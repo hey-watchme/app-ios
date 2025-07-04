@@ -165,6 +165,11 @@ class NetworkManager: ObservableObject {
         print("⏰ 送信タイムスタンプ: \(timestampString)")
         
         // ③ device_id パラメータを追加
+        print("🔍 デバイス情報チェック開始")
+        print("   - deviceManager存在: \(deviceManager != nil)")
+        print("   - deviceManager登録状態: \(deviceManager?.isDeviceRegistered ?? false)")
+        print("   - deviceManager現在ID: \(deviceManager?.currentDeviceID ?? "なし")")
+        
         if let deviceInfo = deviceManager?.getDeviceInfo() {
             body.append("--\(boundary)\r\n".data(using: .utf8)!)
             body.append("Content-Disposition: form-data; name=\"device_id\"\r\n\r\n".data(using: .utf8)!)
@@ -172,6 +177,10 @@ class NetworkManager: ObservableObject {
             print("📱 送信デバイスID: \(deviceInfo.deviceID)")
         } else {
             print("❌ デバイス登録が完了していません。アップロードを中断します。")
+            print("   - deviceManager: \(deviceManager != nil ? "存在" : "nil")")
+            print("   - isDeviceRegistered: \(deviceManager?.isDeviceRegistered ?? false)")
+            print("   - currentDeviceID: \(deviceManager?.currentDeviceID ?? "nil")")
+            
             let errorMsg = "デバイス登録が必要です"
             recording.markAsUploadFailed(error: errorMsg)
             
