@@ -10,6 +10,7 @@ import Combine
 
 struct ContentView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var deviceManager: DeviceManager
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -17,14 +18,17 @@ struct ContentView: View {
     @State private var showUserIDChangeAlert = false
     @State private var newUserID = ""
     @State private var showLogoutConfirmation = false
-    
-    // NetworkManagerを遅延初期化
-    @StateObject private var networkManager: NetworkManager = NetworkManager()
+    @State private var networkManager: NetworkManager?
     
     private func initializeNetworkManager() {
+        // NetworkManagerを初期化（AuthManagerとDeviceManagerを渡す）
+        networkManager = NetworkManager(authManager: authManager, deviceManager: deviceManager)
+        
         if let authUser = authManager.currentUser {
-            networkManager.updateToAuthenticatedUserID(authUser.id)
+            networkManager?.updateToAuthenticatedUserID(authUser.id)
         }
+        
+        print("🔧 NetworkManager初期化完了")
     }
     
     var body: some View {
@@ -49,7 +53,7 @@ struct ContentView: View {
                 }
                 
                 // アップロード進捗表示
-                if networkManager.connectionStatus == .uploading {
+                if networkManager?.connectionStatus == .uploading {
                     VStack(spacing: 8) {
                         HStack {
                             Text("📤 アップロード中...")
@@ -58,15 +62,15 @@ struct ContentView: View {
                             
                             Spacer()
                             
-                            Text("\(Int(networkManager.uploadProgress * 100))%")
+                            Text("\(Int((networkManager?.uploadProgress ?? 0.0) * 100))%")
                                 .font(.caption)
                                 .fontWeight(.bold)
                         }
                         
-                        ProgressView(value: networkManager.uploadProgress, total: 1.0)
+                        ProgressView(value: networkManager?.uploadProgress ?? 0.0, total: 1.0)
                             .progressViewStyle(LinearProgressViewStyle(tint: .blue))
                         
-                        if let fileName = networkManager.currentUploadingFile {
+                        if let fileName = networkManager?.currentUploadingFile {
                             Text("ファイル: \(fileName)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -85,7 +89,7 @@ struct ContentView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        Text(networkManager.serverURL)
+                        Text(networkManager?.serverURL ?? "サーバーURL未設定")
                             .font(.footnote)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 8)
@@ -119,6 +123,27 @@ struct ContentView: View {
                                     .font(.caption)
                                     .foregroundColor(.secondary)
                                     .lineLimit(1)
+                                
+                                // デバイス登録状態表示
+                                if deviceManager.isDeviceRegistered {
+                                    if let deviceInfo = deviceManager.getDeviceInfo() {
+                                        Text("📱 デバイス: \(deviceInfo.deviceID.prefix(8))...")
+                                            .font(.caption)
+                                            .foregroundColor(.green)
+                                    }
+                                } else {
+                                    Text("📱 デバイス: 未登録")
+                                        .font(.caption)
+                                        .foregroundColor(.orange)
+                                }
+                                
+                                // デバイス登録エラー表示
+                                if let error = deviceManager.registrationError {
+                                    Text("❌ \(error)")
+                                        .font(.caption)
+                                        .foregroundColor(.red)
+                                        .lineLimit(2)
+                                }
                             }
                         }
                         .padding(.horizontal, 12)
@@ -257,7 +282,7 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                     .cornerRadius(8)
                                 }
-                                .disabled(networkManager.connectionStatus == .uploading)
+                                .disabled(networkManager?.connectionStatus == .uploading)
                             }
                         }
                         .padding(.horizontal)
@@ -332,7 +357,7 @@ struct ContentView: View {
             }
             Button("変更") {
                 if !newUserID.isEmpty {
-                    networkManager.setUserID(newUserID)
+                    networkManager?.setUserID(newUserID)
                     alertMessage = "ユーザーIDを「\(newUserID)」に変更しました"
                     showAlert = true
                     newUserID = ""
@@ -345,19 +370,19 @@ struct ContentView: View {
             Button("キャンセル", role: .cancel) { }
             Button("ログアウト", role: .destructive) {
                 authManager.signOut()
-                networkManager.resetToFallbackUserID()
+                networkManager?.resetToFallbackUserID()
                 alertMessage = "ログアウトしました"
                 showAlert = true
             }
         } message: {
             Text("本当にログアウトしますか？")
         }
-        .onChange(of: networkManager.connectionStatus) { oldValue, newValue in
+        .onChange(of: networkManager?.connectionStatus) { oldValue, newValue in
             // アップロード完了時の通知
-            if newValue == .connected && networkManager.currentUploadingFile != nil {
+            if newValue == .connected && networkManager?.currentUploadingFile != nil {
                 alertMessage = "アップロードが完了しました！"
                 showAlert = true
-            } else if newValue == .failed && networkManager.currentUploadingFile != nil {
+            } else if newValue == .failed && networkManager?.currentUploadingFile != nil {
                 alertMessage = "アップロードに失敗しました。手動でリトライしてください。"
                 showAlert = true
             }
@@ -374,7 +399,7 @@ struct ContentView: View {
         }
         
         print("🤖 自動アップロード開始: \(latestRecording.fileName) (サイズ: \(latestRecording.fileSizeFormatted))")
-        networkManager.uploadRecording(latestRecording)
+        networkManager?.uploadRecording(latestRecording)
     }
     
     // すべてのアップロード可能ファイルを順次自動アップロード（改善版）
@@ -421,17 +446,17 @@ struct ContentView: View {
         print("🤖 自動アップロード進行中: [\(currentIndex + 1)/\(recordings.count)] \(currentRecording.fileName)")
         
         // アップロード開始
-        networkManager.uploadRecording(currentRecording)
+        networkManager?.uploadRecording(currentRecording)
         
         // アップロード結果を監視（ConnectionStatusの変化を待つ）
         var observer: AnyCancellable?
-        observer = networkManager.$connectionStatus
+        observer = networkManager?.$connectionStatus
             .sink { status in
                 
                 switch status {
                 case .connected:
                     // アップロード成功
-                    if networkManager.currentUploadingFile == currentRecording.fileName {
+                    if networkManager?.currentUploadingFile == currentRecording.fileName {
                         print("✅ 自動アップロード成功: \(currentRecording.fileName)")
                         print("📋 アップロード状態が永続化されました")
                         
@@ -446,7 +471,7 @@ struct ContentView: View {
                     
                 case .failed:
                     // アップロード失敗
-                    if networkManager.currentUploadingFile == currentRecording.fileName {
+                    if networkManager?.currentUploadingFile == currentRecording.fileName {
                         print("❌ 自動アップロード失敗: \(currentRecording.fileName) - ファイルを保持（手動リトライ用）")
                         
                         // 次のファイルへ（失敗したファイルは保持）
@@ -464,7 +489,7 @@ struct ContentView: View {
     
     // 接続ステータスに応じた色
     private var statusColor: Color {
-        switch networkManager.connectionStatus {
+        switch networkManager?.connectionStatus ?? .unknown {
         case .unknown:
             return .gray
         case .connected:
@@ -480,7 +505,7 @@ struct ContentView: View {
     
     // 接続ステータスのテキスト
     private var statusText: String {
-        switch networkManager.connectionStatus {
+        switch networkManager?.connectionStatus ?? .unknown {
         case .unknown:
             return "状態不明"
         case .connected:
@@ -499,7 +524,7 @@ struct ContentView: View {
 struct RecordingRowView: View {
     let recording: RecordingModel
     let isSelected: Bool
-    let networkManager: NetworkManager
+    let networkManager: NetworkManager?
     let onSelect: () -> Void
     let onDelete: (RecordingModel) -> Void
     
@@ -564,12 +589,12 @@ struct RecordingRowView: View {
                     Button(action: {
                         onSelect()
                         print("📤 手動アップロード開始: \(recording.fileName)")
-                        networkManager.uploadRecording(recording)
+                        networkManager?.uploadRecording(recording)
                     }) {
                         Image(systemName: "icloud.and.arrow.up")
                             .foregroundColor(.blue)
                     }
-                    .disabled(networkManager.connectionStatus == .uploading)
+                    .disabled(networkManager?.connectionStatus == .uploading)
                 } else if !recording.isUploaded {
                     // アップロード不可の場合はリセットボタンを表示
                     Button(action: {

@@ -16,9 +16,11 @@ class NetworkManager: ObservableObject {
     @Published var currentUploadingFile: String? = nil
     
     private var authManager: SupabaseAuthManager?
+    private var deviceManager: DeviceManager?
     
-    init(authManager: SupabaseAuthManager? = nil) {
+    init(authManager: SupabaseAuthManager? = nil, deviceManager: DeviceManager? = nil) {
         self.authManager = authManager
+        self.deviceManager = deviceManager
         
         // 認証済みユーザーIDを優先、フォールバックとして従来のユーザーID
         if let authenticatedUser = authManager?.currentUser {
@@ -162,7 +164,25 @@ class NetworkManager: ObservableObject {
         body.append("\(timestampString)\r\n".data(using: .utf8)!)
         print("⏰ 送信タイムスタンプ: \(timestampString)")
         
-        // ③ file パラメータを追加
+        // ③ device_id パラメータを追加
+        if let deviceInfo = deviceManager?.getDeviceInfo() {
+            body.append("--\(boundary)\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"device_id\"\r\n\r\n".data(using: .utf8)!)
+            body.append("\(deviceInfo.deviceID)\r\n".data(using: .utf8)!)
+            print("📱 送信デバイスID: \(deviceInfo.deviceID)")
+        } else {
+            print("❌ デバイス登録が完了していません。アップロードを中断します。")
+            let errorMsg = "デバイス登録が必要です"
+            recording.markAsUploadFailed(error: errorMsg)
+            
+            DispatchQueue.main.async {
+                self.connectionStatus = .failed
+                self.currentUploadingFile = nil
+            }
+            return
+        }
+        
+        // ④ file パラメータを追加
         do {
             let fileData = try Data(contentsOf: fileURL)
             print("📄 ファイルデータ読み込み成功: \(fileData.count) bytes")

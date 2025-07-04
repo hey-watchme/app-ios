@@ -15,6 +15,8 @@ WatchMe は、音声を30分間隔で自動分割して録音し、AWS EC2上の
 - **完全クリーンアップ**: 物理ファイル・メタデータ・アップロード状態を完全削除
 
 ### ☁️ クラウド連携機能
+- **Supabase認証**: メール・パスワードによるユーザー認証システム
+- **デバイス登録**: Supabaseデータベースへの自動デバイス登録・管理
 - **自動アップロード**: 録音完了時に自動的にサーバーアップロード
 - **状態永続化**: アップロード状態をUserDefaultsで永続保存
 - **リトライ機能**: 失敗時の自動リトライ（最大3回まで）
@@ -33,7 +35,11 @@ WatchMe は、音声を30分間隔で自動分割して録音し、AWS EC2上の
 ```
 ios_watchme_v9/
 ├── ios_watchme_v9App.swift          # アプリエントリーポイント
+├── MainAppView.swift               # アプリ状態管理・認証分岐
+├── LoginView.swift                 # ログイン・サインアップ画面
 ├── ContentView.swift               # メインUI画面
+├── SupabaseAuthManager.swift       # Supabase認証管理
+├── DeviceManager.swift             # デバイス登録・管理
 ├── RecordingModel.swift            # 録音データモデル・永続化
 ├── AudioRecorder.swift             # 録音制御・ファイル管理
 ├── NetworkManager.swift            # クラウド通信・アップロード
@@ -41,6 +47,44 @@ ios_watchme_v9/
 ```
 
 ### クラス設計
+
+#### SupabaseAuthManager
+```swift
+class SupabaseAuthManager: ObservableObject {
+    @Published var isAuthenticated: Bool = false
+    @Published var currentUser: SupabaseUser? = nil
+    @Published var authError: String? = nil
+    @Published var isLoading: Bool = false
+}
+```
+
+**主要メソッド**:
+- `signIn(email:password:)`: メール・パスワードでログイン
+- `signUp(email:password:)`: 新規ユーザー登録
+- `signOut()`: ログアウト処理
+- `refreshToken()`: JWTトークンのリフレッシュ
+- `fetchUserInfo()`: ユーザー情報・確認状態の取得
+
+#### DeviceManager
+```swift
+class DeviceManager: ObservableObject {
+    @Published var isDeviceRegistered: Bool = false
+    @Published var currentDeviceID: String? = nil
+    @Published var registrationError: String? = nil
+    @Published var isLoading: Bool = false
+}
+```
+
+**主要メソッド**:
+- `registerDevice(ownerUserID:)`: Supabaseへのデバイス登録（UPSERT）
+- `getDeviceInfo()`: 登録済みデバイス情報の取得
+- `resetDeviceRegistration()`: デバイス登録状態のリセット
+
+**デバイス登録フロー**:
+1. `UIDevice.current.identifierForVendor`でプラットフォーム識別子取得
+2. Supabaseデータベースに`platform_identifier`・`owner_user_id`でUPSERT
+3. 既存レコードがあれば再利用、なければ新規作成
+4. `device_id`をUserDefaultsにキャッシュして高速アクセス
 
 #### RecordingModel
 ```swift
@@ -139,6 +183,10 @@ Content-Disposition: form-data; name="timestamp"
 
 {ISO8601形式のタイムスタンプ}
 --{boundary}
+Content-Disposition: form-data; name="device_id"
+
+{Supabase登録済みデバイスID}
+--{boundary}
 Content-Disposition: form-data; name="file"; filename="{fileName}"
 Content-Type: audio/wav
 
@@ -150,8 +198,9 @@ Content-Type: audio/wav
 
 | パラメーター | 型 | 必須 | 説明 | 例 |
 |---|---|---|---|---|
-| user_id | String | ○ | ユーザー識別子 | `user_12345678` |
+| user_id | String | ○ | ユーザー識別子（認証済みUser ID） | `164cba5a-dba6-4cbc-9b39-4eea28d98fa5` |
 | timestamp | String | ○ | ISO8601形式の録音作成日時 | `2025-06-24T13:00:00Z` |
+| device_id | String | ○ | Supabase登録済みデバイスID | `device_uuid_12345` |
 | file | Binary | ○ | WAV形式の音声ファイル | バイナリデータ |
 
 ### レスポンス仕様
@@ -393,28 +442,41 @@ HStack {
 # iOS > App > SwiftUI
 ```
 
-### 3. ファイル構成
+### 3. 依存関係追加
+**Supabase Swift ライブラリ**をプロジェクトに追加：
+```
+1. Xcode > File > Add Package Dependencies
+2. URL: https://github.com/supabase/supabase-swift
+3. Version: 2.5.1以上
+4. Target: ios_watchme_v9に追加
+```
+
+### 4. ファイル構成
 以下のファイルを作成・配置：
 - `ios_watchme_v9App.swift`
+- `MainAppView.swift`
+- `LoginView.swift`
 - `ContentView.swift`
+- `SupabaseAuthManager.swift`
+- `DeviceManager.swift`
 - `RecordingModel.swift`
 - `AudioRecorder.swift`
 - `NetworkManager.swift`
 - `ConnectionStatus.swift`
 
-### 4. Info.plist設定
+### 5. Info.plist設定
 ```xml
 <key>NSMicrophoneUsageDescription</key>
 <string>このアプリは音声録音のためにマイクロフォンアクセスが必要です</string>
 ```
 
-### 5. サーバー設定
+### 6. サーバー設定
 NetworkManager.swiftの`serverURL`を適切なエンドポイントに設定：
 ```swift
 @Published var serverURL: String = "https://api.hey-watch.me"
 ```
 
-### 6. ビルド・実行
+### 7. ビルド・実行
 ```bash
 xcodebuild -project ios_watchme_v9.xcodeproj \
            -scheme ios_watchme_v9 \
@@ -547,6 +609,104 @@ private func handleExistingRecording(fileName: String) {
 - **iOS側の責任範囲**: ローカルファイルの上書き処理のみ
 - **サーバー実装**: 同一ファイル名での上書き・履歴管理はサーバー側で制御
 
+## Supabase認証・デバイス登録仕様
+
+### 認証フロー
+```
+1. アプリ起動
+   ↓
+2. 保存された認証状態確認（UserDefaults）
+   ↓ 認証済み
+3. MainAppView → ContentView（メイン画面）
+   ↓ 未認証
+4. LoginView（ログイン画面）
+   ↓ ログイン成功
+5. デバイス登録処理
+   ↓
+6. ContentView（メイン画面）
+```
+
+### デバイス登録データベース構造
+```sql
+CREATE TABLE devices (
+    device_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    platform_identifier TEXT NOT NULL,
+    device_type TEXT,
+    platform_type TEXT NOT NULL,
+    owner_user_id UUID REFERENCES auth.users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT now(),
+    
+    CONSTRAINT unique_platform_owner 
+        UNIQUE (platform_identifier, owner_user_id)
+);
+```
+
+### Supabase設定例
+```swift
+// SupabaseAuthManager.swift / DeviceManager.swift
+private let supabaseURL = "https://your-project.supabase.co"
+private let supabaseAnonKey = "your-anon-key"
+
+private let supabase = SupabaseClient(
+    supabaseURL: URL(string: supabaseURL)!,
+    supabaseKey: supabaseAnonKey
+)
+```
+
+### デバイス登録UPSERT実装
+```swift
+func registerDeviceToSupabase(platformIdentifier: String, ownerUserID: String?) {
+    Task { @MainActor in
+        do {
+            let deviceData = DeviceInsert(
+                platform_identifier: platformIdentifier,
+                device_type: "ios",
+                platform_type: "iOS",
+                owner_user_id: ownerUserID
+            )
+            
+            // UPSERT: 既存レコードがあれば更新、なければ作成
+            let response: [Device] = try await supabase
+                .from("devices")
+                .upsert(deviceData)
+                .select()
+                .execute()
+                .value
+                
+            if let device = response.first {
+                saveSupabaseDeviceRegistration(
+                    deviceID: device.device_id,
+                    platformIdentifier: platformIdentifier
+                )
+                print("✅ デバイス情報を取得/登録完了: \(device.device_id)")
+            }
+        } catch {
+            print("❌ デバイス情報取得エラー: \(error)")
+        }
+    }
+}
+```
+
+### 認証状態永続化
+```swift
+// UserDefaults保存キー
+private let userKey = "supabase_user"
+private let deviceIDKey = "watchme_device_id"
+private let isRegisteredKey = "watchme_supabase_registered"
+
+// 認証情報保存
+func saveUserToDefaults(_ user: SupabaseUser) {
+    let data = try JSONEncoder().encode(user)
+    UserDefaults.standard.set(data, forKey: userKey)
+}
+
+// デバイス情報保存
+func saveSupabaseDeviceRegistration(deviceID: String, platformIdentifier: String) {
+    UserDefaults.standard.set(deviceID, forKey: deviceIDKey)
+    UserDefaults.standard.set(true, forKey: "watchme_supabase_registered")
+}
+```
+
 ## 拡張可能性
 
 ### 追加機能候補
@@ -587,8 +747,8 @@ struct AudioMetadata: Codable {
 
 - **作成者**: Kaya Matsumoto
 - **作成日**: 2025年6月11日
-- **最終更新**: 2025年6月24日
-- **バージョン**: v9.0
+- **最終更新**: 2025年7月5日
+- **バージョン**: v9.1 - Supabase認証・デバイス登録機能追加
 
 ---
 

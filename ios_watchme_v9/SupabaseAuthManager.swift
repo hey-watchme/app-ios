@@ -220,18 +220,111 @@ class SupabaseAuthManager: ObservableObject {
             DispatchQueue.main.async {
                 self?.isLoading = false
                 
+                if let error = error {
+                    print("❌ ユーザー情報取得エラー: \(error)")
+                    return
+                }
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("❌ 無効なレスポンス")
+                    return
+                }
+                
                 if let data = data,
                    let responseString = String(data: data, encoding: .utf8) {
                     print("📡 ユーザー情報: \(responseString)")
                     
-                    // JSONをパースしてemail_confirmed_atを確認
-                    if let jsonData = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-                        let emailConfirmedAt = jsonData["email_confirmed_at"] as? String
-                        print("📧 メール確認状態: \(emailConfirmedAt ?? "未確認")")
-                        
-                        if emailConfirmedAt == nil {
-                            self?.authError = "メール確認が完了していません"
+                    if httpResponse.statusCode == 403 && responseString.contains("token is expired") {
+                        print("🔄 トークン期限切れ検知 - リフレッシュ試行")
+                        self?.refreshToken()
+                        return
+                    }
+                    
+                    if httpResponse.statusCode == 200 {
+                        // JSONをパースしてemail_confirmed_atを確認
+                        if let jsonData = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                            let emailConfirmedAt = jsonData["email_confirmed_at"] as? String
+                            print("📧 メール確認状態: \(emailConfirmedAt ?? "未確認")")
+                            
+                            if emailConfirmedAt == nil {
+                                self?.authError = "メール確認が完了していません"
+                            }
                         }
+                    }
+                }
+            }
+        }.resume()
+    }
+    
+    // MARK: - トークンリフレッシュ
+    func refreshToken() {
+        guard let currentUser = currentUser,
+              let refreshToken = currentUser.refreshToken else {
+            print("❌ リフレッシュトークンが利用できません")
+            signOut()
+            return
+        }
+        
+        print("🔄 トークンリフレッシュ開始")
+        
+        let refreshData = [
+            "refresh_token": refreshToken
+        ]
+        
+        guard let jsonData = try? JSONSerialization.data(withJSONObject: refreshData) else {
+            print("❌ リフレッシュリクエストデータ作成失敗")
+            return
+        }
+        
+        guard let url = URL(string: "\(supabaseURL)/auth/v1/token?grant_type=refresh_token") else {
+            print("❌ リフレッシュURL無効")
+            return
+        }
+        
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.httpBody = jsonData
+        
+        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    print("❌ トークンリフレッシュエラー: \(error)")
+                    self?.signOut()
+                    return
+                }
+                
+                guard let httpResponse = response as? HTTPURLResponse else {
+                    print("❌ リフレッシュレスポンス無効")
+                    self?.signOut()
+                    return
+                }
+                
+                if let data = data,
+                   let responseString = String(data: data, encoding: .utf8) {
+                    print("📡 リフレッシュレスポンス(\(httpResponse.statusCode)): \(responseString)")
+                    
+                    if httpResponse.statusCode == 200 {
+                        if let authResponse = try? JSONDecoder().decode(SupabaseAuthResponse.self, from: data) {
+                            let refreshedUser = SupabaseUser(
+                                id: authResponse.user.id,
+                                email: authResponse.user.email,
+                                accessToken: authResponse.access_token,
+                                refreshToken: authResponse.refresh_token
+                            )
+                            
+                            self?.currentUser = refreshedUser
+                            self?.saveUserToDefaults(refreshedUser)
+                            print("✅ トークンリフレッシュ成功")
+                        } else {
+                            print("❌ リフレッシュレスポンス解析失敗")
+                            self?.signOut()
+                        }
+                    } else {
+                        print("❌ トークンリフレッシュ失敗 - ログアウト実行")
+                        self?.signOut()
                     }
                 }
             }
