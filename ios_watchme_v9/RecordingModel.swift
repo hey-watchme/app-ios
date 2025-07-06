@@ -114,6 +114,15 @@ class RecordingModel: ObservableObject, Codable {
         saveUploadStatus()
     }
     
+    // 強制再アップロード用（アップロード済み状態をリセット）
+    func prepareForceUpload() {
+        print("🔄 強制再アップロード準備: \(fileName)")
+        isUploaded = false
+        uploadAttempts = 0
+        lastUploadError = "強制再アップロード"
+        saveUploadStatus()
+    }
+    
     // ファイルの存在確認
     func fileExists() -> Bool {
         let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
@@ -143,6 +152,11 @@ extension RecordingModel {
     // アップロード可能かチェック
     var canUpload: Bool {
         return !isUploaded && fileExists() && uploadAttempts < 3
+    }
+    
+    // 強制アップロード可能かチェック（既にアップロード済みでも可能）
+    var canForceUpload: Bool {
+        return fileExists() && uploadAttempts < 3
     }
     
     // 表示用のファイルサイズ

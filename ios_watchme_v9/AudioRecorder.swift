@@ -27,6 +27,37 @@ class AudioRecorder: NSObject, ObservableObject {
         super.init()
         setupAudioSession()
         loadRecordings()
+        setupNotificationObserver()
+    }
+    
+    // アップロード完了通知の監視を設定
+    private func setupNotificationObserver() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleUploadedFileDeleted(_:)),
+            name: NSNotification.Name("UploadedFileDeleted"),
+            object: nil
+        )
+    }
+    
+    // アップロード完了ファイル削除の通知を受信
+    @objc private func handleUploadedFileDeleted(_ notification: Notification) {
+        guard let deletedRecording = notification.object as? RecordingModel else { return }
+        
+        print("📢 アップロード完了ファイル削除通知を受信: \(deletedRecording.fileName)")
+        
+        DispatchQueue.main.async {
+            // リストから削除
+            self.recordings.removeAll { $0.fileName == deletedRecording.fileName }
+            self.pendingRecordings.removeAll { $0.fileName == deletedRecording.fileName }
+            
+            print("✅ リストからファイルを削除: \(deletedRecording.fileName)")
+            print("📊 残りファイル数: \(self.recordings.count)")
+        }
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
     
     // オーディオセッションの設定
@@ -253,7 +284,11 @@ class AudioRecorder: NSObject, ObservableObject {
         print("📅 切り替え時刻: \(Date())")
         
         // 現在の録音を完了・保存
-        if finishCurrentSlotRecording() {
+        if let completedRecording = finishCurrentSlotRecordingWithReturn() {
+            // 完了したファイルを即座にアップロードキューに追加（バックグラウンド）
+            print("📤 スロット切り替え時の自動アップロード: \(completedRecording.fileName)")
+            UploadManager.shared.addToQueue(completedRecording)
+            
             // 新しいスロットで録音開始
             currentSlot = newSlot
             currentSlotStartTime = Date()
@@ -330,6 +365,64 @@ class AudioRecorder: NSObject, ObservableObject {
         } else {
             print("❌ 録音ファイルが存在しません")
             return false
+        }
+    }
+    
+    // 現在のスロット録音を完了・保存し、RecordingModelを返す
+    private func finishCurrentSlotRecordingWithReturn() -> RecordingModel? {
+        guard let recorder = audioRecorder else {
+            print("❌ オーディオレコーダーが存在しません")
+            return nil
+        }
+        
+        let recordingURL = recorder.url
+        let fileName = recordingURL.lastPathComponent
+        
+        print("💾 スロット録音完了処理開始: \(fileName)")
+        print("   - 録音URL: \(recordingURL.path)")
+        print("   - スロット継続時間: \(Date().timeIntervalSince(currentSlotStartTime!))秒")
+        
+        // 録音停止
+        recorder.stop()
+        
+        // ファイル存在確認
+        let fileExists = FileManager.default.fileExists(atPath: recordingURL.path)
+        print("   - ファイル存在確認: \(fileExists)")
+        
+        if fileExists {
+            // ファイルサイズ確認
+            do {
+                let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
+                let fileSize = attributes[.size] as? Int64 ?? 0
+                print("   - ファイルサイズ: \(fileSize) bytes")
+                
+                if fileSize > 0 {
+                    // RecordingModelを作成・追加
+                    let recording = RecordingModel(fileName: fileName, date: currentSlotStartTime!)
+                    
+                    // 重複チェック
+                    if let existingIndex = recordings.firstIndex(where: { $0.fileName == fileName }) {
+                        recordings.remove(at: existingIndex)
+                        print("🔄 既存の同名録音を置換")
+                    }
+                    
+                    recordings.insert(recording, at: 0)
+                    pendingRecordings.append(recording)
+                    
+                    print("✅ スロット録音完了: \(fileName)")
+                    print("📊 総録音ファイル数: \(recordings.count)")
+                    return recording
+                } else {
+                    print("❌ ファイルサイズが0bytes")
+                    return nil
+                }
+            } catch {
+                print("❌ ファイル属性取得エラー: \(error)")
+                return nil
+            }
+        } else {
+            print("❌ 録音ファイルが存在しません")
+            return nil
         }
     }
     

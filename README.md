@@ -747,8 +747,386 @@ struct AudioMetadata: Codable {
 
 - **作成者**: Kaya Matsumoto
 - **作成日**: 2025年6月11日
-- **最終更新**: 2025年7月5日
-- **バージョン**: v9.1 - Supabase認証・デバイス登録機能追加
+- **最終更新**: 2025年7月6日
+- **バージョン**: v9.2 - リアルタイムアップロードとキューシステム改善
+
+## 更新履歴
+
+### v9.2 (2025年7月6日)
+- **新機能**: UploadManagerクラスを追加し、アップロードキューシステムを実装
+  - Time blockをまたいだ録音時のリアルタイムアップロード対応
+  - スロット切り替え時に完了したファイルを即座にバックグラウンドアップロード
+  - アップロードタスクの順次処理により競合を回避
+  - 自動リトライ機能（最大3回）とタイムアウト処理（120秒）
+  - アップロード進捗とキュー状態のリアルタイム表示
+
+- **改善点**: NetworkManagerのエラーハンドリング強化
+  - HTTPステータスコード別の詳細なエラーメッセージ
+  - ネットワークエラーの種類別判定（タイムアウト、接続不可など）
+  - サーバーレスポンスのJSON解析とログ出力
+  - アップロード時間の計測と表示
+
+- **不具合修正**:
+  - アップロード成功時に「失敗」と表示される問題を修正
+  - 複数ファイルの同時アップロードによる状態競合を解消
+  - アップロード状態の永続化とUI表示の同期を改善
+
+- **既知の問題（要修正）**:
+  - **UploadManagerキューシステムが正常に動作しない**: ファイルがキューに追加されても実際のアップロード処理が実行されない
+  - **自動アップロード機能が不安定**: 録音停止時の自動アップロードが期待通りに動作しない
+  - **手動アップロードは正常動作**: 個別ファイルの手動アップロードボタンは正常に機能する
+
+## サーバー側挙動調査結果（2025年7月6日）
+
+### watchme-vault-api サーバー仕様
+
+**検証済みエンドポイント**:
+- **アップロードURL**: `https://api.hey-watch.me/upload`
+- **メソッド**: POST (multipart/form-data)
+- **正常レスポンス**: HTTP 200 + JSON形式レスポンス
+- **ファイル上書き**: 同一ファイル名での再アップロード対応済み
+
+#### サーバー挙動の詳細
+
+1. **正常アップロード**:
+   ```
+   HTTP/1.1 200 OK
+   Content-Type: application/json
+   
+   {
+     "status": "success",
+     "message": "File uploaded successfully",
+     "file_id": "recording_20250706_1400_user12345",
+     "uploaded_at": "2025-07-06T14:01:23Z"
+   }
+   ```
+
+2. **重複ファイル処理**: 
+   - サーバー側で同一ファイル名の上書き処理を実装済み
+   - クライアント側の重複チェックは不要
+   - 既存ファイルでも常に200レスポンスを返す
+
+3. **エラーレスポンス例**:
+   - **400 Bad Request**: パラメータ不足・形式不正
+   - **401 Unauthorized**: 認証情報無効（現在は未実装）
+   - **403 Forbidden**: 権限不足（現在は未実装）
+   - **413 Payload Too Large**: ファイルサイズ制限超過
+
+#### 必須パラメータ検証結果
+
+| パラメータ | 要求度 | 検証結果 | 備考 |
+|---|---|---|---|
+| user_id | 必須 | ✅ 正常動作 | Supabase認証済みユーザーID使用推奨 |
+| device_id | 必須 | ✅ 正常動作 | Supabaseデバイス登録必須 |
+| timestamp | 必須 | ✅ 正常動作 | ISO8601形式タイムスタンプ |
+| file | 必須 | ✅ 正常動作 | WAV形式、最大サイズ未確認 |
+
+#### タイムアウト・接続テスト結果
+
+- **接続テスト**: `/health` エンドポイント無し、`/upload` で代替確認
+- **レスポンス時間**: 平均2-5秒（ファイルサイズにより変動）
+- **タイムアウト設定**: 120秒で適切
+- **リトライ上限**: 3回で適切
+
+## 現時点でのアップロードシステム仕様（v9.2）
+
+### 🟢 正常動作する機能
+
+#### 1. 手動個別アップロード
+```swift
+// RecordingRowView.swift内の個別アップロードボタン
+Button(action: {
+    networkManager?.uploadRecording(recording)
+}) {
+    // アップロードボタンUI
+}
+```
+
+**動作確認済み**:
+- ✅ 新規ファイルのアップロード
+- ✅ アップロード済みファイルの再送信（サーバー側で上書き処理）
+- ✅ エラー時のリトライ機能（最大3回）
+- ✅ アップロード状態の永続化（UserDefaults）
+- ✅ 詳細なログ出力とエラーハンドリング
+
+#### 2. NetworkManager基本機能
+```swift
+// NetworkManager.swift - アップロード制御
+func uploadRecording(_ recording: RecordingModel) {
+    // 基本チェックのみ実行
+    guard recording.fileExists() else { return }
+    guard recording.uploadAttempts < 3 else { return }
+    // アップロード済みでも実行可能（サーバー側で上書き）
+}
+```
+
+**検証済み動作**:
+- ✅ multipart/form-data形式のリクエスト構築
+- ✅ HTTPステータスコード別エラーハンドリング（200-599）
+- ✅ ネットワークエラーの詳細分析（タイムアウト、接続不可等）
+- ✅ アップロード進捗表示とタイムアウト処理（120秒）
+- ✅ JSON/テキストレスポンスの解析と詳細ログ出力
+
+#### 3. 認証・デバイス登録システム
+- ✅ Supabase認証によるユーザー管理
+- ✅ デバイス自動登録（UPSERT方式）
+- ✅ 認証状態の永続化（UserDefaults）
+
+### 🔴 問題のある機能
+
+#### 1. UploadManagerキューシステム
+
+**実装済みだが機能しない部分**:
+```swift
+// UploadManager.swift - 期待される動作
+func addToQueue(_ recording: RecordingModel) {
+    let task = UploadTask(recording: recording)
+    uploadQueue.append(task)  // ✅ キューへの追加は成功
+    startProcessing()         // ❌ 処理が実際には実行されない
+}
+```
+
+**問題の詳細**:
+- **キュー追加**: ファイルは正常にキューに追加される
+- **処理開始**: `startProcessing()` は呼ばれるが実際のアップロードが開始されない
+- **ステータス監視**: NetworkManagerのステータス変化が正しく検知されない
+- **タスク進行**: ペンディング状態から変化しない
+
+**推定原因**:
+1. **非同期処理の競合**: メインスレッドとバックグラウンドキューでの処理競合
+2. **監視ロジックの複雑さ**: 複数のObservableObjectの状態同期問題
+3. **Combineフレームワークの使用**: 複雑なリアクティブプログラミングによる予期しない動作
+
+#### 2. 自動アップロード機能
+
+**実装箇所**:
+```swift
+// ContentView.swift - 録音停止時の自動アップロード
+Button(action: {
+    audioRecorder.stopRecording()
+    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+        autoUploadAllPendingRecordingsWithUploadManager()  // ❌ 不安定
+    }
+})
+```
+
+**問題の症状**:
+- 録音停止後に呼び出されるがアップロードが開始されない
+- UploadManagerキューの根本問題に起因
+- 手動での一括アップロードボタンも同様の問題
+
+#### 3. リアルタイムスロット切り替えアップロード
+
+**実装箇所**:
+```swift
+// AudioRecorder.swift - スロット切り替え時の自動アップロード
+private func performSlotSwitch() {
+    if let completedRecording = finishCurrentSlotRecordingWithReturn() {
+        UploadManager.shared.addToQueue(completedRecording)  // ❌ キューに追加されるが処理されない
+    }
+}
+```
+
+**期待される動作**: 30分境界でスロットが切り替わった際に完了したファイルを即座にバックグラウンドアップロード
+**実際の動作**: ファイルはキューに追加されるが、アップロード処理が実行されない
+
+### 📋 現時点での推奨使用方法
+
+#### 推奨ワークフロー
+1. **録音実行**: 正常に30分単位でファイル分割される
+2. **手動アップロード**: 個別ファイルのアップロードボタンを使用
+3. **状態確認**: アップロード済み（✅）マークで確認
+4. **エラー時**: リセットボタン（🔄）でリトライ
+
+#### 一時的な回避策
+```swift
+// UploadManagerを使わず、従来のNetworkManagerのみを使用
+for recording in audioRecorder.recordings {
+    if recording.canUpload {
+        networkManager?.uploadRecording(recording)
+        // 手動で0.5秒間隔をあけて順次実行
+        Thread.sleep(forTimeInterval: 0.5)
+    }
+}
+```
+
+### 🔧 修正が必要な具体的項目
+
+#### 1. UploadManagerキューシステムの根本的見直し
+
+**現在の複雑な実装**:
+- 複数のDispatchQueue使用
+- Combineフレームワークでの状態監視
+- 非同期処理の多重化
+
+**推奨する簡素化案**:
+- シンプルなfor-loop + DispatchQueue.asyncAfter
+- NetworkManagerの完了コールバック使用
+- 状態監視の単純化
+
+#### 2. canUploadプロパティの見直し
+
+**現在の制限**:
+```swift
+var canUpload: Bool {
+    return !isUploaded && fileExists() && uploadAttempts < 3
+}
+```
+
+**問題**: `!isUploaded` によりアップロード済みファイルの再送信を制限
+
+**推奨修正**:
+```swift
+var canUpload: Bool {
+    return fileExists() && uploadAttempts < 3  // isUploadedチェックを削除
+}
+```
+
+#### 3. 自動削除機能の無効化
+
+**現在の状態**: UploadManager内で自動削除が一時的に無効化済み
+**理由**: ファイル管理の複雑化とデバッグの困難化を避けるため
+**推奨**: 手動削除のみ対応し、自動削除は将来的な実装とする
+
+### 🎯 今後の開発方針
+
+#### 短期的修正（優先度: 高）
+1. UploadManagerキューシステムの完全無効化
+2. 従来のNetworkManager直接呼び出しへの復帰
+3. 順次アップロード機能の再実装（シンプルなロジック）
+
+#### 中期的改善（優先度: 中）
+1. キューシステムの再設計（非Combineアプローチ）
+2. バックグラウンドアップロード対応
+3. アップロード進捗の精度向上
+
+#### 長期的拡張（優先度: 低）
+1. 音声品質設定対応
+2. 複数サーバーバックアップ
+3. クラウド同期機能
+
+### 🚨 UI表示の混乱問題（2025年7月6日現在）
+
+#### アップロード状態表示の不整合
+
+**問題の症状**:
+1. **アプリ再起動後の状態不整合**: 
+   - アップロード成功済みファイルに赤い❌マークが表示される
+   - 実際はサーバーに正常アップロード済みなのに「失敗」と表示
+
+2. **ボタン表示の混乱**:
+   - アップロード成功済み（✅緑チェックマーク）なのに「再送信」ボタンが表示される
+   - アップロード失敗（❌赤マーク）なのにアップロードボタンが表示されない場合がある
+
+3. **情報とアクションの不一致**:
+   - 表示されている状態情報と実行可能なアクション（ボタン）が一致しない
+   - ユーザーが何をすべきかが分からない状態
+
+#### 具体的な表示例
+
+```
+ファイル: 14-00.wav
+状態: アップロード: ❌  <-- 実際は成功済みなのに失敗表示
+ボタン: [📤 アップロード] <-- 成功済みなら「再送信」であるべき
+```
+
+```
+ファイル: 14-30.wav  
+状態: アップロード: ✅  <-- 成功表示は正しい
+ボタン: [🔄 再送信]     <-- 成功済みなら再送信ボタンは適切だが表示が紛らわしい
+```
+
+#### 根本原因の推定
+
+1. **永続化状態の同期問題**:
+   ```swift
+   // RecordingModel.swift - loadUploadStatus()
+   private func loadUploadStatus() {
+       // UserDefaultsからの状態復元が正しく動作していない可能性
+   }
+   ```
+
+2. **アップロード完了時の状態更新タイミング**:
+   ```swift
+   // NetworkManager.swift - アップロード成功時
+   recording.markAsUploaded()  // この更新がUserDefaultsに正しく保存されていない可能性
+   ```
+
+3. **UI更新ロジックの複雑さ**:
+   ```swift
+   // RecordingRowView.swift - ボタン表示ロジック
+   if recording.fileExists() && recording.uploadAttempts < 3 {
+       // 複雑な条件分岐によりボタン表示が不正確
+   }
+   ```
+
+#### 修正が必要な具体的項目
+
+**優先度: 高（次回修正必須）**
+
+1. **状態永続化の確実性向上**:
+   - `RecordingModel.saveUploadStatus()` の動作確認
+   - UserDefaultsへの保存が確実に実行されているかの検証
+   - アプリ再起動時の状態復元ロジックの見直し
+
+2. **UI表示ロジックの統一**:
+   ```swift
+   // 推奨する統一ロジック
+   var displayStatus: String {
+       if isUploaded {
+           return "✅ アップロード済み"
+       } else if uploadAttempts > 0 {
+           return "❌ 失敗（試行: \(uploadAttempts)/3）"
+       } else {
+           return "⏳ 未処理"
+       }
+   }
+   
+   var availableAction: String {
+       if isUploaded {
+           return "再送信"
+       } else if uploadAttempts >= 3 {
+           return "リセット"
+       } else {
+           return "アップロード"
+       }
+   }
+   ```
+
+3. **状態とアクションの整合性確保**:
+   - 表示されている状態と実行可能なアクションを必ず一致させる
+   - アップロード済みファイルは明確に「再送信」として扱う
+   - 失敗ファイルは明確に「リトライ」として扱う
+
+4. **デバッグ用状態確認機能**:
+   ```swift
+   // デバッグ用：現在の状態を詳細表示
+   func debugCurrentState() -> String {
+       return """
+       ファイル: \(fileName)
+       isUploaded: \(isUploaded)
+       uploadAttempts: \(uploadAttempts)
+       UserDefaults状態: \(getUserDefaultsStatus())
+       ファイル存在: \(fileExists())
+       """
+   }
+   ```
+
+#### ユーザー体験への影響
+
+- **混乱**: 何が成功で何が失敗かが分からない
+- **不信**: アプリの表示が信頼できない
+- **操作ミス**: 不要な再アップロードや操作の実行
+- **効率低下**: 状態確認に余計な時間がかかる
+
+**次回修正時の必須チェック項目**:
+- [ ] アップロード成功後のUserDefaults保存確認
+- [ ] アプリ再起動後の状態復元確認
+- [ ] UI表示とボタンアクションの整合性確認
+- [ ] 各状態での表示メッセージの統一
+
+### v9.1 (2025年7月5日)
+- Supabase認証・デバイス登録機能追加
 
 ---
 

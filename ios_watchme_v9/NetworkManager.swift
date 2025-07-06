@@ -7,6 +7,7 @@
 
 import SwiftUI
 import Foundation
+import Combine
 
 class NetworkManager: ObservableObject {
     @Published var serverURL: String = "https://api.hey-watch.me"
@@ -69,13 +70,9 @@ class NetworkManager: ObservableObject {
     }
     
     func uploadRecording(_ recording: RecordingModel) {
-        // アップロード可能チェック
-        guard recording.canUpload else {
-            print("⚠️ アップロード不可: \(recording.fileName)")
-            print("   - アップロード済み: \(recording.isUploaded)")
-            print("   - ファイル存在: \(recording.fileExists())")
-            print("   - アップロード試行回数: \(recording.uploadAttempts)/3")
-            
+        // 基本的なチェックのみ（ファイル存在と最大試行回数）
+        guard recording.fileExists() else {
+            print("⚠️ アップロード不可: ファイルが存在しません - \(recording.fileName)")
             DispatchQueue.main.async {
                 self.connectionStatus = .failed
                 self.currentUploadingFile = nil
@@ -83,10 +80,27 @@ class NetworkManager: ObservableObject {
             return
         }
         
+        guard recording.uploadAttempts < 3 else {
+            print("⚠️ アップロード不可: 最大試行回数超過 - \(recording.fileName)")
+            DispatchQueue.main.async {
+                self.connectionStatus = .failed
+                self.currentUploadingFile = nil
+            }
+            return
+        }
+        
+        // アップロード済みでも実行可能（サーバー側で上書き処理される）
+        if recording.isUploaded {
+            print("ℹ️ アップロード済みファイルの再送信: \(recording.fileName)")
+        }
+        
         print("🚀 アップロード開始: \(recording.fileName)")
         print("   - ファイルサイズ: \(recording.fileSizeFormatted)")
         print("   - アップロード試行: \(recording.uploadAttempts + 1)回目")
         print("   - ユーザーID: \(currentUserID)")
+        print("   - サーバーURL: \(serverURL)")
+        print("   - デバイス登録状態: \(deviceManager?.isDeviceRegistered ?? false)")
+        print("   - 認証状態: \(authManager?.isAuthenticated ?? false)")
         
         // 接続ステータスを更新
         DispatchQueue.main.async {
@@ -238,15 +252,40 @@ class NetworkManager: ObservableObject {
             }
         }
         
+        // アップロード開始時刻を記録
+        let uploadStartTime = Date()
+        
         // URLSessionでリクエストを送信
-        URLSession.shared.dataTask(with: request) { data, response, error in
+        let uploadTask = URLSession.shared.dataTask(with: request) { data, response, error in
             progressTimer.invalidate()
+            
+            // アップロード終了時刻
+            let uploadEndTime = Date()
+            let uploadDuration = uploadEndTime.timeIntervalSince(uploadStartTime)
             
             DispatchQueue.main.async {
                 if let error = error {
-                    let errorMsg = "ネットワークエラー: \(error.localizedDescription)"
+                    let errorMsg: String
+                    let nsError = error as NSError
+                    
+                    // エラーの詳細な分析
+                    switch nsError.code {
+                    case NSURLErrorTimedOut:
+                        errorMsg = "タイムアウト: サーバーが応答しませんでした"
+                    case NSURLErrorNotConnectedToInternet:
+                        errorMsg = "インターネット接続がありません"
+                    case NSURLErrorNetworkConnectionLost:
+                        errorMsg = "ネットワーク接続が失われました"
+                    case NSURLErrorCannotConnectToHost:
+                        errorMsg = "サーバーに接続できません: \(self.serverURL)"
+                    default:
+                        errorMsg = "ネットワークエラー: \(error.localizedDescription)"
+                    }
+                    
                     print("❌ \(errorMsg)")
-                    print("❌ エラー詳細: \(error)")
+                    print("❌ エラーコード: \(nsError.code)")
+                    print("❌ エラードメイン: \(nsError.domain)")
+                    print("❌ エラー詳細: \(nsError.userInfo)")
                     
                     recording.markAsUploadFailed(error: errorMsg)
                     
@@ -257,7 +296,7 @@ class NetworkManager: ObservableObject {
                 }
                 
                 guard let httpResponse = response as? HTTPURLResponse else {
-                    let errorMsg = "無効なレスポンス"
+                    let errorMsg = "無効なレスポンス: HTTPレスポンスではありません"
                     print("❌ \(errorMsg)")
                     
                     recording.markAsUploadFailed(error: errorMsg)
@@ -268,19 +307,57 @@ class NetworkManager: ObservableObject {
                     return
                 }
                 
+                // レスポンス詳細ログ
+                print("📡 アップロード完了: \(recording.fileName)")
                 print("📡 レスポンスステータス: \(httpResponse.statusCode)")
-                print("📡 レスポンスヘッダー: \(httpResponse.allHeaderFields)")
+                print("📡 アップロード時間: \(String(format: "%.2f", uploadDuration))秒")
+                
+                // レスポンスヘッダーの主要項目を表示
+                if let contentType = httpResponse.allHeaderFields["Content-Type"] as? String {
+                    print("📡 Content-Type: \(contentType)")
+                }
+                if let serverHeader = httpResponse.allHeaderFields["Server"] as? String {
+                    print("📡 Server: \(serverHeader)")
+                }
+                
+                // レスポンスボディの解析
+                var responseBody: String? = nil
+                var responseJSON: [String: Any]? = nil
                 
                 if let data = data {
                     print("📡 レスポンスデータサイズ: \(data.count) bytes")
+                    
+                    // テキストとして解析
                     if let responseString = String(data: data, encoding: .utf8) {
+                        responseBody = responseString
                         print("📡 レスポンスボディ: \(responseString)")
+                    }
+                    
+                    // JSONとして解析を試みる
+                    if let json = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
+                        responseJSON = json
+                        print("📡 レスポンスJSON: \(json)")
                     }
                 }
                 
-                if httpResponse.statusCode == 200 {
-                    print("✅ アップロード成功: \(recording.fileName) (ユーザー: \(self.currentUserID))")
-                    print("📋 ファイルサイズ: \(recording.fileSizeFormatted)")
+                // ステータスコードに基づく処理
+                switch httpResponse.statusCode {
+                case 200...299:
+                    // 成功
+                    print("✅ アップロード成功: \(recording.fileName)")
+                    print("✅ ユーザーID: \(self.currentUserID)")
+                    print("✅ ファイルサイズ: \(recording.fileSizeFormatted)")
+                    print("✅ アップロード試行回数: \(recording.uploadAttempts + 1)")
+                    
+                    // サーバーレスポンスから追加情報を取得
+                    if let json = responseJSON {
+                        if let fileId = json["file_id"] as? String {
+                            print("✅ サーバー側ファイルID: \(fileId)")
+                        }
+                        if let uploadedAt = json["uploaded_at"] as? String {
+                            print("✅ サーバー側アップロード時刻: \(uploadedAt)")
+                        }
+                    }
                     
                     // RecordingModelの状態を更新（永続化される）
                     recording.markAsUploaded()
@@ -288,31 +365,193 @@ class NetworkManager: ObservableObject {
                     self.connectionStatus = .connected
                     self.uploadProgress = 1.0
                     
-                    // 少し遅らせてUIをリセット（順次処理のため）
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    // UIリセットを遅らせる（UploadManagerが監視できるようにする）
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                         self.currentUploadingFile = nil
+                        self.uploadProgress = 0.0
                     }
                     
-                } else {
-                    let errorMsg = "サーバーエラー - ステータスコード: \(httpResponse.statusCode)"
+                case 400:
+                    let errorMsg = "リクエストエラー (400): 不正なリクエスト形式"
                     print("❌ \(errorMsg)")
-                    
-                    // レスポンスボディの詳細を表示
-                    if let data = data, let responseString = String(data: data, encoding: .utf8) {
-                        print("❌ サーバーレスポンス: \(responseString)")
+                    if let body = responseBody {
+                        print("❌ エラー詳細: \(body)")
                     }
-                    
                     recording.markAsUploadFailed(error: errorMsg)
+                    self.handleUploadFailure()
                     
-                    self.connectionStatus = .failed
-                    self.uploadProgress = 0.0
+                case 401:
+                    let errorMsg = "認証エラー (401): 認証情報が無効です"
+                    print("❌ \(errorMsg)")
+                    recording.markAsUploadFailed(error: errorMsg)
+                    self.handleUploadFailure()
                     
-                    // 少し遅らせてUIをリセット
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        self.currentUploadingFile = nil
+                case 403:
+                    let errorMsg = "アクセス拒否 (403): 権限がありません"
+                    print("❌ \(errorMsg)")
+                    recording.markAsUploadFailed(error: errorMsg)
+                    self.handleUploadFailure()
+                    
+                case 404:
+                    let errorMsg = "エンドポイントエラー (404): アップロードURLが見つかりません"
+                    print("❌ \(errorMsg)")
+                    print("❌ URL: \(self.serverURL)/upload")
+                    recording.markAsUploadFailed(error: errorMsg)
+                    self.handleUploadFailure()
+                    
+                case 413:
+                    let errorMsg = "ファイルサイズエラー (413): ファイルが大きすぎます"
+                    print("❌ \(errorMsg)")
+                    print("❌ ファイルサイズ: \(recording.fileSizeFormatted)")
+                    recording.markAsUploadFailed(error: errorMsg)
+                    self.handleUploadFailure()
+                    
+                case 500...599:
+                    let errorMsg = "サーバーエラー (\(httpResponse.statusCode)): サーバー側で問題が発生しました"
+                    print("❌ \(errorMsg)")
+                    if let body = responseBody {
+                        print("❌ エラー詳細: \(body)")
                     }
+                    recording.markAsUploadFailed(error: errorMsg)
+                    self.handleUploadFailure()
+                    
+                default:
+                    let errorMsg = "予期しないステータスコード: \(httpResponse.statusCode)"
+                    print("⚠️ \(errorMsg)")
+                    if let body = responseBody {
+                        print("⚠️ レスポンス: \(body)")
+                    }
+                    recording.markAsUploadFailed(error: errorMsg)
+                    self.handleUploadFailure()
+                }
+            }
+        }
+        
+        uploadTask.resume()
+        print("🚀 アップロードタスク開始")
+    }
+    
+    // アップロード失敗時の共通処理
+    private func handleUploadFailure() {
+        self.connectionStatus = .failed
+        self.uploadProgress = 0.0
+        
+        // UIリセット
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            self.currentUploadingFile = nil
+        }
+    }
+    
+    // サーバー接続テスト機能
+    func testServerConnection(completion: @escaping (Bool, String) -> Void) {
+        guard let testURL = URL(string: "\(serverURL)/health") else {
+            completion(false, "無効なサーバーURL: \(serverURL)")
+            return
+        }
+        
+        print("🔍 サーバー接続テスト開始: \(testURL)")
+        
+        var request = URLRequest(url: testURL)
+        request.httpMethod = "GET"
+        request.timeoutInterval = 10.0
+        
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                if let error = error {
+                    let errorMessage = "接続エラー: \(error.localizedDescription)"
+                    print("❌ \(errorMessage)")
+                    completion(false, errorMessage)
+                    return
+                }
+                
+                if let httpResponse = response as? HTTPURLResponse {
+                    print("📡 サーバーレスポンス: \(httpResponse.statusCode)")
+                    
+                    if httpResponse.statusCode == 200 {
+                        completion(true, "サーバー接続成功")
+                    } else if httpResponse.statusCode == 404 {
+                        // /healthエンドポイントがない場合、/uploadで確認
+                        self.testUploadEndpoint(completion: completion)
+                    } else {
+                        completion(false, "サーバーエラー: \(httpResponse.statusCode)")
+                    }
+                } else {
+                    completion(false, "無効なレスポンス")
                 }
             }
         }.resume()
+    }
+    
+    // アップロードエンドポイントのテスト
+    private func testUploadEndpoint(completion: @escaping (Bool, String) -> Void) {
+        guard let uploadURL = URL(string: "\(serverURL)/upload") else {
+            completion(false, "無効なアップロードURL")
+            return
+        }
+        
+        print("🔍 アップロードエンドポイントテスト: \(uploadURL)")
+        
+        var request = URLRequest(url: uploadURL)
+        request.httpMethod = "POST"
+        request.timeoutInterval = 10.0
+        
+        // 空のリクエストを送信して、エンドポイントの存在確認
+        URLSession.shared.dataTask(with: request) { data, response, error in
+            DispatchQueue.main.async {
+                if let httpResponse = response as? HTTPURLResponse {
+                    print("📡 アップロードエンドポイントレスポンス: \(httpResponse.statusCode)")
+                    
+                    // 400は「リクエストが不正」なので、エンドポイントは存在している
+                    if httpResponse.statusCode == 400 || httpResponse.statusCode == 422 {
+                        completion(true, "アップロードエンドポイント確認済み")
+                    } else if httpResponse.statusCode == 404 {
+                        completion(false, "アップロードエンドポイントが見つかりません")
+                    } else {
+                        completion(true, "サーバー応答確認済み (ステータス: \(httpResponse.statusCode))")
+                    }
+                } else {
+                    completion(false, "エンドポイントテスト失敗")
+                }
+            }
+        }.resume()
+    }
+    
+    // 同一ファイル名での上書きテスト
+    func testDuplicateFileUpload(_ recording: RecordingModel, completion: @escaping (Bool, String) -> Void) {
+        print("🧪 同一ファイル名アップロードテスト: \(recording.fileName)")
+        
+        // 通常のアップロード処理を実行し、結果を監視
+        var statusObserver: AnyCancellable?
+        
+        statusObserver = $connectionStatus
+            .combineLatest($currentUploadingFile)
+            .sink { status, uploadingFile in
+                
+                if uploadingFile == recording.fileName {
+                    switch status {
+                    case .connected:
+                        print("✅ 同一ファイル名アップロード成功")
+                        statusObserver?.cancel()
+                        completion(true, "同一ファイル名でのアップロード成功（サーバー側で上書き処理された可能性）")
+                        
+                    case .failed:
+                        print("❌ 同一ファイル名アップロード失敗")
+                        statusObserver?.cancel()
+                        completion(false, "同一ファイル名でのアップロード失敗（サーバー側で重複拒否された可能性）")
+                        
+                    default:
+                        break
+                    }
+                }
+            }
+        
+        // 実際のアップロードを実行
+        uploadRecording(recording)
+        
+        // タイムアウト処理
+        DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
+            statusObserver?.cancel()
+            completion(false, "テストタイムアウト")
+        }
     }
 } 
