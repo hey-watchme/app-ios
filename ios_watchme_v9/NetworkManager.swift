@@ -368,7 +368,15 @@ class NetworkManager: ObservableObject {
                     }
                     
                     // RecordingModelの状態を更新（永続化される）
+                    print("🔍 アップロード前のisUploaded: \(recording.isUploaded)")
+                    print("🔍 RecordingModelのObjectIdentifier: \(ObjectIdentifier(recording))")
                     recording.markAsUploaded()
+                    print("🔍 アップロード後のisUploaded: \(recording.isUploaded)")
+                    
+                    // 状態が正しく更新されたか確認
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        print("🔍 0.1秒後のisUploaded: \(recording.isUploaded)")
+                    }
                     
                     self.connectionStatus = .connected
                     self.uploadProgress = 1.0

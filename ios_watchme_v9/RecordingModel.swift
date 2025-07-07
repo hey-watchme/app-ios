@@ -95,9 +95,18 @@ class RecordingModel: ObservableObject, Codable {
     }
     
     func markAsUploaded() {
+        print("📌 markAsUploaded呼び出し開始")
+        print("📌 変更前のisUploaded: \(isUploaded)")
         isUploaded = true
+        print("📌 変更後のisUploaded: \(isUploaded)")
         lastUploadError = nil
         saveUploadStatus()
+        print("📌 markAsUploaded完了 - 永続化済み")
+        
+        // @Published属性が正しく動作しているか確認
+        DispatchQueue.main.async {
+            print("📌 メインスレッドでのisUploaded: \(self.isUploaded)")
+        }
     }
     
     func markAsUploadFailed(error: String) {

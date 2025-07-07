@@ -571,7 +571,7 @@ struct ContentView: View {
 
 // MARK: - 録音ファイル行のビュー
 struct RecordingRowView: View {
-    let recording: RecordingModel
+    @ObservedObject var recording: RecordingModel
     let isSelected: Bool
     let uploadManager: UploadManager
     let networkManager: NetworkManager?
