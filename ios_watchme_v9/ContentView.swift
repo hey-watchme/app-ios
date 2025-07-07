@@ -20,6 +20,7 @@ struct ContentView: View {
     @State private var newUserID = ""
     @State private var showLogoutConfirmation = false
     @State private var showUploadHistory = false
+    @State private var showUserInfoSheet = false
     @State private var networkManager: NetworkManager?
     
     private func initializeNetworkManager() {
@@ -139,8 +140,9 @@ struct ContentView: View {
                         }
                         
                         if uploadManager.failedTaskCount > 0 {
-                            Button("失敗したタスクをリトライ") {
+                            Button("失敗タスクを手動リトライ") {
                                 uploadManager.retryFailedTasks()
+                                uploadManager.startManualProcessing()
                             }
                             .font(.caption)
                             .foregroundColor(.orange)
@@ -151,77 +153,6 @@ struct ContentView: View {
                     .cornerRadius(8)
                 }
                 
-                // サーバーURL & ユーザーID表示
-                VStack(spacing: 12) {
-                    // サーバーURL
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("サーバーURL:")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                        
-                        Text(networkManager?.serverURL ?? "サーバーURL未設定")
-                            .font(.footnote)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color(.systemGray6))
-                            .cornerRadius(8)
-                    }
-                    
-                    // ユーザー情報
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("ログインユーザー:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            
-                            Spacer()
-                            
-                            Button("ログアウト") {
-                                showLogoutConfirmation = true
-                            }
-                            .font(.caption)
-                            .foregroundColor(.red)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            if let user = authManager.currentUser {
-                                Text("📧 \(user.email)")
-                                    .font(.footnote)
-                                    .fontWeight(.medium)
-                                
-                                Text("🆔 \(user.id)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                                
-                                // デバイス登録状態表示
-                                if deviceManager.isDeviceRegistered {
-                                    if let deviceInfo = deviceManager.getDeviceInfo() {
-                                        Text("📱 デバイス: \(deviceInfo.deviceID.prefix(8))...")
-                                            .font(.caption)
-                                            .foregroundColor(.green)
-                                    }
-                                } else {
-                                    Text("📱 デバイス: 未登録")
-                                        .font(.caption)
-                                        .foregroundColor(.orange)
-                                }
-                                
-                                // デバイス登録エラー表示
-                                if let error = deviceManager.registrationError {
-                                    Text("❌ \(error)")
-                                        .font(.caption)
-                                        .foregroundColor(.red)
-                                        .lineLimit(2)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.green.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                }
                 
                 // 録音コントロール
                 VStack(spacing: 16) {
@@ -248,10 +179,8 @@ struct ContentView: View {
                         // 録音停止ボタン
                         Button(action: {
                             audioRecorder.stopRecording()
-                            // 録音停止後、少し待ってから自動アップロード
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-                                autoUploadAllPendingRecordingsWithUploadManager()
-                            }
+                            // 自動アップロード機能を削除 - 手動アップロードのみ対応
+                            print("💾 録音停止完了 - 手動でアップロードしてください")
                         }) {
                             HStack {
                                 Image(systemName: "stop.fill")
@@ -277,10 +206,6 @@ struct ContentView: View {
                                 .foregroundColor(.white)
                                 .cornerRadius(10)
                             }
-                            
-                            Text(audioRecorder.getCurrentSlotInfo())
-                                .font(.caption)
-                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -331,7 +256,7 @@ struct ContentView: View {
                     // 録音一覧
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            Text("未アップロードファイル")
+                            Text("録音ファイル")
                                 .font(.headline)
                             
                             Spacer()
@@ -352,30 +277,15 @@ struct ContentView: View {
                                 .cornerRadius(6)
                             }
                             
-                            // サーバー接続テストボタン
-                            Button(action: {
-                                testServerConnection()
-                            }) {
-                                HStack {
-                                    Image(systemName: "network")
-                                    Text("接続テスト")
-                                }
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.orange.opacity(0.2))
-                                .foregroundColor(.orange)
-                                .cornerRadius(6)
-                            }
                             
-                            // 一括アップロードボタン
+                            // 一括アップロードボタン（手動処理）
                             if audioRecorder.recordings.filter({ !$0.isUploaded && $0.canUpload }).count > 0 {
                                 Button(action: {
-                                    autoUploadAllPendingRecordingsWithUploadManager()
+                                    manualBatchUploadWithUploadManager()
                                 }) {
                                     HStack {
                                         Image(systemName: "icloud.and.arrow.up")
-                                        Text("一括アップロード")
+                                        Text("手動一括アップロード")
                                     }
                                     .font(.caption)
                                     .padding(.horizontal, 12)
@@ -436,12 +346,79 @@ struct ContentView: View {
                         .padding()
                 }
                 
-                Spacer(minLength: 50)
+                Spacer(minLength: 20)
+                
+                // フッターエリア - テスト用機能
+                VStack(spacing: 16) {
+                    Divider()
+                        .padding(.horizontal)
+                    
+                    VStack(spacing: 12) {
+                        Text("🔧 開発・テスト用機能")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(.secondary)
+                        
+                        // サーバーURL表示
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("サーバーURL:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            
+                            Text(networkManager?.serverURL ?? "サーバーURL未設定")
+                                .font(.footnote)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color(.systemGray6))
+                                .cornerRadius(8)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        
+                        // 接続テストボタン
+                        Button(action: {
+                            testServerConnection()
+                        }) {
+                            HStack {
+                                Image(systemName: "network")
+                                Text("サーバー接続テスト")
+                            }
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.orange.opacity(0.15))
+                            .foregroundColor(.orange)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                            )
+                        }
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
+                }
+                .background(
+                    Color(.systemGray6)
+                        .opacity(0.3)
+                        .ignoresSafeArea(.container, edges: .bottom)
+                )
                 }
                 .padding()
             }
             .navigationTitle("録音アップロード")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button(action: {
+                        showUserInfoSheet = true
+                    }) {
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.blue)
+                    }
+                }
+            }
         }
         .onAppear {
             initializeNetworkManager()
@@ -483,6 +460,9 @@ struct ContentView: View {
         .sheet(isPresented: $showUploadHistory) {
             UploadHistoryView()
         }
+        .sheet(isPresented: $showUserInfoSheet) {
+            UserInfoSheetView(authManager: authManager, deviceManager: deviceManager, showLogoutConfirmation: $showLogoutConfirmation)
+        }
         .onChange(of: networkManager?.connectionStatus) { oldValue, newValue in
             // アップロード完了時の通知
             if newValue == .connected && networkManager?.currentUploadingFile != nil {
@@ -523,13 +503,13 @@ struct ContentView: View {
         }
     }
     
-    // 新しいUploadManagerを使用した自動アップロード
-    private func autoUploadAllPendingRecordingsWithUploadManager() {
+    // 新しいUploadManagerを使用した手動アップロード
+    private func manualBatchUploadWithUploadManager() {
         // アップロード可能なファイルを取得
         let uploadableRecordings = audioRecorder.recordings.filter { $0.canUpload }
         
         guard !uploadableRecordings.isEmpty else {
-            print("🤖 自動アップロード: アップロード可能なファイルがありません")
+            print("💾 手動アップロード: アップロード可能なファイルがありません")
             
             // アップロード不可能なファイルの理由を表示
             let failedRecordings = audioRecorder.recordings.filter { !$0.isUploaded }
@@ -547,112 +527,17 @@ struct ContentView: View {
         // 作成日時順（古い順）でソート
         let sortedRecordings = uploadableRecordings.sorted { $0.date < $1.date }
         
-        print("🤖 UploadManager経由で自動アップロード開始: \(sortedRecordings.count)個のファイル")
+        print("💾 UploadManager経由で手動アップロード開始: \(sortedRecordings.count)個のファイル")
         
         // UploadManagerのキューに追加
         uploadManager.addMultipleToQueue(sortedRecordings)
         
+        // 手動でアップロード処理を開始
+        uploadManager.startManualProcessing()
+        
         // アップロード状態を表示
-        alertMessage = "\(sortedRecordings.count)個のファイルをアップロードキューに追加しました"
+        alertMessage = "\(sortedRecordings.count)個のファイルの手動アップロードを開始しました"
         showAlert = true
-    }
-    
-    // 最新の録音を自動アップロード（改善版）
-    private func autoUploadLatestRecording() {
-        // アップロード可能な最新ファイルを取得
-        let uploadableRecordings = audioRecorder.recordings.filter { $0.canUpload }
-        guard let latestRecording = uploadableRecordings.max(by: { $0.date < $1.date }) else {
-            print("🤖 自動アップロード: アップロード可能なファイルがありません")
-            return
-        }
-        
-        print("🤖 自動アップロード開始: \(latestRecording.fileName) (サイズ: \(latestRecording.fileSizeFormatted))")
-        networkManager?.uploadRecording(latestRecording)
-    }
-    
-    // すべてのアップロード可能ファイルを順次自動アップロード（改善版）
-    private func autoUploadAllPendingRecordings() {
-        // アップロード可能なファイルを取得
-        let uploadableRecordings = audioRecorder.recordings.filter { $0.canUpload }
-        
-        guard !uploadableRecordings.isEmpty else {
-            print("🤖 自動アップロード: アップロード可能なファイルがありません")
-            
-            // アップロード不可能なファイルの理由を表示
-            let failedRecordings = audioRecorder.recordings.filter { !$0.isUploaded }
-            if !failedRecordings.isEmpty {
-                print("📄 アップロード不可能なファイル: \(failedRecordings.count)個")
-                for recording in failedRecordings {
-                    let reason = !recording.fileExists() ? "ファイル不存在" : 
-                                recording.uploadAttempts >= 3 ? "最大試行回数超過" : "不明"
-                    print("   - \(recording.fileName): \(reason) (試行: \(recording.uploadAttempts)/3)")
-                }
-            }
-            return
-        }
-        
-        // 作成日時順（古い順）でアップロード
-        let sortedRecordings = uploadableRecordings.sorted { $0.date < $1.date }
-        
-        print("🤖 自動アップロード開始: \(sortedRecordings.count)個のファイルを順次処理")
-        for (index, recording) in sortedRecordings.enumerated() {
-            print("   \(index + 1). \(recording.fileName) (サイズ: \(recording.fileSizeFormatted), 試行: \(recording.uploadAttempts))")
-        }
-        
-        // 最初のファイルからアップロード開始
-        processNextUpload(from: sortedRecordings, currentIndex: 0)
-    }
-    
-    // 順次アップロード処理
-    private func processNextUpload(from recordings: [RecordingModel], currentIndex: Int) {
-        guard currentIndex < recordings.count else {
-            print("🎉 自動アップロード完了: 全てのファイル処理が終了しました")
-            return
-        }
-        
-        let currentRecording = recordings[currentIndex]
-        print("🤖 自動アップロード進行中: [\(currentIndex + 1)/\(recordings.count)] \(currentRecording.fileName)")
-        
-        // アップロード開始
-        networkManager?.uploadRecording(currentRecording)
-        
-        // アップロード結果を監視（ConnectionStatusの変化を待つ）
-        var observer: AnyCancellable?
-        observer = networkManager?.$connectionStatus
-            .sink { status in
-                
-                switch status {
-                case .connected:
-                    // アップロード成功
-                    if networkManager?.currentUploadingFile == currentRecording.fileName {
-                        print("✅ 自動アップロード成功: \(currentRecording.fileName)")
-                        print("📋 アップロード状態が永続化されました")
-                        
-                        // ファイルは保持し、アップロード状態のみ更新（既にRecordingModel側で実施済み）
-                        
-                        // 次のファイルへ
-                        observer?.cancel()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                            self.processNextUpload(from: recordings, currentIndex: currentIndex + 1)
-                        }
-                    }
-                    
-                case .failed:
-                    // アップロード失敗
-                    if networkManager?.currentUploadingFile == currentRecording.fileName {
-                        print("❌ 自動アップロード失敗: \(currentRecording.fileName) - ファイルを保持（手動リトライ用）")
-                        
-                        // 次のファイルへ（失敗したファイルは保持）
-                        observer?.cancel()
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            self.processNextUpload(from: recordings, currentIndex: currentIndex + 1)
-                        }
-                    }
-                    
-                default:
-                    break
-                }
-            }
     }
     
     // 接続ステータスに応じた色
@@ -753,25 +638,17 @@ struct RecordingRowView: View {
             Spacer()
             
             HStack(spacing: 8) {
-                // アップロードボタン（常に表示、サーバー側で上書き処理）
-                if recording.fileExists() && recording.uploadAttempts < 3 {
+                // アップロードボタン（未アップロードファイルのみ表示）
+                if !recording.isUploaded && recording.fileExists() && recording.uploadAttempts < 3 {
                     Button(action: {
                         onSelect()
-                        if recording.isUploaded {
-                            print("📤 アップロード済みファイルの再送信: \(recording.fileName)")
-                        } else {
-                            print("📤 手動アップロード開始: \(recording.fileName)")
-                        }
+                        print("📤 手動アップロード開始: \(recording.fileName)")
                         networkManager?.uploadRecording(recording)
                     }) {
                         HStack(spacing: 4) {
-                            Image(systemName: recording.isUploaded ? "arrow.triangle.2.circlepath" : "icloud.and.arrow.up")
-                            if recording.isUploaded {
-                                Text("再送信")
-                                    .font(.caption2)
-                            }
+                            Image(systemName: "icloud.and.arrow.up")
                         }
-                        .foregroundColor(recording.isUploaded ? .purple : .blue)
+                        .foregroundColor(.blue)
                     }
                     .disabled(networkManager?.connectionStatus == .uploading)
                 } else if recording.uploadAttempts >= 3 {
@@ -810,6 +687,159 @@ extension DateFormatter {
         formatter.locale = Locale(identifier: "ja_JP")
         return formatter
     }()
+}
+
+// MARK: - ユーザー情報シートビュー
+struct UserInfoSheetView: View {
+    let authManager: SupabaseAuthManager
+    let deviceManager: DeviceManager
+    @Binding var showLogoutConfirmation: Bool
+    @Environment(\.dismiss) private var dismiss
+    
+    var body: some View {
+        NavigationView {
+            VStack(spacing: 24) {
+                // ユーザーアイコン
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.system(size: 80))
+                    .foregroundColor(.blue)
+                    .padding(.top, 20)
+                
+                // ユーザー情報セクション
+                VStack(spacing: 16) {
+                    // ユーザーアカウント情報
+                    InfoSection(title: "ユーザーアカウント情報") {
+                        if let user = authManager.currentUser {
+                            InfoRow(label: "メールアドレス", value: user.email, icon: "envelope.fill")
+                            InfoRow(label: "ユーザーID", value: user.id, icon: "person.text.rectangle.fill")
+                        } else {
+                            InfoRow(label: "状態", value: "ログインしていません", icon: "exclamationmark.triangle.fill", valueColor: .red)
+                        }
+                    }
+                    
+                    // デバイス情報
+                    InfoSection(title: "デバイス情報") {
+                        if let deviceInfo = deviceManager.getDeviceInfo() {
+                            InfoRow(label: "デバイスID", value: deviceInfo.deviceID, icon: "iphone")
+                            InfoRow(label: "デバイスタイプ", value: deviceInfo.deviceType, icon: "tag.fill")
+                            InfoRow(label: "プラットフォーム", value: deviceInfo.platformType, icon: "gear")
+                            InfoRow(label: "登録状態", value: deviceManager.isDeviceRegistered ? "登録済み" : "未登録", 
+                                   icon: deviceManager.isDeviceRegistered ? "checkmark.circle.fill" : "xmark.circle.fill",
+                                   valueColor: deviceManager.isDeviceRegistered ? .green : .orange)
+                        } else {
+                            InfoRow(label: "状態", value: "デバイス情報取得エラー", icon: "exclamationmark.triangle.fill", valueColor: .red)
+                        }
+                        
+                        // デバイス登録エラー表示
+                        if let error = deviceManager.registrationError {
+                            InfoRow(label: "エラー", value: error, icon: "exclamationmark.triangle.fill", valueColor: .red)
+                        }
+                    }
+                    
+                    // 認証状態
+                    InfoSection(title: "認証状態") {
+                        InfoRow(label: "認証状態", value: authManager.isAuthenticated ? "認証済み" : "未認証", 
+                               icon: authManager.isAuthenticated ? "checkmark.shield.fill" : "xmark.shield.fill",
+                               valueColor: authManager.isAuthenticated ? .green : .red)
+                    }
+                }
+                
+                Spacer()
+                
+                // ログアウトボタン
+                if authManager.isAuthenticated {
+                    Button(action: {
+                        dismiss()
+                        showLogoutConfirmation = true
+                    }) {
+                        HStack {
+                            Image(systemName: "rectangle.portrait.and.arrow.right.fill")
+                            Text("ログアウト")
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.red)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal)
+                    .padding(.bottom, 20)
+                }
+            }
+            .navigationTitle("ユーザー情報")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("閉じる") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+// MARK: - 情報セクション
+struct InfoSection<Content: View>: View {
+    let title: String
+    let content: Content
+    
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+                .foregroundColor(.primary)
+            
+            VStack(spacing: 8) {
+                content
+            }
+            .padding()
+            .background(Color(.systemGray6))
+            .cornerRadius(12)
+        }
+        .padding(.horizontal)
+    }
+}
+
+// MARK: - 情報行
+struct InfoRow: View {
+    let label: String
+    let value: String
+    let icon: String
+    let valueColor: Color
+    
+    init(label: String, value: String, icon: String, valueColor: Color = .primary) {
+        self.label = label
+        self.value = value
+        self.icon = icon
+        self.valueColor = valueColor
+    }
+    
+    var body: some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(.blue)
+                .frame(width: 20)
+            
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+            
+            Spacer()
+            
+            Text(value)
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(valueColor)
+                .lineLimit(1)
+                .truncationMode(.middle)
+        }
+    }
 }
 
 #Preview {

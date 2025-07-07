@@ -74,73 +74,22 @@ class AudioRecorder: NSObject, ObservableObject {
     
     // 現在の30分スロット時刻を取得（HH-mm形式）
     private func getCurrentSlot() -> String {
-        let now = Date()
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute], from: now)
-        
-        let hour = components.hour ?? 0
-        let minute = components.minute ?? 0
-        
-        // 30分単位に調整（0-29分 → 00分、30-59分 → 30分）
-        let adjustedMinute = minute < 30 ? 0 : 30
-        
-        return String(format: "%02d-%02d", hour, adjustedMinute)
+        return SlotTimeUtility.getCurrentSlot()
     }
     
     // 特定の時刻のスロットを取得
     private func getSlotForDate(_ date: Date) -> String {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute], from: date)
-        
-        let hour = components.hour ?? 0
-        let minute = components.minute ?? 0
-        
-        // 30分単位に調整
-        let adjustedMinute = minute < 30 ? 0 : 30
-        
-        return String(format: "%02d-%02d", hour, adjustedMinute)
+        return SlotTimeUtility.getSlotName(from: date)
     }
     
     // 次のスロット切り替えまでの正確な秒数を計算
     private func getSecondsUntilNextSlot() -> TimeInterval {
-        let now = Date()
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.hour, .minute, .second, .nanosecond], from: now)
-        
-        let minute = components.minute ?? 0
-        let second = components.second ?? 0
-        let nanosecond = components.nanosecond ?? 0
-        
-        let currentMinuteInSlot = minute % 30
-        let totalSecondsInCurrentSlot = Double(currentMinuteInSlot * 60 + second) + Double(nanosecond) / 1_000_000_000.0
-        let secondsUntilNextSlot = (30.0 * 60.0) - totalSecondsInCurrentSlot
-        
-        return TimeInterval(secondsUntilNextSlot)
+        return SlotTimeUtility.getSecondsUntilNextSlot()
     }
     
     // 次のスロット開始時刻を取得
     private func getNextSlotStartTime() -> Date {
-        let now = Date()
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
-        
-        let minute = components.minute ?? 0
-        let nextSlotMinute = minute < 30 ? 30 : 0
-        let nextHour = minute < 30 ? components.hour ?? 0 : (components.hour ?? 0) + 1
-        
-        var nextSlotComponents = components
-        nextSlotComponents.hour = nextHour
-        nextSlotComponents.minute = nextSlotMinute
-        nextSlotComponents.second = 0
-        nextSlotComponents.nanosecond = 0
-        
-        // 時刻が24時を超える場合の処理
-        if nextHour >= 24 {
-            nextSlotComponents.hour = 0
-            nextSlotComponents.day = (components.day ?? 0) + 1
-        }
-        
-        return calendar.date(from: nextSlotComponents) ?? now
+        return SlotTimeUtility.getNextSlotStartTime()
     }
     
     // 録音開始
@@ -285,9 +234,8 @@ class AudioRecorder: NSObject, ObservableObject {
         
         // 現在の録音を完了・保存
         if let completedRecording = finishCurrentSlotRecordingWithReturn() {
-            // 完了したファイルを即座にアップロードキューに追加（バックグラウンド）
-            print("📤 スロット切り替え時の自動アップロード: \(completedRecording.fileName)")
-            UploadManager.shared.addToQueue(completedRecording)
+            // 自動アップロード機能を削除（手動アップロードのみ対応）
+            print("💾 スロット切り替え時の録音完了: \(completedRecording.fileName) - 手動アップロードが必要です")
             
             // 新しいスロットで録音開始
             currentSlot = newSlot

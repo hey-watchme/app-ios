@@ -83,22 +83,39 @@ class UploadManager: ObservableObject {
         
         DispatchQueue.main.async {
             self.uploadQueue.append(task)
-            print("📤 アップロードキューに追加: \(recording.fileName) (キュー内: \(self.uploadQueue.count)件)")
+            print("📤 アップロードキューに追加: \(recording.fileName) (キュー内: \(self.uploadQueue.count)件) - 手動処理が必要")
         }
         
-        // 処理が実行中でない場合は開始
-        if !isProcessing {
-            startProcessing()
-        }
+        // 自動アップロードを無効化 - 手動アップロードのみ対応
+        // if !isProcessing {
+        //     startProcessing()
+        // }
     }
     
-    // 複数のファイルを一括でキューに追加
+    // 複数のファイルを一括でキューに追加（まとめ送信対応）
     func addMultipleToQueue(_ recordings: [RecordingModel]) {
         print("📤 複数ファイルをキューに追加: \(recordings.count)件")
+        print("📤 バックデート・まとめ送信モード開始")
+        
+        // ファイルパスをログ出力
+        for recording in recordings {
+            if let deviceInfo = DeviceManager().getDeviceInfo() {
+                let filePath = SlotTimeUtility.generateFilePath(deviceID: deviceInfo.deviceID, date: recording.date)
+                print("   - \(filePath)")
+            }
+        }
         
         for recording in recordings {
             addToQueue(recording)
         }
+        
+        print("📤 まとめ送信キュー登録完了 - 手動で開始してください")
+    }
+    
+    // 手動でキュー処理を開始
+    func startManualProcessing() {
+        print("📤 手動アップロード処理を開始")
+        startProcessing()
     }
     
     // アップロード処理を開始
@@ -226,9 +243,10 @@ class UploadManager: ObservableObject {
             
             print("📊 アップロード統計 - 成功: \(self.successCount), 失敗: \(self.failureCount), 残り: \(self.pendingTaskCount)件")
             
-            // 自動削除を一時的に無効化（デバッグ用）
-            print("ℹ️ 自動削除を一時的に無効化: \(task.recording.fileName)")
+            // 自動削除機能を無効化 - ファイルは手動で管理
+            // print("🗑️ アップロード完了ファイルの自動削除を実行: \(task.recording.fileName)")
             // self.autoDeleteUploadedFile(task.recording)
+            print("✅ アップロード完了: \(task.recording.fileName) - ファイルは手動で管理してください")
         }
         
         // 次のタスクを処理（少し遅延を入れる）
@@ -373,9 +391,11 @@ class UploadManager: ObservableObject {
             }
         }
         
-        if !isProcessing {
-            startProcessing()
-        }
+        // 自動アップロードを無効化 - 手動アップロードのみ対応
+        print("📤 手動でリトライ処理を開始してください")
+        // if !isProcessing {
+        //     startProcessing()
+        // }
     }
     
     // 進捗率を更新

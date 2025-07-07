@@ -156,6 +156,14 @@ class NetworkManager: ObservableObject {
         request.httpMethod = "POST"
         request.timeoutInterval = 120.0  // タイムアウトを120秒に延長
         
+        // X-File-Pathヘッダーを設定（device_id/YYYY-MM-DD/HH-MM.wav形式）
+        if let deviceInfo = deviceManager?.getDeviceInfo() {
+            // 共通ユーティリティを使用してファイルパスを生成
+            let filePath = SlotTimeUtility.generateFilePath(deviceID: deviceInfo.deviceID, date: recording.date)
+            request.setValue(filePath, forHTTPHeaderField: "X-File-Path")
+            print("📋 X-File-Path設定: \(filePath)")
+        }
+        
         // Boundary文字列を生成
         let boundary = UUID().uuidString
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
