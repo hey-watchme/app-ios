@@ -19,7 +19,6 @@ struct ContentView: View {
     @State private var showUserIDChangeAlert = false
     @State private var newUserID = ""
     @State private var showLogoutConfirmation = false
-    @State private var showUploadHistory = false
     @State private var showUserInfoSheet = false
     @State private var networkManager: NetworkManager?
     
@@ -160,44 +159,6 @@ struct ContentView: View {
                     .cornerRadius(12)
                 }
                 
-                // アップロードキュー状態表示
-                if uploadManager.uploadQueue.count > 0 {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("📤 アップロードキュー")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                        
-                        HStack {
-                            Label("\(uploadManager.pendingTaskCount)", systemImage: "clock")
-                                .font(.caption)
-                                .foregroundColor(.orange)
-                            
-                            Label("\(uploadManager.uploadingTaskCount)", systemImage: "arrow.up.circle")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                            
-                            Label("\(uploadManager.completedTaskCount)", systemImage: "checkmark.circle")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                            
-                            Label("\(uploadManager.failedTaskCount)", systemImage: "xmark.circle")
-                                .font(.caption)
-                                .foregroundColor(.red)
-                        }
-                        
-                        if uploadManager.failedTaskCount > 0 {
-                            Button("失敗タスクを手動リトライ") {
-                                uploadManager.retryFailedTasks()
-                                uploadManager.startManualProcessing()
-                            }
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                        }
-                    }
-                    .padding()
-                    .background(Color.gray.opacity(0.1))
-                    .cornerRadius(8)
-                }
                 
                 
                 // 録音コントロール
@@ -264,23 +225,6 @@ struct ContentView: View {
                                 .font(.headline)
                             
                             Spacer()
-                            
-                            // アップロード履歴ボタン
-                            Button(action: {
-                                showUploadHistory = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "clock.arrow.circlepath")
-                                    Text("履歴")
-                                }
-                                .font(.caption)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 4)
-                                .background(Color.gray.opacity(0.2))
-                                .foregroundColor(.primary)
-                                .cornerRadius(6)
-                            }
-                            
                             
                             // 一括アップロードボタン（手動処理）
                             if audioRecorder.recordings.filter({ !$0.isUploaded && $0.canUpload }).count > 0 {
@@ -460,9 +404,6 @@ struct ContentView: View {
             }
         } message: {
             Text("本当にログアウトしますか？")
-        }
-        .sheet(isPresented: $showUploadHistory) {
-            UploadHistoryView()
         }
         .sheet(isPresented: $showUserInfoSheet) {
             UserInfoSheetView(authManager: authManager, deviceManager: deviceManager, showLogoutConfirmation: $showLogoutConfirmation)

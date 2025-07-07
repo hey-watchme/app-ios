@@ -8,19 +8,6 @@
 import Foundation
 import Combine
 
-// アップロード履歴項目
-struct UploadHistoryItem {
-    let fileName: String
-    let originalDate: Date
-    let uploadedAt: Date
-    let fileSize: Int64
-    
-    var fileSizeFormatted: String {
-        let formatter = ByteCountFormatter()
-        formatter.countStyle = .file
-        return formatter.string(fromByteCount: fileSize)
-    }
-}
 
 // アップロードタスクを管理する構造体
 struct UploadTask {
@@ -272,8 +259,6 @@ class UploadManager: ObservableObject {
                 print("✅ 物理ファイル削除成功: \(recording.fileName)")
             }
             
-            // アップロード履歴に追加
-            addToUploadHistory(recording)
             
             // AudioRecorderのリストからも削除（通知を送信）
             NotificationCenter.default.post(
@@ -286,35 +271,6 @@ class UploadManager: ObservableObject {
         }
     }
     
-    // アップロード履歴に追加
-    private func addToUploadHistory(_ recording: RecordingModel) {
-        let historyKey = "uploadHistory"
-        
-        var history: [[String: Any]] = []
-        if let data = UserDefaults.standard.data(forKey: historyKey),
-           let existingHistory = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-            history = existingHistory
-        }
-        
-        let historyItem: [String: Any] = [
-            "fileName": recording.fileName,
-            "originalDate": recording.date.timeIntervalSince1970,
-            "uploadedAt": Date().timeIntervalSince1970,
-            "fileSize": recording.fileSize
-        ]
-        
-        history.insert(historyItem, at: 0) // 最新を先頭に
-        
-        // 履歴は最大100件まで保持
-        if history.count > 100 {
-            history = Array(history.prefix(100))
-        }
-        
-        if let data = try? JSONSerialization.data(withJSONObject: history) {
-            UserDefaults.standard.set(data, forKey: historyKey)
-            print("📋 アップロード履歴に追加: \(recording.fileName)")
-        }
-    }
     
     // タスク失敗処理
     private func handleTaskFailure(at index: Int, error: String) {
@@ -447,30 +403,4 @@ class UploadManager: ObservableObject {
         """
     }
     
-    // アップロード履歴を取得
-    static func getUploadHistory() -> [UploadHistoryItem] {
-        let historyKey = "uploadHistory"
-        var items: [UploadHistoryItem] = []
-        
-        if let data = UserDefaults.standard.data(forKey: historyKey),
-           let history = try? JSONSerialization.jsonObject(with: data) as? [[String: Any]] {
-            
-            for item in history {
-                if let fileName = item["fileName"] as? String,
-                   let originalTimestamp = item["originalDate"] as? TimeInterval,
-                   let uploadedTimestamp = item["uploadedAt"] as? TimeInterval,
-                   let fileSize = item["fileSize"] as? Int64 {
-                    
-                    items.append(UploadHistoryItem(
-                        fileName: fileName,
-                        originalDate: Date(timeIntervalSince1970: originalTimestamp),
-                        uploadedAt: Date(timeIntervalSince1970: uploadedTimestamp),
-                        fileSize: fileSize
-                    ))
-                }
-            }
-        }
-        
-        return items
-    }
 }
