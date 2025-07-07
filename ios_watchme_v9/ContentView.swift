@@ -43,11 +43,49 @@ struct ContentView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                // タイトル
-                Text("WatchMe")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
+                // 統計情報（録音数・アップロード済み・アップロード待ち）
+                if !audioRecorder.recordings.isEmpty {
+                    VStack(spacing: 8) {
+                        // 統計情報
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("総録音数")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("\(audioRecorder.recordings.count)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                            }
+                            
+                            Spacer()
+                            
+                            VStack(alignment: .center, spacing: 4) {
+                                Text("アップロード済み")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("\(audioRecorder.recordings.filter { $0.isUploaded }.count)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.green)
+                            }
+                            
+                            Spacer()
+                            
+                            VStack(alignment: .trailing, spacing: 4) {
+                                Text("アップロード待ち")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                Text("\(audioRecorder.recordings.filter { !$0.isUploaded }.count)")
+                                    .font(.title2)
+                                    .fontWeight(.bold)
+                                    .foregroundColor(.orange)
+                            }
+                        }
+                        .padding()
+                        .background(Color(.systemGray6))
+                        .cornerRadius(12)
+                    }
+                }
                 
                 // 接続ステータス表示
                 HStack {
@@ -210,50 +248,8 @@ struct ContentView: View {
                     }
                 }
                 
-                // 録音統計情報
+                // 録音一覧
                 if !audioRecorder.recordings.isEmpty {
-                    VStack(spacing: 8) {
-                        // 統計情報
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("総録音数")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("\(audioRecorder.recordings.count)")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .center, spacing: 4) {
-                                Text("アップロード済み")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("\(audioRecorder.recordings.filter { $0.isUploaded }.count)")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.green)
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text("アップロード待ち")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("\(audioRecorder.recordings.filter { !$0.isUploaded }.count)")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.orange)
-                            }
-                        }
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
-                    }
-                    
-                    // 録音一覧
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
                             Text("録音ファイル")
@@ -406,7 +402,7 @@ struct ContentView: View {
                 }
                 .padding()
             }
-            .navigationTitle("録音アップロード")
+            .navigationTitle("WatchMe")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
