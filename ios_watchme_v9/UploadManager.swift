@@ -168,47 +168,43 @@ class UploadManager: ObservableObject {
             networkManager.uploadRecording(task.recording)
         }
         
-        // アップロード結果を監視（簡単なロジックに変更）
+        // アップロード結果を監視（改善版）
         var statusObserver: AnyCancellable?
+        var recordingObserver: AnyCancellable?
         
-        statusObserver = networkManager.$connectionStatus
-            .sink { [weak self] status in
+        // RecordingModelのisUploadedプロパティを直接監視
+        recordingObserver = task.recording.$isUploaded
+            .removeDuplicates()
+            .sink { [weak self] isUploaded in
                 guard let self = self else { return }
                 
-                print("📊 UploadManager監視: status=\(status), targetFile=\(task.recording.fileName)")
+                print("📊 RecordingModel状態変化検知: \(task.recording.fileName) - isUploaded: \(isUploaded)")
+                
+                if isUploaded {
+                    print("✅ アップロード成功確認: \(task.recording.fileName)")
+                    self.handleTaskSuccess(at: nextTaskIndex)
+                    statusObserver?.cancel()
+                    recordingObserver?.cancel()
+                }
+            }
+        
+        // NetworkManagerの接続状態も監視（エラー検知用）
+        statusObserver = networkManager.$connectionStatus
+            .combineLatest(networkManager.$currentUploadingFile)
+            .sink { [weak self] status, uploadingFile in
+                guard let self = self else { return }
+                
+                // 現在のタスクのファイルがアップロード中の場合のみ処理
+                guard uploadingFile == task.recording.fileName else { return }
+                
+                print("📊 NetworkManager監視: status=\(status), targetFile=\(task.recording.fileName)")
                 
                 switch status {
-                case .connected:
-                    // アップロード成功 - RecordingModelの状態を確認
-                    print("✅ UploadManager: アップロード成功の可能性 \(task.recording.fileName)")
-                    
-                    // 少し待ってからRecordingModelの状態を確認
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        if task.recording.isUploaded {
-                            print("✅ RecordingModelもアップロード済みになりました: \(task.recording.fileName)")
-                            self.handleTaskSuccess(at: nextTaskIndex)
-                            statusObserver?.cancel()
-                        } else {
-                            print("⚠️ RecordingModelがまだアップロード済みになっていません: \(task.recording.fileName)")
-                            // 再度確認
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                if task.recording.isUploaded {
-                                    print("✅ 遅延でRecordingModelがアップロード済みになりました: \(task.recording.fileName)")
-                                    self.handleTaskSuccess(at: nextTaskIndex)
-                                    statusObserver?.cancel()
-                                } else {
-                                    print("❌ RecordingModelのアップロード状態が更新されませんでした: \(task.recording.fileName)")
-                                    self.handleTaskFailure(at: nextTaskIndex, error: "アップロード状態未更新")
-                                    statusObserver?.cancel()
-                                }
-                            }
-                        }
-                    }
-                    
                 case .failed:
-                    print("❌ UploadManager: アップロード失敗 \(task.recording.fileName)")
+                    print("❌ NetworkManager: アップロード失敗 \(task.recording.fileName)")
                     self.handleTaskFailure(at: nextTaskIndex, error: "アップロード失敗")
                     statusObserver?.cancel()
+                    recordingObserver?.cancel()
                     
                 default:
                     break
@@ -224,6 +220,7 @@ class UploadManager: ObservableObject {
                currentTask.id == task.id && currentTask.status == .uploading {
                 print("⏱️ アップロードタイムアウト: \(task.recording.fileName)")
                 statusObserver?.cancel()
+                recordingObserver?.cancel()
                 self.handleTaskFailure(at: nextTaskIndex, error: "タイムアウト")
             }
         }

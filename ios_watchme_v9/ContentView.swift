@@ -281,7 +281,7 @@ struct ContentView: View {
                                 }) {
                                     HStack {
                                         Image(systemName: "icloud.and.arrow.up")
-                                        Text("手動一括アップロード")
+                                        Text("すべてアップロード")
                                     }
                                     .font(.caption)
                                     .padding(.horizontal, 12)
