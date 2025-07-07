@@ -38,6 +38,14 @@ class AudioRecorder: NSObject, ObservableObject {
             name: NSNotification.Name("UploadedFileDeleted"),
             object: nil
         )
+        
+        // アップロード状態変更通知の監視を追加
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleRecordingUploadStatusChanged(_:)),
+            name: NSNotification.Name("RecordingUploadStatusChanged"),
+            object: nil
+        )
     }
     
     // アップロード完了ファイル削除の通知を受信
@@ -53,6 +61,37 @@ class AudioRecorder: NSObject, ObservableObject {
             
             print("✅ リストからファイルを削除: \(deletedRecording.fileName)")
             print("📊 残りファイル数: \(self.recordings.count)")
+        }
+    }
+    
+    // アップロード状態変更の通知を受信
+    @objc private func handleRecordingUploadStatusChanged(_ notification: Notification) {
+        guard let changedRecording = notification.object as? RecordingModel else { return }
+        
+        print("📢 [AudioRecorder] アップロード状態変更通知を受信: \(changedRecording.fileName)")
+        print("   - isUploaded: \(changedRecording.isUploaded)")
+        print("   - ObjectIdentifier: \(ObjectIdentifier(changedRecording))")
+        
+        DispatchQueue.main.async {
+            // 配列内の対応するRecordingModelを探して状態を確認
+            if let index = self.recordings.firstIndex(where: { $0.fileName == changedRecording.fileName }) {
+                let recording = self.recordings[index]
+                print("📊 [AudioRecorder] 配列内のRecordingModel確認:")
+                print("   - ファイル名: \(recording.fileName)")
+                print("   - isUploaded: \(recording.isUploaded)")
+                print("   - ObjectIdentifier: \(ObjectIdentifier(recording))")
+                print("   - 同一インスタンス: \(ObjectIdentifier(recording) == ObjectIdentifier(changedRecording))")
+                
+                // 配列を強制的に更新してUIを再描画
+                self.objectWillChange.send()
+                
+                // 統計情報の更新を確認
+                let uploadedCount = self.recordings.filter { $0.isUploaded }.count
+                let pendingCount = self.recordings.filter { !$0.isUploaded }.count
+                print("📊 [AudioRecorder] 更新後の統計:")
+                print("   - アップロード済み: \(uploadedCount)")
+                print("   - アップロード待ち: \(pendingCount)")
+            }
         }
     }
     

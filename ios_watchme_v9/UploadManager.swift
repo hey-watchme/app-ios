@@ -79,6 +79,12 @@ class UploadManager: ObservableObject {
             return
         }
         
+        // デバッグ: RecordingModelのインスタンスを確認
+        print("🔍 [UploadManager] RecordingModel追加:")
+        print("   - ファイル名: \(recording.fileName)")
+        print("   - ObjectIdentifier: \(ObjectIdentifier(recording))")
+        print("   - isUploaded: \(recording.isUploaded)")
+        
         let task = UploadTask(recording: recording)
         
         DispatchQueue.main.async {
@@ -179,6 +185,7 @@ class UploadManager: ObservableObject {
                 guard let self = self else { return }
                 
                 print("📊 RecordingModel状態変化検知: \(task.recording.fileName) - isUploaded: \(isUploaded)")
+                print("   - ObjectIdentifier: \(ObjectIdentifier(task.recording))")
                 
                 if isUploaded {
                     print("✅ アップロード成功確認: \(task.recording.fileName)")

@@ -95,17 +95,28 @@ class RecordingModel: ObservableObject, Codable {
     }
     
     func markAsUploaded() {
-        print("📌 markAsUploaded呼び出し開始")
-        print("📌 変更前のisUploaded: \(isUploaded)")
+        print("📌 [RecordingModel] markAsUploaded呼び出し開始")
+        print("📌 [RecordingModel] ObjectIdentifier: \(ObjectIdentifier(self))")
+        print("📌 [RecordingModel] ファイル名: \(fileName)")
+        print("📌 [RecordingModel] 変更前のisUploaded: \(isUploaded)")
+        
+        // メインスレッドで実行されているか確認
+        if Thread.isMainThread {
+            print("📌 [RecordingModel] メインスレッドで実行中")
+        } else {
+            print("📌 [RecordingModel] バックグラウンドスレッドで実行中")
+        }
+        
         isUploaded = true
-        print("📌 変更後のisUploaded: \(isUploaded)")
+        print("📌 [RecordingModel] 変更後のisUploaded: \(isUploaded)")
         lastUploadError = nil
         saveUploadStatus()
-        print("📌 markAsUploaded完了 - 永続化済み")
+        print("📌 [RecordingModel] markAsUploaded完了 - 永続化済み")
         
         // @Published属性が正しく動作しているか確認
         DispatchQueue.main.async {
-            print("📌 メインスレッドでのisUploaded: \(self.isUploaded)")
+            print("📌 [RecordingModel] メインスレッドでのisUploaded: \(self.isUploaded)")
+            print("📌 [RecordingModel] メインスレッドでのObjectIdentifier: \(ObjectIdentifier(self))")
         }
     }
     

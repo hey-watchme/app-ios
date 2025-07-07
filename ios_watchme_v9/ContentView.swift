@@ -63,10 +63,14 @@ struct ContentView: View {
                                 Text("アップロード済み")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                Text("\(audioRecorder.recordings.filter { $0.isUploaded }.count)")
+                                let uploadedCount = audioRecorder.recordings.filter { $0.isUploaded }.count
+                                Text("\(uploadedCount)")
                                     .font(.title2)
                                     .fontWeight(.bold)
                                     .foregroundColor(.green)
+                                    .onAppear {
+                                        print("🔍 [ContentView] 初期アップロード済み数: \(uploadedCount)")
+                                    }
                             }
                             
                             Spacer()
@@ -75,10 +79,14 @@ struct ContentView: View {
                                 Text("アップロード待ち")
                                     .font(.caption)
                                     .foregroundColor(.secondary)
-                                Text("\(audioRecorder.recordings.filter { !$0.isUploaded }.count)")
+                                let pendingCount = audioRecorder.recordings.filter { !$0.isUploaded }.count
+                                Text("\(pendingCount)")
                                     .font(.title2)
                                     .fontWeight(.bold)
                                     .foregroundColor(.orange)
+                                    .onAppear {
+                                        print("🔍 [ContentView] 初期アップロード待ち数: \(pendingCount)")
+                                    }
                             }
                         }
                         .padding()
@@ -525,6 +533,12 @@ struct ContentView: View {
         
         print("💾 UploadManager経由で手動アップロード開始: \(sortedRecordings.count)個のファイル")
         
+        // デバッグ: AudioRecorder内のRecordingModelのObjectIdentifierを確認
+        print("🔍 [ContentView] AudioRecorder内のRecordingModel:")
+        for recording in sortedRecordings {
+            print("   - \(recording.fileName): ObjectIdentifier = \(ObjectIdentifier(recording)), isUploaded = \(recording.isUploaded)")
+        }
+        
         // UploadManagerのキューに追加
         uploadManager.addMultipleToQueue(sortedRecordings)
         
@@ -602,6 +616,9 @@ struct RecordingRowView: View {
                     Text("アップロード: \(recording.isUploaded ? "✅" : "❌")")
                         .font(.caption)
                         .foregroundColor(recording.isUploaded ? .green : .red)
+                        .onChange(of: recording.isUploaded) { oldValue, newValue in
+                            print("🔍 [RecordingRowView] isUploaded変更検知: \(recording.fileName) - \(oldValue) → \(newValue)")
+                        }
                     
                     if !recording.isUploaded {
                         // 試行回数表示

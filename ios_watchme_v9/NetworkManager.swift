@@ -367,15 +367,26 @@ class NetworkManager: ObservableObject {
                         }
                     }
                     
-                    // RecordingModelの状態を更新（永続化される）
-                    print("🔍 アップロード前のisUploaded: \(recording.isUploaded)")
-                    print("🔍 RecordingModelのObjectIdentifier: \(ObjectIdentifier(recording))")
-                    recording.markAsUploaded()
-                    print("🔍 アップロード後のisUploaded: \(recording.isUploaded)")
+                    // RecordingModelの状態を更新（メインスレッドで実行）
+                    print("🔍 [NetworkManager] アップロード前のisUploaded: \(recording.isUploaded)")
+                    print("🔍 [NetworkManager] RecordingModelのObjectIdentifier: \(ObjectIdentifier(recording))")
+                    
+                    // メインスレッドで状態を更新
+                    DispatchQueue.main.async {
+                        recording.markAsUploaded()
+                        print("🔍 [NetworkManager] メインスレッドでmarkAsUploaded実行完了")
+                        
+                        // AudioRecorderの配列更新を通知
+                        NotificationCenter.default.post(
+                            name: NSNotification.Name("RecordingUploadStatusChanged"),
+                            object: recording
+                        )
+                    }
                     
                     // 状態が正しく更新されたか確認
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                        print("🔍 0.1秒後のisUploaded: \(recording.isUploaded)")
+                        print("🔍 [NetworkManager] 0.1秒後のisUploaded: \(recording.isUploaded)")
+                        print("🔍 [NetworkManager] 0.1秒後のObjectIdentifier: \(ObjectIdentifier(recording))")
                     }
                     
                     self.connectionStatus = .connected
