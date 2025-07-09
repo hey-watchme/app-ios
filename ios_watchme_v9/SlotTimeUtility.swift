@@ -37,11 +37,11 @@ class SlotTimeUtility {
         return dateFormatter.string(from: date)
     }
     
-    // MARK: - 完全なファイルパスを生成（device_id/YYYY-MM-DD/HH-MM.wav）
+    // MARK: - 完全なファイルパスを生成（device_id/YYYY-MM-DD/raw/HH-MM.wav）
     static func generateFilePath(deviceID: String, date: Date) -> String {
         let dateString = getDateString(from: date)
         let slotName = getSlotName(from: date)
-        return "\(deviceID)/\(dateString)/\(slotName).wav"
+        return "\(deviceID)/\(dateString)/raw/\(slotName).wav"
     }
     
     // MARK: - ファイル名からスロット名を抽出（拡張子を除去）

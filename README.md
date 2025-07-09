@@ -205,6 +205,28 @@ class SlotTimeUtility {
 - **メソッド**: POST
 - **Content-Type**: multipart/form-data
 
+### ファイルパス仕様 【重要更新: 2025年7月9日】
+
+#### X-File-Pathヘッダー形式
+```
+device_id/YYYY-MM-DD/raw/HH-MM.wav
+```
+
+#### 仕様変更内容
+- **旧形式**: `device_id/YYYY-MM-DD/HH-MM.wav`
+- **新形式**: `device_id/YYYY-MM-DD/raw/HH-MM.wav` (rawディレクトリ追加)
+- **理由**: Vault APIサーバー側のディレクトリ構造と完全に一致させるため
+
+#### 実装
+```swift
+// SlotTimeUtility.swift - generateFilePath()
+static func generateFilePath(deviceID: String, date: Date) -> String {
+    let dateString = getDateString(from: date)
+    let slotName = getSlotName(from: date)
+    return "\(deviceID)/\(dateString)/raw/\(slotName).wav"
+}
+```
+
 ### リクエスト仕様
 
 #### エンドポイント
@@ -390,6 +412,42 @@ func uploadRecording(_ recording: RecordingModel) {
 - 13-00.wav (13:00-13:29の録音)
 - 13-30.wav (13:30-13:59の録音)
 - 14-00.wav (14:00-14:29の録音)
+```
+
+### ローカルファイル保存構造 【重要更新: 2025年7月9日】
+
+#### 保存パス構造
+```
+Documents/
+├── 2025-07-08/
+│   ├── 23-00.wav
+│   └── 23-30.wav
+└── 2025-07-09/
+    ├── 00-00.wav
+    └── 00-30.wav
+```
+
+#### 重要な仕様
+- **日付別ディレクトリ**: 録音ファイルはYYYY-MM-DD形式の日付ディレクトリ下に保存
+- **日をまたぐ録音対応**: 23:50-00:10の録音でも正しく2つの日付ディレクトリに分割
+- **ファイル名重複回避**: 異なる日付の同じ時刻スロットも区別可能
+
+#### 実装詳細
+```swift
+// AudioRecorder.swift - startRecordingForCurrentSlot()
+private func startRecordingForCurrentSlot() -> Bool {
+    let dateString = SlotTimeUtility.getDateString(from: Date())
+    let fileName = "\(currentSlot).wav"
+    let documentPath = getDocumentsDirectory()
+    let dateDirectory = documentPath.appendingPathComponent(dateString)
+    
+    // 日付ディレクトリを作成
+    try? FileManager.default.createDirectory(at: dateDirectory, 
+                                           withIntermediateDirectories: true)
+    
+    let audioURL = dateDirectory.appendingPathComponent(fileName)
+    // ...
+}
 ```
 
 ### AVAudioRecorder設定
@@ -849,10 +907,26 @@ struct AudioMetadata: Codable {
 
 - **作成者**: Kaya Matsumoto
 - **作成日**: 2025年6月11日
-- **最終更新**: 2025年7月7日
-- **バージョン**: v9.3 - デバイス主導型アーキテクチャへの重要変更
+- **最終更新**: 2025年7月9日
+- **バージョン**: v9.4.1 - ファイル保存構造の階層化実装
 
 ## 更新履歴
+
+### v9.4.1 (2025年7月9日) **【重要更新 - ファイル保存構造変更】**
+- **📁 ローカルファイル保存構造の階層化**:
+  - 旧: `Documents/HH-MM.wav` (フラット構造)
+  - 新: `Documents/YYYY-MM-DD/HH-MM.wav` (日付別ディレクトリ)
+  - **日をまたぐ録音の問題を解決**
+
+- **🌐 アップロードパスにrawディレクトリ追加**:
+  - 旧: `device_id/YYYY-MM-DD/HH-MM.wav`
+  - 新: `device_id/YYYY-MM-DD/raw/HH-MM.wav`
+  - Vault APIサーバー側のディレクトリ構造と完全一致
+
+- **🔧 Vault API側の修正**:
+  - X-File-Pathヘッダーを必須化
+  - サーバー側での自動時刻計算を完全に禁止
+  - iOSアプリが指定した日付・時刻を確実に使用
 
 ### v9.3 (2025年7月7日) **【重要アップデート - 手動アップロード化】**
 - **🎯 デバイス主導型アーキテクチャへの変更**:

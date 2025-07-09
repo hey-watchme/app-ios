@@ -161,14 +161,26 @@ class AudioRecorder: NSObject, ObservableObject {
     // 現在のスロット用録音を開始
     @discardableResult
     private func startRecordingForCurrentSlot() -> Bool {
+        let dateString = SlotTimeUtility.getDateString(from: Date())
         let fileName = "\(currentSlot).wav"
         let documentPath = getDocumentsDirectory()
-        let audioURL = documentPath.appendingPathComponent(fileName)
+        let dateDirectory = documentPath.appendingPathComponent(dateString)
+        
+        // 日付ディレクトリを作成
+        do {
+            try FileManager.default.createDirectory(at: dateDirectory, withIntermediateDirectories: true, attributes: nil)
+        } catch {
+            print("❌ 日付ディレクトリ作成エラー: \(error)")
+            return false
+        }
+        
+        let audioURL = dateDirectory.appendingPathComponent(fileName)
         
         // 同じファイル名の既存録音を確認（上書き処理）
         handleExistingRecording(fileName: fileName)
         
         print("🔍 新規スロット録音開始:")
+        print("   - 日付: \(dateString)")
         print("   - スロット: \(currentSlot)")
         print("   - ファイル名: \(fileName)")
         print("   - 保存パス: \(audioURL.path)")
@@ -215,7 +227,10 @@ class AudioRecorder: NSObject, ObservableObject {
     
     // 既存録音の処理（自動上書き）
     private func handleExistingRecording(fileName: String) {
-        if let existingIndex = recordings.firstIndex(where: { $0.fileName == fileName }) {
+        let dateString = SlotTimeUtility.getDateString(from: Date())
+        let fullFileName = "\(dateString)/\(fileName)"
+        
+        if let existingIndex = recordings.firstIndex(where: { $0.fileName == fullFileName }) {
             let existingRecording = recordings[existingIndex]
             print("🔄 同一スロット録音の自動上書き: \(fileName)")
             print("   - 既存ファイル作成日時: \(existingRecording.date)")
@@ -234,11 +249,11 @@ class AudioRecorder: NSObject, ObservableObject {
             }
             
             // アップロード状態クリア（UserDefaultsからも削除）
-            clearUploadStatus(fileName: fileName)
+            clearUploadStatus(fileName: fullFileName)
             
             // リストから削除
             recordings.remove(at: existingIndex)
-            pendingRecordings.removeAll { $0.fileName == fileName }
+            pendingRecordings.removeAll { $0.fileName == fullFileName }
             
             print("✅ 上書き準備完了 - 新録音を開始します")
         }
@@ -306,6 +321,8 @@ class AudioRecorder: NSObject, ObservableObject {
         
         let recordingURL = recorder.url
         let fileName = recordingURL.lastPathComponent
+        let dateString = SlotTimeUtility.getDateString(from: currentSlotStartTime!)
+        let fullFileName = "\(dateString)/\(fileName)"
         
         print("💾 スロット録音完了処理開始: \(fileName)")
         print("   - 録音URL: \(recordingURL.path)")
@@ -327,10 +344,10 @@ class AudioRecorder: NSObject, ObservableObject {
                 
                 if fileSize > 0 {
                     // RecordingModelを作成・追加
-                    let recording = RecordingModel(fileName: fileName, date: currentSlotStartTime!)
+                    let recording = RecordingModel(fileName: fullFileName, date: currentSlotStartTime!)
                     
                     // 重複チェック
-                    if let existingIndex = recordings.firstIndex(where: { $0.fileName == fileName }) {
+                    if let existingIndex = recordings.firstIndex(where: { $0.fileName == fullFileName }) {
                         recordings.remove(at: existingIndex)
                         print("🔄 既存の同名録音を置換")
                     }
@@ -338,7 +355,7 @@ class AudioRecorder: NSObject, ObservableObject {
                     recordings.insert(recording, at: 0)
                     pendingRecordings.append(recording)
                     
-                    print("✅ スロット録音完了: \(fileName)")
+                    print("✅ スロット録音完了: \(fullFileName)")
                     print("📊 総録音ファイル数: \(recordings.count)")
                     return true
                 } else {
@@ -364,6 +381,8 @@ class AudioRecorder: NSObject, ObservableObject {
         
         let recordingURL = recorder.url
         let fileName = recordingURL.lastPathComponent
+        let dateString = SlotTimeUtility.getDateString(from: currentSlotStartTime!)
+        let fullFileName = "\(dateString)/\(fileName)"
         
         print("💾 スロット録音完了処理開始: \(fileName)")
         print("   - 録音URL: \(recordingURL.path)")
@@ -385,10 +404,10 @@ class AudioRecorder: NSObject, ObservableObject {
                 
                 if fileSize > 0 {
                     // RecordingModelを作成・追加
-                    let recording = RecordingModel(fileName: fileName, date: currentSlotStartTime!)
+                    let recording = RecordingModel(fileName: fullFileName, date: currentSlotStartTime!)
                     
                     // 重複チェック
-                    if let existingIndex = recordings.firstIndex(where: { $0.fileName == fileName }) {
+                    if let existingIndex = recordings.firstIndex(where: { $0.fileName == fullFileName }) {
                         recordings.remove(at: existingIndex)
                         print("🔄 既存の同名録音を置換")
                     }
@@ -396,7 +415,7 @@ class AudioRecorder: NSObject, ObservableObject {
                     recordings.insert(recording, at: 0)
                     pendingRecordings.append(recording)
                     
-                    print("✅ スロット録音完了: \(fileName)")
+                    print("✅ スロット録音完了: \(fullFileName)")
                     print("📊 総録音ファイル数: \(recordings.count)")
                     return recording
                 } else {
@@ -486,42 +505,62 @@ class AudioRecorder: NSObject, ObservableObject {
         let documentsPath = getDocumentsDirectory()
         
         do {
-            let fileURLs = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.creationDateKey, .fileSizeKey])
+            // 日付ディレクトリを取得
+            let dateDirectories = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.isDirectoryKey])
+                .filter { url in
+                    // YYYY-MM-DD形式のディレクトリをフィルタ
+                    let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
+                    let dirName = url.lastPathComponent
+                    return isDirectory && dirName.matches("^\\d{4}-\\d{2}-\\d{2}$")
+                }
             
-            let wavFiles = fileURLs.filter { $0.pathExtension.lowercased() == "wav" }
-            
-            print("📂 Documents ディレクトリ内のWAVファイル一覧: \(wavFiles.count)個")
+            print("📂 日付ディレクトリ数: \(dateDirectories.count)")
             
             var newRecordings: [RecordingModel] = []
             var duplicateCount = 0
             
-            for url in wavFiles {
-                let fileName = url.lastPathComponent
+            // 各日付ディレクトリ内のWAVファイルを読み込み
+            for dateDir in dateDirectories {
+                let dateDirName = dateDir.lastPathComponent
                 
-                // 重複チェック
-                if newRecordings.contains(where: { $0.fileName == fileName }) {
-                    duplicateCount += 1
-                    print("⚠️ 重複ファイル名をスキップ: \(fileName)")
-                    continue
-                }
-                
-                // ファイルの詳細情報を取得
                 do {
-                    let resourceValues = try url.resourceValues(forKeys: [.creationDateKey, .fileSizeKey])
-                    let creationDate = resourceValues.creationDate ?? Date()
-                    let fileSize = Int64(resourceValues.fileSize ?? 0)
+                    let wavFiles = try FileManager.default.contentsOfDirectory(at: dateDir, includingPropertiesForKeys: [.creationDateKey, .fileSizeKey])
+                        .filter { $0.pathExtension.lowercased() == "wav" }
                     
-                    // RecordingModelを作成（アップロード状態は自動復元）
-                    let recording = RecordingModel(fileName: fileName, date: creationDate)
-                    newRecordings.append(recording)
+                    print("📁 \(dateDirName): \(wavFiles.count)個のWAVファイル")
                     
-                    print("📄 ファイル読み込み: \(fileName) (サイズ: \(recording.fileSizeFormatted), アップロード: \(recording.isUploaded))")
-                    
+                    for url in wavFiles {
+                        let fileName = url.lastPathComponent
+                        let fullFileName = "\(dateDirName)/\(fileName)"
+                        
+                        // 重複チェック
+                        if newRecordings.contains(where: { $0.fileName == fullFileName }) {
+                            duplicateCount += 1
+                            print("⚠️ 重複ファイル名をスキップ: \(fullFileName)")
+                            continue
+                        }
+                        
+                        // ファイルの詳細情報を取得
+                        do {
+                            let resourceValues = try url.resourceValues(forKeys: [.creationDateKey, .fileSizeKey])
+                            let creationDate = resourceValues.creationDate ?? Date()
+                            let fileSize = Int64(resourceValues.fileSize ?? 0)
+                            
+                            // RecordingModelを作成（アップロード状態は自動復元）
+                            let recording = RecordingModel(fileName: fullFileName, date: creationDate)
+                            newRecordings.append(recording)
+                            
+                            print("📄 ファイル読み込み: \(fullFileName) (サイズ: \(recording.fileSizeFormatted), アップロード: \(recording.isUploaded))")
+                            
+                        } catch {
+                            print("⚠️ ファイル属性取得エラー: \(fullFileName) - \(error)")
+                            // エラーがあってもファイルを読み込み
+                            let recording = RecordingModel(fileName: fullFileName, date: Date())
+                            newRecordings.append(recording)
+                        }
+                    }
                 } catch {
-                    print("⚠️ ファイル属性取得エラー: \(fileName) - \(error)")
-                    // エラーがあってもファイルを読み込み
-                    let recording = RecordingModel(fileName: fileName, date: Date())
-                    newRecordings.append(recording)
+                    print("⚠️ 日付ディレクトリ読み込みエラー: \(dateDirName) - \(error)")
                 }
             }
             
@@ -705,5 +744,12 @@ extension AudioRecorder: AVAudioRecorderDelegate {
         if !flag {
             print("❌ 録音が失敗しました")
         }
+    }
+}
+
+// MARK: - String Extension for Regex
+extension String {
+    func matches(_ pattern: String) -> Bool {
+        return self.range(of: pattern, options: .regularExpression) != nil
     }
 } 

@@ -166,7 +166,24 @@ private struct RecordingStatus: Codable {
 extension RecordingModel {
     // ファイル名からスロット時刻を取得
     var slotTime: String {
-        return String(fileName.dropLast(4)) // ".wav"を除去
+        // 日付ディレクトリを含む場合の処理
+        let components = fileName.split(separator: "/")
+        if components.count == 2 {
+            // YYYY-MM-DD/HH-MM.wav 形式
+            return String(components[1].dropLast(4))
+        } else {
+            // 旧形式: HH-MM.wav
+            return String(fileName.dropLast(4))
+        }
+    }
+    
+    // ファイル名から日付を取得
+    var dateString: String? {
+        let components = fileName.split(separator: "/")
+        if components.count == 2 {
+            return String(components[0])
+        }
+        return nil
     }
     
     // アップロード可能かチェック
