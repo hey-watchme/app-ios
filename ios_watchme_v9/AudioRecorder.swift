@@ -286,24 +286,35 @@ class AudioRecorder: NSObject, ObservableObject {
         print("🔄 スロット切り替え実行: \(oldSlot) → \(newSlot)")
         print("📅 切り替え時刻: \(Date())")
         
-        // 現在の録音を完了・保存
+        // 現在の録音を完全に停止
+        audioRecorder?.stop()
+        print("⏸️ 現在の録音を停止")
+        
+        // 少し待機してファイルシステムが確実に保存されるようにする
+        Thread.sleep(forTimeInterval: 0.5)
+        
+        // 現在の録音を保存
         if let completedRecording = finishCurrentSlotRecordingWithReturn() {
-            // 自動アップロード機能を削除（手動アップロードのみ対応）
-            print("💾 スロット切り替え時の録音完了: \(completedRecording.fileName) - 手動アップロードが必要です")
+            print("💾 スロット切り替え時の録音完了: \(completedRecording.fileName)")
             
-            // 新しいスロットで録音開始
+            // 新しいスロットに更新
             currentSlot = newSlot
             currentSlotStartTime = Date()
             
-            if startRecordingForCurrentSlot() {
-                // 次の切り替えタイマーを設定（30分後）
-                slotSwitchTimer = Timer.scheduledTimer(withTimeInterval: 1800.0, repeats: false) { [weak self] _ in
-                    self?.performSlotSwitch()
+            // 1秒待機してから新しい録音を開始（ファイルシステムへの負荷を軽減）
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+                guard let self = self else { return }
+                
+                if self.startRecordingForCurrentSlot() {
+                    // 次の切り替えタイマーを設定（30分後）
+                    self.slotSwitchTimer = Timer.scheduledTimer(withTimeInterval: 1800.0, repeats: false) { [weak self] _ in
+                        self?.performSlotSwitch()
+                    }
+                    print("✅ スロット切り替え成功")
+                } else {
+                    print("❌ 新スロット録音開始失敗 - 録音を停止")
+                    self.stopRecording()
                 }
-                print("✅ スロット切り替え成功")
-            } else {
-                print("❌ 新スロット録音開始失敗 - 録音を停止")
-                stopRecording()
             }
         } else {
             print("❌ 現在スロット録音完了失敗 - 録音を停止")
@@ -328,8 +339,10 @@ class AudioRecorder: NSObject, ObservableObject {
         print("   - 録音URL: \(recordingURL.path)")
         print("   - スロット継続時間: \(Date().timeIntervalSince(currentSlotStartTime!))秒")
         
-        // 録音停止
-        recorder.stop()
+        // 録音停止（既に停止されている場合もあるため、エラーを無視）
+        if recorder.isRecording {
+            recorder.stop()
+        }
         
         // ファイル存在確認
         let fileExists = FileManager.default.fileExists(atPath: recordingURL.path)
@@ -388,8 +401,10 @@ class AudioRecorder: NSObject, ObservableObject {
         print("   - 録音URL: \(recordingURL.path)")
         print("   - スロット継続時間: \(Date().timeIntervalSince(currentSlotStartTime!))秒")
         
-        // 録音停止
-        recorder.stop()
+        // 録音停止（既に停止されている場合もあるため、エラーを無視）
+        if recorder.isRecording {
+            recorder.stop()
+        }
         
         // ファイル存在確認
         let fileExists = FileManager.default.fileExists(atPath: recordingURL.path)
