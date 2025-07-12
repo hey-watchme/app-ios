@@ -58,7 +58,6 @@ struct UploadUIUpdateTestView: View {
             RecordingRowView(
                 recording: testRecording,
                 isSelected: false,
-                uploadManager: UploadManager.shared,
                 networkManager: nil,
                 onSelect: {
                     print("行が選択されました")

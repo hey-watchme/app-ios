@@ -69,7 +69,7 @@ class NetworkManager: ObservableObject {
         print("👤 フォールバックユーザーIDに復元: \(currentUserID)")
     }
     
-    func uploadRecording(_ recording: RecordingModel) {
+    func uploadRecording(_ recording: RecordingModel, completion: @escaping (Bool) -> Void = { _ in }) {
         // 基本的なチェックのみ（ファイル存在と最大試行回数）
         guard recording.fileExists() else {
             print("⚠️ アップロード不可: ファイルが存在しません - \(recording.fileName)")
@@ -77,6 +77,7 @@ class NetworkManager: ObservableObject {
                 self.connectionStatus = .failed
                 self.currentUploadingFile = nil
             }
+            completion(false)
             return
         }
         
@@ -235,6 +236,7 @@ class NetworkManager: ObservableObject {
                 self.connectionStatus = .failed
                 self.currentUploadingFile = nil
             }
+            completion(false)
             return
         }
         
@@ -300,6 +302,7 @@ class NetworkManager: ObservableObject {
                     self.connectionStatus = .failed
                     self.uploadProgress = 0.0
                     self.currentUploadingFile = nil
+                    completion(false)
                     return
                 }
                 
@@ -312,6 +315,7 @@ class NetworkManager: ObservableObject {
                     self.connectionStatus = .failed
                     self.uploadProgress = 0.0
                     self.currentUploadingFile = nil
+                    completion(false)
                     return
                 }
                 
@@ -391,6 +395,7 @@ class NetworkManager: ObservableObject {
                     
                     self.connectionStatus = .connected
                     self.uploadProgress = 1.0
+                    completion(true)
                     
                     // UIリセットを遅らせる（UploadManagerが監視できるようにする）
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -406,18 +411,21 @@ class NetworkManager: ObservableObject {
                     }
                     recording.markAsUploadFailed(error: errorMsg)
                     self.handleUploadFailure()
+                    completion(false)
                     
                 case 401:
                     let errorMsg = "認証エラー (401): 認証情報が無効です"
                     print("❌ \(errorMsg)")
                     recording.markAsUploadFailed(error: errorMsg)
                     self.handleUploadFailure()
+                    completion(false)
                     
                 case 403:
                     let errorMsg = "アクセス拒否 (403): 権限がありません"
                     print("❌ \(errorMsg)")
                     recording.markAsUploadFailed(error: errorMsg)
                     self.handleUploadFailure()
+                    completion(false)
                     
                 case 404:
                     let errorMsg = "エンドポイントエラー (404): アップロードURLが見つかりません"
@@ -425,6 +433,7 @@ class NetworkManager: ObservableObject {
                     print("❌ URL: \(self.serverURL)/upload")
                     recording.markAsUploadFailed(error: errorMsg)
                     self.handleUploadFailure()
+                    completion(false)
                     
                 case 413:
                     let errorMsg = "ファイルサイズエラー (413): ファイルが大きすぎます"
@@ -432,6 +441,7 @@ class NetworkManager: ObservableObject {
                     print("❌ ファイルサイズ: \(recording.fileSizeFormatted)")
                     recording.markAsUploadFailed(error: errorMsg)
                     self.handleUploadFailure()
+                    completion(false)
                     
                 case 500...599:
                     let errorMsg = "サーバーエラー (\(httpResponse.statusCode)): サーバー側で問題が発生しました"
@@ -441,6 +451,7 @@ class NetworkManager: ObservableObject {
                     }
                     recording.markAsUploadFailed(error: errorMsg)
                     self.handleUploadFailure()
+                    completion(false)
                     
                 default:
                     let errorMsg = "予期しないステータスコード: \(httpResponse.statusCode)"
@@ -450,6 +461,7 @@ class NetworkManager: ObservableObject {
                     }
                     recording.markAsUploadFailed(error: errorMsg)
                     self.handleUploadFailure()
+                    completion(false)
                 }
             }
         }
@@ -573,7 +585,9 @@ class NetworkManager: ObservableObject {
             }
         
         // 実際のアップロードを実行
-        uploadRecording(recording)
+        uploadRecording(recording) { _ in
+            // completion handler is handled by statusObserver
+        }
         
         // タイムアウト処理
         DispatchQueue.main.asyncAfter(deadline: .now() + 30) {

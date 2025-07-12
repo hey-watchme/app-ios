@@ -12,7 +12,7 @@ struct ContentView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
     @StateObject private var audioRecorder = AudioRecorder()
-    @StateObject private var uploadManager = UploadManager.shared
+    // @StateObject private var uploadManager = UploadManager.shared
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var selectedRecording: RecordingModel?
@@ -32,7 +32,7 @@ struct ContentView: View {
         
         // UploadManagerにNetworkManagerを設定
         if let networkManager = networkManager {
-            uploadManager.configure(networkManager: networkManager)
+            // uploadManager.configure(networkManager: networkManager)
         }
         
         print("🔧 NetworkManager初期化完了")
@@ -40,8 +40,58 @@ struct ContentView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
+            scrollContent
+        }
+        .navigationViewStyle(StackNavigationViewStyle())
+        .onAppear {
+            initializeNetworkManager()
+        }
+        .alert("通知", isPresented: $showAlert) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(alertMessage)
+        }
+        .alert("ユーザーID変更", isPresented: $showUserIDChangeAlert) {
+            TextField("新しいユーザーID", text: $newUserID)
+            Button("変更") {
+                if !newUserID.isEmpty {
+                    networkManager?.setUserID(newUserID)
+                    alertMessage = "ユーザーIDを変更しました: \(newUserID)"
+                    showAlert = true
+                }
+            }
+            Button("キャンセル", role: .cancel) { }
+        } message: {
+            Text("新しいユーザーIDを入力してください")
+        }
+        .confirmationDialog("ログアウト確認", isPresented: $showLogoutConfirmation) {
+            Button("ログアウト", role: .destructive) {
+                authManager.signOut()
+                networkManager?.resetToFallbackUserID()
+                alertMessage = "ログアウトしました"
+                showAlert = true
+            }
+        } message: {
+            Text("本当にログアウトしますか？")
+        }
+        .sheet(isPresented: $showUserInfoSheet) {
+            UserInfoSheetView(authManager: authManager, deviceManager: deviceManager, showLogoutConfirmation: $showLogoutConfirmation)
+        }
+        .onChange(of: networkManager?.connectionStatus) { oldValue, newValue in
+            // アップロード完了時の通知
+            if newValue == .connected && networkManager?.currentUploadingFile != nil {
+                alertMessage = "アップロードが完了しました！"
+                showAlert = true
+            } else if newValue == .failed && networkManager?.currentUploadingFile != nil {
+                alertMessage = "アップロードに失敗しました。手動でリトライしてください。"
+                showAlert = true
+            }
+        }
+    }
+    
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(spacing: 20) {
                 // 統計情報（録音数・アップロード済み・アップロード待ち）
                 if !audioRecorder.recordings.isEmpty {
                     VStack(spacing: 8) {
@@ -106,7 +156,7 @@ struct ContentView: View {
                 }
                 
                 // アップロード進捗表示
-                if networkManager?.connectionStatus == .uploading || uploadManager.isProcessing {
+                if networkManager?.connectionStatus == .uploading {
                     VStack(spacing: 8) {
                         HStack {
                             Text("📤 アップロード中...")
@@ -115,43 +165,25 @@ struct ContentView: View {
                             
                             Spacer()
                             
-                            if uploadManager.isProcessing {
-                                Text("\(Int(uploadManager.totalProgress * 100))%")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                            } else {
-                                Text("\(Int((networkManager?.uploadProgress ?? 0.0) * 100))%")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                            }
+                            // if uploadManager.isProcessing {
+                            //     Text("\(Int(uploadManager.totalProgress * 100))%")
+                            //         .font(.caption)
+                            //         .fontWeight(.bold)
+                            // } else {
+                            Text("\(Int((networkManager?.uploadProgress ?? 0.0) * 100))%")
+                                .font(.caption)
+                                .fontWeight(.bold)
+                            // }
                         }
                         
-                        if uploadManager.isProcessing {
-                            ProgressView(value: uploadManager.totalProgress, total: 1.0)
-                                .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-                            
-                            HStack {
-                                if let currentTask = uploadManager.currentTask {
-                                    Text("ファイル: \(currentTask.recording.fileName)")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                
-                                Spacer()
-                                
-                                Text("\(uploadManager.completedTaskCount)/\(uploadManager.uploadQueue.count)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        } else {
-                            ProgressView(value: networkManager?.uploadProgress ?? 0.0, total: 1.0)
-                                .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-                            
-                            if let fileName = networkManager?.currentUploadingFile {
-                                Text("ファイル: \(fileName)")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
+                        // UploadManager無効化: NetworkManagerのみ使用
+                        ProgressView(value: networkManager?.uploadProgress ?? 0.0, total: 1.0)
+                            .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                        
+                        if let fileName = networkManager?.currentUploadingFile {
+                            Text("ファイル: \(fileName)")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
                         }
                     }
                     .padding()
@@ -229,7 +261,7 @@ struct ContentView: View {
                             // 一括アップロードボタン（手動処理）
                             if audioRecorder.recordings.filter({ !$0.isUploaded && $0.canUpload }).count > 0 {
                                 Button(action: {
-                                    manualBatchUploadWithUploadManager()
+                                    manualBatchUpload()
                                 }) {
                                     HStack {
                                         Image(systemName: "icloud.and.arrow.up")
@@ -242,7 +274,7 @@ struct ContentView: View {
                                     .foregroundColor(.white)
                                     .cornerRadius(8)
                                 }
-                                .disabled(uploadManager.isProcessing)
+                                .disabled(networkManager?.connectionStatus == .uploading)
                             }
                         }
                         .padding(.horizontal)
@@ -274,12 +306,12 @@ struct ContentView: View {
                                         RecordingRowView(
                                             recording: recording,
                                             isSelected: selectedRecording?.fileName == recording.fileName,
-                                            uploadManager: uploadManager,
                                             networkManager: networkManager,
-                                            onSelect: { selectedRecording = recording }
-                                        ) { recording in
-                                            audioRecorder.deleteRecording(recording)
-                                        }
+                                            onSelect: { selectedRecording = recording },
+                                            onDelete: { recording in
+                                                audioRecorder.deleteRecording(recording)
+                                            }
+                                        )
                                     }
                                 }
                                 .padding(.horizontal)
@@ -366,57 +398,6 @@ struct ContentView: View {
                             .foregroundColor(.blue)
                     }
                 }
-            }
-        }
-        .onAppear {
-            initializeNetworkManager()
-            // ユーザーの確認状態をチェック
-            authManager.fetchUserInfo()
-        }
-        .alert("結果", isPresented: $showAlert) {
-            Button("OK") { }
-        } message: {
-            Text(alertMessage)
-        }
-        .alert("ユーザーID変更", isPresented: $showUserIDChangeAlert) {
-            TextField("新しいユーザーID", text: $newUserID)
-            Button("キャンセル", role: .cancel) { 
-                newUserID = ""
-            }
-            Button("変更") {
-                if !newUserID.isEmpty {
-                    networkManager?.setUserID(newUserID)
-                    alertMessage = "ユーザーIDを「\(newUserID)」に変更しました"
-                    showAlert = true
-                    newUserID = ""
-                }
-            }
-        } message: {
-            Text("新しいユーザーIDを入力してください\n（例: user123, test_user）")
-        }
-        .alert("ログアウト確認", isPresented: $showLogoutConfirmation) {
-            Button("キャンセル", role: .cancel) { }
-            Button("ログアウト", role: .destructive) {
-                authManager.signOut()
-                networkManager?.resetToFallbackUserID()
-                alertMessage = "ログアウトしました"
-                showAlert = true
-            }
-        } message: {
-            Text("本当にログアウトしますか？")
-        }
-        .sheet(isPresented: $showUserInfoSheet) {
-            UserInfoSheetView(authManager: authManager, deviceManager: deviceManager, showLogoutConfirmation: $showLogoutConfirmation)
-        }
-        .onChange(of: networkManager?.connectionStatus) { oldValue, newValue in
-            // アップロード完了時の通知
-            if newValue == .connected && networkManager?.currentUploadingFile != nil {
-                alertMessage = "アップロードが完了しました！"
-                showAlert = true
-            } else if newValue == .failed && networkManager?.currentUploadingFile != nil {
-                alertMessage = "アップロードに失敗しました。手動でリトライしてください。"
-                showAlert = true
-            }
         }
     }
     
@@ -448,7 +429,37 @@ struct ContentView: View {
         }
     }
     
-    // 新しいUploadManagerを使用した手動アップロード
+    // シンプルな一括アップロード（NetworkManagerを直接使用）
+    private func manualBatchUpload() {
+        guard let networkManager = self.networkManager else { return }
+        
+        let recordingsToUpload = audioRecorder.recordings.filter { $0.canUpload }
+        guard !recordingsToUpload.isEmpty else {
+            alertMessage = "アップロード対象のファイルがありません。"
+            showAlert = true
+            return
+        }
+        
+        // 1つずつ順番にアップロードする
+        for recording in recordingsToUpload {
+            networkManager.uploadRecording(recording) { success in
+                // UIの更新はメインスレッドで行う
+                DispatchQueue.main.async {
+                    if success {
+                        print("✅ シンプルアップロード成功: \(recording.fileName)")
+                    } else {
+                        print("❌ シンプルアップロード失敗: \(recording.fileName)")
+                    }
+                }
+            }
+        }
+        
+        alertMessage = "\(recordingsToUpload.count)件のアップロードを開始しました。"
+        showAlert = true
+    }
+    
+    /*
+    // 新しいUploadManagerを使用した手動アップロード（旧実装）
     private func manualBatchUploadWithUploadManager() {
         // アップロード可能なファイルを取得
         let uploadableRecordings = audioRecorder.recordings.filter { $0.canUpload }
@@ -490,6 +501,7 @@ struct ContentView: View {
         alertMessage = "\(sortedRecordings.count)個のファイルの手動アップロードを開始しました"
         showAlert = true
     }
+    */
     
     // 接続ステータスに応じた色
     private var statusColor: Color {
@@ -528,7 +540,6 @@ struct ContentView: View {
 struct RecordingRowView: View {
     @ObservedObject var recording: RecordingModel
     let isSelected: Bool
-    let uploadManager: UploadManager
     let networkManager: NetworkManager?
     let onSelect: () -> Void
     let onDelete: (RecordingModel) -> Void
@@ -597,7 +608,11 @@ struct RecordingRowView: View {
                     Button(action: {
                         onSelect()
                         print("📤 手動アップロード開始: \(recording.fileName)")
-                        networkManager?.uploadRecording(recording)
+                        networkManager?.uploadRecording(recording) { success in
+                            DispatchQueue.main.async {
+                                print("個別アップロード完了: \(recording.fileName), 成功: \(success)")
+                            }
+                        }
                     }) {
                         HStack(spacing: 4) {
                             Image(systemName: "icloud.and.arrow.up")
