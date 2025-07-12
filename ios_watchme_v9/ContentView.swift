@@ -429,33 +429,58 @@ struct ContentView: View {
         }
     }
     
-    // シンプルな一括アップロード（NetworkManagerを直接使用）
+    // シンプルな一括アップロード（NetworkManagerを直接使用）- 逐次実行版
     private func manualBatchUpload() {
         guard let networkManager = self.networkManager else { return }
         
+        // アップロード対象のリストを取得
         let recordingsToUpload = audioRecorder.recordings.filter { $0.canUpload }
+        
         guard !recordingsToUpload.isEmpty else {
             alertMessage = "アップロード対象のファイルがありません。"
             showAlert = true
             return
         }
         
-        // 1つずつ順番にアップロードする
-        for recording in recordingsToUpload {
-            networkManager.uploadRecording(recording) { success in
-                // UIの更新はメインスレッドで行う
-                DispatchQueue.main.async {
-                    if success {
-                        print("✅ シンプルアップロード成功: \(recording.fileName)")
-                    } else {
-                        print("❌ シンプルアップロード失敗: \(recording.fileName)")
-                    }
-                }
+        alertMessage = "\(recordingsToUpload.count)件のアップロードを開始します..."
+        showAlert = true
+        
+        print("📤 一括アップロード開始: \(recordingsToUpload.count)件")
+        
+        // 最初のファイルからアップロードを開始する
+        uploadSequentially(recordings: recordingsToUpload, networkManager: networkManager)
+    }
+    
+    // 再帰的にファイルを1つずつアップロードする関数
+    private func uploadSequentially(recordings: [RecordingModel], networkManager: NetworkManager) {
+        // アップロードするリストが空になったら処理を終了
+        guard let recording = recordings.first else {
+            print("✅ 全ての一括アップロードが完了しました。")
+            DispatchQueue.main.async {
+                self.alertMessage = "すべての一括アップロードが完了しました。"
+                self.showAlert = true
             }
+            return
         }
         
-        alertMessage = "\(recordingsToUpload.count)件のアップロードを開始しました。"
-        showAlert = true
+        // リストの残りを次の処理のために準備
+        var remainingRecordings = recordings
+        remainingRecordings.removeFirst()
+        
+        print("📤 アップロード中: \(recording.fileName) (残り: \(remainingRecordings.count)件)")
+        
+        // 1つのファイルをアップロード
+        networkManager.uploadRecording(recording) { success in
+            if success {
+                print("✅ 一括アップロード成功: \(recording.fileName)")
+            } else {
+                print("❌ 一括アップロード失敗: \(recording.fileName)")
+            }
+            
+            // 成功・失敗にかかわらず、次のファイルのアップロードを再帰的に呼び出す
+            // これにより、1つが完了してから次が始まることが保証される
+            self.uploadSequentially(recordings: remainingRecordings, networkManager: networkManager)
+        }
     }
     
     /*
