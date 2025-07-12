@@ -907,10 +907,31 @@ struct AudioMetadata: Codable {
 
 - **作成者**: Kaya Matsumoto
 - **作成日**: 2025年6月11日
-- **最終更新**: 2025年7月9日
-- **バージョン**: v9.4.1 - ファイル保存構造の階層化実装
+- **最終更新**: 2025年7月12日
+- **バージョン**: v9.5.0 - アップロードシステム安定化リファクタリング
 
 ## 更新履歴
+
+### v9.5.0 (2025年7月12日) **【重要リファクタリング - アップロードシステム安定化】**
+- **🔧 UploadManagerキューシステムの無効化**:
+  - 複雑で不安定だったUploadManagerを空のクラスに変更
+  - NetworkManagerを直接使用するシンプルなアーキテクチャに変更
+  - Combineフレームワークによる複雑な非同期処理を排除
+
+- **⚡ 逐次アップロード機能の実装**:
+  - 一括アップロードを再帰呼び出しによる逐次実行に変更
+  - 同時に1つのファイルしかアップロードせず、サーバー負荷を軽減
+  - アップロード順序の保証と競合状態の完全回避
+
+- **🔄 完了ハンドラ対応**:
+  - NetworkManager.uploadRecording()に完了ハンドラを追加
+  - アップロード成功/失敗の確実な通知機能を実装
+  - UIの更新タイミングを明確化
+
+- **📊 安定性の大幅向上**:
+  - 「ボタンを押す → NetworkManager → アップロード」のシンプルなロジック
+  - 複雑な状態管理を削除し、理解しやすいコードに変更
+  - ビルドエラーの解決と動作の安定化
 
 ### v9.4.1 (2025年7月9日) **【重要更新 - ファイル保存構造変更】**
 - **📁 ローカルファイル保存構造の階層化**:
@@ -1080,30 +1101,78 @@ func uploadRecording(_ recording: RecordingModel) {
 - ✅ デバイス自動登録（UPSERT方式）
 - ✅ 認証状態の永続化（UserDefaults）
 
-### 🔴 問題のある機能
+### 🟢 新機能：リファクタリング済みアップロードシステム **【2025年7月12日実装完了】**
 
-#### 1. UploadManagerキューシステム
+#### 1. UploadManager無効化とシンプル化
+**実装変更**:
+- UploadManagerを空のクラスに変更し、複雑なキューシステムを無効化
+- NetworkManagerを直接使用するシンプルなアーキテクチャに変更
+- async/awaitを使わず、コールバックのみで実装
 
-**実装済みだが機能しない部分**:
+**変更前の問題**:
 ```swift
-// UploadManager.swift - 期待される動作
-func addToQueue(_ recording: RecordingModel) {
-    let task = UploadTask(recording: recording)
-    uploadQueue.append(task)  // ✅ キューへの追加は成功
-    startProcessing()         // ❌ 処理が実際には実行されない
+// 複雑な非同期処理とCombineフレームワークの競合
+UploadManager.shared.addToQueue(recording)  // ❌ キューシステムが不安定
+```
+
+**変更後のシンプル実装**:
+```swift
+// 直接的なNetworkManager呼び出し
+networkManager.uploadRecording(recording) { success in
+    // 完了時の処理
 }
 ```
 
-**問題の詳細**:
-- **キュー追加**: ファイルは正常にキューに追加される
-- **処理開始**: `startProcessing()` は呼ばれるが実際のアップロードが開始されない
-- **ステータス監視**: NetworkManagerのステータス変化が正しく検知されない
-- **タスク進行**: ペンディング状態から変化しない
+#### 2. 逐次アップロード機能
+**新機能**: 一括アップロードを再帰呼び出しによる逐次実行に変更
 
-**推定原因**:
-1. **非同期処理の競合**: メインスレッドとバックグラウンドキューでの処理競合
-2. **監視ロジックの複雑さ**: 複数のObservableObjectの状態同期問題
-3. **Combineフレームワークの使用**: 複雑なリアクティブプログラミングによる予期しない動作
+```swift
+// ContentView.swift - 逐次アップロード実装
+private func uploadSequentially(recordings: [RecordingModel], networkManager: NetworkManager) {
+    guard let recording = recordings.first else {
+        // 全件完了時の処理
+        return
+    }
+    
+    var remainingRecordings = recordings
+    remainingRecordings.removeFirst()
+    
+    networkManager.uploadRecording(recording) { success in
+        // 1つ完了後、次のファイルを再帰的に処理
+        self.uploadSequentially(recordings: remainingRecordings, networkManager: networkManager)
+    }
+}
+```
+
+**メリット**:
+- ✅ **安定性向上**: 同時に1つのファイルしかアップロードしないため、サーバー負荷軽減
+- ✅ **順序保証**: アップロードの順序が確実に保たれる
+- ✅ **競合回避**: 複数のネットワークリクエストによる競合状態を完全に回避
+- ✅ **シンプルなロジック**: 理解しやすく、デバッグしやすいコード
+
+#### 3. 完了ハンドラ対応
+**新機能**: NetworkManager.uploadRecording()に完了ハンドラを追加
+
+```swift
+// NetworkManager.swift - 完了ハンドラ対応
+func uploadRecording(_ recording: RecordingModel, completion: @escaping (Bool) -> Void = { _ in }) {
+    // アップロード処理
+    // ...
+    
+    // 成功時
+    completion(true)
+    
+    // 失敗時
+    completion(false)
+}
+```
+
+### 🔴 解決済み：旧UploadManagerの問題（参考情報）
+
+**解決済みの問題**:
+- ❌ UploadManagerキューシステムの不安定性 → ✅ シンプルな直接呼び出しに変更
+- ❌ 非同期処理の競合 → ✅ 逐次実行による競合回避
+- ❌ Combineフレームワークの複雑さ → ✅ コールバックベースのシンプル実装
 
 #### 2. 自動アップロード機能
 
@@ -1138,37 +1207,44 @@ private func performSlotSwitch() {
 **期待される動作**: 30分境界でスロットが切り替わった際に完了したファイルを即座にバックグラウンドアップロード
 **実際の動作**: ファイルはキューに追加されるが、アップロード処理が実行されない
 
-### 📋 現時点での推奨使用方法
+### 📋 現時点での推奨使用方法 **【v9.5.0更新】**
 
 #### 推奨ワークフロー
 1. **録音実行**: 正常に30分単位でファイル分割される
-2. **手動アップロード**: 個別ファイルのアップロードボタンを使用
+2. **手動アップロード**: 
+   - **個別アップロード**: 各ファイルの📤ボタンでその場でアップロード
+   - **一括アップロード**: 「すべてアップロード」ボタンで逐次アップロード実行
 3. **状態確認**: アップロード済み（✅）マークで確認
 4. **エラー時**: リセットボタン（🔄）でリトライ
 
-#### 一時的な回避策
+#### 安定化された一括アップロード
 ```swift
-// UploadManagerを使わず、従来のNetworkManagerのみを使用
-for recording in audioRecorder.recordings {
-    if recording.canUpload {
-        networkManager?.uploadRecording(recording)
-        // 手動で0.5秒間隔をあけて順次実行
-        Thread.sleep(forTimeInterval: 0.5)
-    }
-}
+// v9.5.0で実装済み：逐次アップロード機能
+// manualBatchUpload() → uploadSequentially() の自動実行
+// 1つずつ順番にアップロードされ、サーバー負荷を軽減
 ```
 
-### 🔧 修正が必要な具体的項目
+#### 主な改善点
+- ✅ **同時アップロード制限**: 1つずつ確実にアップロード
+- ✅ **完了ハンドラ対応**: アップロード成功/失敗の確実な通知
+- ✅ **シンプルなロジック**: 複雑なキューシステムを排除
 
-#### 1. UploadManagerキューシステムの根本的見直し
+### 🔧 修正完了項目 **【v9.5.0で対応済み】**
 
-**現在の複雑な実装**:
+#### 1. UploadManagerキューシステムの根本的見直し ✅
+
+**v9.5.0での対応**:
+- UploadManagerを空のクラスに変更し、複雑なキューシステムを無効化
+- NetworkManagerを直接使用するシンプルなアーキテクチャに変更
+- 再帰呼び出しによる逐次アップロード機能を実装
+
+**変更前の複雑な実装**:
 - 複数のDispatchQueue使用
 - Combineフレームワークでの状態監視
 - 非同期処理の多重化
 
-**推奨する簡素化案**:
-- シンプルなfor-loop + DispatchQueue.asyncAfter
+**v9.5.0での簡素化実装**:
+- シンプルな再帰呼び出し
 - NetworkManagerの完了コールバック使用
 - 状態監視の単純化
 
@@ -1196,22 +1272,24 @@ var canUpload: Bool {
 **理由**: ファイル管理の複雑化とデバッグの困難化を避けるため
 **推奨**: 手動削除のみ対応し、自動削除は将来的な実装とする
 
-### 🎯 今後の開発方針
+### 🎯 今後の開発方針 **【v9.5.0更新】**
 
-#### 短期的修正（優先度: 高）
-1. UploadManagerキューシステムの完全無効化
-2. 従来のNetworkManager直接呼び出しへの復帰
-3. 順次アップロード機能の再実装（シンプルなロジック）
+#### 短期的修正（優先度: 高） ✅ 完了
+1. ✅ UploadManagerキューシステムの完全無効化
+2. ✅ 従来のNetworkManager直接呼び出しへの復帰
+3. ✅ 順次アップロード機能の再実装（シンプルなロジック）
 
 #### 中期的改善（優先度: 中）
-1. キューシステムの再設計（非Combineアプローチ）
-2. バックグラウンドアップロード対応
-3. アップロード進捗の精度向上
+1. **進捗表示の改善**: 現在何件目をアップロード中かUIに表示
+2. **エラーハンドリングの強化**: 失敗したファイルのリトライや、失敗リストの表示
+3. **キャンセル機能**: 一括アップロード中の中断機能
+4. **アップロード進捗の精度向上**: リアルタイム進捗表示
 
 #### 長期的拡張（優先度: 低）
-1. 音声品質設定対応
-2. 複数サーバーバックアップ
-3. クラウド同期機能
+1. **音声品質設定対応**: サンプルレート・ビット深度の変更
+2. **複数サーバーバックアップ**: 冗長性向上
+3. **クラウド同期機能**: 複数デバイス間での同期
+4. **バックグラウンドアップロード対応**: iOS Background Tasksの活用
 
 ### 🚨 UI表示の混乱問題（2025年7月6日現在）
 
