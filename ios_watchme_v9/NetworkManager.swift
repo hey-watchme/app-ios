@@ -157,13 +157,7 @@ class NetworkManager: ObservableObject {
         request.httpMethod = "POST"
         request.timeoutInterval = 120.0  // タイムアウトを120秒に延長
         
-        // X-File-Pathヘッダーを設定（device_id/YYYY-MM-DD/HH-MM.wav形式）
-        if let deviceInfo = deviceManager?.getDeviceInfo() {
-            // 共通ユーティリティを使用してファイルパスを生成
-            let filePath = SlotTimeUtility.generateFilePath(deviceID: deviceInfo.deviceID, date: recording.date)
-            request.setValue(filePath, forHTTPHeaderField: "X-File-Path")
-            print("📋 X-File-Path設定: \(filePath)")
-        }
+        // X-File-Pathヘッダーは廃止されました
         
         // Boundary文字列を生成
         let boundary = UUID().uuidString
@@ -172,38 +166,31 @@ class NetworkManager: ObservableObject {
         // HTTPボディを作成
         var body = Data()
         
-        // ① user_id パラメータを追加
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"user_id\"\r\n\r\n".data(using: .utf8)!)
-        body.append("\(currentUserID)\r\n".data(using: .utf8)!)
-        print("👤 送信ユーザーID: \(currentUserID)")
-        
-        // ② timestamp パラメータを追加
-        let timestampFormatter = ISO8601DateFormatter()
-        let timestampString = timestampFormatter.string(from: recording.date)
-        
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"timestamp\"\r\n\r\n".data(using: .utf8)!)
-        body.append("\(timestampString)\r\n".data(using: .utf8)!)
-        print("⏰ 送信タイムスタンプ: \(timestampString)")
-        
-        // ③ device_id パラメータを追加
-        print("🔍 デバイス情報チェック開始")
-        print("   - deviceManager存在: \(deviceManager != nil)")
-        print("   - deviceManager登録状態: \(deviceManager?.isDeviceRegistered ?? false)")
-        print("   - deviceManager現在ID: \(deviceManager?.currentDeviceID ?? "なし")")
-        
+        // ① metadata JSONパラメータを追加
         if let deviceInfo = deviceManager?.getDeviceInfo() {
-            body.append("--\(boundary)\r\n".data(using: .utf8)!)
-            body.append("Content-Disposition: form-data; name=\"device_id\"\r\n\r\n".data(using: .utf8)!)
-            body.append("\(deviceInfo.deviceID)\r\n".data(using: .utf8)!)
-            print("📱 送信デバイスID: \(deviceInfo.deviceID)")
+            // ユーザー体験のため、時刻は常にデバイスのローカルタイムゾーンを基準とします。
+            // UTCに変換せず、タイムゾーン情報(+09:00など)を付与したままサーバーに送信します。
+            let isoFormatter = ISO8601DateFormatter()
+            isoFormatter.formatOptions = [.withInternetDateTime, .withTimeZone, .withFractionalSeconds]
+            // 明示的にローカルタイムゾーンを設定
+            isoFormatter.timeZone = TimeZone.current
+            let recordedAtString = isoFormatter.string(from: recording.date)
+            
+            let metadata: [String: Any] = [
+                "device_id": deviceInfo.deviceID,
+                "recorded_at": recordedAtString
+            ]
+            
+            if let jsonData = try? JSONSerialization.data(withJSONObject: metadata, options: []),
+               let jsonString = String(data: jsonData, encoding: .utf8) {
+                body.append("--\(boundary)\r\n".data(using: .utf8)!)
+                body.append("Content-Disposition: form-data; name=\"metadata\"\r\n".data(using: .utf8)!)
+                body.append("Content-Type: application/json\r\n\r\n".data(using: .utf8)!)
+                body.append("\(jsonString)\r\n".data(using: .utf8)!)
+                print("📋 メタデータJSON: \(jsonString)")
+            }
         } else {
             print("❌ デバイス登録が完了していません。アップロードを中断します。")
-            print("   - deviceManager: \(deviceManager != nil ? "存在" : "nil")")
-            print("   - isDeviceRegistered: \(deviceManager?.isDeviceRegistered ?? false)")
-            print("   - currentDeviceID: \(deviceManager?.currentDeviceID ?? "nil")")
-            
             let errorMsg = "デバイス登録が必要です"
             recording.markAsUploadFailed(error: errorMsg)
             
@@ -211,8 +198,30 @@ class NetworkManager: ObservableObject {
                 self.connectionStatus = .failed
                 self.currentUploadingFile = nil
             }
+            completion(false)
             return
         }
+        
+        // ② user_id パラメータを追加
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"user_id\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(currentUserID)\r\n".data(using: .utf8)!)
+        print("👤 送信ユーザーID: \(currentUserID)")
+        
+        // ③ timestamp パラメータを追加
+        // ユーザーの生活時間と一致させるため、ローカルタイムゾーン情報を含めます
+        let timestampFormatter = ISO8601DateFormatter()
+        timestampFormatter.formatOptions = [.withInternetDateTime, .withTimeZone, .withFractionalSeconds]
+        // 明示的にローカルタイムゾーンを設定
+        timestampFormatter.timeZone = TimeZone.current
+        let timestampString = timestampFormatter.string(from: recording.date)
+        
+        body.append("--\(boundary)\r\n".data(using: .utf8)!)
+        body.append("Content-Disposition: form-data; name=\"timestamp\"\r\n\r\n".data(using: .utf8)!)
+        body.append("\(timestampString)\r\n".data(using: .utf8)!)
+        print("⏰ 送信タイムスタンプ: \(timestampString)")
+        
+        // device_idフィールドは廃止されました（metadataに統合）
         
         // ④ file パラメータを追加
         do {
@@ -220,7 +229,7 @@ class NetworkManager: ObservableObject {
             print("📄 ファイルデータ読み込み成功: \(fileData.count) bytes")
             
             body.append("--\(boundary)\r\n".data(using: .utf8)!)
-            body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(recording.fileName)\"\r\n".data(using: .utf8)!)
+            body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".data(using: .utf8)!)
             body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
             body.append(fileData)
             body.append("\r\n".data(using: .utf8)!)

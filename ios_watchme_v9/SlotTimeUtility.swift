@@ -31,9 +31,11 @@ class SlotTimeUtility {
     
     // MARK: - 日付文字列を取得（YYYY-MM-DD形式）
     static func getDateString(from date: Date) -> String {
+        // ユーザー体験のため、デバイスのローカルタイムゾーンを使用します
+        // これにより、世界中どこでも自分の生活時間に基づいたデータ管理が可能になります
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
-        dateFormatter.timeZone = TimeZone(identifier: "Asia/Tokyo")
+        dateFormatter.timeZone = TimeZone.current  // デバイスのローカルタイムゾーン
         return dateFormatter.string(from: date)
     }
     

@@ -675,10 +675,13 @@ struct RecordingRowView: View {
 // 日付フォーマッター
 extension DateFormatter {
     static let display: DateFormatter = {
+        // ユーザーのローカル設定に基づいて日時を表示
+        // これにより、世界中のユーザーが自分の地域の形式で時刻を確認できます
         let formatter = DateFormatter()
         formatter.dateStyle = .medium
         formatter.timeStyle = .medium
-        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.locale = Locale.current  // デバイスのローカル設定を使用
+        formatter.timeZone = TimeZone.current  // デバイスのローカルタイムゾーンを使用
         return formatter
     }()
 }
