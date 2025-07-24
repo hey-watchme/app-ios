@@ -296,7 +296,6 @@ struct ContentView: View {
                                         RecordingRowView(
                                             recording: recording,
                                             isSelected: selectedRecording?.fileName == recording.fileName,
-                                            networkManager: networkManager,
                                             onSelect: { selectedRecording = recording },
                                             onDelete: { recording in
                                                 audioRecorder.deleteRecording(recording)
@@ -511,7 +510,6 @@ struct ContentView: View {
 struct RecordingRowView: View {
     @ObservedObject var recording: RecordingModel
     let isSelected: Bool
-    let networkManager: NetworkManager?
     let onSelect: () -> Void
     let onDelete: (RecordingModel) -> Void
     
@@ -574,25 +572,8 @@ struct RecordingRowView: View {
             Spacer()
             
             HStack(spacing: 8) {
-                // アップロードボタン（未アップロードファイルのみ表示）
-                if !recording.isUploaded && recording.fileExists() && recording.uploadAttempts < 3 {
-                    Button(action: {
-                        onSelect()
-                        print("📤 手動アップロード開始: \(recording.fileName)")
-                        networkManager?.uploadRecording(recording) { success in
-                            DispatchQueue.main.async {
-                                print("個別アップロード完了: \(recording.fileName), 成功: \(success)")
-                            }
-                        }
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "icloud.and.arrow.up")
-                        }
-                        .foregroundColor(.blue)
-                    }
-                    .disabled(networkManager?.connectionStatus == .uploading)
-                } else if recording.uploadAttempts >= 3 {
-                    // 最大試行回数に達した場合はリセットボタンを表示
+                // 最大試行回数に達した場合はリセットボタンを表示
+                if recording.uploadAttempts >= 3 {
                     Button(action: {
                         recording.resetUploadStatus()
                         print("🔄 アップロード状態リセット: \(recording.fileName)")

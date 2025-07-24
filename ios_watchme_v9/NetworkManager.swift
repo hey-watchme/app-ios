@@ -163,81 +163,128 @@ class NetworkManager: ObservableObject {
         let boundary = UUID().uuidString
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         
-        // HTTPボディを作成
-        var body = Data()
+        // 一時ファイルのパスを生成
+        let tempFileName = "\(UUID().uuidString).tmp"
+        let tempFileURL = FileManager.default.temporaryDirectory.appendingPathComponent(tempFileName)
+        print("📝 一時ファイルパス: \(tempFileURL.path)")
         
-        // ① metadata JSONパラメータを追加
-        if let deviceInfo = deviceManager?.getDeviceInfo() {
-            // ユーザー体験のため、時刻は常にデバイスのローカルタイムゾーンを基準とします。
-            // UTCに変換せず、タイムゾーン情報(+09:00など)を付与したままサーバーに送信します。
-            let isoFormatter = ISO8601DateFormatter()
-            isoFormatter.formatOptions = [.withInternetDateTime, .withTimeZone, .withFractionalSeconds]
-            // 明示的にローカルタイムゾーンを設定
-            isoFormatter.timeZone = TimeZone.current
-            let recordedAtString = isoFormatter.string(from: recording.date)
-            
-            let metadata: [String: Any] = [
-                "device_id": deviceInfo.deviceID,
-                "recorded_at": recordedAtString
-            ]
-            
-            if let jsonData = try? JSONSerialization.data(withJSONObject: metadata, options: []),
-               let jsonString = String(data: jsonData, encoding: .utf8) {
-                body.append("--\(boundary)\r\n".data(using: .utf8)!)
-                body.append("Content-Disposition: form-data; name=\"metadata\"\r\n".data(using: .utf8)!)
-                body.append("Content-Type: application/json\r\n\r\n".data(using: .utf8)!)
-                body.append("\(jsonString)\r\n".data(using: .utf8)!)
-                print("📋 メタデータJSON: \(jsonString)")
-            }
-        } else {
-            print("❌ デバイス登録が完了していません。アップロードを中断します。")
-            let errorMsg = "デバイス登録が必要です"
-            recording.markAsUploadFailed(error: errorMsg)
-            
-            DispatchQueue.main.async {
-                self.connectionStatus = .failed
-                self.currentUploadingFile = nil
-            }
-            completion(false)
-            return
-        }
-        
-        // ② user_id パラメータを追加
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"user_id\"\r\n\r\n".data(using: .utf8)!)
-        body.append("\(currentUserID)\r\n".data(using: .utf8)!)
-        print("👤 送信ユーザーID: \(currentUserID)")
-        
-        // ③ timestamp パラメータを追加
-        // ユーザーの生活時間と一致させるため、ローカルタイムゾーン情報を含めます
-        let timestampFormatter = ISO8601DateFormatter()
-        timestampFormatter.formatOptions = [.withInternetDateTime, .withTimeZone, .withFractionalSeconds]
-        // 明示的にローカルタイムゾーンを設定
-        timestampFormatter.timeZone = TimeZone.current
-        let timestampString = timestampFormatter.string(from: recording.date)
-        
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"timestamp\"\r\n\r\n".data(using: .utf8)!)
-        body.append("\(timestampString)\r\n".data(using: .utf8)!)
-        print("⏰ 送信タイムスタンプ: \(timestampString)")
-        
-        // device_idフィールドは廃止されました（metadataに統合）
-        
-        // ④ file パラメータを追加
+        // 一時ファイルを作成してリクエストボディを書き込む
         do {
-            let fileData = try Data(contentsOf: fileURL)
-            print("📄 ファイルデータ読み込み成功: \(fileData.count) bytes")
+            // ファイルハンドルを作成
+            FileManager.default.createFile(atPath: tempFileURL.path, contents: nil, attributes: nil)
+            guard let fileHandle = FileHandle(forWritingAtPath: tempFileURL.path) else {
+                throw NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "一時ファイルの作成に失敗しました"])
+            }
             
-            body.append("--\(boundary)\r\n".data(using: .utf8)!)
-            body.append("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".data(using: .utf8)!)
-            body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
-            body.append(fileData)
-            body.append("\r\n".data(using: .utf8)!)
+            defer {
+                fileHandle.closeFile()
+            }
+            
+            // ① metadata JSONパラメータを追加
+            if let deviceInfo = deviceManager?.getDeviceInfo() {
+                // ユーザー体験のため、時刻は常にデバイスのローカルタイムゾーンを基準とします。
+                // UTCに変換せず、タイムゾーン情報(+09:00など)を付与したままサーバーに送信します。
+                let isoFormatter = ISO8601DateFormatter()
+                isoFormatter.formatOptions = [.withInternetDateTime, .withTimeZone, .withFractionalSeconds]
+                // 明示的にローカルタイムゾーンを設定
+                isoFormatter.timeZone = TimeZone.current
+                let recordedAtString = isoFormatter.string(from: recording.date)
+                
+                let metadata: [String: Any] = [
+                    "device_id": deviceInfo.deviceID,
+                    "recorded_at": recordedAtString
+                ]
+                
+                if let jsonData = try? JSONSerialization.data(withJSONObject: metadata, options: []),
+                   let jsonString = String(data: jsonData, encoding: .utf8) {
+                    fileHandle.write("--\(boundary)\r\n".data(using: .utf8)!)
+                    fileHandle.write("Content-Disposition: form-data; name=\"metadata\"\r\n".data(using: .utf8)!)
+                    fileHandle.write("Content-Type: application/json\r\n\r\n".data(using: .utf8)!)
+                    fileHandle.write("\(jsonString)\r\n".data(using: .utf8)!)
+                    print("📋 メタデータJSON: \(jsonString)")
+                }
+            } else {
+                print("❌ デバイス登録が完了していません。アップロードを中断します。")
+                let errorMsg = "デバイス登録が必要です"
+                recording.markAsUploadFailed(error: errorMsg)
+                
+                // 一時ファイルを削除
+                try? FileManager.default.removeItem(at: tempFileURL)
+                
+                DispatchQueue.main.async {
+                    self.connectionStatus = .failed
+                    self.currentUploadingFile = nil
+                }
+                completion(false)
+                return
+            }
+            
+            // ② user_id パラメータを追加
+            fileHandle.write("--\(boundary)\r\n".data(using: .utf8)!)
+            fileHandle.write("Content-Disposition: form-data; name=\"user_id\"\r\n\r\n".data(using: .utf8)!)
+            fileHandle.write("\(currentUserID)\r\n".data(using: .utf8)!)
+            print("👤 送信ユーザーID: \(currentUserID)")
+            
+            // ③ timestamp パラメータを追加
+            // ユーザーの生活時間と一致させるため、ローカルタイムゾーン情報を含めます
+            let timestampFormatter = ISO8601DateFormatter()
+            timestampFormatter.formatOptions = [.withInternetDateTime, .withTimeZone, .withFractionalSeconds]
+            // 明示的にローカルタイムゾーンを設定
+            timestampFormatter.timeZone = TimeZone.current
+            let timestampString = timestampFormatter.string(from: recording.date)
+            
+            fileHandle.write("--\(boundary)\r\n".data(using: .utf8)!)
+            fileHandle.write("Content-Disposition: form-data; name=\"timestamp\"\r\n\r\n".data(using: .utf8)!)
+            fileHandle.write("\(timestampString)\r\n".data(using: .utf8)!)
+            print("⏰ 送信タイムスタンプ: \(timestampString)")
+            
+            // device_idフィールドは廃止されました（metadataに統合）
+            
+            // ④ file パラメータを追加（ストリーミング方式で読み込み）
+            fileHandle.write("--\(boundary)\r\n".data(using: .utf8)!)
+            fileHandle.write("Content-Disposition: form-data; name=\"file\"; filename=\"audio.wav\"\r\n".data(using: .utf8)!)
+            fileHandle.write("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+            
+            // 音声ファイルをストリーミングでコピー
+            guard let audioFileHandle = FileHandle(forReadingAtPath: fileURL.path) else {
+                throw NSError(domain: "NetworkManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "音声ファイルを開けません"])
+            }
+            
+            defer {
+                audioFileHandle.closeFile()
+            }
+            
+            // 64KBごとにファイルをコピー（メモリ効率化）
+            let bufferSize = 65536 // 64KB
+            var totalCopied: Int64 = 0
+            
+            while true {
+                let chunk = audioFileHandle.readData(ofLength: bufferSize)
+                if chunk.isEmpty {
+                    break
+                }
+                fileHandle.write(chunk)
+                totalCopied += Int64(chunk.count)
+            }
+            
+            print("📄 音声ファイルコピー完了: \(totalCopied) bytes")
+            
+            fileHandle.write("\r\n".data(using: .utf8)!)
+            
+            // boundary終了
+            fileHandle.write("--\(boundary)--\r\n".data(using: .utf8)!)
+            
+            // ファイルサイズを取得
+            let tempFileAttributes = try FileManager.default.attributesOfItem(atPath: tempFileURL.path)
+            let tempFileSize = tempFileAttributes[.size] as? Int64 ?? 0
+            print("📦 一時ファイルサイズ: \(tempFileSize) bytes")
             
         } catch {
-            let errorMsg = "ファイルデータ読み込み失敗: \(error.localizedDescription)"
+            let errorMsg = "一時ファイル作成エラー: \(error.localizedDescription)"
             print("❌ \(errorMsg)")
-            print("❌ ファイルパス: \(fileURL.path)")
+            
+            // 一時ファイルを削除
+            try? FileManager.default.removeItem(at: tempFileURL)
             
             recording.markAsUploadFailed(error: errorMsg)
             
@@ -248,12 +295,6 @@ class NetworkManager: ObservableObject {
             completion(false)
             return
         }
-        
-        // boundary終了
-        body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        
-        request.httpBody = body
-        print("📦 リクエストボディサイズ: \(body.count) bytes")
         
         print("🚀 アップロード開始 - ユーザーID: \(currentUserID), ファイル: \(recording.fileName)")
         
@@ -274,9 +315,19 @@ class NetworkManager: ObservableObject {
         // アップロード開始時刻を記録
         let uploadStartTime = Date()
         
-        // URLSessionでリクエストを送信
-        let uploadTask = URLSession.shared.dataTask(with: request) { data, response, error in
+        // URLSessionでリクエストを送信（ストリーミングアップロード）
+        let uploadTask = URLSession.shared.uploadTask(with: request, fromFile: tempFileURL) { data, response, error in
             progressTimer.invalidate()
+            
+            // 一時ファイルを削除
+            defer {
+                do {
+                    try FileManager.default.removeItem(at: tempFileURL)
+                    print("🗑 一時ファイル削除完了: \(tempFileURL.lastPathComponent)")
+                } catch {
+                    print("⚠️ 一時ファイル削除エラー: \(error.localizedDescription)")
+                }
+            }
             
             // アップロード終了時刻
             let uploadEndTime = Date()
