@@ -60,6 +60,7 @@ ios_watchme_v9/
 
 2. **NetworkManager**
    - サーバーとの通信管理
+   - ストリーミング方式によるメモリ効率的なアップロード（v9.7.0〜）
    - multipart/form-dataでのファイルアップロード
    - エラーハンドリングとリトライ機能
    - タイムゾーン情報を含むタイムスタンプの送信
@@ -73,6 +74,7 @@ ios_watchme_v9/
    - NetworkManagerによる直接アップロード処理
    - 逐次アップロード機能
    - エラーハンドリングとリトライ機能
+   - ストリーミング方式でメモリ不足によるアップロード失敗を解消（v9.7.0〜）
 
 ## API仕様
 
@@ -127,7 +129,60 @@ Parameters:
 - アップロード済みファイルの定期的な削除
 - ディスク容量の監視
 
-### 4. Xcodeビルドエラーの対処
+### 4. ストリーミングアップロード仕様（v9.7.0〜）
+
+#### 概要
+従来の`Data(contentsOf:)`による一括メモリ読み込み方式から、ストリーミング方式に移行しました。これにより、ファイルサイズに関係なく安定したアップロードが可能になりました。
+
+#### 技術仕様
+1. **一時ファイル戦略**
+   - multipart/form-dataのリクエストボディを一時ファイルとして構築
+   - `FileManager.default.temporaryDirectory`に一時ファイルを作成
+   - UUIDベースのユニークなファイル名で衝突を回避
+
+2. **ストリーミングコピー**
+   - 音声ファイルを64KB単位のチャンクで読み込み
+   - FileHandleを使用したメモリ効率的なファイル操作
+   - autoreleasepoolによるメモリの適切な解放
+
+3. **URLSessionUploadTask**
+   - `dataTask`から`uploadTask(with:fromFile:)`に変更
+   - OSレベルでの効率的なファイルストリーミング
+   - バックグラウンドでの安定した転送
+
+4. **クリーンアップ処理**
+   - アップロード完了後に一時ファイルを自動削除
+   - deferブロックによる確実なリソース解放
+   - エラー時も適切にクリーンアップ
+
+#### メリット
+- **メモリ効率**: ファイル全体をメモリに読み込まないため、大容量ファイルでも安定動作
+- **信頼性向上**: メモリ不足によるアップロード失敗を完全に解消
+- **パフォーマンス**: OSレベルの最適化により、効率的なデータ転送を実現
+
+#### 実装例
+```swift
+// 一時ファイルへの書き込み
+let tempFileURL = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).tmp")
+let fileHandle = FileHandle(forWritingAtPath: tempFileURL.path)
+
+// 64KBごとにストリーミングコピー
+let bufferSize = 65536 // 64KB
+while true {
+    let chunk = audioFileHandle.readData(ofLength: bufferSize)
+    if chunk.isEmpty { break }
+    fileHandle.write(chunk)
+}
+
+// URLSessionUploadTaskでアップロード
+let uploadTask = URLSession.shared.uploadTask(with: request, fromFile: tempFileURL) { data, response, error in
+    // クリーンアップ
+    defer { try? FileManager.default.removeItem(at: tempFileURL) }
+    // レスポンス処理
+}
+```
+
+### 5. Xcodeビルドエラーの対処
 
 #### "Missing package product 'Supabase'" エラー
 
@@ -204,10 +259,18 @@ Xcodeのネットワークデバッガーを使用して、送信されるリク
 - **v9.7.0 - アップロード安定化とUI改善**
   - **ストリーミングアップロード方式への移行**
     - NetworkManager.swiftの`uploadRecording`メソッドを全面改修
-    - `Data(contentsOf:)`による一括メモリ読み込みを廃止
-    - 一時ファイル戦略とURLSessionUploadTaskによるストリーミング実装
-    - 64KBごとのチャンクでファイルをコピーしメモリ効率を大幅改善
-    - 大容量ファイルでもメモリ不足によるアップロード失敗を完全解消
+    - 従来の`Data(contentsOf:)`による一括メモリ読み込みを廃止し、メモリ不足によるアップロード失敗を根本解決
+    - 一時ファイル戦略の採用：
+      - multipart/form-dataリクエストボディを一時ファイルとして構築
+      - FileHandleを使用した効率的なファイル操作
+      - 64KB単位のチャンクでストリーミングコピー
+    - URLSessionUploadTaskによるOSレベルの最適化：
+      - `dataTask`から`uploadTask(with:fromFile:)`に変更
+      - バックグラウンドでの安定した転送を実現
+    - 確実なリソース管理：
+      - deferブロックによる一時ファイルの自動削除
+      - エラー時も適切なクリーンアップを保証
+    - 結果：大容量ファイルでも安定したアップロードが可能に
   
   - **UI簡素化**
     - RecordingRowViewから個別アップロードボタンを削除

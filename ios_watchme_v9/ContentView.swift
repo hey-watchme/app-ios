@@ -20,6 +20,8 @@ struct ContentView: View {
     @State private var showLogoutConfirmation = false
     @State private var showUserInfoSheet = false
     @State private var networkManager: NetworkManager?
+    @State private var uploadingTotalCount = 0
+    @State private var uploadingCurrentIndex = 0
     
     private func initializeNetworkManager() {
         // NetworkManagerを初期化（AuthManagerとDeviceManagerを渡す）
@@ -88,57 +90,53 @@ struct ContentView: View {
     private var scrollContent: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // 統計情報（録音数・アップロード済み・アップロード待ち）
-                if !audioRecorder.recordings.isEmpty {
+                // 統計情報（アップロード済み・アップロード待ち）- 常時表示
+                HStack(spacing: 20) {
+                    // アップロード済み
                     VStack(spacing: 8) {
-                        // 統計情報
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("総録音数")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                Text("\(audioRecorder.recordings.count)")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .center, spacing: 4) {
-                                Text("アップロード済み")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                let uploadedCount = audioRecorder.recordings.filter { $0.isUploaded }.count
-                                Text("\(uploadedCount)")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.green)
-                                    .onAppear {
-                                        print("🔍 [ContentView] 初期アップロード済み数: \(uploadedCount)")
-                                    }
-                            }
-                            
-                            Spacer()
-                            
-                            VStack(alignment: .trailing, spacing: 4) {
-                                Text("アップロード待ち")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                                let pendingCount = audioRecorder.recordings.filter { !$0.isUploaded }.count
-                                Text("\(pendingCount)")
-                                    .font(.title2)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(.orange)
-                                    .onAppear {
-                                        print("🔍 [ContentView] 初期アップロード待ち数: \(pendingCount)")
-                                    }
-                            }
-                        }
-                        .padding()
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title)
+                            .foregroundColor(.green)
+                        
+                        Text("アップロード済み")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                        
+                        let uploadedCount = audioRecorder.recordings.filter { $0.isUploaded }.count
+                        Text("\(uploadedCount)")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(.green)
                     }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .background(Color.green.opacity(0.1))
+                    .cornerRadius(16)
+                    
+                    // アップロード待ち
+                    VStack(spacing: 8) {
+                        Image(systemName: "arrow.up.circle.fill")
+                            .font(.title)
+                            .foregroundColor(.orange)
+                        
+                        Text("アップロード待ち")
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                        
+                        let pendingCount = audioRecorder.recordings.filter { !$0.isUploaded }.count
+                        Text("\(pendingCount)")
+                            .font(.largeTitle)
+                            .fontWeight(.bold)
+                            .foregroundColor(.orange)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+                    .background(Color.orange.opacity(0.1))
+                    .cornerRadius(16)
                 }
+                .padding(.horizontal)
                 
                 // 接続ステータス表示
                 HStack {
@@ -155,9 +153,15 @@ struct ContentView: View {
                 if networkManager?.connectionStatus == .uploading {
                     VStack(spacing: 8) {
                         HStack {
-                            Text("📤 アップロード中...")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
+                            if uploadingTotalCount > 0 {
+                                Text("📤 アップロード中 (\(uploadingCurrentIndex)/\(uploadingTotalCount)件)")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            } else {
+                                Text("📤 アップロード中...")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                            }
                             
                             Spacer()
                             
@@ -431,10 +435,11 @@ struct ContentView: View {
             return
         }
         
-        alertMessage = "\(recordingsToUpload.count)件のアップロードを開始します..."
-        showAlert = true
-        
         print("📤 一括アップロード開始: \(recordingsToUpload.count)件")
+        
+        // アップロード件数を設定
+        uploadingTotalCount = recordingsToUpload.count
+        uploadingCurrentIndex = 0
         
         // 最初のファイルからアップロードを開始する
         uploadSequentially(recordings: recordingsToUpload, networkManager: networkManager)
@@ -448,6 +453,9 @@ struct ContentView: View {
             DispatchQueue.main.async {
                 self.alertMessage = "すべての一括アップロードが完了しました。"
                 self.showAlert = true
+                // カウンターをリセット
+                self.uploadingTotalCount = 0
+                self.uploadingCurrentIndex = 0
             }
             return
         }
@@ -456,12 +464,23 @@ struct ContentView: View {
         var remainingRecordings = recordings
         remainingRecordings.removeFirst()
         
-        print("📤 アップロード中: \(recording.fileName) (残り: \(remainingRecordings.count)件)")
+        // 現在のアップロード番号を更新
+        uploadingCurrentIndex = uploadingTotalCount - recordings.count + 1
+        
+        print("📤 アップロード中: \(recording.fileName) (\(uploadingCurrentIndex)/\(uploadingTotalCount))")
         
         // 1つのファイルをアップロード
         networkManager.uploadRecording(recording) { success in
             if success {
                 print("✅ 一括アップロード成功: \(recording.fileName)")
+                
+                // アップロードが成功したので、このファイルを削除する
+                // 少し遅延させてから削除処理を呼ぶことで、UIの更新などがスムーズに行われる
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    print("🗑️ 送信済みファイルを削除します:\(recording.fileName)")
+                    // AudioRecorderのメソッドを呼び出して削除を依頼
+                    self.audioRecorder.deleteRecording(recording)
+                }
             } else {
                 print("❌ 一括アップロード失敗: \(recording.fileName)")
             }
