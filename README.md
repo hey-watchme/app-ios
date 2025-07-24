@@ -46,9 +46,10 @@ ios_watchme_v9/
 ├── NetworkManager.swift       # API通信
 ├── DeviceManager.swift        # デバイス管理
 ├── SupabaseAuthManager.swift  # 認証管理
-├── UploadManager.swift        # アップロード管理
 ├── RecordingModel.swift       # データモデル
 ├── SlotTimeUtility.swift      # 時刻スロット管理
+├── ConnectionStatus.swift     # 接続状態管理
+├── LoginView.swift           # ログインUI
 └── Info.plist                 # アプリ設定
 ```
 
@@ -70,10 +71,10 @@ ios_watchme_v9/
    - セッション管理
    - 自動ログイン機能
 
-4. **UploadManager**
-   - バックグラウンドでのアップロード管理
-   - アップロード状態の監視
-   - 失敗時の自動リトライ
+4. **アップロード処理**
+   - NetworkManagerによる直接アップロード処理
+   - 逐次アップロード機能
+   - エラーハンドリングとリトライ機能
 
 ## API仕様
 
@@ -200,6 +201,13 @@ Parameters:
 Xcodeのネットワークデバッガーを使用して、送信されるリクエストの内容を確認できます。
 
 ## 更新履歴
+
+### 2025年7月24日
+- **コードクリーンアップ**
+  - UploadManager.swiftの削除（未使用の古いコード）
+  - ContentView.swiftのコメントアウトされた古いコードの削除
+  - AudioRecorder.swiftのpendingRecordings冗長プロパティの削除
+  - アップロード処理をNetworkManagerに一元化
 
 ### 2025年7月19日
 - **タイムゾーン処理の改善**

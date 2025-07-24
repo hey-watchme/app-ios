@@ -21,7 +21,6 @@ class AudioRecorder: NSObject, ObservableObject {
     private var slotSwitchTimer: Timer?  // 正確な30分境界でのタイマー
     private var recordingStartTime: Date?
     private var currentSlotStartTime: Date?
-    private var pendingRecordings: [RecordingModel] = []  // アップロード待ちキュー
     
     override init() {
         super.init()
@@ -57,7 +56,6 @@ class AudioRecorder: NSObject, ObservableObject {
         DispatchQueue.main.async {
             // リストから削除
             self.recordings.removeAll { $0.fileName == deletedRecording.fileName }
-            self.pendingRecordings.removeAll { $0.fileName == deletedRecording.fileName }
             
             print("✅ リストからファイルを削除: \(deletedRecording.fileName)")
             print("📊 残りファイル数: \(self.recordings.count)")
@@ -253,7 +251,6 @@ class AudioRecorder: NSObject, ObservableObject {
             
             // リストから削除
             recordings.remove(at: existingIndex)
-            pendingRecordings.removeAll { $0.fileName == fullFileName }
             
             print("✅ 上書き準備完了 - 新録音を開始します")
         }
@@ -366,7 +363,6 @@ class AudioRecorder: NSObject, ObservableObject {
                     }
                     
                     recordings.insert(recording, at: 0)
-                    pendingRecordings.append(recording)
                     
                     print("✅ スロット録音完了: \(fullFileName)")
                     print("📊 総録音ファイル数: \(recordings.count)")
@@ -428,7 +424,6 @@ class AudioRecorder: NSObject, ObservableObject {
                     }
                     
                     recordings.insert(recording, at: 0)
-                    pendingRecordings.append(recording)
                     
                     print("✅ スロット録音完了: \(fullFileName)")
                     print("📊 総録音ファイル数: \(recordings.count)")
@@ -458,15 +453,6 @@ class AudioRecorder: NSObject, ObservableObject {
         }
     }
     
-    // アップロード待ちキューを取得
-    func getPendingUploads() -> [RecordingModel] {
-        return pendingRecordings.filter { !$0.isUploaded && $0.fileExists() }
-    }
-    
-    // アップロード待ちキューから削除
-    func removeFromPendingUploads(_ recording: RecordingModel) {
-        pendingRecordings.removeAll { $0.fileName == recording.fileName }
-    }
     
     // 録音停止（ユーザーによる手動停止）
     func stopRecording() {
@@ -619,7 +605,6 @@ class AudioRecorder: NSObject, ObservableObject {
             
             // リストから削除
             recordings.removeAll { $0.fileName == recording.fileName }
-            pendingRecordings.removeAll { $0.fileName == recording.fileName }
             
             // アップロード状態をクリア（UserDefaultsからも削除）
             clearUploadStatus(fileName: recording.fileName)
@@ -728,7 +713,6 @@ class AudioRecorder: NSObject, ObservableObject {
                     
                     // 録音リストからも削除
                     recordings.removeAll { $0.fileName == fileURL.lastPathComponent }
-                    pendingRecordings.removeAll { $0.fileName == fileURL.lastPathComponent }
                     
                     // アップロード状態もクリア
                     clearUploadStatus(fileName: fileURL.lastPathComponent)

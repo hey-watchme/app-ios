@@ -12,7 +12,6 @@ struct ContentView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
     @StateObject private var audioRecorder = AudioRecorder()
-    // @StateObject private var uploadManager = UploadManager.shared
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var selectedRecording: RecordingModel?
@@ -30,10 +29,7 @@ struct ContentView: View {
             networkManager?.updateToAuthenticatedUserID(authUser.id)
         }
         
-        // UploadManagerにNetworkManagerを設定
-        if let networkManager = networkManager {
-            // uploadManager.configure(networkManager: networkManager)
-        }
+        // NetworkManagerの設定は不要（既に親ビューから渡されている）
         
         print("🔧 NetworkManager初期化完了")
     }
@@ -165,15 +161,9 @@ struct ContentView: View {
                             
                             Spacer()
                             
-                            // if uploadManager.isProcessing {
-                            //     Text("\(Int(uploadManager.totalProgress * 100))%")
-                            //         .font(.caption)
-                            //         .fontWeight(.bold)
-                            // } else {
                             Text("\(Int((networkManager?.uploadProgress ?? 0.0) * 100))%")
                                 .font(.caption)
                                 .fontWeight(.bold)
-                            // }
                         }
                         
                         // UploadManager無効化: NetworkManagerのみ使用
@@ -483,50 +473,6 @@ struct ContentView: View {
         }
     }
     
-    /*
-    // 新しいUploadManagerを使用した手動アップロード（旧実装）
-    private func manualBatchUploadWithUploadManager() {
-        // アップロード可能なファイルを取得
-        let uploadableRecordings = audioRecorder.recordings.filter { $0.canUpload }
-        
-        guard !uploadableRecordings.isEmpty else {
-            print("💾 手動アップロード: アップロード可能なファイルがありません")
-            
-            // アップロード不可能なファイルの理由を表示
-            let failedRecordings = audioRecorder.recordings.filter { !$0.isUploaded }
-            if !failedRecordings.isEmpty {
-                print("📄 アップロード不可能なファイル: \(failedRecordings.count)個")
-                for recording in failedRecordings {
-                    let reason = !recording.fileExists() ? "ファイル不存在" : 
-                                recording.uploadAttempts >= 3 ? "最大試行回数超過" : "不明"
-                    print("   - \(recording.fileName): \(reason) (試行: \(recording.uploadAttempts)/3)")
-                }
-            }
-            return
-        }
-        
-        // 作成日時順（古い順）でソート
-        let sortedRecordings = uploadableRecordings.sorted { $0.date < $1.date }
-        
-        print("💾 UploadManager経由で手動アップロード開始: \(sortedRecordings.count)個のファイル")
-        
-        // デバッグ: AudioRecorder内のRecordingModelのObjectIdentifierを確認
-        print("🔍 [ContentView] AudioRecorder内のRecordingModel:")
-        for recording in sortedRecordings {
-            print("   - \(recording.fileName): ObjectIdentifier = \(ObjectIdentifier(recording)), isUploaded = \(recording.isUploaded)")
-        }
-        
-        // UploadManagerのキューに追加
-        uploadManager.addMultipleToQueue(sortedRecordings)
-        
-        // 手動でアップロード処理を開始
-        uploadManager.startManualProcessing()
-        
-        // アップロード状態を表示
-        alertMessage = "\(sortedRecordings.count)個のファイルの手動アップロードを開始しました"
-        showAlert = true
-    }
-    */
     
     // 接続ステータスに応じた色
     private var statusColor: Color {
