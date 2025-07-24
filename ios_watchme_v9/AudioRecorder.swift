@@ -22,6 +22,16 @@ class AudioRecorder: NSObject, ObservableObject {
     private var recordingStartTime: Date?
     private var currentSlotStartTime: Date?
     
+    // スロット切り替え状態管理
+    private var pendingSlotSwitch: SlotSwitchInfo?
+    
+    // スロット切り替え情報を保持する構造体
+    private struct SlotSwitchInfo {
+        let oldSlot: String
+        let newSlot: String
+        let switchTime: Date
+    }
+    
     override init() {
         super.init()
         setupAudioSession()
@@ -230,10 +240,12 @@ class AudioRecorder: NSObject, ObservableObject {
         
         if let existingIndex = recordings.firstIndex(where: { $0.fileName == fullFileName }) {
             let existingRecording = recordings[existingIndex]
-            print("🔄 同一スロット録音の自動上書き: \(fileName)")
+            print("⚠️ 同一ファイル名検出！同一スロット録音の自動上書き: \(fileName)")
+            print("   - フルファイル名: \(fullFileName)")
             print("   - 既存ファイル作成日時: \(existingRecording.date)")
             print("   - 既存ファイルサイズ: \(existingRecording.fileSizeFormatted)")
             print("   - 既存アップロード状態: \(existingRecording.isUploaded ? "済み" : "未完了")")
+            print("   - 🚨 これは本来起こるべきではない状況です（異なるスロット名が期待されます）")
             
             // 既存ファイルの物理削除
             let fileURL = existingRecording.getFileURL()
@@ -270,7 +282,7 @@ class AudioRecorder: NSObject, ObservableObject {
         }
     }
     
-    // スロット切り替えを実行
+    // スロット切り替えを実行（堅牢な実装）
     private func performSlotSwitch() {
         guard isRecording else {
             print("⚠️ 録音停止中のため、スロット切り替えをスキップ")
@@ -278,169 +290,32 @@ class AudioRecorder: NSObject, ObservableObject {
         }
         
         let oldSlot = currentSlot
-        let newSlot = getCurrentSlot()
+        
+        // 次のスロットの開始時刻を取得
+        let nextSlotTime = getNextSlotStartTime()
+        // その時刻を使って、新しいスロット名を計算する
+        let newSlot = SlotTimeUtility.getSlotName(from: nextSlotTime)
         
         print("🔄 スロット切り替え実行: \(oldSlot) → \(newSlot)")
         print("📅 切り替え時刻: \(Date())")
+        print("📅 次のスロット開始時刻: \(nextSlotTime)")
         
-        // 現在の録音を完全に停止
+        // 次のスロット情報を事前に準備
+        pendingSlotSwitch = SlotSwitchInfo(
+            oldSlot: oldSlot,
+            newSlot: newSlot,
+            switchTime: Date()
+        )
+        
+        print("🎯 pendingSlotSwitchを設定: \(oldSlot) → \(newSlot)")
+        print("🔍 isRecording状態: \(isRecording)")
+        
+        // 現在の録音を停止 - 完了通知はaudioRecorderDidFinishRecordingで受け取る
         audioRecorder?.stop()
-        print("⏸️ 現在の録音を停止")
-        
-        // 少し待機してファイルシステムが確実に保存されるようにする
-        Thread.sleep(forTimeInterval: 0.5)
-        
-        // 現在の録音を保存
-        if let completedRecording = finishCurrentSlotRecordingWithReturn() {
-            print("💾 スロット切り替え時の録音完了: \(completedRecording.fileName)")
-            
-            // 新しいスロットに更新
-            currentSlot = newSlot
-            currentSlotStartTime = Date()
-            
-            // 1秒待機してから新しい録音を開始（ファイルシステムへの負荷を軽減）
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                guard let self = self else { return }
-                
-                if self.startRecordingForCurrentSlot() {
-                    // 次の切り替えタイマーを設定（30分後）
-                    self.slotSwitchTimer = Timer.scheduledTimer(withTimeInterval: 1800.0, repeats: false) { [weak self] _ in
-                        self?.performSlotSwitch()
-                    }
-                    print("✅ スロット切り替え成功")
-                } else {
-                    print("❌ 新スロット録音開始失敗 - 録音を停止")
-                    self.stopRecording()
-                }
-            }
-        } else {
-            print("❌ 現在スロット録音完了失敗 - 録音を停止")
-            stopRecording()
-        }
+        print("⏸️ 現在の録音を停止 - 完了をデリゲートで待機")
     }
     
-    // 現在のスロット録音を完了・保存
-    @discardableResult
-    private func finishCurrentSlotRecording() -> Bool {
-        guard let recorder = audioRecorder else {
-            print("❌ オーディオレコーダーが存在しません")
-            return false
-        }
-        
-        let recordingURL = recorder.url
-        let fileName = recordingURL.lastPathComponent
-        let dateString = SlotTimeUtility.getDateString(from: currentSlotStartTime!)
-        let fullFileName = "\(dateString)/\(fileName)"
-        
-        print("💾 スロット録音完了処理開始: \(fileName)")
-        print("   - 録音URL: \(recordingURL.path)")
-        print("   - スロット継続時間: \(Date().timeIntervalSince(currentSlotStartTime!))秒")
-        
-        // 録音停止（既に停止されている場合もあるため、エラーを無視）
-        if recorder.isRecording {
-            recorder.stop()
-        }
-        
-        // ファイル存在確認
-        let fileExists = FileManager.default.fileExists(atPath: recordingURL.path)
-        print("   - ファイル存在確認: \(fileExists)")
-        
-        if fileExists {
-            // ファイルサイズ確認
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
-                let fileSize = attributes[.size] as? Int64 ?? 0
-                print("   - ファイルサイズ: \(fileSize) bytes")
-                
-                if fileSize > 0 {
-                    // RecordingModelを作成・追加
-                    let recording = RecordingModel(fileName: fullFileName, date: currentSlotStartTime!)
-                    
-                    // 重複チェック
-                    if let existingIndex = recordings.firstIndex(where: { $0.fileName == fullFileName }) {
-                        recordings.remove(at: existingIndex)
-                        print("🔄 既存の同名録音を置換")
-                    }
-                    
-                    recordings.insert(recording, at: 0)
-                    
-                    print("✅ スロット録音完了: \(fullFileName)")
-                    print("📊 総録音ファイル数: \(recordings.count)")
-                    return true
-                } else {
-                    print("❌ ファイルサイズが0bytes")
-                    return false
-                }
-            } catch {
-                print("❌ ファイル属性取得エラー: \(error)")
-                return false
-            }
-        } else {
-            print("❌ 録音ファイルが存在しません")
-            return false
-        }
-    }
-    
-    // 現在のスロット録音を完了・保存し、RecordingModelを返す
-    private func finishCurrentSlotRecordingWithReturn() -> RecordingModel? {
-        guard let recorder = audioRecorder else {
-            print("❌ オーディオレコーダーが存在しません")
-            return nil
-        }
-        
-        let recordingURL = recorder.url
-        let fileName = recordingURL.lastPathComponent
-        let dateString = SlotTimeUtility.getDateString(from: currentSlotStartTime!)
-        let fullFileName = "\(dateString)/\(fileName)"
-        
-        print("💾 スロット録音完了処理開始: \(fileName)")
-        print("   - 録音URL: \(recordingURL.path)")
-        print("   - スロット継続時間: \(Date().timeIntervalSince(currentSlotStartTime!))秒")
-        
-        // 録音停止（既に停止されている場合もあるため、エラーを無視）
-        if recorder.isRecording {
-            recorder.stop()
-        }
-        
-        // ファイル存在確認
-        let fileExists = FileManager.default.fileExists(atPath: recordingURL.path)
-        print("   - ファイル存在確認: \(fileExists)")
-        
-        if fileExists {
-            // ファイルサイズ確認
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
-                let fileSize = attributes[.size] as? Int64 ?? 0
-                print("   - ファイルサイズ: \(fileSize) bytes")
-                
-                if fileSize > 0 {
-                    // RecordingModelを作成・追加
-                    let recording = RecordingModel(fileName: fullFileName, date: currentSlotStartTime!)
-                    
-                    // 重複チェック
-                    if let existingIndex = recordings.firstIndex(where: { $0.fileName == fullFileName }) {
-                        recordings.remove(at: existingIndex)
-                        print("🔄 既存の同名録音を置換")
-                    }
-                    
-                    recordings.insert(recording, at: 0)
-                    
-                    print("✅ スロット録音完了: \(fullFileName)")
-                    print("📊 総録音ファイル数: \(recordings.count)")
-                    return recording
-                } else {
-                    print("❌ ファイルサイズが0bytes")
-                    return nil
-                }
-            } catch {
-                print("❌ ファイル属性取得エラー: \(error)")
-                return nil
-            }
-        } else {
-            print("❌ 録音ファイルが存在しません")
-            return nil
-        }
-    }
+    // 重複メソッドを削除 - 処理はaudioRecorderDidFinishRecordingに統合済み
     
     
     
@@ -466,39 +341,48 @@ class AudioRecorder: NSObject, ObservableObject {
         print("📈 総録音時間: \(recordingTime)秒")
         print("📊 総セッション数: \(totalRecordingSessions)")
         
-        // 最後のスロット録音を完了
-        if finishCurrentSlotRecording() {
-            print("✅ 最終スロット録音完了")
-        } else {
-            print("❌ 最終スロット録音完了失敗")
-        }
+        // スロット切り替え状態をクリア（手動停止の場合は次のスロットを開始しない）
+        pendingSlotSwitch = nil
         
-        // クリーンアップ
-        cleanup()
+        // 最後のスロット録音を停止 - 完了処理はデリゲートで実行される
+        audioRecorder?.stop()
+        print("⏹️ 最終スロット録音停止 - デリゲートで完了処理を待機")
         
-        print("✅ 録音停止完了 - 保存されたファイル数: \(recordings.count)")
+        // タイマーだけを停止（currentSlotStartTimeはデリゲートで使用するため保持）
+        partialCleanup()
+        
+        print("✅ 録音停止処理完了")
     }
     
-    // クリーンアップ処理
-    private func cleanup() {
+    // 部分クリーンアップ（タイマーと基本状態のみ）
+    private func partialCleanup() {
         // タイマーを停止
         recordingTimer?.invalidate()
         slotSwitchTimer?.invalidate()
         recordingTimer = nil
         slotSwitchTimer = nil
         
-        // オーディオレコーダーを停止・クリア
-        audioRecorder?.stop()
-        audioRecorder = nil
-        
-        // 状態をリセット
+        // 基本状態をリセット
         isRecording = false
         recordingTime = 0
         recordingStartTime = nil
+        
+        print("🧹 部分クリーンアップ完了")
+    }
+    
+    // 完全クリーンアップ（デリゲート処理後に呼び出し）
+    private func cleanup() {
+        // オーディオレコーダーをクリア
+        audioRecorder = nil
+        
+        // スロット情報をクリア
         currentSlotStartTime = nil
         currentSlot = ""
         
-        print("🧹 クリーンアップ完了")
+        // スロット切り替え状態もクリア
+        pendingSlotSwitch = nil
+        
+        print("🧹 完全クリーンアップ完了")
     }
     
     // 保存された録音ファイルを読み込み（アップロード状態を永続化から復元）
@@ -740,9 +624,133 @@ class AudioRecorder: NSObject, ObservableObject {
 // MARK: - AVAudioRecorderDelegate
 extension AudioRecorder: AVAudioRecorderDelegate {
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
+        print("🎯 audioRecorderDidFinishRecording呼び出し - 成功: \(flag)")
+        print("🔍 currentSlotStartTime存在チェック: \(currentSlotStartTime != nil)")
+        print("🔍 pendingSlotSwitch存在チェック: \(pendingSlotSwitch != nil)")
+        
         if !flag {
             print("❌ 録音が失敗しました")
+            // 録音失敗時の処理
+            handleRecordingFailure()
+            return
         }
+        
+        // 1. まず録音完了処理を実行（クリーンアップはしない）
+        print("📝 録音完了処理を開始します")
+        handleRecordingCompletion(recorder: recorder)
+        
+        // 2. スロット切り替えが待機中の場合は、次のスロットを開始
+        if let switchInfo = pendingSlotSwitch {
+            print("🔄 スロット切り替え処理を開始します - pendingSlotSwitch有効")
+            handleSlotSwitchCompletion(switchInfo: switchInfo)
+        } else {
+            // 3. 手動停止の場合は、ここで完全クリーンアップを実行
+            print("✅ 手動停止のため、ここで完全クリーンアップを実行します")
+            cleanup()
+        }
+    }
+    
+    // 録音完了処理（RecordingModelの作成と保存）
+    private func handleRecordingCompletion(recorder: AVAudioRecorder) {
+        guard let currentSlotStartTime = currentSlotStartTime else {
+            print("❌ currentSlotStartTimeが設定されていません - 既にクリーンアップされた可能性があります")
+            // クリーンアップを完了させる
+            cleanup()
+            return
+        }
+        
+        let recordingURL = recorder.url
+        let fileName = recordingURL.lastPathComponent
+        let dateString = SlotTimeUtility.getDateString(from: currentSlotStartTime)
+        let fullFileName = "\(dateString)/\(fileName)"
+        
+        print("💾 録音完了処理: \(fullFileName)")
+        print("   - 録音URL: \(recordingURL.path)")
+        print("   - スロット継続時間: \(Date().timeIntervalSince(currentSlotStartTime))秒")
+        
+        // ファイル存在確認
+        let fileExists = FileManager.default.fileExists(atPath: recordingURL.path)
+        print("   - ファイル存在確認: \(fileExists)")
+        
+        if fileExists {
+            // ファイルサイズ確認
+            do {
+                let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
+                let fileSize = attributes[.size] as? Int64 ?? 0
+                print("   - ファイルサイズ: \(fileSize) bytes")
+                
+                if fileSize > 0 {
+                    // RecordingModelを作成・追加
+                    let recording = RecordingModel(fileName: fullFileName, date: currentSlotStartTime)
+                    
+                    // メインスレッドで配列を更新
+                    DispatchQueue.main.async {
+                        // 重複チェック
+                        if let existingIndex = self.recordings.firstIndex(where: { $0.fileName == fullFileName }) {
+                            self.recordings.remove(at: existingIndex)
+                            print("🔄 既存の同名録音を置換")
+                        }
+                        
+                        self.recordings.insert(recording, at: 0)
+                        print("✅ 録音完了: \(fullFileName)")
+                        print("📊 総録音ファイル数: \(self.recordings.count)")
+                    }
+                } else {
+                    print("❌ ファイルサイズが0bytes")
+                }
+            } catch {
+                print("❌ ファイル属性取得エラー: \(error)")
+            }
+        } else {
+            print("❌ 録音ファイルが存在しません")
+        }
+        
+        // クリーンアップは呼び出し元で決定する（責務の分離）
+        print("📁 録音保存処理完了 - 後処理は呼び出し元で決定")
+    }
+    
+    // スロット切り替え完了処理
+    private func handleSlotSwitchCompletion(switchInfo: SlotSwitchInfo) {
+        print("🔄 スロット切り替え完了処理: \(switchInfo.oldSlot) → \(switchInfo.newSlot)")
+        
+        // 録音が継続中の場合のみ、次のスロットを開始
+        guard isRecording else {
+            print("⏹️ ユーザーが録音を停止したため、次のスロットは開始しません")
+            pendingSlotSwitch = nil
+            cleanup()  // 停止状態なのでクリーンアップ
+            return
+        }
+        
+        // 新しいスロット情報を更新
+        currentSlot = switchInfo.newSlot
+        currentSlotStartTime = Date()
+        
+        // 次のスロットの録音を開始
+        print("▶️ 次のスロットの録音を開始: \(currentSlot)")
+        
+        if startRecordingForCurrentSlot() {
+            // 次の切り替えタイマーを設定（30分後）
+            slotSwitchTimer = Timer.scheduledTimer(withTimeInterval: 1800.0, repeats: false) { [weak self] _ in
+                self?.performSlotSwitch()
+            }
+            print("✅ スロット切り替え成功")
+        } else {
+            print("❌ 次のスロットの録音開始に失敗しました。録音を停止します。")
+            DispatchQueue.main.async {
+                self.stopRecording()
+            }
+        }
+        
+        // スロット切り替え状態をクリア
+        pendingSlotSwitch = nil
+    }
+    
+    // 録音失敗時の処理
+    private func handleRecordingFailure() {
+        print("❌ 録音失敗 - クリーンアップします")
+        
+        // 失敗時は完全クリーンアップを実行
+        cleanup()
     }
 }
 
