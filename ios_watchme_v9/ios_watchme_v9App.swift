@@ -165,5 +165,13 @@ struct MainAppView: View {
             print("📱 認証済み状態でのデバイス登録実行")
             deviceManager.registerDevice(ownerUserID: authManager.currentUser?.id)
         }
+        
+        // ユーザーに紐付く全デバイスを取得
+        if let userId = authManager.currentUser?.id {
+            print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
+            Task {
+                await deviceManager.fetchUserDevices(for: userId)
+            }
+        }
     }
 }

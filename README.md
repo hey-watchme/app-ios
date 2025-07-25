@@ -11,6 +11,128 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
 - **デバイス管理**: デバイス登録と管理
 - **タイムゾーン対応**: ユーザーのローカルタイムゾーンでの記録管理
 
+## 重要：ユーザーIDとデバイスIDの関係
+
+このアプリケーションでは、ユーザーとデバイスが以下の構造で管理されています：
+
+### 認証とID管理の流れ
+
+1. **ユーザー認証（SupabaseAuthManager）**
+   - ユーザーはメールアドレスとパスワードでログイン
+   - 認証成功時にユーザーID（UUID形式）が取得される
+   - 例：`user_id: "123e4567-e89b-12d3-a456-426614174000"`
+
+2. **デバイス登録（DeviceManager）**
+   - ログイン後、自動的にデバイス登録処理が実行される
+   - iOSの`identifierForVendor`を使用してデバイスを識別
+   - Supabaseの`devices`テーブルにデバイス情報を登録
+
+3. **デバイスIDの紐付け**
+   - `devices`テーブルで`owner_user_id`フィールドにユーザーIDが保存される
+   - 一意のデバイスID（UUID形式）が生成される
+   - 例：`device_id: "d067d407-cf73-4174-a9c1-d91fb60d64d0"`
+
+### データベース構造
+
+```sql
+-- devicesテーブル
+CREATE TABLE devices (
+    device_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    platform_identifier TEXT NOT NULL UNIQUE,
+    device_type TEXT NOT NULL,
+    platform_type TEXT NOT NULL,
+    owner_user_id UUID REFERENCES auth.users(id),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- vibe_whisper_summaryテーブル（感情分析データ）
+CREATE TABLE vibe_whisper_summary (
+    device_id TEXT NOT NULL,  -- devicesテーブルのdevice_idを参照
+    date DATE NOT NULL,
+    vibe_scores JSONB,
+    average_score DOUBLE PRECISION,
+    positive_hours DOUBLE PRECISION,
+    negative_hours DOUBLE PRECISION,
+    neutral_hours DOUBLE PRECISION,
+    insights JSONB,
+    vibe_changes JSONB,
+    processed_at TIMESTAMP WITH TIME ZONE,
+    processing_log JSONB,
+    PRIMARY KEY (device_id, date)
+);
+```
+
+### 重要な注意点
+
+- **一対多の関係**: 1人のユーザーが複数のデバイスを持つことができる
+- **デバイスIDの永続性**: デバイスIDは一度生成されると変更されない
+- **データの関連付け**: すべての音声データや分析結果はデバイスIDに紐付けられる
+- **ユーザー削除時の考慮**: ユーザーが削除されてもデバイスデータは残る可能性がある
+
+### ID管理の詳細
+
+#### ユーザーIDとデバイスIDの違い
+
+1. **ユーザーID**
+   - Supabase認証で生成されるUUID
+   - メールアドレスとパスワードでログインすると取得
+   - 例：`164cba5a-dba6-4cbc-9b39-4eea28d98fa5`
+   - 1人のユーザーに1つのID
+
+2. **デバイスID**
+   - デバイス登録時にSupabaseが自動生成するUUID
+   - 例：`d067d407-cf73-4174-a9c1-d91fb60d64d0`
+   - 1つのユーザーが複数のデバイスを登録可能
+   - VIBEデータなど、すべての分析データはこのIDに紐付く
+
+3. **Platform Identifier（使用しない）**
+   - iOSの`identifierForVendor`から取得
+   - 例：`8d17fe90-357f-41e5-98c5-e122c1185cc5`
+   - デバイス登録時の識別にのみ使用
+   - **これはデバイスIDではない**ので注意
+
+#### 複数デバイスの管理
+
+1. **デバイス選択UI**
+   - ユーザーが複数デバイスを持つ場合、プルダウンで選択可能
+   - 1つしかない場合は自動選択
+   - 選択したデバイスのデータのみが表示される
+
+2. **デバイス取得の流れ**
+   ```swift
+   // ログイン時に自動実行
+   await deviceManager.fetchUserDevices(for: userId)
+   
+   // 取得したデバイスは以下で参照
+   deviceManager.userDevices      // 全デバイスリスト
+   deviceManager.selectedDeviceID // 選択中のデバイスID
+   deviceManager.actualDeviceID   // 実際に使用するデバイスID
+   ```
+
+3. **データ取得時の注意**
+   - 常に`selectedDeviceID`または`actualDeviceID`を使用
+   - `currentDeviceID`は使用しない（過去の実装の名残）
+
+### トラブルシューティング（ID関連）
+
+#### デバイスが見つからない場合
+
+1. **ユーザーに紐付くデバイスが本当に存在するか確認**
+   ```sql
+   SELECT * FROM devices WHERE owner_user_id = 'ユーザーID';
+   ```
+
+2. **VIBEデータが存在するか確認**
+   ```sql
+   SELECT * FROM vibe_whisper_summary WHERE device_id = 'デバイスID';
+   ```
+
+#### よくある間違い
+
+- ❌ Platform Identifier（`8d17fe90...`）をデバイスIDとして使用
+- ❌ `currentDeviceID`を信頼して使用
+- ✅ `selectedDeviceID`または`actualDeviceID`を使用
+
 ## 技術スタック
 
 - **Swift 5.9+**
@@ -75,6 +197,43 @@ ios_watchme_v9/
    - 逐次アップロード機能
    - エラーハンドリングとリトライ機能
    - ストリーミング方式でメモリ不足によるアップロード失敗を解消（v9.7.0〜）
+
+## API連携とデータフロー
+
+### データの流れ
+1. **音声録音** → デバイスローカルにWAV形式で保存
+2. **アップロード** → API経由でS3に保存（生音声）
+3. **Whisper処理** → 音声をテキストに変換
+4. **感情分析** → ChatGPTで感情スコアを生成
+5. **集計保存** → `vibe_whisper_summary`テーブルに日次サマリーを保存
+6. **データ取得** → アプリからデバイスIDで分析結果を照会
+
+### VIBEデータ取得の実装
+
+1. **SupabaseDataManager**
+   - VIBEデータの取得を管理
+   - デバイスIDと日付を指定してデータを取得
+   - 複数日のデータも取得可能（週次表示用）
+
+2. **ReportTestView（VIBEデータテスト画面）**
+   - デバイス選択UI
+   - 日付選択
+   - データ表示（感情スコア、インサイト、時間帯別グラフ）
+
+3. **データモデル（DailyVibeReport）**
+   ```swift
+   struct DailyVibeReport {
+       let deviceId: String
+       let date: String
+       let vibeScores: [Double?]?    // 48要素（30分刻み）
+       let averageScore: Double
+       let positiveHours: Double
+       let negativeHours: Double
+       let neutralHours: Double
+       let insights: [String]
+       let vibeChanges: [VibeChange]?
+   }
+   ```
 
 ## API仕様
 
@@ -249,9 +408,56 @@ let uploadTask = URLSession.shared.uploadTask(with: request, fromFile: tempFileU
 - ✅ アップロード成功
 - ❌ エラー発生
 - 📊 タイムゾーン情報
+- 🔍 デバイスID確認
+- 📱 デバイス登録状態
 
 ### ネットワーク通信の確認
 Xcodeのネットワークデバッガーを使用して、送信されるリクエストの内容を確認できます。
+
+### データベースクエリの確認
+VIBEデータが見つからない場合の確認手順：
+
+1. **現在のデバイスIDを確認**
+   ```swift
+   print("Current Device ID: \(deviceManager.currentDeviceID)")
+   ```
+
+2. **Supabaseでデータ存在確認**
+   ```sql
+   -- デバイスの確認
+   SELECT * FROM devices WHERE owner_user_id = 'ユーザーID';
+   
+   -- VIBEデータの確認
+   SELECT * FROM vibe_whisper_summary WHERE device_id = 'デバイスID';
+   ```
+
+3. **日付フォーマットの確認**
+   - 日付は`YYYY-MM-DD`形式で保存される
+   - タイムゾーンは考慮されない（日付のみ）
+
+## Git 運用ルール（ブランチベース開発フロー）
+
+このプロジェクトでは、**ブランチベースの開発フロー**を採用しています。  
+main ブランチで直接開発せず、以下のルールに従って作業を進めてください。
+
+---
+
+### 🔹 運用ルール概要
+
+1. `main` ブランチは常に安定した状態を保ちます（リリース可能な状態）。
+2. 開発作業はすべて **`feature/xxx` ブランチ** で行ってください。
+3. 作業が完了したら、GitHub上で Pull Request（PR）を作成し、差分を確認した上で `main` にマージしてください。
+4. **1人開発の場合でも、必ずPRを経由して `main` にマージしてください**（レビューは不要、自分で確認＆マージOK）。
+
+---
+
+### 🔧 ブランチ運用の手順
+
+#### 1. `main` を最新化して作業ブランチを作成
+```bash
+git checkout main
+git pull origin main
+git checkout -b feature/機能名
 
 ## 更新履歴
 

@@ -14,6 +14,9 @@ import Supabase
 class DeviceManager: ObservableObject {
     @Published var isDeviceRegistered: Bool = false
     @Published var currentDeviceID: String? = nil
+    @Published var actualDeviceID: String? = nil  // ユーザーに紐付く実際のデバイスID
+    @Published var userDevices: [Device] = []  // ユーザーの全デバイス
+    @Published var selectedDeviceID: String? = nil  // 選択中のデバイスID
     @Published var registrationError: String? = nil
     @Published var isLoading: Bool = false
     
@@ -167,9 +170,98 @@ class DeviceManager: ObservableObject {
         print("🔄 デバイス登録状態リセット完了")
     }
     
+    // MARK: - ユーザーのデバイスを取得
+    func fetchUserDevices(for userId: String) async {
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/devices") else {
+            print("❌ 無効なURL")
+            return
+        }
+        
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "owner_user_id", value: "eq.\(userId)"),
+            URLQueryItem(name: "select", value: "*")
+        ]
+        
+        guard let requestURL = components?.url else {
+            print("❌ URLの構築に失敗しました")
+            return
+        }
+        
+        print("📡 Fetching devices from: \(requestURL.absoluteString)")
+        
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ 無効なレスポンス")
+                return
+            }
+            
+            print("📡 Response status: \(httpResponse.statusCode)")
+            
+            // エラーレスポンスの詳細を表示
+            if httpResponse.statusCode != 200 {
+                if let errorData = String(data: data, encoding: .utf8) {
+                    print("❌ Error response: \(errorData)")
+                }
+            }
+            
+            if httpResponse.statusCode == 200 {
+                if let rawResponse = String(data: data, encoding: .utf8) {
+                    print("📄 Device query response: \(rawResponse)")
+                }
+                
+                let decoder = JSONDecoder()
+                let devices = try decoder.decode([Device].self, from: data)
+                
+                await MainActor.run {
+                    self.userDevices = devices
+                    print("✅ Found \(devices.count) devices for user: \(userId)")
+                    
+                    // デバイスが1つの場合は自動選択
+                    if devices.count == 1, let device = devices.first {
+                        self.selectedDeviceID = device.device_id
+                        self.actualDeviceID = device.device_id
+                        print("🔍 Auto-selected device: \(device.device_id)")
+                    } else if devices.count > 1 {
+                        // 複数デバイスの場合は最初のものを選択
+                        if let firstDevice = devices.first {
+                            self.selectedDeviceID = firstDevice.device_id
+                            self.actualDeviceID = firstDevice.device_id
+                            print("🔍 Selected first device: \(firstDevice.device_id)")
+                        }
+                    } else {
+                        print("⚠️ No devices found for user: \(userId)")
+                    }
+                }
+            }
+        } catch {
+            print("❌ Device fetch error: \(error)")
+        }
+    }
+    
+    // MARK: - デバイス選択
+    func selectDevice(_ deviceId: String) {
+        if userDevices.contains(where: { $0.device_id == deviceId }) {
+            selectedDeviceID = deviceId
+            actualDeviceID = deviceId
+            print("📱 Selected device: \(deviceId)")
+        }
+    }
+    
     // MARK: - デバイス情報取得
     func getDeviceInfo() -> DeviceInfo? {
-        guard let deviceID = currentDeviceID,
+        // 実際のデバイスIDを優先
+        let deviceID = actualDeviceID ?? currentDeviceID
+        
+        guard let deviceID = deviceID,
               let platformIdentifier = UserDefaults.standard.string(forKey: platformIdentifierKey) else {
             return nil
         }
@@ -208,7 +300,6 @@ struct Device: Codable {
     let device_type: String
     let platform_type: String
     let owner_user_id: String?
-    let created_at: String?
 }
 
 // エラータイプ
