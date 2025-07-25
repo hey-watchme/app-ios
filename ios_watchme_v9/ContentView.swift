@@ -367,6 +367,25 @@ struct ContentView: View {
                                     .stroke(Color.orange.opacity(0.3), lineWidth: 1)
                             )
                         }
+                        
+                        // Vibeデータ表示テスト
+                        NavigationLink(destination: ReportTestView()) {
+                            HStack {
+                                Image(systemName: "chart.line.uptrend.xyaxis")
+                                Text("Vibeデータ表示テスト")
+                            }
+                            .font(.subheadline)
+                            .fontWeight(.medium)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.purple.opacity(0.15))
+                            .foregroundColor(.purple)
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.purple.opacity(0.3), lineWidth: 1)
+                            )
+                        }
                     }
                     .padding(.horizontal)
                     .padding(.bottom, 20)
@@ -662,15 +681,32 @@ struct UserInfoSheetView: View {
                     
                     // デバイス情報
                     InfoSection(title: "デバイス情報") {
-                        if let deviceInfo = deviceManager.getDeviceInfo() {
-                            InfoRow(label: "デバイスID", value: deviceInfo.deviceID, icon: "iphone")
-                            InfoRow(label: "デバイスタイプ", value: deviceInfo.deviceType, icon: "tag.fill")
-                            InfoRow(label: "プラットフォーム", value: deviceInfo.platformType, icon: "gear")
-                            InfoRow(label: "登録状態", value: deviceManager.isDeviceRegistered ? "登録済み" : "未登録", 
-                                   icon: deviceManager.isDeviceRegistered ? "checkmark.circle.fill" : "xmark.circle.fill",
-                                   valueColor: deviceManager.isDeviceRegistered ? .green : .orange)
+                        // ユーザーのデバイス一覧
+                        if !deviceManager.userDevices.isEmpty {
+                            ForEach(Array(deviceManager.userDevices.enumerated()), id: \.element.device_id) { index, device in
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("デバイス \(index + 1)")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                    InfoRow(label: "デバイスID", value: device.device_id, icon: "iphone")
+                                    if device.device_id == deviceManager.selectedDeviceID {
+                                        HStack {
+                                            Image(systemName: "checkmark.circle.fill")
+                                                .foregroundColor(.green)
+                                            Text("現在選択中")
+                                                .font(.caption)
+                                                .foregroundColor(.green)
+                                        }
+                                        .padding(.leading, 20)
+                                    }
+                                }
+                                if index < deviceManager.userDevices.count - 1 {
+                                    Divider()
+                                        .padding(.vertical, 4)
+                                }
+                            }
                         } else {
-                            InfoRow(label: "状態", value: "デバイス情報取得エラー", icon: "exclamationmark.triangle.fill", valueColor: .red)
+                            InfoRow(label: "状態", value: "デバイス情報を取得中...", icon: "arrow.clockwise", valueColor: .orange)
                         }
                         
                         // デバイス登録エラー表示
@@ -715,6 +751,15 @@ struct UserInfoSheetView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
                         dismiss()
+                    }
+                }
+            }
+            .onAppear {
+                // デバイス情報を再取得
+                if deviceManager.userDevices.isEmpty, let userId = authManager.currentUser?.id {
+                    print("📱 UserInfoSheet: デバイス情報を取得")
+                    Task {
+                        await deviceManager.fetchUserDevices(for: userId)
                     }
                 }
             }
