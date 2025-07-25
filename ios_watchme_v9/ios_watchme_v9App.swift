@@ -12,12 +12,14 @@ import AVFoundation
 struct ios_watchme_v9App: App {
     @StateObject private var authManager = SupabaseAuthManager()
     @StateObject private var deviceManager = DeviceManager()
+    @StateObject private var dataManager = SupabaseDataManager()
     
     var body: some Scene {
         WindowGroup {
             MainAppView()
                 .environmentObject(authManager)
                 .environmentObject(deviceManager)
+                .environmentObject(dataManager)
                 .onAppear {
                     requestMicrophonePermission()
                 }
@@ -41,6 +43,7 @@ struct ios_watchme_v9App: App {
 struct MainAppView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showLogin = false
     @State private var hasInitialized = false
     @State private var showDeviceRegistrationError = false
@@ -52,6 +55,7 @@ struct MainAppView: View {
                 ContentView()
                     .environmentObject(authManager)
                     .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
                     .onAppear {
                         print("📱 MainAppView: 認証済み状態 - ContentView表示")
                         checkAndRegisterDevice()

@@ -11,6 +11,7 @@ import Combine
 struct ContentView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var showAlert = false
     @State private var alertMessage = ""

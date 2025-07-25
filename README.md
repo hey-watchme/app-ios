@@ -221,14 +221,45 @@ ios_watchme_v9/
    - multipart/form-dataでのファイルアップロード
    - エラーハンドリングとリトライ機能
 
-3. **SupabaseDataManager**
+3. **SupabaseDataManager**（v9.9.0でSingle Source of Truth実装）
    - Vibeデータの取得と管理
    - 日次レポートの取得
    - リアルタイムデータ更新
+   - **一元化されたデータ管理**: `@EnvironmentObject`パターンによりアプリ全体で単一インスタンスを共有
+   - **データの一貫性保証**: 全ビューが同じデータソースを参照し、状態同期を自動化
 
 4. **認証・デバイス管理**
    - SupabaseAuthManager: ユーザー認証とセッション管理
    - DeviceManager: マルチデバイス対応とデバイス選択
+
+#### 環境オブジェクトパターン（v9.9.0〜）
+アプリケーションのデータ管理は、SwiftUIの`@EnvironmentObject`パターンを使用してSingle Source of Truthを実現：
+
+```swift
+// アプリレベルでの初期化
+@main
+struct ios_watchme_v9App: App {
+    @StateObject private var dataManager = SupabaseDataManager()
+    
+    var body: some Scene {
+        WindowGroup {
+            MainAppView()
+                .environmentObject(dataManager)  // 環境に注入
+        }
+    }
+}
+
+// 各ビューでの利用
+struct HomeView: View {
+    @EnvironmentObject var dataManager: SupabaseDataManager  // 共有インスタンスを取得
+    // ...
+}
+```
+
+このアーキテクチャにより：
+- **効率性**: 不要なAPIコールの削減
+- **一貫性**: ビュー間でのデータ同期の自動化
+- **拡張性**: 新しいグラフビューでも同じデータソースを利用可能
 
 ## API連携とデータフロー
 
@@ -509,6 +540,21 @@ git push origin feature/機能名
 ## 更新履歴
 
 ### 2025年7月25日
+- **v9.9.0 - データ管理の一元化リファクタリング**
+  - **Single Source of Truthの実現**
+    - `SupabaseDataManager`を`@EnvironmentObject`パターンで一元管理
+    - `ios_watchme_v9App.swift`でアプリレベルでの初期化を実装
+    - `HomeView`の`@StateObject`を`@EnvironmentObject`に移行
+  
+  - **アーキテクチャの改善**
+    - データの一貫性保証：全ビューが同じデータソースを参照
+    - 効率性向上：不要なAPIコールとインスタンス生成を削減
+    - スケーラビリティ：新しいグラフビューでも同じデータソースを利用可能
+  
+  - **今後の拡張に向けた基盤整備**
+    - 行動グラフ・感情グラフ実装時のデータ共有基盤を確立
+    - ビュー間での状態同期の自動化を実現
+
 - **v9.8.0 - UI/UXの大幅改善と疎結合アーキテクチャの導入**
   - **TabViewベースのグローバルナビゲーション導入**
     - 「心理グラフ」「行動グラフ」「感情グラフ」「録音」の4タブ構成

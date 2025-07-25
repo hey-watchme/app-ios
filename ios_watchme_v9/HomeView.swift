@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct HomeView: View {
-    @StateObject private var dataManager = SupabaseDataManager()
+    @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
     @ObservedObject var networkManager: NetworkManager
@@ -384,6 +384,7 @@ struct EmotionTimeBar: View {
             showUserInfoSheet: .constant(false)
         )
         .environmentObject(SupabaseAuthManager())
+        .environmentObject(SupabaseDataManager())
         .environmentObject(DeviceManager())
     }
 }
