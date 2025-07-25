@@ -1,14 +1,23 @@
 # iOS WatchMe v9
 
 WatchMeプラットフォームのiOSアプリケーション（バージョン9）。
-音声録音、リアルタイム解析、感情分析機能を提供します。
+音声録音とAI分析による心理・感情・行動の総合的なモニタリングを提供します。
 
-## 主な機能
+## 🌟 主な機能
 
+### 録音・データ収集
 - **30分間隔の自動録音**: ライフログとして30分ごとに音声を自動録音
-- **析用音声収集**: AIによる音声分析のための音声データ収集のためのiOSアプリ
-- **ユーザー認証**: Supabaseによる認証機能
-- **デバイス管理**: デバイス登録と管理
+- **ストリーミングアップロード**: 大容量ファイルでも安定したアップロード
+- **バックグラウンド処理**: アプリを閉じても録音・アップロードが継続
+
+### 分析・レポート機能
+- **心理グラフ (Vibe Graph)**: 日々の感情スコア、ポジティブ/ネガティブの時間分布、AIインサイトを表示
+- **行動グラフ (Behavior Graph)**: 行動パターンの分析（Coming Soon）
+- **感情グラフ (Emotion Graph)**: 感情の変化を詳細に分析（Coming Soon）
+
+### ユーザー・デバイス管理
+- **Supabase認証**: メールアドレスとパスワードによる安全な認証
+- **マルチデバイス対応**: 1人のユーザーが複数のデバイスを管理可能
 - **タイムゾーン対応**: ユーザーのローカルタイムゾーンでの記録管理
 
 ## 重要：ユーザーIDとデバイスIDの関係
@@ -161,20 +170,46 @@ CREATE TABLE vibe_whisper_summary (
 ### ディレクトリ構造
 ```
 ios_watchme_v9/
-├── ContentView.swift          # メインUI
-├── AudioRecorder.swift        # 録音管理
-├── NetworkManager.swift       # API通信
-├── DeviceManager.swift        # デバイス管理
-├── SupabaseAuthManager.swift  # 認証管理
-├── RecordingModel.swift       # データモデル
-├── SlotTimeUtility.swift      # 時刻スロット管理
-├── ConnectionStatus.swift     # 接続状態管理
-├── LoginView.swift           # ログインUI
-└── Info.plist                 # アプリ設定
+├── ios_watchme_v9App.swift    # アプリエントリーポイント
+├── ContentView.swift          # TabViewを使用したグローバルナビゲーション
+├── Views/
+│   ├── HomeView.swift         # 心理グラフ（Vibe Graph）表示
+│   ├── RecordingView.swift    # 録音機能とファイル管理
+│   ├── BehaviorGraphView.swift # 行動グラフ（Coming Soon）
+│   ├── EmotionGraphView.swift  # 感情グラフ（Coming Soon）
+│   ├── LoginView.swift         # ログインUI
+│   └── ReportTestView.swift    # デバッグ用Vibeデータ表示
+├── Managers/
+│   ├── AudioRecorder.swift        # 録音管理
+│   ├── NetworkManager.swift       # API通信
+│   ├── DeviceManager.swift        # デバイス管理
+│   ├── SupabaseAuthManager.swift  # 認証管理
+│   └── SupabaseDataManager.swift  # Vibeデータ取得
+├── Models/
+│   ├── RecordingModel.swift       # 録音データモデル
+│   ├── DailyVibeReport.swift      # Vibeレポートモデル
+│   └── DeviceModel.swift          # デバイスモデル
+├── Utilities/
+│   ├── SlotTimeUtility.swift      # 時刻スロット管理
+│   └── ConnectionStatus.swift     # 接続状態管理
+└── Info.plist                     # アプリ設定
 ```
 
 ### 主要コンポーネント
 
+#### UI/ナビゲーション
+1. **TabViewベースのグローバルナビゲーション**
+   - 心理グラフ（Vibe Graph）
+   - 行動グラフ（Behavior Graph）
+   - 感情グラフ（Emotion Graph）
+   - 録音
+
+2. **疎結合アーキテクチャ**
+   - 各Viewが独立した責務を持つ
+   - ContentViewはナビゲーション管理に特化
+   - 機能ごとに分離されたView構造
+
+#### データ管理
 1. **AudioRecorder**
    - AVAudioRecorderを使用した録音機能
    - WAVフォーマットでの保存
@@ -185,18 +220,15 @@ ios_watchme_v9/
    - ストリーミング方式によるメモリ効率的なアップロード（v9.7.0〜）
    - multipart/form-dataでのファイルアップロード
    - エラーハンドリングとリトライ機能
-   - タイムゾーン情報を含むタイムスタンプの送信
 
-3. **SupabaseAuthManager**
-   - ユーザー認証の管理
-   - セッション管理
-   - 自動ログイン機能
+3. **SupabaseDataManager**
+   - Vibeデータの取得と管理
+   - 日次レポートの取得
+   - リアルタイムデータ更新
 
-4. **アップロード処理**
-   - NetworkManagerによる直接アップロード処理
-   - 逐次アップロード機能
-   - エラーハンドリングとリトライ機能
-   - ストリーミング方式でメモリ不足によるアップロード失敗を解消（v9.7.0〜）
+4. **認証・デバイス管理**
+   - SupabaseAuthManager: ユーザー認証とセッション管理
+   - DeviceManager: マルチデバイス対応とデバイス選択
 
 ## API連携とデータフロー
 
@@ -208,17 +240,19 @@ ios_watchme_v9/
 5. **集計保存** → `vibe_whisper_summary`テーブルに日次サマリーを保存
 6. **データ取得** → アプリからデバイスIDで分析結果を照会
 
-### VIBEデータ取得の実装
+### 心理グラフ（Vibe Graph）の実装
 
-1. **SupabaseDataManager**
-   - VIBEデータの取得を管理
+1. **HomeView（メインレポート画面）**
+   - 日付ナビゲーション（前日/次日ボタン）
+   - 平均スコアの大きな表示
+   - ポジティブ/ニュートラル/ネガティブの時間分布バー
+   - AIインサイトの表示
+   - 時間帯別感情推移グラフ
+
+2. **SupabaseDataManager**
+   - vibe_whisper_summaryテーブルからデータ取得
    - デバイスIDと日付を指定してデータを取得
-   - 複数日のデータも取得可能（週次表示用）
-
-2. **ReportTestView（VIBEデータテスト画面）**
-   - デバイス選択UI
-   - 日付選択
-   - データ表示（感情スコア、インサイト、時間帯別グラフ）
+   - リアルタイムデータ更新
 
 3. **データモデル（DailyVibeReport）**
    ```swift
@@ -458,8 +492,45 @@ main ブランチで直接開発せず、以下のルールに従って作業を
 git checkout main
 git pull origin main
 git checkout -b feature/機能名
+```
+
+#### 2. 作業内容をコミット
+```bash
+git add .
+git commit -m "変更内容の説明"
+```
+
+#### 3. リモートにプッシュしてPR作成
+```bash
+git push origin feature/機能名
+# GitHub上でPull Requestを作成
+```
 
 ## 更新履歴
+
+### 2025年7月25日
+- **v9.8.0 - UI/UXの大幅改善と疎結合アーキテクチャの導入**
+  - **TabViewベースのグローバルナビゲーション導入**
+    - 「心理グラフ」「行動グラフ」「感情グラフ」「録音」の4タブ構成
+    - 各機能への直感的なアクセスを実現
+  
+  - **疎結合アーキテクチャへのリファクタリング**
+    - ContentViewから機能を分離
+    - RecordingView: 録音機能を独立したViewに
+    - HomeView: 心理グラフ表示専用Viewに
+    - BehaviorGraphView/EmotionGraphView: 将来機能用プレースホルダー
+  
+  - **心理グラフ（Vibe Graph）のUI完全リニューアル**
+    - タブ選択時に即座にレポートを表示
+    - 日付ナビゲーション（前日/次日）を追加
+    - 平均スコアの大きな表示と視覚的な感情アイコン
+    - 感情の時間分布をプログレスバーで表現
+    - 時間帯別グラフを簡易バーチャートで実装
+  
+  - **不要な機能の削除**
+    - サーバー接続テストボタンを削除
+    - 「開発・テスト用機能」フッターを削除
+    - 接続ステータス表示を削除
 
 ### 2025年7月24日
 - **v9.7.0 - アップロード安定化とUI改善**
