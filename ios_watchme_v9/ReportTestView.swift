@@ -26,11 +26,6 @@ struct ReportTestView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // ヘッダー
-                Text("Vibeデータ取得テスト")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .padding(.top)
                 
                 // デバイス選択UI
                 VStack(spacing: 12) {
