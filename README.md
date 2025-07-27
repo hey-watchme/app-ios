@@ -12,8 +12,8 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
 
 ### 分析・レポート機能
 - **心理グラフ (Vibe Graph)**: 日々の感情スコア、ポジティブ/ネガティブの時間分布、AIインサイトを表示
-- **行動グラフ (Behavior Graph)**: 行動パターンの分析（Coming Soon）
-- **感情グラフ (Emotion Graph)**: 感情の変化を詳細に分析（Coming Soon）
+- **行動グラフ (Behavior Graph)**: 1日の行動パターンをランキングと時間帯別で可視化（v9.10.0〜）
+- **感情グラフ (Emotion Graph)**: 8つの感情（Joy、Fear、Anger、Trust、Disgust、Sadness、Surprise、Anticipation）の時系列変化を折れ線グラフで表示（v9.10.0〜）
 
 ### ユーザー・デバイス管理
 - **Supabase認証**: メールアドレスとパスワードによる安全な認証
@@ -175,8 +175,8 @@ ios_watchme_v9/
 ├── Views/
 │   ├── HomeView.swift         # 心理グラフ（Vibe Graph）表示
 │   ├── RecordingView.swift    # 録音機能とファイル管理
-│   ├── BehaviorGraphView.swift # 行動グラフ（Coming Soon）
-│   ├── EmotionGraphView.swift  # 感情グラフ（Coming Soon）
+│   ├── BehaviorGraphView.swift # 行動グラフ
+│   ├── EmotionGraphView.swift  # 感情グラフ
 │   ├── LoginView.swift         # ログインUI
 │   └── ReportTestView.swift    # デバッグ用Vibeデータ表示
 ├── Managers/
@@ -188,7 +188,9 @@ ios_watchme_v9/
 ├── Models/
 │   ├── RecordingModel.swift       # 録音データモデル
 │   ├── DailyVibeReport.swift      # Vibeレポートモデル
-│   └── DeviceModel.swift          # デバイスモデル
+│   ├── DeviceModel.swift          # デバイスモデル
+│   ├── BehaviorReport.swift       # 行動レポートモデル
+│   └── EmotionReport.swift        # 感情レポートモデル
 ├── Utilities/
 │   ├── SlotTimeUtility.swift      # 時刻スロット管理
 │   └── ConnectionStatus.swift     # 接続状態管理
@@ -538,6 +540,32 @@ git push origin feature/機能名
 ```
 
 ## 更新履歴
+
+### 2025年7月27日
+- **v9.10.0 - 行動グラフと感情グラフの実装**
+  - **行動グラフ (Behavior Graph) の実装**
+    - behavior_summaryテーブルからのデータ取得機能
+    - 1日の行動ランキング表示（上位5件）
+    - 48個の時間ブロック（30分単位）での行動可視化
+    - 時間帯別の色分け表示（深夜・朝・昼・夕方・夜）
+    - タップで各時間帯の詳細表示
+  
+  - **感情グラフ (Emotion Graph) の実装**
+    - emotion_opensmile_summaryテーブルからのデータ取得機能
+    - 8つの感情の1日の合計値をランキング表示
+    - 48時間帯の感情推移を折れ線グラフで表示
+    - Charts frameworkを使用した美しいグラフ描画
+    - 各感情の表示/非表示切り替え機能
+    - 凡例の表示/非表示機能
+  
+  - **データモデルの追加**
+    - BehaviorReport.swift: 行動データモデル
+    - EmotionReport.swift: 感情データモデル（8感情対応）
+  
+  - **SupabaseDataManagerの拡張**
+    - fetchBehaviorReport()メソッドの追加
+    - fetchEmotionReport()メソッドの追加
+    - 既存の認証・デバイス管理機能との統合
 
 ### 2025年7月25日
 - **v9.9.0 - データ管理の一元化リファクタリング**
