@@ -84,12 +84,12 @@ struct RecordingView: View {
                         
                         Spacer()
                         
-                        Text("\(Int((networkManager.uploadProgress ?? 0.0) * 100))%")
+                        Text("\(Int(networkManager.uploadProgress * 100))%")
                             .font(.caption)
                             .fontWeight(.bold)
                     }
                     
-                    ProgressView(value: networkManager.uploadProgress ?? 0.0, total: 1.0)
+                    ProgressView(value: networkManager.uploadProgress, total: 1.0)
                         .progressViewStyle(LinearProgressViewStyle(tint: .blue))
                     
                     if let fileName = networkManager.currentUploadingFile {

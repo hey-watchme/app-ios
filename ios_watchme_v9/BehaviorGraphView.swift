@@ -12,55 +12,15 @@ struct BehaviorGraphView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     
-    @State private var selectedDate = Date()
-    @State private var behaviorReport: BehaviorReport?
-    @State private var isLoading = false
-    @State private var errorMessage: String?
-    @State private var showingError = false
     @State private var expandedTimeBlocks: Set<String> = []
     
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.locale = Locale(identifier: "ja_JP")
-        return formatter
-    }()
-    
     var body: some View {
-        VStack(spacing: 0) {
-            // Date Navigation
-            HStack(spacing: 20) {
-                Button(action: { changeDate(by: -1) }) {
-                    Image(systemName: "chevron.left.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                }
-                
-                Text(dateFormatter.string(from: selectedDate))
-                    .font(.headline)
-                    .frame(minWidth: 150)
-                
-                Button(action: { changeDate(by: 1) }) {
-                    Image(systemName: "chevron.right.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                }
-            }
-            .padding(.vertical, 12)
-            .background(Color(.systemBackground))
-            .overlay(
-                Rectangle()
-                    .frame(height: 0.5)
-                    .foregroundColor(Color(.separator)),
-                alignment: .bottom
-            )
-            
-            ScrollView {
+        ScrollView {
                 VStack(spacing: 16) {
-                    if isLoading {
+                    if dataManager.isLoading {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
-                    } else if let report = behaviorReport {
+                    } else if let report = dataManager.dailyBehaviorReport {
                         // Summary Ranking Section
                         VStack(alignment: .leading, spacing: 12) {
                             HStack {
@@ -155,66 +115,8 @@ struct BehaviorGraphView: View {
                 }
                 .padding(.bottom, 20)
             }
-        }
         .navigationTitle("行動グラフ")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear {
-            fetchBehaviorData()
-        }
-        .alert("エラー", isPresented: $showingError) {
-            Button("OK") { }
-        } message: {
-            Text(errorMessage ?? "不明なエラーが発生しました")
-        }
-    }
-    
-    private func fetchBehaviorData() {
-        guard authManager.isAuthenticated else {
-            errorMessage = "ログインが必要です"
-            showingError = true
-            return
-        }
-        
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.actualDeviceID else {
-            errorMessage = "デバイスが登録されていません"
-            showingError = true
-            return
-        }
-        
-        isLoading = true
-        errorMessage = nil
-        
-        Task {
-            do {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
-                let dateString = formatter.string(from: selectedDate)
-                
-                let report = try await dataManager.fetchBehaviorReport(
-                    deviceId: deviceId,
-                    date: dateString
-                )
-                
-                await MainActor.run {
-                    self.behaviorReport = report
-                    self.isLoading = false
-                }
-            } catch {
-                await MainActor.run {
-                    self.errorMessage = error.localizedDescription
-                    self.showingError = true
-                    self.isLoading = false
-                }
-            }
-        }
-    }
-    
-    private func changeDate(by days: Int) {
-        if let newDate = Calendar.current.date(byAdding: .day, value: days, to: selectedDate) {
-            selectedDate = newDate
-            expandedTimeBlocks.removeAll()
-            fetchBehaviorData()
-        }
     }
     
     private func toggleTimeBlock(_ time: String) {

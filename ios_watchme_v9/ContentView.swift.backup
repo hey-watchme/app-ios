@@ -20,9 +20,20 @@ struct ContentView: View {
     @State private var showLogoutConfirmation = false
     @State private var showUserInfoSheet = false
     @State private var networkManager: NetworkManager?
-    
-    // 日付の選択状態を一元管理
     @State private var selectedDate = Date()
+    
+    private func initializeNetworkManager() {
+        // NetworkManagerを初期化（AuthManagerとDeviceManagerを渡す）
+        networkManager = NetworkManager(authManager: authManager, deviceManager: deviceManager)
+        
+        if let authUser = authManager.currentUser {
+            networkManager?.updateToAuthenticatedUserID(authUser.id)
+        }
+        
+        // NetworkManagerの設定は不要（既に親ビューから渡されている）
+        
+        print("🔧 NetworkManager初期化完了")
+    }
     
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
@@ -32,101 +43,24 @@ struct ContentView: View {
         return formatter
     }()
     
-    private func initializeNetworkManager() {
-        networkManager = NetworkManager(authManager: authManager, deviceManager: deviceManager)
-        
-        if let authUser = authManager.currentUser {
-            networkManager?.updateToAuthenticatedUserID(authUser.id)
-        }
-        print("🔧 NetworkManager初期化完了")
-    }
-    
     var body: some View {
         if let networkManager = networkManager {
-            VStack(spacing: 0) { // ヘッダー、日付ナビゲーション、TabViewを縦に並べる
-                // 固定ヘッダー (デバイス選択、ユーザー情報、通知など)
-                HStack {
-                    // デバイス選択ボタン (仮)
-                    Button(action: {
-                        // デバイス選択ロジック
-                        print("デバイス選択")
-                    }) {
-                        HStack {
-                            Image(systemName: "iphone")
-                            Text(deviceManager.selectedDeviceID?.prefix(8) ?? "デバイス未選択")
-                        }
-                        .font(.subheadline)
-                        .foregroundColor(.blue)
-                    }
-                    
-                    Spacer()
-                    
-                    // ユーザー情報/通知 (仮)
-                    Button(action: {
-                        showUserInfoSheet = true
-                    }) {
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                    }
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(Color(.systemBackground).shadow(radius: 1))
+            VStack(spacing: 0) {
+                // 固定ヘッダー
+                AppHeaderView(showUserInfoSheet: $showUserInfoSheet)
                 
                 // 日付ナビゲーション
-                HStack {
-                    Button(action: {
-                        withAnimation {
-                            selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
-                        }
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                            .frame(width: 44, height: 44)
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(spacing: 4) {
-                        Text(dateFormatter.string(from: selectedDate))
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                        
-                        if Calendar.current.isDateInToday(selectedDate) {
-                            Text("今日")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        withAnimation {
-                            let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-                            if tomorrow <= Date() {
-                                selectedDate = tomorrow
-                            }
-                        }
-                    }) {
-                        Image(systemName: "chevron.right")
-                            .font(.title2)
-                            .foregroundColor(canGoToNextDay ? .blue : .gray.opacity(0.3))
-                            .frame(width: 44, height: 44)
-                    }
-                    .disabled(!canGoToNextDay)
-                }
-                .padding(.horizontal)
-                .padding(.vertical, 8)
-                .background(Color(.systemBackground).shadow(radius: 1))
+                DateNavigationView(
+                    selectedDate: $selectedDate,
+                    canGoToNextDay: canGoToNextDay,
+                    dateFormatter: dateFormatter
+                )
                 
+                // TabView（残りのスペース）
                 TabView {
                     // 心理グラフタブ (Vibe Graph)
                     NavigationView {
-                        HomeView() // 引数を削除
+                        HomeView()
                     }
                     .navigationViewStyle(StackNavigationViewStyle())
                     .tabItem {
@@ -156,22 +90,25 @@ struct ContentView: View {
                         RecordingView(audioRecorder: audioRecorder, networkManager: networkManager)
                             .navigationTitle("録音")
                             .navigationBarTitleDisplayMode(.inline)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarLeading) {
-                                    Button(action: {
-                                        showUserInfoSheet = true
-                                    }) {
-                                        Image(systemName: "person.crop.circle.fill")
-                                            .font(.title2)
-                                            .foregroundColor(.blue)
-                                    }
-                                }
-                            }
                     }
                     .navigationViewStyle(StackNavigationViewStyle())
                     .tabItem {
                         Label("録音", systemImage: "mic.circle.fill")
                     }
+                }
+            }
+            .onChange(of: selectedDate) { oldDate, newDate in
+                // 日付が変更されたときにデータを再取得
+                fetchAllReports()
+            }
+            .onChange(of: deviceManager.selectedDeviceID) { oldDevice, newDevice in
+                // デバイスが変更されたときにデータを再取得
+                fetchAllReports()
+            }
+            .onAppear {
+                // 初回表示時にデータを取得
+                if authManager.isAuthenticated {
+                    fetchAllReports()
                 }
             }
             .alert("通知", isPresented: $showAlert) {
@@ -215,18 +152,6 @@ struct ContentView: View {
                     showAlert = true
                 }
             }
-            // selectedDate または selectedDeviceID が変更されたときにデータをフェッチ
-            .onChange(of: selectedDate) { oldValue, newValue in
-                fetchReports()
-            }
-            .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
-                fetchReports()
-            }
-            .onAppear {
-                initializeNetworkManager()
-                // アプリ起動時またはViewが表示されたときにデータをフェッチ
-                fetchReports()
-            }
         } else {
             ProgressView("初期化中...")
                 .onAppear {
@@ -235,29 +160,122 @@ struct ContentView: View {
         }
     }
     
-    // MARK: - Private Methods
+    // MARK: - Helper Properties & Methods
     
-    private func fetchReports() {
+    private var canGoToNextDay: Bool {
+        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
+        return tomorrow <= Date()
+    }
+    
+    private func fetchAllReports() {
         guard authManager.isAuthenticated else {
             dataManager.errorMessage = "ログインが必要です"
             return
         }
         
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.actualDeviceID else {
             dataManager.errorMessage = "デバイスが登録されていません"
             return
         }
-        
-        // dataManagerのisLoadingとerrorMessageはfetchAllReports内で管理される
         
         Task {
             await dataManager.fetchAllReports(deviceId: deviceId, date: selectedDate)
         }
     }
+}
+
+// MARK: - App Header View
+struct AppHeaderView: View {
+    @Binding var showUserInfoSheet: Bool
     
-    private var canGoToNextDay: Bool {
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-        return tomorrow <= Date()
+    var body: some View {
+        HStack {
+            Button(action: {
+                showUserInfoSheet = true
+            }) {
+                Image(systemName: "person.crop.circle.fill")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+            }
+            
+            Spacer()
+            
+            Text("WatchMe")
+                .font(.headline)
+                .fontWeight(.semibold)
+            
+            Spacer()
+            
+            // プレースホルダー（バランスのため）
+            Color.clear
+                .frame(width: 44, height: 44)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.systemBackground))
+        .overlay(
+            Rectangle()
+                .frame(height: 0.5)
+                .foregroundColor(Color(.separator)),
+            alignment: .bottom
+        )
+    }
+}
+
+// MARK: - Date Navigation View
+struct DateNavigationView: View {
+    @Binding var selectedDate: Date
+    let canGoToNextDay: Bool
+    let dateFormatter: DateFormatter
+    
+    var body: some View {
+        HStack {
+            Button(action: {
+                withAnimation {
+                    selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
+                }
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+                    .frame(width: 44, height: 44)
+            }
+            
+            Spacer()
+            
+            VStack(spacing: 4) {
+                Text(dateFormatter.string(from: selectedDate))
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.primary)
+                
+                if Calendar.current.isDateInToday(selectedDate) {
+                    Text("今日")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            Button(action: {
+                withAnimation {
+                    let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
+                    if tomorrow <= Date() {
+                        selectedDate = tomorrow
+                    }
+                }
+            }) {
+                Image(systemName: "chevron.right")
+                    .font(.title2)
+                    .foregroundColor(canGoToNextDay ? .blue : .gray.opacity(0.3))
+                    .frame(width: 44, height: 44)
+            }
+            .disabled(!canGoToNextDay)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.secondarySystemBackground))
     }
 }
 
