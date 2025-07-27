@@ -287,4 +287,134 @@ class SupabaseDataManager: ObservableObject {
         weeklyReports = []
         errorMessage = nil
     }
+    
+    // MARK: - Behavior Report Methods
+    
+    /// 特定の日付の行動レポートを取得
+    func fetchBehaviorReport(deviceId: String, date: String) async throws -> BehaviorReport? {
+        print("📊 Fetching behavior report for device: \(deviceId), date: \(date)")
+        
+        // URLの構築
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/behavior_summary") else {
+            throw URLError(.badURL)
+        }
+        
+        // クエリパラメータの構築
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "select", value: "*")
+        ]
+        
+        guard let requestURL = components?.url else {
+            throw URLError(.badURL)
+        }
+        
+        // リクエストの構築
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        
+        print("📡 Behavior response status: \(httpResponse.statusCode)")
+        
+        if httpResponse.statusCode == 200 {
+            // レスポンスの生データを確認
+            if let rawResponse = String(data: data, encoding: .utf8) {
+                print("📄 Raw behavior response: \(rawResponse)")
+            }
+            
+            // レスポンスをデコード
+            let decoder = JSONDecoder()
+            let reports = try decoder.decode([BehaviorReport].self, from: data)
+            
+            if let report = reports.first {
+                print("✅ Behavior report fetched successfully")
+                print("   Total events: \(report.totalEventCount)")
+                print("   Active time blocks: \(report.activeTimeBlocks.count)")
+                return report
+            } else {
+                print("⚠️ No behavior report found for the specified date")
+                return nil
+            }
+        } else {
+            if let errorData = String(data: data, encoding: .utf8) {
+                print("❌ Error response: \(errorData)")
+            }
+            throw URLError(.badServerResponse)
+        }
+    }
+    
+    // MARK: - Emotion Report Methods
+    
+    /// 特定の日付の感情レポートを取得
+    func fetchEmotionReport(deviceId: String, date: String) async throws -> EmotionReport? {
+        print("🎭 Fetching emotion report for device: \(deviceId), date: \(date)")
+        
+        // URLの構築
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/emotion_opensmile_summary") else {
+            throw URLError(.badURL)
+        }
+        
+        // クエリパラメータの構築
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
+            URLQueryItem(name: "date", value: "eq.\(date)"),
+            URLQueryItem(name: "select", value: "*")
+        ]
+        
+        guard let requestURL = components?.url else {
+            throw URLError(.badURL)
+        }
+        
+        // リクエストの構築
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        let (data, response) = try await URLSession.shared.data(for: request)
+        
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw URLError(.badServerResponse)
+        }
+        
+        print("📡 Emotion response status: \(httpResponse.statusCode)")
+        
+        if httpResponse.statusCode == 200 {
+            // レスポンスの生データを確認
+            if let rawResponse = String(data: data, encoding: .utf8) {
+                print("📄 Raw emotion response: \(rawResponse)")
+            }
+            
+            // レスポンスをデコード
+            let decoder = JSONDecoder()
+            let reports = try decoder.decode([EmotionReport].self, from: data)
+            
+            if let report = reports.first {
+                print("✅ Emotion report fetched successfully")
+                print("   Emotion graph points: \(report.emotionGraph.count)")
+                print("   Active time points: \(report.activeTimePoints.count)")
+                return report
+            } else {
+                print("⚠️ No emotion report found for the specified date")
+                return nil
+            }
+        } else {
+            if let errorData = String(data: data, encoding: .utf8) {
+                print("❌ Error response: \(errorData)")
+            }
+            throw URLError(.badServerResponse)
+        }
+    }
 }
