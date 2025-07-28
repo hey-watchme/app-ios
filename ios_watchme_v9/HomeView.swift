@@ -11,74 +11,10 @@ struct HomeView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
-    @ObservedObject var networkManager: NetworkManager
-    @Binding var showAlert: Bool
-    @Binding var alertMessage: String
-    @Binding var showUserInfoSheet: Bool
-    
-    @State private var selectedDate = Date()
-    @State private var showDatePicker = false
-    
-    // 日付フォーマッター
-    private let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年MM月dd日"
-        formatter.locale = Locale(identifier: "ja_JP")
-        return formatter
-    }()
     
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // 日付ナビゲーション
-                HStack {
-                    Button(action: {
-                        withAnimation {
-                            selectedDate = Calendar.current.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
-                            fetchReport(for: selectedDate)
-                        }
-                    }) {
-                        Image(systemName: "chevron.left")
-                            .font(.title2)
-                            .foregroundColor(.blue)
-                            .frame(width: 44, height: 44)
-                    }
-                    
-                    Spacer()
-                    
-                    VStack(spacing: 4) {
-                        Text(dateFormatter.string(from: selectedDate))
-                            .font(.title2)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                        
-                        if Calendar.current.isDateInToday(selectedDate) {
-                            Text("今日")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                    
-                    Spacer()
-                    
-                    Button(action: {
-                        withAnimation {
-                            let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-                            if tomorrow <= Date() {
-                                selectedDate = tomorrow
-                                fetchReport(for: selectedDate)
-                            }
-                        }
-                    }) {
-                        Image(systemName: "chevron.right")
-                            .font(.title2)
-                            .foregroundColor(canGoToNextDay ? .blue : .gray.opacity(0.3))
-                            .frame(width: 44, height: 44)
-                    }
-                    .disabled(!canGoToNextDay)
-                }
-                .padding(.horizontal)
-                .padding(.top)
                 
                 // ローディング表示
                 if dataManager.isLoading {
@@ -107,18 +43,6 @@ struct HomeView: View {
                             .multilineTextAlignment(.center)
                             .foregroundColor(.secondary)
                         
-                        Button(action: { fetchReport(for: selectedDate) }) {
-                            HStack {
-                                Image(systemName: "arrow.clockwise")
-                                Text("再試行")
-                            }
-                            .font(.subheadline)
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 10)
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(8)
-                        }
                     }
                     .padding()
                     .frame(maxWidth: .infinity)
@@ -140,15 +64,15 @@ struct HomeView: View {
                                         .foregroundColor(.secondary)
                                     Text(String(format: "%.1f", report.averageScore))
                                         .font(.system(size: 48, weight: .bold, design: .rounded))
-                                        .foregroundColor(scoreColor(for: report.averageScore))
+                                        .foregroundColor(report.averageScoreColor)
                                 }
                                 Spacer()
-                                Image(systemName: emotionIcon(for: report.averageScore))
+                                Image(systemName: report.averageScoreIcon)
                                     .font(.system(size: 60))
-                                    .foregroundColor(scoreColor(for: report.averageScore))
+                                    .foregroundColor(report.averageScoreColor)
                             }
                             .padding()
-                            .background(scoreColor(for: report.averageScore).opacity(0.1))
+                            .background(report.averageScoreColor.opacity(0.1))
                             .cornerRadius(16)
                             
                             // 感情の時間分布
@@ -217,7 +141,7 @@ struct HomeView: View {
                                             if let scoreValue = score {
                                                 VStack {
                                                     Rectangle()
-                                                        .fill(scoreColor(for: scoreValue))
+                                                        .fill(report.scoreColor(for: scoreValue))
                                                         .frame(width: 20, height: CGFloat(scoreValue * 10))
                                                     Text("\(index/2)")
                                                         .font(.caption2)
@@ -259,78 +183,6 @@ struct HomeView: View {
         }
         .navigationTitle("心理グラフ")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .navigationBarLeading) {
-                Button(action: {
-                    showUserInfoSheet = true
-                }) {
-                    Image(systemName: "person.crop.circle.fill")
-                        .font(.title2)
-                        .foregroundColor(.blue)
-                }
-            }
-        }
-        .onAppear {
-            if deviceManager.userDevices.isEmpty, let userId = authManager.currentUser?.id {
-                Task {
-                    await deviceManager.fetchUserDevices(for: userId)
-                    // デバイス取得後に自動でレポートを取得
-                    fetchReport(for: selectedDate)
-                }
-            } else {
-                // デバイスがある場合は直接レポートを取得
-                fetchReport(for: selectedDate)
-            }
-        }
-    }
-    
-    // MARK: - Private Methods
-    
-    private func fetchReport(for date: Date) {
-        guard authManager.isAuthenticated else {
-            dataManager.errorMessage = "ログインが必要です"
-            return
-        }
-        
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.actualDeviceID else {
-            dataManager.errorMessage = "デバイスが登録されていません"
-            return
-        }
-        
-        Task {
-            await dataManager.fetchDailyReport(for: deviceId, date: date)
-        }
-    }
-    
-    private var canGoToNextDay: Bool {
-        let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-        return tomorrow <= Date()
-    }
-    
-    private func scoreColor(for score: Double) -> Color {
-        switch score {
-        case 0..<3:
-            return .red
-        case 3..<7:
-            return .orange
-        case 7...10:
-            return .green
-        default:
-            return .gray
-        }
-    }
-    
-    private func emotionIcon(for score: Double) -> String {
-        switch score {
-        case 0..<3:
-            return "face.dashed"
-        case 3..<7:
-            return "face.smiling"
-        case 7...10:
-            return "face.smiling.fill"
-        default:
-            return "questionmark.circle"
-        }
     }
 }
 
@@ -373,18 +225,12 @@ struct EmotionTimeBar: View {
 }
 
 #Preview {
-    NavigationView {
-        HomeView(
-            networkManager: NetworkManager(
-                authManager: SupabaseAuthManager(),
-                deviceManager: DeviceManager()
-            ),
-            showAlert: .constant(false),
-            alertMessage: .constant(""),
-            showUserInfoSheet: .constant(false)
-        )
-        .environmentObject(SupabaseAuthManager())
+    let deviceManager = DeviceManager()
+    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    return NavigationView {
+        HomeView()
+        .environmentObject(authManager)
         .environmentObject(SupabaseDataManager())
-        .environmentObject(DeviceManager())
+        .environmentObject(deviceManager)
     }
 }

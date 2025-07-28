@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Supabase
 
 // MARK: - Supabaseデータ管理クラス
 // vibe_whisper_summaryテーブルからデータを取得・管理する責務を持つ
@@ -15,7 +16,10 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Published Properties
     @Published var dailyReport: DailyVibeReport?
+    @Published var dailyBehaviorReport: BehaviorReport? // 新しく追加
+    @Published var dailyEmotionReport: EmotionReport?   // 新しく追加
     @Published var weeklyReports: [DailyVibeReport] = []
+    @Published var deviceMetadata: DeviceMetadata?
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -38,77 +42,17 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Public Methods
     
-    /// ユーザーIDから関連するデバイスIDを取得
-    func fetchDeviceId(for userId: String) async -> String? {
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/devices") else {
-            print("❌ 無効なURL")
-            return nil
-        }
-        
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "owner_user_id", value: "eq.\(userId)"),
-            URLQueryItem(name: "select", value: "device_id"),
-            URLQueryItem(name: "limit", value: "1")
-        ]
-        
-        guard let requestURL = components?.url else {
-            print("❌ URLの構築に失敗しました")
-            return nil
-        }
-        
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("❌ 無効なレスポンス")
-                return nil
-            }
-            
-            if httpResponse.statusCode == 200 {
-                if let rawResponse = String(data: data, encoding: .utf8) {
-                    print("📄 Device query response: \(rawResponse)")
-                }
-                
-                struct DeviceResponse: Codable {
-                    let device_id: String
-                }
-                
-                let decoder = JSONDecoder()
-                let devices = try decoder.decode([DeviceResponse].self, from: data)
-                
-                if let device = devices.first {
-                    print("✅ Found device ID: \(device.device_id) for user: \(userId)")
-                    return device.device_id
-                } else {
-                    print("⚠️ No device found for user: \(userId)")
-                }
-            }
-        } catch {
-            print("❌ Device fetch error: \(error)")
-        }
-        
-        return nil
-    }
-    
     /// 特定の日付のレポートを取得
     func fetchDailyReport(for deviceId: String, date: Date) async {
-        isLoading = true
-        errorMessage = nil
+        // このメソッドはfetchAllReportsから呼ばれることを想定
+        // エラー時はerrorMessageを設定し、UIに即座に反映させる
         
         let dateString = dateFormatter.string(from: date)
         print("📅 Fetching daily report for device: \(deviceId), date: \(dateString)")
         
         // URLの構築
         guard let url = URL(string: "\(supabaseURL)/rest/v1/vibe_whisper_summary") else {
-            errorMessage = "無効なURL"
-            isLoading = false
+            // エラーはfetchAllReportsでまとめて処理するため、ここではthrowしない
             return
         }
         
@@ -121,8 +65,6 @@ class SupabaseDataManager: ObservableObject {
         ]
         
         guard let requestURL = components?.url else {
-            errorMessage = "URLの構築に失敗しました"
-            isLoading = false
             return
         }
         
@@ -137,73 +79,58 @@ class SupabaseDataManager: ObservableObject {
             let (data, response) = try await URLSession.shared.data(for: request)
             
             guard let httpResponse = response as? HTTPURLResponse else {
-                errorMessage = "無効なレスポンス"
-                isLoading = false
                 return
             }
             
             print("📡 Response status: \(httpResponse.statusCode)")
             
             if httpResponse.statusCode == 200 {
-                // レスポンスの生データを確認
                 if let rawResponse = String(data: data, encoding: .utf8) {
                     print("📄 Raw response: \(rawResponse)")
                 }
                 
-                // レスポンスをデコード
                 let decoder = JSONDecoder()
-                // processed_atはStringで受け取るため、特別な日付デコード戦略は不要
-                
                 do {
                     let reports = try decoder.decode([DailyVibeReport].self, from: data)
                     print("📊 Decoded reports count: \(reports.count)")
                     
-                    if let report = reports.first {
-                        self.dailyReport = report
-                        print("✅ Daily report fetched successfully")
-                        print("   Average score: \(report.averageScore)")
-                        print("   Insights count: \(report.insights.count)")
-                    } else {
-                        print("⚠️ No report found for the specified date")
-                        self.dailyReport = nil
-                        self.errorMessage = "指定された日付のレポートが見つかりません"
+                    await MainActor.run { [weak self] in
+                        if let report = reports.first {
+                            self?.dailyReport = report
+                            print("✅ Daily report fetched successfully")
+                            print("   Average score: \(report.averageScore)")
+                            print("   Insights count: \(report.insights.count)")
+                        } else {
+                            print("⚠️ No report found for the specified date")
+                            self?.dailyReport = nil
+                        }
                     }
                 } catch {
                     print("❌ Decoding error: \(error)")
-                    self.errorMessage = "データの解析に失敗しました: \(error.localizedDescription)"
-                    
-                    // デコードエラーの詳細を表示
-                    if let decodingError = error as? DecodingError {
-                        switch decodingError {
-                        case .dataCorrupted(let context):
-                            print("   Data corrupted: \(context)")
-                        case .keyNotFound(let key, let context):
-                            print("   Key not found: \(key), \(context)")
-                        case .typeMismatch(let type, let context):
-                            print("   Type mismatch: \(type), \(context)")
-                        case .valueNotFound(let type, let context):
-                            print("   Value not found: \(type), \(context)")
-                        @unknown default:
-                            print("   Unknown decoding error")
-                        }
+                    await MainActor.run { [weak self] in
+                        self?.errorMessage = "データの解析に失敗しました: \(error.localizedDescription)"
                     }
                 }
             } else {
                 if let errorData = String(data: data, encoding: .utf8) {
                     print("❌ Error response: \(errorData)")
                 }
-                errorMessage = "データの取得に失敗しました (Status: \(httpResponse.statusCode))"
+                await MainActor.run { [weak self] in
+                    self?.errorMessage = "データの取得に失敗しました (Status: \(httpResponse.statusCode))"
+                }
             }
             
         } catch {
             print("❌ Fetch error: \(error)")
-            errorMessage = "エラー: \(error.localizedDescription)"
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "エラー: \(error.localizedDescription)"
+            }
         }
-        
-        isLoading = false
     }
     
     /// 日付範囲でレポートを取得（週次表示用）
+    /// - Note: 現在は未使用。将来の週次グラフ機能実装時に使用予定
+    /// - TODO: 週次グラフ機能を実装する際にこのメソッドを活用
     func fetchWeeklyReports(for deviceId: String, startDate: Date, endDate: Date) async {
         isLoading = true
         errorMessage = nil
@@ -259,7 +186,6 @@ class SupabaseDataManager: ObservableObject {
             if httpResponse.statusCode == 200 {
                 // レスポンスをデコード
                 let decoder = JSONDecoder()
-                // processed_atはStringで受け取るため、特別な日付デコード戦略は不要
                 
                 let reports = try decoder.decode([DailyVibeReport].self, from: data)
                 self.weeklyReports = reports
@@ -284,19 +210,70 @@ class SupabaseDataManager: ObservableObject {
     /// データをクリア
     func clearData() {
         dailyReport = nil
+        dailyBehaviorReport = nil
+        dailyEmotionReport = nil
         weeklyReports = []
+        deviceMetadata = nil
         errorMessage = nil
+    }
+    
+    /// 統合データフェッチメソッド - すべてのグラフデータを一括で取得
+    func fetchAllReports(deviceId: String, date: Date) async {
+        await MainActor.run { [weak self] in
+            self?.isLoading = true
+            self?.errorMessage = nil
+        }
+        
+        let dateString = dateFormatter.string(from: date)
+        print("🔄 Fetching all reports for device: \(deviceId), date: \(dateString)")
+        
+        // 並行してすべてのレポートを取得
+        await withTaskGroup(of: Void.self) { group in
+            // Vibeレポートの取得
+            group.addTask { [weak self] in
+                await self?.fetchDailyReport(for: deviceId, date: date)
+            }
+            
+            // 行動レポートの取得
+            group.addTask { [weak self] in
+                let report = await self?.fetchBehaviorReport(deviceId: deviceId, date: dateString)
+                await MainActor.run { [weak self] in
+                    self?.dailyBehaviorReport = report
+                }
+            }
+            
+            // 感情レポートの取得
+            group.addTask { [weak self] in
+                let report = await self?.fetchEmotionReport(deviceId: deviceId, date: dateString)
+                await MainActor.run { [weak self] in
+                    self?.dailyEmotionReport = report
+                }
+            }
+            
+            // デバイスメタデータの取得
+            group.addTask { [weak self] in
+                await self?.fetchDeviceMetadata(for: deviceId)
+            }
+        }
+        
+        await MainActor.run { [weak self] in
+            self?.isLoading = false
+            print("✅ All reports fetching completed")
+        }
     }
     
     // MARK: - Behavior Report Methods
     
     /// 特定の日付の行動レポートを取得
-    func fetchBehaviorReport(deviceId: String, date: String) async throws -> BehaviorReport? {
+    func fetchBehaviorReport(deviceId: String, date: String) async -> BehaviorReport? {
         print("📊 Fetching behavior report for device: \(deviceId), date: \(date)")
         
         // URLの構築
         guard let url = URL(string: "\(supabaseURL)/rest/v1/behavior_summary") else {
-            throw URLError(.badURL)
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "行動データ: 無効なURL"
+            }
+            return nil
         }
         
         // クエリパラメータの構築
@@ -308,7 +285,10 @@ class SupabaseDataManager: ObservableObject {
         ]
         
         guard let requestURL = components?.url else {
-            throw URLError(.badURL)
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "行動データ: URLの構築に失敗しました"
+            }
+            return nil
         }
         
         // リクエストの構築
@@ -318,50 +298,73 @@ class SupabaseDataManager: ObservableObject {
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
-        
-        print("📡 Behavior response status: \(httpResponse.statusCode)")
-        
-        if httpResponse.statusCode == 200 {
-            // レスポンスの生データを確認
-            if let rawResponse = String(data: data, encoding: .utf8) {
-                print("📄 Raw behavior response: \(rawResponse)")
-            }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
             
-            // レスポンスをデコード
-            let decoder = JSONDecoder()
-            let reports = try decoder.decode([BehaviorReport].self, from: data)
-            
-            if let report = reports.first {
-                print("✅ Behavior report fetched successfully")
-                print("   Total events: \(report.totalEventCount)")
-                print("   Active time blocks: \(report.activeTimeBlocks.count)")
-                return report
-            } else {
-                print("⚠️ No behavior report found for the specified date")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                await MainActor.run { [weak self] in
+                    self?.errorMessage = "行動データ: 無効なレスポンス"
+                }
                 return nil
             }
-        } else {
-            if let errorData = String(data: data, encoding: .utf8) {
-                print("❌ Error response: \(errorData)")
+            
+            print("📡 Behavior response status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode == 200 {
+                if let rawResponse = String(data: data, encoding: .utf8) {
+                    print("📄 Raw behavior response: \(rawResponse)")
+                }
+                
+                let decoder = JSONDecoder()
+                do {
+                    let reports = try decoder.decode([BehaviorReport].self, from: data)
+                    
+                    if let report = reports.first {
+                        print("✅ Behavior report fetched successfully")
+                        print("   Total events: \(report.totalEventCount)")
+                        print("   Active time blocks: \(report.activeTimeBlocks.count)")
+                        return report
+                    } else {
+                        print("⚠️ No behavior report found for the specified date")
+                        return nil
+                    }
+                } catch {
+                    print("❌ Behavior decoding error: \(error)")
+                    await MainActor.run { [weak self] in
+                        self?.errorMessage = "行動データの解析に失敗しました: \(error.localizedDescription)"
+                    }
+                    return nil
+                }
+            } else {
+                if let errorData = String(data: data, encoding: .utf8) {
+                    print("❌ Error response: \(errorData)")
+                }
+                await MainActor.run { [weak self] in
+                    self?.errorMessage = "行動データの取得に失敗しました (Status: \(httpResponse.statusCode))"
+                }
+                return nil
             }
-            throw URLError(.badServerResponse)
+        } catch {
+            print("❌ Behavior fetch error: \(error)")
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "行動データの取得エラー: \(error.localizedDescription)"
+            }
+            return nil
         }
     }
     
     // MARK: - Emotion Report Methods
     
     /// 特定の日付の感情レポートを取得
-    func fetchEmotionReport(deviceId: String, date: String) async throws -> EmotionReport? {
+    func fetchEmotionReport(deviceId: String, date: String) async -> EmotionReport? {
         print("🎭 Fetching emotion report for device: \(deviceId), date: \(date)")
         
         // URLの構築
         guard let url = URL(string: "\(supabaseURL)/rest/v1/emotion_opensmile_summary") else {
-            throw URLError(.badURL)
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "感情データ: 無効なURL"
+            }
+            return nil
         }
         
         // クエリパラメータの構築
@@ -373,7 +376,10 @@ class SupabaseDataManager: ObservableObject {
         ]
         
         guard let requestURL = components?.url else {
-            throw URLError(.badURL)
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "感情データ: URLの構築に失敗しました"
+            }
+            return nil
         }
         
         // リクエストの構築
@@ -383,38 +389,164 @@ class SupabaseDataManager: ObservableObject {
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
-        let (data, response) = try await URLSession.shared.data(for: request)
-        
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw URLError(.badServerResponse)
-        }
-        
-        print("📡 Emotion response status: \(httpResponse.statusCode)")
-        
-        if httpResponse.statusCode == 200 {
-            // レスポンスの生データを確認
-            if let rawResponse = String(data: data, encoding: .utf8) {
-                print("📄 Raw emotion response: \(rawResponse)")
-            }
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
             
-            // レスポンスをデコード
-            let decoder = JSONDecoder()
-            let reports = try decoder.decode([EmotionReport].self, from: data)
-            
-            if let report = reports.first {
-                print("✅ Emotion report fetched successfully")
-                print("   Emotion graph points: \(report.emotionGraph.count)")
-                print("   Active time points: \(report.activeTimePoints.count)")
-                return report
-            } else {
-                print("⚠️ No emotion report found for the specified date")
+            guard let httpResponse = response as? HTTPURLResponse else {
+                await MainActor.run { [weak self] in
+                    self?.errorMessage = "感情データ: 無効なレスポンス"
+                }
                 return nil
             }
-        } else {
-            if let errorData = String(data: data, encoding: .utf8) {
-                print("❌ Error response: \(errorData)")
+            
+            print("📡 Emotion response status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode == 200 {
+                if let rawResponse = String(data: data, encoding: .utf8) {
+                    print("📄 Raw emotion response: \(rawResponse)")
+                }
+                
+                let decoder = JSONDecoder()
+                do {
+                    let reports = try decoder.decode([EmotionReport].self, from: data)
+                    
+                    if let report = reports.first {
+                        print("✅ Emotion report fetched successfully")
+                        print("   Emotion graph points: \(report.emotionGraph.count)")
+                        print("   Active time points: \(report.activeTimePoints.count)")
+                        return report
+                    } else {
+                        print("⚠️ No emotion report found for the specified date")
+                        return nil
+                    }
+                } catch {
+                    print("❌ Emotion decoding error: \(error)")
+                    await MainActor.run { [weak self] in
+                        self?.errorMessage = "感情データの解析に失敗しました: \(error.localizedDescription)"
+                    }
+                    return nil
+                }
+            } else {
+                if let errorData = String(data: data, encoding: .utf8) {
+                    print("❌ Error response: \(errorData)")
+                }
+                await MainActor.run { [weak self] in
+                    self?.errorMessage = "感情データの取得に失敗しました (Status: \(httpResponse.statusCode))"
+                }
+                return nil
             }
-            throw URLError(.badServerResponse)
+        } catch {
+            print("❌ Emotion fetch error: \(error)")
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "感情データの取得エラー: \(error.localizedDescription)"
+            }
+            return nil
+        }
+    }
+    
+    /// デバイスメタデータを取得
+    func fetchDeviceMetadata(for deviceId: String) async {
+        print("👤 Fetching device metadata for device: \(deviceId)")
+        
+        // URLの構築
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/device_metadata") else {
+            return
+        }
+        
+        // クエリパラメータの構築
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
+            URLQueryItem(name: "select", value: "*")
+        ]
+        
+        guard let requestURL = components?.url else {
+            return
+        }
+        
+        // リクエストの構築
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return
+            }
+            
+            print("📡 Device metadata response status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode == 200 {
+                let decoder = JSONDecoder()
+                
+                // レスポンスをまずArrayとしてデコード
+                let metadataArray = try decoder.decode([DeviceMetadata].self, from: data)
+                
+                // MainActorで@Publishedプロパティを更新
+                await MainActor.run { [weak self] in
+                    self?.deviceMetadata = metadataArray.first
+                    if let metadata = metadataArray.first {
+                        print("✅ Device metadata fetched successfully")
+                        print("   Name: \(metadata.name ?? "N/A")")
+                        print("   Age: \(metadata.age ?? 0)")
+                        print("   Gender: \(metadata.gender ?? "N/A")")
+                    } else {
+                        print("ℹ️ No device metadata found")
+                    }
+                }
+            }
+        } catch {
+            print("❌ Device metadata fetch error: \(error)")
+        }
+    }
+    
+    // MARK: - Avatar Methods
+    
+    /// ユーザーのアバター画像の署名付きURLを取得する
+    /// - Parameter userId: 取得対象のユーザーID
+    /// - Returns: 1時間有効なアバター画像のURL。存在しない、またはエラーの場合はnil。
+    func fetchAvatarUrl(for userId: String) async -> URL? {
+        print("👤 Fetching avatar URL for user: \(userId)")
+        
+        // 1. ファイルパスを構築
+        let path = "\(userId)/avatar.webp"
+        
+        do {
+            // 2. ファイルの存在を確認 (任意だが推奨)
+            //    Web側の実装に合わせて、listで存在確認を行う
+            let files = try await supabase.storage
+                .from("avatars")
+                .list(path: userId, options: SearchOptions(limit: 1, search: "avatar.webp"))
+            
+            // ファイルが見つからなければ、URLは存在しないのでnilを返す
+            guard !files.isEmpty else {
+                print("🤷‍♂️ Avatar file not found at path: \(path)")
+                return nil
+            }
+            print("✅ Avatar file found. Proceeding to get signed URL.")
+            
+            // 3. 署名付きURLを生成 (Web側と同じく1時間有効)
+            let signedURL = try await supabase.storage
+                .from("avatars")
+                .createSignedURL(path: path, expiresIn: 3600)
+            
+            print("🔗 Successfully created signed URL: \(signedURL)")
+            return signedURL
+            
+        } catch {
+            // エラーログを出力
+            print("❌ Failed to fetch avatar URL: \(error.localizedDescription)")
+            
+            // エラー内容をUIに表示したい場合は、ここでerrorMessageを更新しても良い
+            // await MainActor.run {
+            //     self.errorMessage = "アバターの取得に失敗しました。"
+            // }
+            
+            return nil
         }
     }
 }

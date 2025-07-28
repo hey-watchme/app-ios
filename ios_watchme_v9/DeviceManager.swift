@@ -13,8 +13,7 @@ import Supabase
 // デバイス登録管理クラス
 class DeviceManager: ObservableObject {
     @Published var isDeviceRegistered: Bool = false
-    @Published var currentDeviceID: String? = nil
-    @Published var actualDeviceID: String? = nil  // ユーザーに紐付く実際のデバイスID
+    @Published var localDeviceIdentifier: String? = nil  // この物理デバイス自身のID
     @Published var userDevices: [Device] = []  // ユーザーの全デバイス
     @Published var selectedDeviceID: String? = nil  // 選択中のデバイスID
     @Published var registrationError: String? = nil
@@ -28,7 +27,7 @@ class DeviceManager: ObservableObject {
     private let supabase: SupabaseClient
     
     // UserDefaults キー
-    private let deviceIDKey = "watchme_device_id"
+    private let localDeviceIdentifierKey = "watchme_device_id"  // UserDefaultsのキーは互換性のため維持
     private let isRegisteredKey = "watchme_device_registered"
     private let platformIdentifierKey = "watchme_platform_identifier"
     
@@ -44,11 +43,11 @@ class DeviceManager: ObservableObject {
     
     // MARK: - デバイス登録状態確認
     private func checkDeviceRegistrationStatus() {
-        let savedDeviceID = UserDefaults.standard.string(forKey: deviceIDKey)
+        let savedDeviceID = UserDefaults.standard.string(forKey: localDeviceIdentifierKey)
         let isSupabaseRegistered = UserDefaults.standard.bool(forKey: "watchme_supabase_registered")
         
         if let deviceID = savedDeviceID, isSupabaseRegistered {
-            self.currentDeviceID = deviceID
+            self.localDeviceIdentifier = deviceID
             self.isDeviceRegistered = true
             print("📱 Supabaseデバイス登録確認: \(deviceID)")
         } else {
@@ -56,9 +55,9 @@ class DeviceManager: ObservableObject {
             print("📱 デバイス未登録 - Supabase登録が必要")
             
             // 古いローカル登録データがあれば削除
-            if UserDefaults.standard.string(forKey: deviceIDKey) != nil {
+            if UserDefaults.standard.string(forKey: localDeviceIdentifierKey) != nil {
                 print("🗑️ 古いローカル登録データを削除")
-                UserDefaults.standard.removeObject(forKey: deviceIDKey)
+                UserDefaults.standard.removeObject(forKey: localDeviceIdentifierKey)
                 UserDefaults.standard.removeObject(forKey: isRegisteredKey)
                 UserDefaults.standard.removeObject(forKey: platformIdentifierKey)
             }
@@ -86,24 +85,9 @@ class DeviceManager: ObservableObject {
         print("   - Platform Identifier: \(platformIdentifier)")
         print("   - Owner User ID: \(ownerUserID ?? "ゲストユーザー")")
         
-        // Supabaseライブラリが利用できない場合はエラー
-        if !isSupabaseLibraryAvailable() {
-            self.isLoading = false
-            self.registrationError = "Supabaseライブラリが利用できません。デバイス登録に失敗しました。"
-            print("❌ Supabaseライブラリ未利用 - デバイス登録失敗")
-            return
-        }
-        
         // Supabase直接Insert実装
         registerDeviceToSupabase(platformIdentifier: platformIdentifier, ownerUserID: ownerUserID)
     }
-    
-    // MARK: - Supabaseライブラリ利用可能判定
-    private func isSupabaseLibraryAvailable() -> Bool {
-        // Supabaseライブラリが追加されているかチェック
-        return true
-    }
-    
     
     // MARK: - Supabase UPSERT登録（改善版）
     private func registerDeviceToSupabase(platformIdentifier: String, ownerUserID: String?) {
@@ -143,13 +127,53 @@ class DeviceManager: ObservableObject {
         }
     }
     
+    // MARK: - ユーザーIDを指定したSupabase登録（内部用）
+    private func registerDeviceToSupabase(userId: String) async {
+        guard let platformIdentifier = getPlatformIdentifier() else {
+            print("❌ デバイス識別子の取得に失敗しました")
+            return
+        }
+        
+        do {
+            let deviceData = DeviceInsert(
+                platform_identifier: platformIdentifier,
+                device_type: "ios",
+                platform_type: "iOS",
+                owner_user_id: userId
+            )
+            
+            // UPSERT: INSERT ON CONFLICT DO UPDATE を使用
+            let response: [Device] = try await supabase
+                .from("devices")
+                .upsert(deviceData)
+                .select()
+                .execute()
+                .value
+            
+            if let device = response.first {
+                await MainActor.run {
+                    self.saveSupabaseDeviceRegistration(
+                        deviceID: device.device_id,
+                        platformIdentifier: platformIdentifier
+                    )
+                }
+                print("✅ デバイス情報を取得/登録完了: \(device.device_id)")
+            } else {
+                throw DeviceRegistrationError.noDeviceReturned
+            }
+            
+        } catch {
+            print("❌ デバイス情報取得エラー: \(error)")
+        }
+    }
+    
     // MARK: - Supabaseデバイス登録情報保存
     private func saveSupabaseDeviceRegistration(deviceID: String, platformIdentifier: String) {
-        UserDefaults.standard.set(deviceID, forKey: deviceIDKey)
+        UserDefaults.standard.set(deviceID, forKey: localDeviceIdentifierKey)
         UserDefaults.standard.set(platformIdentifier, forKey: platformIdentifierKey)
         UserDefaults.standard.set(true, forKey: "watchme_supabase_registered")
         
-        self.currentDeviceID = deviceID
+        self.localDeviceIdentifier = deviceID
         self.isDeviceRegistered = true
         
         print("💾 Supabaseデバイス登録完了")
@@ -159,11 +183,11 @@ class DeviceManager: ObservableObject {
     
     // MARK: - デバイス登録状態リセット（デバッグ用）
     func resetDeviceRegistration() {
-        UserDefaults.standard.removeObject(forKey: deviceIDKey)
+        UserDefaults.standard.removeObject(forKey: localDeviceIdentifierKey)
         UserDefaults.standard.removeObject(forKey: platformIdentifierKey)
         UserDefaults.standard.removeObject(forKey: "watchme_supabase_registered")
         
-        self.currentDeviceID = nil
+        self.localDeviceIdentifier = nil
         self.isDeviceRegistered = false
         self.registrationError = nil
         
@@ -228,17 +252,21 @@ class DeviceManager: ObservableObject {
                     // デバイスが1つの場合は自動選択
                     if devices.count == 1, let device = devices.first {
                         self.selectedDeviceID = device.device_id
-                        self.actualDeviceID = device.device_id
                         print("🔍 Auto-selected device: \(device.device_id)")
                     } else if devices.count > 1 {
                         // 複数デバイスの場合は最初のものを選択
                         if let firstDevice = devices.first {
                             self.selectedDeviceID = firstDevice.device_id
-                            self.actualDeviceID = firstDevice.device_id
                             print("🔍 Selected first device: \(firstDevice.device_id)")
                         }
                     } else {
-                        print("⚠️ No devices found for user: \(userId)")
+                        // ユーザーに紐付くデバイスがない場合、このデバイス自身のIDを使用
+                        if let localId = self.localDeviceIdentifier {
+                            self.selectedDeviceID = localId
+                            print("⚠️ No devices found for user: \(userId), using local device: \(localId)")
+                        } else {
+                            print("⚠️ No devices found for user: \(userId)")
+                        }
                     }
                 }
             }
@@ -251,15 +279,14 @@ class DeviceManager: ObservableObject {
     func selectDevice(_ deviceId: String) {
         if userDevices.contains(where: { $0.device_id == deviceId }) {
             selectedDeviceID = deviceId
-            actualDeviceID = deviceId
             print("📱 Selected device: \(deviceId)")
         }
     }
     
     // MARK: - デバイス情報取得
     func getDeviceInfo() -> DeviceInfo? {
-        // 実際のデバイスIDを優先
-        let deviceID = actualDeviceID ?? currentDeviceID
+        // 選択されたデバイスIDがあればそれを使用、なければこの物理デバイスのIDを使用
+        let deviceID = selectedDeviceID ?? localDeviceIdentifier
         
         guard let deviceID = deviceID,
               let platformIdentifier = UserDefaults.standard.string(forKey: platformIdentifierKey) else {
@@ -272,6 +299,23 @@ class DeviceManager: ObservableObject {
             deviceType: "ios",
             platformType: "iOS"
         )
+    }
+    
+    // MARK: - Public Methods for Auth Integration
+    
+    /// ログイン成功後に呼ぶ統括関数：デバイス登録とユーザーデバイス取得を実行
+    func checkAndRegisterDevice(for userId: String) {
+        Task {
+            print("🔄 DeviceManager: デバイス登録とユーザーデバイス取得を開始")
+            
+            // 1. まず現在のデバイスをSupabaseに登録（既存の場合は更新）
+            await registerDeviceToSupabase(userId: userId)
+            
+            // 2. ユーザーのデバイスリストを取得
+            await fetchUserDevices(for: userId)
+            
+            print("✅ DeviceManager: デバイス処理が完了しました")
+        }
     }
 }
 

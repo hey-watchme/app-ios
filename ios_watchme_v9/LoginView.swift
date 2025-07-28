@@ -11,7 +11,6 @@ struct LoginView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @State private var email: String = ""
     @State private var password: String = ""
-    @State private var isSignUpMode: Bool = false
     @State private var showPassword: Bool = false
     @Environment(\.dismiss) private var dismiss
     
@@ -19,16 +18,14 @@ struct LoginView: View {
         NavigationView {
             VStack(spacing: 20) {
                 // アプリロゴ・タイトル
-                VStack(spacing: 10) {
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.blue)
+                VStack(spacing: 15) {
+                    // PNGロゴを表示
+                    Image("WatchMeLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 180, height: 63)
                     
-                    Text("WatchMe")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                    
-                    Text(isSignUpMode ? "新規アカウント作成" : "ログイン")
+                    Text("ログイン")
                         .font(.title2)
                         .foregroundColor(.secondary)
                 }
@@ -44,11 +41,21 @@ struct LoginView: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         
-                        TextField("example@example.com", text: $email)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
-                            .keyboardType(.emailAddress)
-                            .autocapitalization(.none)
-                            .autocorrectionDisabled()
+                        ZStack(alignment: .leading) {
+                            if email.isEmpty {
+                                Text("example@example.com")
+                                    .foregroundColor(.gray.opacity(0.6))
+                                    .padding(.leading, 8)
+                                    .allowsHitTesting(false)
+                            }
+                            TextField("", text: $email)
+                                .textFieldStyle(RoundedBorderTextFieldStyle())
+                                .keyboardType(.emailAddress)
+                                .autocapitalization(.none)
+                                .autocorrectionDisabled()
+                                .foregroundColor(.primary)
+                                .accentColor(.blue)
+                        }
                     }
                     
                     // パスワード入力
@@ -119,13 +126,9 @@ struct LoginView: View {
                         }
                     }
                     
-                    // ログイン/サインアップボタン
+                    // ログインボタン
                     Button(action: {
-                        if isSignUpMode {
-                            authManager.signUp(email: email, password: password)
-                        } else {
-                            authManager.signIn(email: email, password: password)
-                        }
+                        authManager.signIn(email: email, password: password)
                     }) {
                         HStack {
                             if authManager.isLoading {
@@ -134,7 +137,7 @@ struct LoginView: View {
                                     .scaleEffect(0.8)
                             }
                             
-                            Text(isSignUpMode ? "アカウント作成" : "ログイン")
+                            Text("ログイン")
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
@@ -147,51 +150,19 @@ struct LoginView: View {
                 }
                 .padding(.horizontal, 40)
                 
-                // メール確認リマインダー（サインアップ時）
-                if isSignUpMode {
-                    VStack(spacing: 8) {
-                        Text("📬 重要: サインアップ後の手順")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                            .fontWeight(.medium)
-                        
-                        Text("1. アカウント作成後、確認メールが送信されます\n2. メール内のリンクをクリックして確認完了\n3. その後ログインが可能になります")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
-                    .background(Color.orange.opacity(0.1))
-                    .cornerRadius(8)
-                }
-                
-                // モード切り替えボタン
+                // 新規アカウント作成リンク
                 Button(action: {
-                    isSignUpMode.toggle()
-                    authManager.authError = nil
+                    if let url = URL(string: "https://hey-watch.me/signup.html") {
+                        UIApplication.shared.open(url)
+                    }
                 }) {
-                    Text(isSignUpMode ? "既にアカウントをお持ちの方はこちら" : "新規アカウント作成はこちら")
+                    Text("新規アカウント作成はこちら")
                         .font(.footnote)
                         .foregroundColor(.blue)
                 }
                 .padding(.top, 20)
                 
                 Spacer()
-                
-                // デバッグ情報（開発時のみ）
-                #if DEBUG
-                VStack(spacing: 4) {
-                    Text("デバッグ情報")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                    
-                    Text("Supabase URL: qvtlwotzuzbavrzqhyvt.supabase.co")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                }
-                .padding(.bottom, 20)
-                #endif
             }
             .navigationBarHidden(true)
         }
@@ -204,7 +175,10 @@ struct LoginView: View {
     }
 }
 
+
 #Preview {
-    LoginView()
-        .environmentObject(SupabaseAuthManager())
+    let deviceManager = DeviceManager()
+    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    return LoginView()
+        .environmentObject(authManager)
 }

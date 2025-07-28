@@ -94,11 +94,31 @@ CREATE TABLE vibe_whisper_summary (
    - 1つのユーザーが複数のデバイスを登録可能
    - VIBEデータなど、すべての分析データはこのIDに紐付く
 
-3. **Platform Identifier（使用しない）**
+3. **Platform Identifier（内部使用のみ）**
    - iOSの`identifierForVendor`から取得
    - 例：`8d17fe90-357f-41e5-98c5-e122c1185cc5`
    - デバイス登録時の識別にのみ使用
    - **これはデバイスIDではない**ので注意
+
+#### DeviceManagerで管理されるIDプロパティ
+
+DeviceManagerは以下の3つの主要なプロパティでデバイス情報を管理しています：
+
+1. **`localDeviceIdentifier: String?`**
+   - **役割**: このアプリが動作している物理デバイス自身のID
+   - Supabaseに登録されたこのデバイスのユニークな識別子
+   - UserDefaultsに永続的に保存される
+   - 主に、このデバイスから音声データをアップロードする際に使用
+
+2. **`userDevices: [Device]`**
+   - **役割**: 現在ログインしているユーザーに紐付けられている全てのデバイスのリスト
+   - ユーザーが複数のデバイスを管理できるという要件を満たすために必須
+
+3. **`selectedDeviceID: String?`**
+   - **役割**: 現在アプリケーションのUI上でデータ閲覧のために選択されているデバイスのID
+   - グラフ表示など、どのデバイスのデータを見ているかを制御する主要なID
+   - userDevicesから選択されるか、デバイスが1つしかない場合は自動設定
+   - ユーザーに紐づくデバイスがない場合は、localDeviceIdentifierがデフォルトとして使用される
 
 #### 複数デバイスの管理
 
@@ -113,14 +133,14 @@ CREATE TABLE vibe_whisper_summary (
    await deviceManager.fetchUserDevices(for: userId)
    
    // 取得したデバイスは以下で参照
-   deviceManager.userDevices      // 全デバイスリスト
-   deviceManager.selectedDeviceID // 選択中のデバイスID
-   deviceManager.actualDeviceID   // 実際に使用するデバイスID
+   deviceManager.userDevices          // 全デバイスリスト
+   deviceManager.selectedDeviceID     // 選択中のデバイスID
+   deviceManager.localDeviceIdentifier // この物理デバイス自身のID
    ```
 
 3. **データ取得時の注意**
-   - 常に`selectedDeviceID`または`actualDeviceID`を使用
-   - `currentDeviceID`は使用しない（過去の実装の名残）
+   - 通常は`selectedDeviceID`を使用
+   - `selectedDeviceID`がnilの場合は`localDeviceIdentifier`をフォールバックとして使用
 
 ### トラブルシューティング（ID関連）
 
@@ -139,8 +159,9 @@ CREATE TABLE vibe_whisper_summary (
 #### よくある間違い
 
 - ❌ Platform Identifier（`8d17fe90...`）をデバイスIDとして使用
-- ❌ `currentDeviceID`を信頼して使用
-- ✅ `selectedDeviceID`または`actualDeviceID`を使用
+- ❌ 過去の実装の名残である古いプロパティ名を使用
+- ✅ `selectedDeviceID`を使用（UI上で選択されたデバイス）
+- ✅ `localDeviceIdentifier`を使用（この物理デバイス自身のID）
 
 ## 技術スタック
 
@@ -170,45 +191,49 @@ CREATE TABLE vibe_whisper_summary (
 ### ディレクトリ構造
 ```
 ios_watchme_v9/
-├── ios_watchme_v9App.swift    # アプリエントリーポイント
-├── ContentView.swift          # TabViewを使用したグローバルナビゲーション
-├── Views/
-│   ├── HomeView.swift         # 心理グラフ（Vibe Graph）表示
-│   ├── RecordingView.swift    # 録音機能とファイル管理
-│   ├── BehaviorGraphView.swift # 行動グラフ
-│   ├── EmotionGraphView.swift  # 感情グラフ
-│   ├── LoginView.swift         # ログインUI
-│   └── ReportTestView.swift    # デバッグ用Vibeデータ表示
-├── Managers/
-│   ├── AudioRecorder.swift        # 録音管理
-│   ├── NetworkManager.swift       # API通信
-│   ├── DeviceManager.swift        # デバイス管理
-│   ├── SupabaseAuthManager.swift  # 認証管理
-│   └── SupabaseDataManager.swift  # Vibeデータ取得
+├── ios_watchme_v9App.swift        # アプリエントリーポイント
+├── ContentView.swift              # 日付選択とTabViewを使用したグローバルナビゲーション
+├── HomeView.swift                 # 心理グラフ（Vibe Graph）表示
+├── BehaviorGraphView.swift        # 行動グラフ
+├── EmotionGraphView.swift         # 感情グラフ
+├── RecordingView.swift            # 録音機能とファイル管理
+├── LoginView.swift                # ログインUI
+├── ReportTestView.swift           # デバッグ用Vibeデータ表示
+├── AudioRecorder.swift            # 録音管理
+├── NetworkManager.swift           # API通信
+├── DeviceManager.swift            # デバイス管理
+├── SupabaseAuthManager.swift      # 認証管理
+├── SupabaseDataManager.swift      # 統合データ管理
 ├── Models/
-│   ├── RecordingModel.swift       # 録音データモデル
-│   ├── DailyVibeReport.swift      # Vibeレポートモデル
-│   ├── DeviceModel.swift          # デバイスモデル
 │   ├── BehaviorReport.swift       # 行動レポートモデル
 │   └── EmotionReport.swift        # 感情レポートモデル
-├── Utilities/
-│   ├── SlotTimeUtility.swift      # 時刻スロット管理
-│   └── ConnectionStatus.swift     # 接続状態管理
+├── DailyVibeReport.swift          # Vibeレポートモデル
+├── RecordingModel.swift           # 録音データモデル
+├── SlotTimeUtility.swift          # 時刻スロット管理
+├── ConnectionStatus.swift         # 接続状態管理
+├── UploadUIUpdateTest.swift       # アップロードUIテスト
+├── Assets.xcassets/               # アプリアイコンとカラーセット
 └── Info.plist                     # アプリ設定
 ```
 
 ### 主要コンポーネント
 
-#### UI/ナビゲーション
-1. **TabViewベースのグローバルナビゲーション**
-   - 心理グラフ（Vibe Graph）
-   - 行動グラフ（Behavior Graph）
-   - 感情グラフ（Emotion Graph）
-   - 録音
+#### UI/ナビゲーション（v9.11.0で階層構造化）
+1. **「デバイス → 日付 → グラフ」階層構造**
+   - **最上位階層**: ContentViewでデバイスと日付を一元管理
+   - **固定ヘッダー**: デバイス選択ボタンとユーザー情報ボタンを配置
+   - **日付ナビゲーション**: TabViewの上に配置され、全グラフで共有（前日/次日ボタンと日付表示）
+   - **タブ構成**: 心理グラフ、行動グラフ、感情グラフ、録音
 
-2. **疎結合アーキテクチャ**
+2. **統合データフロー**
+   - デバイスまたは日付の変更時に、全グラフのデータを一括取得
+   - 各グラフビューは個別のデータ取得を行わず、SupabaseDataManagerの`@Published`プロパティを参照
+   - データの一貫性と効率性を保証
+
+3. **疎結合アーキテクチャ**
    - 各Viewが独立した責務を持つ
-   - ContentViewはナビゲーション管理に特化
+   - ContentViewは日付・デバイス選択とデータフロー制御に特化
+   - 各グラフビューは表示に特化し、データフェッチは行わない
    - 機能ごとに分離されたView構造
 
 #### データ管理
@@ -223,12 +248,15 @@ ios_watchme_v9/
    - multipart/form-dataでのファイルアップロード
    - エラーハンドリングとリトライ機能
 
-3. **SupabaseDataManager**（v9.9.0でSingle Source of Truth実装）
-   - Vibeデータの取得と管理
-   - 日次レポートの取得
-   - リアルタイムデータ更新
+3. **SupabaseDataManager**（v9.11.0で統合データ管理を実装）
+   - **統合データ取得**: `fetchAllReports`メソッドで全グラフデータを並行取得
+   - **Published プロパティ**:
+     - `dailyReport`: 心理グラフ用データ
+     - `dailyBehaviorReport`: 行動グラフ用データ
+     - `dailyEmotionReport`: 感情グラフ用データ
    - **一元化されたデータ管理**: `@EnvironmentObject`パターンによりアプリ全体で単一インスタンスを共有
    - **データの一貫性保証**: 全ビューが同じデータソースを参照し、状態同期を自動化
+   - **Swift 6対応**: TaskブロックとMainActor.runに`[weak self]`を追加
 
 4. **認証・デバイス管理**
    - SupabaseAuthManager: ユーザー認証とセッション管理
@@ -541,7 +569,54 @@ git push origin feature/機能名
 
 ## 更新履歴
 
+### 2025年7月27日（追加修正）
+- **v9.11.1 - 日付選択機能の最終調整とコード整理**
+  - **HomeView.swiftの修正**
+    - 不要な`showUserInfoSheet`への参照を削除
+    - 個別のデータフェッチロジックを削除し、ContentViewで管理されるデータフローに統一
+    - toolbarからユーザーアイコンボタンを削除（ContentViewのヘッダーに集約）
+    
+  - **ディレクトリ構造の正確化**
+    - README.mdのディレクトリ構造を実際のファイル配置に合わせて修正
+    - ManagersディレクトリとViewsディレクトリは存在せず、全ファイルがルート直下に配置
+    - ContentView.swiftの説明を「日付選択とTabViewを使用したグローバルナビゲーション」に更新
+    
+  - **DailyVibeReport.swiftの確認**
+    - scoreColorとemotionIconメソッドが既に実装済みであることを確認
+    - 各グラフビューがエクステンションメソッドを正しく使用していることを確認
+    
+  - **グラフビューの確認**
+    - BehaviorGraphViewとEmotionGraphViewは既に日付ナビゲーションUIが削除済み
+    - dataManagerから直接データを参照する実装になっていることを確認
+
 ### 2025年7月27日
+- **v9.11.0 - データフロー階層構造への大規模リファクタリング**
+  - **「デバイス → 日付 → グラフ」階層構造の実装**
+    - ライフログツールとして最適なUI階層を実現
+    - デバイスと日付の選択を最上位（ContentView）に集約
+    - すべてのグラフが同一のデバイス・日付のデータを表示
+    
+  - **統合データ管理の実現**
+    - `ContentView`に`selectedDate`の状態管理を一元化
+    - 固定ヘッダー（ユーザーアイコンとアプリタイトル）の実装
+    - 日付ナビゲーションをTabViewの上に配置し、全グラフで共有
+    - デバイスまたは日付変更時に、すべてのレポートを自動的に再取得
+    
+  - **SupabaseDataManagerの拡張**
+    - `dailyBehaviorReport`と`dailyEmotionReport`の`@Published`プロパティを追加
+    - `fetchAllReports`メソッドで3つのレポートを並行取得
+    - Swift 6対応: TaskブロックとMainActor.runに`[weak self]`を追加
+    
+  - **各グラフビューの簡素化**
+    - HomeView、BehaviorGraphView、EmotionGraphViewから日付ナビゲーションUIを削除
+    - 個別のデータフェッチロジックを削除
+    - SupabaseDataManagerの`@Published`プロパティを直接参照する設計に変更
+    
+  - **コード品質の向上**
+    - ContentViewのbodyを簡素化（AppHeaderView、DateNavigationViewに分割）
+    - `scoreColor`と`emotionIcon`をDailyVibeReportのエクステンションに移動
+    - 冗長なコードの削除とエラー処理の改善
+
 - **v9.10.0 - 行動グラフと感情グラフの実装**
   - **行動グラフ (Behavior Graph) の実装**
     - behavior_summaryテーブルからのデータ取得機能

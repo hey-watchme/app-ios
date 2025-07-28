@@ -10,9 +10,18 @@ import AVFoundation
 
 @main
 struct ios_watchme_v9App: App {
-    @StateObject private var authManager = SupabaseAuthManager()
     @StateObject private var deviceManager = DeviceManager()
+    @StateObject private var authManager: SupabaseAuthManager
     @StateObject private var dataManager = SupabaseDataManager()
+    
+    init() {
+        let deviceManager = DeviceManager()
+        let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+        
+        _deviceManager = StateObject(wrappedValue: deviceManager)
+        _authManager = StateObject(wrappedValue: authManager)
+        _dataManager = StateObject(wrappedValue: SupabaseDataManager())
+    }
     
     var body: some Scene {
         WindowGroup {
@@ -62,51 +71,33 @@ struct MainAppView: View {
                     }
             } else {
                 // 未ログイン：ログイン画面表示ボタン
-                VStack(spacing: 20) {
-                    VStack(spacing: 10) {
-                        Image(systemName: "waveform.circle.fill")
-                            .font(.system(size: 80))
-                            .foregroundColor(.blue)
-                        
-                        Text("WatchMe")
-                            .font(.largeTitle)
-                            .fontWeight(.bold)
-                        
-                        Text("音声録音・アップロードアプリ")
-                            .font(.title3)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding(.top, 100)
+                VStack(spacing: 0) {
+                    Spacer()
+                    
+                    // ロゴを中央に配置
+                    Image("WatchMeLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 200, height: 70)
                     
                     Spacer()
                     
-                    VStack(spacing: 16) {
-                        Text("ログインして録音を開始")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        
-                        Button(action: {
-                            showLogin = true
-                        }) {
-                            HStack {
-                                Image(systemName: "person.circle.fill")
-                                Text("ログイン / サインアップ")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
+                    // ログインボタンを最下部に配置
+                    Button(action: {
+                        showLogin = true
+                    }) {
+                        HStack {
+                            Image(systemName: "person.circle.fill")
+                            Text("ログイン / サインアップ")
                         }
-                        .padding(.horizontal, 40)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                        .background(Color.blue)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
                     }
-                    
-                    Spacer()
-                    
-                    Text("Supabase認証を使用")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.bottom, 50)
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 50)
                 }
                 .onAppear {
                     print("📱 MainAppView: 未認証状態 - ログイン画面表示")
@@ -179,3 +170,4 @@ struct MainAppView: View {
         }
     }
 }
+

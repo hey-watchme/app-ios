@@ -73,7 +73,7 @@ struct ReportTestView: View {
                         .padding(.vertical, 8)
                         .background(Color.orange.opacity(0.1))
                         .cornerRadius(8)
-                    } else if let deviceId = deviceManager.selectedDeviceID ?? deviceManager.actualDeviceID {
+                    } else if let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier {
                         // デバイスが1つの場合は単純表示
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
@@ -278,8 +278,7 @@ struct ReportTestView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             print("📊 ReportTestView onAppear")
-            print("   - currentDeviceID: \(deviceManager.currentDeviceID ?? "nil")")
-            print("   - actualDeviceID: \(deviceManager.actualDeviceID ?? "nil")")
+            print("   - localDeviceIdentifier: \(deviceManager.localDeviceIdentifier ?? "nil")")
             print("   - selectedDeviceID: \(deviceManager.selectedDeviceID ?? "nil")")
             print("   - userDevices count: \(deviceManager.userDevices.count)")
             
@@ -301,7 +300,7 @@ struct ReportTestView: View {
             return
         }
         
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.actualDeviceID else {
+        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
             dataManager.errorMessage = "デバイスIDが見つかりません"
             return
         }
@@ -319,7 +318,7 @@ struct ReportTestView: View {
             return
         }
         
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.actualDeviceID else {
+        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
             dataManager.errorMessage = "デバイスIDが見つかりません"
             return
         }
@@ -357,10 +356,12 @@ private let itemFormatter: DateFormatter = {
 // MARK: - Preview
 struct ReportTestView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView {
+        let deviceManager = DeviceManager()
+        let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+        return NavigationView {
             ReportTestView()
-                .environmentObject(SupabaseAuthManager())
-                .environmentObject(DeviceManager())
+                .environmentObject(authManager)
+                .environmentObject(deviceManager)
         }
     }
 }

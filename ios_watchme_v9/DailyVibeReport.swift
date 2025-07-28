@@ -6,6 +6,7 @@
 //
 
 import Foundation
+import SwiftUI
 
 // MARK: - Daily Vibe Report Data Model
 // vibe_whisper_summaryテーブルの構造に対応したデータモデル
@@ -78,5 +79,41 @@ extension DailyVibeReport {
     // インサイトの最初の3つを取得（UIで表示する際に便利）
     var topInsights: [String] {
         Array(insights.prefix(3))
+    }
+    
+    // MARK: - UI Helper Methods
+    
+    func scoreColor(for score: Double) -> Color {
+        switch score {
+        case 0..<3:
+            return .red
+        case 3..<7:
+            return .orange
+        case 7...10:
+            return .green
+        default:
+            return .gray
+        }
+    }
+    
+    var averageScoreColor: Color {
+        scoreColor(for: averageScore)
+    }
+    
+    func emotionIcon(for score: Double) -> String {
+        switch score {
+        case 0..<3:
+            return "face.dashed"
+        case 3..<7:
+            return "face.smiling"
+        case 7...10:
+            return "face.smiling.fill"
+        default:
+            return "questionmark.circle"
+        }
+    }
+    
+    var averageScoreIcon: String {
+        emotionIcon(for: averageScore)
     }
 }
