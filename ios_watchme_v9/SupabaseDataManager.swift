@@ -7,6 +7,7 @@
 
 import Foundation
 import SwiftUI
+import Supabase
 
 // MARK: - Supabaseデータ管理クラス
 // vibe_whisper_summaryテーブルからデータを取得・管理する責務を持つ
@@ -18,6 +19,7 @@ class SupabaseDataManager: ObservableObject {
     @Published var dailyBehaviorReport: BehaviorReport? // 新しく追加
     @Published var dailyEmotionReport: EmotionReport?   // 新しく追加
     @Published var weeklyReports: [DailyVibeReport] = []
+    @Published var deviceMetadata: DeviceMetadata?
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -211,6 +213,7 @@ class SupabaseDataManager: ObservableObject {
         dailyBehaviorReport = nil
         dailyEmotionReport = nil
         weeklyReports = []
+        deviceMetadata = nil
         errorMessage = nil
     }
     
@@ -245,6 +248,11 @@ class SupabaseDataManager: ObservableObject {
                 await MainActor.run { [weak self] in
                     self?.dailyEmotionReport = report
                 }
+            }
+            
+            // デバイスメタデータの取得
+            group.addTask { [weak self] in
+                await self?.fetchDeviceMetadata(for: deviceId)
             }
         }
         
@@ -432,6 +440,112 @@ class SupabaseDataManager: ObservableObject {
             await MainActor.run { [weak self] in
                 self?.errorMessage = "感情データの取得エラー: \(error.localizedDescription)"
             }
+            return nil
+        }
+    }
+    
+    /// デバイスメタデータを取得
+    func fetchDeviceMetadata(for deviceId: String) async {
+        print("👤 Fetching device metadata for device: \(deviceId)")
+        
+        // URLの構築
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/device_metadata") else {
+            return
+        }
+        
+        // クエリパラメータの構築
+        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
+            URLQueryItem(name: "select", value: "*")
+        ]
+        
+        guard let requestURL = components?.url else {
+            return
+        }
+        
+        // リクエストの構築
+        var request = URLRequest(url: requestURL)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            
+            guard let httpResponse = response as? HTTPURLResponse else {
+                return
+            }
+            
+            print("📡 Device metadata response status: \(httpResponse.statusCode)")
+            
+            if httpResponse.statusCode == 200 {
+                let decoder = JSONDecoder()
+                
+                // レスポンスをまずArrayとしてデコード
+                let metadataArray = try decoder.decode([DeviceMetadata].self, from: data)
+                
+                // MainActorで@Publishedプロパティを更新
+                await MainActor.run { [weak self] in
+                    self?.deviceMetadata = metadataArray.first
+                    if let metadata = metadataArray.first {
+                        print("✅ Device metadata fetched successfully")
+                        print("   Name: \(metadata.name ?? "N/A")")
+                        print("   Age: \(metadata.age ?? 0)")
+                        print("   Gender: \(metadata.gender ?? "N/A")")
+                    } else {
+                        print("ℹ️ No device metadata found")
+                    }
+                }
+            }
+        } catch {
+            print("❌ Device metadata fetch error: \(error)")
+        }
+    }
+    
+    // MARK: - Avatar Methods
+    
+    /// ユーザーのアバター画像の署名付きURLを取得する
+    /// - Parameter userId: 取得対象のユーザーID
+    /// - Returns: 1時間有効なアバター画像のURL。存在しない、またはエラーの場合はnil。
+    func fetchAvatarUrl(for userId: String) async -> URL? {
+        print("👤 Fetching avatar URL for user: \(userId)")
+        
+        // 1. ファイルパスを構築
+        let path = "\(userId)/avatar.webp"
+        
+        do {
+            // 2. ファイルの存在を確認 (任意だが推奨)
+            //    Web側の実装に合わせて、listで存在確認を行う
+            let files = try await supabase.storage
+                .from("avatars")
+                .list(path: userId, options: SearchOptions(limit: 1, search: "avatar.webp"))
+            
+            // ファイルが見つからなければ、URLは存在しないのでnilを返す
+            guard !files.isEmpty else {
+                print("🤷‍♂️ Avatar file not found at path: \(path)")
+                return nil
+            }
+            print("✅ Avatar file found. Proceeding to get signed URL.")
+            
+            // 3. 署名付きURLを生成 (Web側と同じく1時間有効)
+            let signedURL = try await supabase.storage
+                .from("avatars")
+                .createSignedURL(path: path, expiresIn: 3600)
+            
+            print("🔗 Successfully created signed URL: \(signedURL)")
+            return signedURL
+            
+        } catch {
+            // エラーログを出力
+            print("❌ Failed to fetch avatar URL: \(error.localizedDescription)")
+            
+            // エラー内容をUIに表示したい場合は、ここでerrorMessageを更新しても良い
+            // await MainActor.run {
+            //     self.errorMessage = "アバターの取得に失敗しました。"
+            // }
+            
             return nil
         }
     }

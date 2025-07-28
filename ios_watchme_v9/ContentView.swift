@@ -20,9 +20,12 @@ struct ContentView: View {
     @State private var showLogoutConfirmation = false
     @State private var showUserInfoSheet = false
     @State private var networkManager: NetworkManager?
+    @State private var showRecordingSheet = false
     
     // 日付の選択状態を一元管理
     @State private var selectedDate = Date()
+    // TabViewの選択状態を管理（ダッシュボードから開始）
+    @State private var selectedTab = 0
     
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
@@ -123,7 +126,17 @@ struct ContentView: View {
                 .padding(.vertical, 8)
                 .background(Color(.systemBackground).shadow(radius: 1))
                 
-                TabView {
+                TabView(selection: $selectedTab) {
+                    // ダッシュボードタブ
+                    NavigationView {
+                        DashboardView(selectedDate: $selectedDate)
+                    }
+                    .navigationViewStyle(StackNavigationViewStyle())
+                    .tabItem {
+                        Label("ダッシュボード", systemImage: "square.grid.2x2")
+                    }
+                    .tag(0)
+                    
                     // 心理グラフタブ (Vibe Graph)
                     NavigationView {
                         HomeView() // 引数を削除
@@ -132,6 +145,7 @@ struct ContentView: View {
                     .tabItem {
                         Label("心理グラフ", systemImage: "brain")
                     }
+                    .tag(1)
                     
                     // 行動グラフタブ (Behavior Graph)
                     NavigationView {
@@ -141,6 +155,7 @@ struct ContentView: View {
                     .tabItem {
                         Label("行動グラフ", systemImage: "figure.walk.motion")
                     }
+                    .tag(2)
                     
                     // 感情グラフタブ (Emotion Graph)
                     NavigationView {
@@ -150,28 +165,21 @@ struct ContentView: View {
                     .tabItem {
                         Label("感情グラフ", systemImage: "heart.text.square")
                     }
+                    .tag(3)
                     
-                    // 録音タブ
-                    NavigationView {
-                        RecordingView(audioRecorder: audioRecorder, networkManager: networkManager)
-                            .navigationTitle("録音")
-                            .navigationBarTitleDisplayMode(.inline)
-                            .toolbar {
-                                ToolbarItem(placement: .navigationBarLeading) {
-                                    Button(action: {
-                                        showUserInfoSheet = true
-                                    }) {
-                                        Image(systemName: "person.crop.circle.fill")
-                                            .font(.title2)
-                                            .foregroundColor(.blue)
-                                    }
-                                }
+                    // 録音タブ（タップでモーダル表示）
+                    Text("")
+                        .tabItem {
+                            Label("録音", systemImage: "mic.circle.fill")
+                        }
+                        .tag(4)
+                        .onAppear {
+                            if selectedTab == 4 {
+                                showRecordingSheet = true
+                                // タブを前の位置に戻す
+                                selectedTab = 0
                             }
-                    }
-                    .navigationViewStyle(StackNavigationViewStyle())
-                    .tabItem {
-                        Label("録音", systemImage: "mic.circle.fill")
-                    }
+                        }
                 }
             }
             .alert("通知", isPresented: $showAlert) {
@@ -205,6 +213,22 @@ struct ContentView: View {
             .sheet(isPresented: $showUserInfoSheet) {
                 UserInfoSheetView(authManager: authManager, deviceManager: deviceManager, showLogoutConfirmation: $showLogoutConfirmation)
             }
+            .sheet(isPresented: $showRecordingSheet) {
+                NavigationView {
+                    RecordingView(audioRecorder: audioRecorder, networkManager: networkManager)
+                        .navigationTitle("録音")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .navigationBarLeading) {
+                                Button(action: {
+                                    showRecordingSheet = false
+                                }) {
+                                    Text("閉じる")
+                                }
+                            }
+                        }
+                }
+            }
             .onChange(of: networkManager.connectionStatus) { oldValue, newValue in
                 // アップロード完了時の通知
                 if newValue == .connected && networkManager.currentUploadingFile != nil {
@@ -221,6 +245,13 @@ struct ContentView: View {
             }
             .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
                 fetchReports()
+            }
+            .onChange(of: selectedTab) { oldValue, newValue in
+                if newValue == 4 {
+                    showRecordingSheet = true
+                    // すぐに前のタブに戻す
+                    selectedTab = oldValue
+                }
             }
             .onAppear {
                 initializeNetworkManager()
@@ -271,10 +302,8 @@ struct UserInfoSheetView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 24) {
-                // ユーザーアイコン
-                Image(systemName: "person.crop.circle.fill")
-                    .font(.system(size: 80))
-                    .foregroundColor(.blue)
+                // ユーザーアバター
+                AvatarView(userId: authManager.currentUser?.id)
                     .padding(.top, 20)
                 
                 // ユーザー情報セクション
@@ -282,8 +311,23 @@ struct UserInfoSheetView: View {
                     // ユーザーアカウント情報
                     InfoSection(title: "ユーザーアカウント情報") {
                         if let user = authManager.currentUser {
-                            InfoRow(label: "メールアドレス", value: user.email, icon: "envelope.fill")
-                            InfoRow(label: "ユーザーID", value: user.id, icon: "person.text.rectangle.fill")
+                            InfoRowTwoLine(label: "メールアドレス", value: user.email, icon: "envelope.fill")
+                            InfoRowTwoLine(label: "ユーザーID", value: user.id, icon: "person.text.rectangle.fill")
+                            
+                            // プロファイル情報がある場合の追加項目
+                            if let profile = user.profile {
+                                // 会員登録日
+                                if let createdAt = profile.createdAt {
+                                    let formattedDate = formatDate(createdAt)
+                                    InfoRow(label: "会員登録日", value: formattedDate, icon: "calendar.badge.plus")
+                                }
+                                
+                                // ニュースレター配信設定
+                                if let newsletter = profile.newsletter {
+                                    let newsletterStatus = newsletter ? "受信希望" : "不要"
+                                    InfoRow(label: "ニュースレター配信", value: newsletterStatus, icon: "envelope.badge", valueColor: newsletter ? .green : .secondary)
+                                }
+                            }
                         } else {
                             InfoRow(label: "状態", value: "ログインしていません", icon: "exclamationmark.triangle.fill", valueColor: .red)
                         }
@@ -438,6 +482,165 @@ struct InfoRow: View {
                 .truncationMode(.middle)
         }
     }
+}
+
+// MARK: - 2行表示情報行
+struct InfoRowTwoLine: View {
+    let label: String
+    let value: String
+    let icon: String
+    let valueColor: Color
+    
+    init(label: String, value: String, icon: String, valueColor: Color = .primary) {
+        self.label = label
+        self.value = value
+        self.icon = icon
+        self.valueColor = valueColor
+    }
+    
+    var body: some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: icon)
+                .foregroundColor(.blue)
+                .frame(width: 20)
+                .padding(.top, 2)
+            
+            VStack(alignment: .leading, spacing: 4) {
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Text(value)
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(valueColor)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+            }
+            
+            Spacer()
+        }
+    }
+}
+
+// MARK: - アバタービュー
+struct AvatarView: View {
+    let userId: String?
+    let size: CGFloat = 80
+    @EnvironmentObject var dataManager: SupabaseDataManager
+    @State private var avatarUrl: URL?
+    @State private var isLoadingAvatar = true
+    
+    var body: some View {
+        Group {
+            if isLoadingAvatar {
+                // 読み込み中
+                ZStack {
+                    Circle()
+                        .fill(Color.gray.opacity(0.1))
+                        .frame(width: size, height: size)
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                }
+            } else if let url = avatarUrl {
+                // アバター画像を表示
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                            .frame(width: size, height: size)
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                            )
+                    case .failure(_):
+                        // エラー時のデフォルトアイコン
+                        defaultAvatarView
+                    case .empty:
+                        // 読み込み中
+                        ZStack {
+                            Circle()
+                                .fill(Color.gray.opacity(0.1))
+                                .frame(width: size, height: size)
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle())
+                        }
+                    @unknown default:
+                        defaultAvatarView
+                    }
+                }
+            } else {
+                // アバター未設定時のデフォルトアイコン
+                defaultAvatarView
+            }
+        }
+        .onAppear {
+            // Viewが表示された時にアバターURLを取得する
+            Task {
+                guard let userId = userId else {
+                    print("⚠️ ユーザーIDが指定されていません")
+                    isLoadingAvatar = false
+                    return
+                }
+                
+                // DataManagerの新しい関数を呼び出す
+                self.avatarUrl = await dataManager.fetchAvatarUrl(for: userId)
+                self.isLoadingAvatar = false
+            }
+        }
+        .onChange(of: userId) { oldValue, newValue in
+            // ユーザーIDが変更されたら再取得
+            Task {
+                guard let userId = newValue else {
+                    self.avatarUrl = nil
+                    self.isLoadingAvatar = false
+                    return
+                }
+                
+                self.isLoadingAvatar = true
+                self.avatarUrl = await dataManager.fetchAvatarUrl(for: userId)
+                self.isLoadingAvatar = false
+            }
+        }
+    }
+    
+    private var defaultAvatarView: some View {
+        Image(systemName: "person.crop.circle.fill")
+            .font(.system(size: size))
+            .foregroundColor(.blue)
+    }
+}
+
+// MARK: - ヘルパー関数
+private func formatDate(_ dateString: String) -> String {
+    let isoFormatter = ISO8601DateFormatter()
+    isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    
+    // ISO8601形式でパースを試行
+    if let date = isoFormatter.date(from: dateString) {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: date)
+    }
+    
+    // フォールバック: 別の形式を試行
+    let fallbackFormatter = DateFormatter()
+    fallbackFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'"
+    if let date = fallbackFormatter.date(from: dateString) {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .none
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: date)
+    }
+    
+    // 最終的にフォーマットできない場合は元の文字列を返す
+    return dateString
 }
 
 #Preview {

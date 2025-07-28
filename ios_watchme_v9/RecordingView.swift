@@ -20,8 +20,56 @@ struct RecordingView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-            // 統計情報（アップロード済み・アップロード待ち）
-            HStack(spacing: 20) {
+                // WatchMe Pro プロモーションセクション
+                VStack(spacing: 16) {
+                    VStack(spacing: 12) {
+                        Image(systemName: "applewatch.radiowaves.left.and.right")
+                            .font(.system(size: 50))
+                            .foregroundColor(.blue)
+                        
+                        Text("ウェアラブルデバイス「WatchMe」を使って簡単に24時間ノータッチでこころの分析が可能です。WatchMe Pro プランに切り替えて、始めてみましょう。")
+                            .font(.subheadline)
+                            .multilineTextAlignment(.center)
+                            .foregroundColor(.primary)
+                            .padding(.horizontal)
+                    }
+                    
+                    // サブスクリプションボタン
+                    Button(action: {
+                        if let url = URL(string: "https://hey-watch.me/") {
+                            UIApplication.shared.open(url)
+                        }
+                    }) {
+                        VStack(spacing: 4) {
+                            Text("WatchMe Pro プラン")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                            Text("月額980円")
+                                .font(.subheadline)
+                                .foregroundColor(.white.opacity(0.9))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .cornerRadius(12)
+                    }
+                    .padding(.horizontal)
+                }
+                .padding()
+                .background(Color(.systemGray6))
+                .cornerRadius(16)
+                
+                Divider()
+                    .padding(.vertical, 8)
+                
+                // 統計情報（アップロード済み・アップロード待ち）
+                HStack(spacing: 20) {
                 // アップロード済み
                 VStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
