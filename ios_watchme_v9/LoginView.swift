@@ -177,6 +177,8 @@ struct LoginView: View {
 
 
 #Preview {
-    LoginView()
-        .environmentObject(SupabaseAuthManager())
+    let deviceManager = DeviceManager()
+    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    return LoginView()
+        .environmentObject(authManager)
 }

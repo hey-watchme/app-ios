@@ -225,10 +225,12 @@ struct EmotionTimeBar: View {
 }
 
 #Preview {
-    NavigationView {
+    let deviceManager = DeviceManager()
+    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    return NavigationView {
         HomeView()
-        .environmentObject(SupabaseAuthManager())
+        .environmentObject(authManager)
         .environmentObject(SupabaseDataManager())
-        .environmentObject(DeviceManager())
+        .environmentObject(deviceManager)
     }
 }

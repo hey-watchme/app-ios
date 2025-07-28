@@ -462,11 +462,13 @@ extension DateFormatter {
 }
 
 #Preview {
-    RecordingView(
+    let deviceManager = DeviceManager()
+    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    return RecordingView(
         audioRecorder: AudioRecorder(),
         networkManager: NetworkManager(
-            authManager: SupabaseAuthManager(),
-            deviceManager: DeviceManager()
+            authManager: authManager,
+            deviceManager: deviceManager
         )
     )
 }

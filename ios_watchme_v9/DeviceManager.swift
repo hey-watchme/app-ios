@@ -127,6 +127,46 @@ class DeviceManager: ObservableObject {
         }
     }
     
+    // MARK: - ユーザーIDを指定したSupabase登録（内部用）
+    private func registerDeviceToSupabase(userId: String) async {
+        guard let platformIdentifier = getPlatformIdentifier() else {
+            print("❌ デバイス識別子の取得に失敗しました")
+            return
+        }
+        
+        do {
+            let deviceData = DeviceInsert(
+                platform_identifier: platformIdentifier,
+                device_type: "ios",
+                platform_type: "iOS",
+                owner_user_id: userId
+            )
+            
+            // UPSERT: INSERT ON CONFLICT DO UPDATE を使用
+            let response: [Device] = try await supabase
+                .from("devices")
+                .upsert(deviceData)
+                .select()
+                .execute()
+                .value
+            
+            if let device = response.first {
+                await MainActor.run {
+                    self.saveSupabaseDeviceRegistration(
+                        deviceID: device.device_id,
+                        platformIdentifier: platformIdentifier
+                    )
+                }
+                print("✅ デバイス情報を取得/登録完了: \(device.device_id)")
+            } else {
+                throw DeviceRegistrationError.noDeviceReturned
+            }
+            
+        } catch {
+            print("❌ デバイス情報取得エラー: \(error)")
+        }
+    }
+    
     // MARK: - Supabaseデバイス登録情報保存
     private func saveSupabaseDeviceRegistration(deviceID: String, platformIdentifier: String) {
         UserDefaults.standard.set(deviceID, forKey: localDeviceIdentifierKey)
@@ -259,6 +299,23 @@ class DeviceManager: ObservableObject {
             deviceType: "ios",
             platformType: "iOS"
         )
+    }
+    
+    // MARK: - Public Methods for Auth Integration
+    
+    /// ログイン成功後に呼ぶ統括関数：デバイス登録とユーザーデバイス取得を実行
+    func checkAndRegisterDevice(for userId: String) {
+        Task {
+            print("🔄 DeviceManager: デバイス登録とユーザーデバイス取得を開始")
+            
+            // 1. まず現在のデバイスをSupabaseに登録（既存の場合は更新）
+            await registerDeviceToSupabase(userId: userId)
+            
+            // 2. ユーザーのデバイスリストを取得
+            await fetchUserDevices(for: userId)
+            
+            print("✅ DeviceManager: デバイス処理が完了しました")
+        }
     }
 }
 

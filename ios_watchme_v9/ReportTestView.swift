@@ -356,10 +356,12 @@ private let itemFormatter: DateFormatter = {
 // MARK: - Preview
 struct ReportTestView_Previews: PreviewProvider {
     static var previews: some View {
-        NavigationView {
+        let deviceManager = DeviceManager()
+        let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+        return NavigationView {
             ReportTestView()
-                .environmentObject(SupabaseAuthManager())
-                .environmentObject(DeviceManager())
+                .environmentObject(authManager)
+                .environmentObject(deviceManager)
         }
     }
 }

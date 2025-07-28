@@ -22,11 +22,15 @@ class SupabaseAuthManager: ObservableObject {
     @Published var authError: String? = nil
     @Published var isLoading: Bool = false
     
+    // DeviceManagerへの参照
+    private let deviceManager: DeviceManager
+    
     // Supabase設定
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
     
-    init() {
+    init(deviceManager: DeviceManager) {
+        self.deviceManager = deviceManager
         // 保存された認証状態を確認
         checkAuthStatus()
     }
@@ -41,6 +45,9 @@ class SupabaseAuthManager: ObservableObject {
             
             // プロファイルを取得
             fetchUserProfile(userId: savedUser.id)
+            
+            // デバイス情報を取得
+            deviceManager.checkAndRegisterDevice(for: savedUser.id)
         } else {
             print("⚠️ 保存された認証状態なし: isAuthenticated = false")
         }
@@ -118,6 +125,9 @@ class SupabaseAuthManager: ObservableObject {
                             
                             // ユーザープロファイルを取得
                             self?.fetchUserProfile(userId: user.id)
+                            
+                            // デバイス登録とユーザーデバイス取得を実行
+                            self?.deviceManager.checkAndRegisterDevice(for: user.id)
                         } else {
                             self?.authError = "レスポンス解析エラー"
                         }
