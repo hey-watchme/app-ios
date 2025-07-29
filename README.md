@@ -400,15 +400,29 @@ Parameters:
 
 #### ❌ やってはいけないこと
 ```swift
-// 手動でAPIを呼び出さない！
+// ⚠️ 手動でAPIを呼び出さない！
 URLSession.shared.dataTask(with: "supabaseURL/auth/v1/token") { ... }
+URLSession.shared.dataTask(with: "supabaseURL/rest/v1/table") { ... }
 ```
 
 #### ✅ 正しい実装
 ```swift
-// Supabase SDKの標準メソッドを使用
+// 🔐 認証: Supabase SDKの標準メソッドを使用
 let session = try await supabase.auth.signIn(email: email, password: password)
+
+// 📊 データ取得: SDKのクエリビルダーを使用
+let data: [MyModel] = try await supabase
+    .from("table_name")
+    .select()
+    .eq("column", value: "value")
+    .execute()
+    .value
 ```
+
+#### 🔍 認証情報不整合問題の解決（v9.12.1で修正済み）
+- **問題**: 手動API呼び出しではRLSポリシーを通過できない
+- **解決**: 全てのデータアクセスをSDK標準メソッドに統一
+- **効果**: 認証状態とデータアクセスの完全な整合性を実現
 
 #### 認証状態の復元（アプリ再起動時）
 ```swift
@@ -670,6 +684,28 @@ git push origin feature/機能名
 ## 更新履歴
 
 ### 2025年7月29日
+- **v9.12.1 - 手動API呼び出しからSDK標準メソッド化による認証情報不整合問題の根本解決**
+  - **SupabaseAuthManagerの完全SDK化**
+    - signUpメソッドを`supabase.auth.signUp()`に変更
+    - signOutメソッドを`supabase.auth.signOut()`に変更
+    - fetchUserInfoメソッドを`supabase.auth.session.user`に変更
+    - resendConfirmationEmailメソッドを`supabase.auth.resend()`に変更
+    - fetchUserProfileメソッドを`supabase.from("users").select()`に変更
+    - refreshTokenメソッドを削除（SDKが自動管理）
+    
+  - **SupabaseDataManagerの完全SDK化**
+    - fetchDailyReportメソッドを`supabase.from("vibe_whisper_summary").select()`に変更
+    - fetchBehaviorReportメソッドを`supabase.from("behavior_summary").select()`に変更
+    - fetchEmotionReportメソッドを`supabase.from("emotion_opensmile_summary").select()`に変更
+    - fetchDeviceMetadataメソッドを`supabase.from("device_metadata").select()`に変更
+    - fetchWeeklyReportsメソッドを`supabase.from("vibe_whisper_summary").select()`に変更
+    
+  - **認証情報の不整合問題を根本解決**
+    - 手動のURLSession API呼び出しを完全に排除
+    - SDKが自動的に認証トークンを管理し、RLSポリシーを正しく通過
+    - PostgrestErrorの詳細表示機能を追加してデバッグを改善
+    - トークンの自動リフレッシュによる堅牢なセッション管理
+
 - **v9.12.0 - user_devicesテーブル対応と認証フロー修正**
   - **データベース構造の変更**
     - `user_devices`中間テーブルに対応

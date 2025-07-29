@@ -50,80 +50,40 @@ class SupabaseDataManager: ObservableObject {
         let dateString = dateFormatter.string(from: date)
         print("📅 Fetching daily report for device: \(deviceId), date: \(dateString)")
         
-        // URLの構築
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/vibe_whisper_summary") else {
-            // エラーはfetchAllReportsでまとめて処理するため、ここではthrowしない
-            return
-        }
-        
-        // クエリパラメータの構築
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
-            URLQueryItem(name: "date", value: "eq.\(dateString)"),
-            URLQueryItem(name: "select", value: "*")
-        ]
-        
-        guard let requestURL = components?.url else {
-            return
-        }
-        
-        // リクエストの構築
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            // Supabase SDKの標準メソッドを使用
+            let reports: [DailyVibeReport] = try await supabase
+                .from("vibe_whisper_summary")
+                .select()
+                .eq("device_id", value: deviceId)
+                .eq("date", value: dateString)
+                .execute()
+                .value
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return
-            }
+            print("📊 Decoded reports count: \(reports.count)")
             
-            print("📡 Response status: \(httpResponse.statusCode)")
-            
-            if httpResponse.statusCode == 200 {
-                if let rawResponse = String(data: data, encoding: .utf8) {
-                    print("📄 Raw response: \(rawResponse)")
-                }
-                
-                let decoder = JSONDecoder()
-                do {
-                    let reports = try decoder.decode([DailyVibeReport].self, from: data)
-                    print("📊 Decoded reports count: \(reports.count)")
-                    
-                    await MainActor.run { [weak self] in
-                        if let report = reports.first {
-                            self?.dailyReport = report
-                            print("✅ Daily report fetched successfully")
-                            print("   Average score: \(report.averageScore)")
-                            print("   Insights count: \(report.insights.count)")
-                        } else {
-                            print("⚠️ No report found for the specified date")
-                            self?.dailyReport = nil
-                        }
-                    }
-                } catch {
-                    print("❌ Decoding error: \(error)")
-                    await MainActor.run { [weak self] in
-                        self?.errorMessage = "データの解析に失敗しました: \(error.localizedDescription)"
-                    }
-                }
-            } else {
-                if let errorData = String(data: data, encoding: .utf8) {
-                    print("❌ Error response: \(errorData)")
-                }
-                await MainActor.run { [weak self] in
-                    self?.errorMessage = "データの取得に失敗しました (Status: \(httpResponse.statusCode))"
+            await MainActor.run { [weak self] in
+                if let report = reports.first {
+                    self?.dailyReport = report
+                    print("✅ Daily report fetched successfully")
+                    print("   Average score: \(report.averageScore)")
+                    print("   Insights count: \(report.insights.count)")
+                } else {
+                    print("⚠️ No report found for the specified date")
+                    self?.dailyReport = nil
                 }
             }
             
         } catch {
             print("❌ Fetch error: \(error)")
             await MainActor.run { [weak self] in
-                self?.errorMessage = "エラー: \(error.localizedDescription)"
+                self?.errorMessage = "データの取得に失敗しました: \(error.localizedDescription)"
+                
+                // PostgrestErrorの詳細を表示
+                if let dbError = error as? PostgrestError {
+                    print("   - コード: \(dbError.code ?? "不明")")
+                    print("   - メッセージ: \(dbError.message)")
+                }
             }
         }
     }
@@ -142,66 +102,32 @@ class SupabaseDataManager: ObservableObject {
         print("📅 Fetching weekly reports for device: \(deviceId)")
         print("   From: \(startDateString) To: \(endDateString)")
         
-        // URLの構築
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/vibe_whisper_summary") else {
-            errorMessage = "無効なURL"
-            isLoading = false
-            return
-        }
-        
-        // クエリパラメータの構築
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
-            URLQueryItem(name: "date", value: "gte.\(startDateString)"),
-            URLQueryItem(name: "date", value: "lte.\(endDateString)"),
-            URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "date.asc")
-        ]
-        
-        guard let requestURL = components?.url else {
-            errorMessage = "URLの構築に失敗しました"
-            isLoading = false
-            return
-        }
-        
-        // リクエストの構築
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            // Supabase SDKの標準メソッドを使用
+            let reports: [DailyVibeReport] = try await supabase
+                .from("vibe_whisper_summary")
+                .select()
+                .eq("device_id", value: deviceId)
+                .gte("date", value: startDateString)
+                .lte("date", value: endDateString)
+                .order("date", ascending: true)
+                .execute()
+                .value
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                errorMessage = "無効なレスポンス"
-                isLoading = false
-                return
-            }
+            self.weeklyReports = reports
             
-            print("📡 Response status: \(httpResponse.statusCode)")
-            
-            if httpResponse.statusCode == 200 {
-                // レスポンスをデコード
-                let decoder = JSONDecoder()
-                
-                let reports = try decoder.decode([DailyVibeReport].self, from: data)
-                self.weeklyReports = reports
-                
-                print("✅ Weekly reports fetched successfully")
-                print("   Reports count: \(reports.count)")
-            } else {
-                if let errorData = String(data: data, encoding: .utf8) {
-                    print("❌ Error response: \(errorData)")
-                }
-                errorMessage = "データの取得に失敗しました (Status: \(httpResponse.statusCode))"
-            }
+            print("✅ Weekly reports fetched successfully")
+            print("   Reports count: \(reports.count)")
             
         } catch {
             print("❌ Fetch error: \(error)")
             errorMessage = "エラー: \(error.localizedDescription)"
+            
+            // PostgrestErrorの詳細を表示
+            if let dbError = error as? PostgrestError {
+                print("   - コード: \(dbError.code ?? "不明")")
+                print("   - メッセージ: \(dbError.message)")
+            }
         }
         
         isLoading = false
@@ -268,86 +194,36 @@ class SupabaseDataManager: ObservableObject {
     func fetchBehaviorReport(deviceId: String, date: String) async -> BehaviorReport? {
         print("📊 Fetching behavior report for device: \(deviceId), date: \(date)")
         
-        // URLの構築
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/behavior_summary") else {
-            await MainActor.run { [weak self] in
-                self?.errorMessage = "行動データ: 無効なURL"
-            }
-            return nil
-        }
-        
-        // クエリパラメータの構築
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "select", value: "*")
-        ]
-        
-        guard let requestURL = components?.url else {
-            await MainActor.run { [weak self] in
-                self?.errorMessage = "行動データ: URLの構築に失敗しました"
-            }
-            return nil
-        }
-        
-        // リクエストの構築
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            // Supabase SDKの標準メソッドを使用
+            let reports: [BehaviorReport] = try await supabase
+                .from("behavior_summary")
+                .select()
+                .eq("device_id", value: deviceId)
+                .eq("date", value: date)
+                .execute()
+                .value
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                await MainActor.run { [weak self] in
-                    self?.errorMessage = "行動データ: 無効なレスポンス"
-                }
-                return nil
-            }
-            
-            print("📡 Behavior response status: \(httpResponse.statusCode)")
-            
-            if httpResponse.statusCode == 200 {
-                if let rawResponse = String(data: data, encoding: .utf8) {
-                    print("📄 Raw behavior response: \(rawResponse)")
-                }
-                
-                let decoder = JSONDecoder()
-                do {
-                    let reports = try decoder.decode([BehaviorReport].self, from: data)
-                    
-                    if let report = reports.first {
-                        print("✅ Behavior report fetched successfully")
-                        print("   Total events: \(report.totalEventCount)")
-                        print("   Active time blocks: \(report.activeTimeBlocks.count)")
-                        return report
-                    } else {
-                        print("⚠️ No behavior report found for the specified date")
-                        return nil
-                    }
-                } catch {
-                    print("❌ Behavior decoding error: \(error)")
-                    await MainActor.run { [weak self] in
-                        self?.errorMessage = "行動データの解析に失敗しました: \(error.localizedDescription)"
-                    }
-                    return nil
-                }
+            if let report = reports.first {
+                print("✅ Behavior report fetched successfully")
+                print("   Total events: \(report.totalEventCount)")
+                print("   Active time blocks: \(report.activeTimeBlocks.count)")
+                return report
             } else {
-                if let errorData = String(data: data, encoding: .utf8) {
-                    print("❌ Error response: \(errorData)")
-                }
-                await MainActor.run { [weak self] in
-                    self?.errorMessage = "行動データの取得に失敗しました (Status: \(httpResponse.statusCode))"
-                }
+                print("⚠️ No behavior report found for the specified date")
                 return nil
             }
+            
         } catch {
             print("❌ Behavior fetch error: \(error)")
             await MainActor.run { [weak self] in
                 self?.errorMessage = "行動データの取得エラー: \(error.localizedDescription)"
+                
+                // PostgrestErrorの詳細を表示
+                if let dbError = error as? PostgrestError {
+                    print("   - コード: \(dbError.code ?? "不明")")
+                    print("   - メッセージ: \(dbError.message)")
+                }
             }
             return nil
         }
@@ -359,86 +235,36 @@ class SupabaseDataManager: ObservableObject {
     func fetchEmotionReport(deviceId: String, date: String) async -> EmotionReport? {
         print("🎭 Fetching emotion report for device: \(deviceId), date: \(date)")
         
-        // URLの構築
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/emotion_opensmile_summary") else {
-            await MainActor.run { [weak self] in
-                self?.errorMessage = "感情データ: 無効なURL"
-            }
-            return nil
-        }
-        
-        // クエリパラメータの構築
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
-            URLQueryItem(name: "date", value: "eq.\(date)"),
-            URLQueryItem(name: "select", value: "*")
-        ]
-        
-        guard let requestURL = components?.url else {
-            await MainActor.run { [weak self] in
-                self?.errorMessage = "感情データ: URLの構築に失敗しました"
-            }
-            return nil
-        }
-        
-        // リクエストの構築
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            // Supabase SDKの標準メソッドを使用
+            let reports: [EmotionReport] = try await supabase
+                .from("emotion_opensmile_summary")
+                .select()
+                .eq("device_id", value: deviceId)
+                .eq("date", value: date)
+                .execute()
+                .value
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                await MainActor.run { [weak self] in
-                    self?.errorMessage = "感情データ: 無効なレスポンス"
-                }
-                return nil
-            }
-            
-            print("📡 Emotion response status: \(httpResponse.statusCode)")
-            
-            if httpResponse.statusCode == 200 {
-                if let rawResponse = String(data: data, encoding: .utf8) {
-                    print("📄 Raw emotion response: \(rawResponse)")
-                }
-                
-                let decoder = JSONDecoder()
-                do {
-                    let reports = try decoder.decode([EmotionReport].self, from: data)
-                    
-                    if let report = reports.first {
-                        print("✅ Emotion report fetched successfully")
-                        print("   Emotion graph points: \(report.emotionGraph.count)")
-                        print("   Active time points: \(report.activeTimePoints.count)")
-                        return report
-                    } else {
-                        print("⚠️ No emotion report found for the specified date")
-                        return nil
-                    }
-                } catch {
-                    print("❌ Emotion decoding error: \(error)")
-                    await MainActor.run { [weak self] in
-                        self?.errorMessage = "感情データの解析に失敗しました: \(error.localizedDescription)"
-                    }
-                    return nil
-                }
+            if let report = reports.first {
+                print("✅ Emotion report fetched successfully")
+                print("   Emotion graph points: \(report.emotionGraph.count)")
+                print("   Active time points: \(report.activeTimePoints.count)")
+                return report
             } else {
-                if let errorData = String(data: data, encoding: .utf8) {
-                    print("❌ Error response: \(errorData)")
-                }
-                await MainActor.run { [weak self] in
-                    self?.errorMessage = "感情データの取得に失敗しました (Status: \(httpResponse.statusCode))"
-                }
+                print("⚠️ No emotion report found for the specified date")
                 return nil
             }
+            
         } catch {
             print("❌ Emotion fetch error: \(error)")
             await MainActor.run { [weak self] in
                 self?.errorMessage = "感情データの取得エラー: \(error.localizedDescription)"
+                
+                // PostgrestErrorの詳細を表示
+                if let dbError = error as? PostgrestError {
+                    print("   - コード: \(dbError.code ?? "不明")")
+                    print("   - メッセージ: \(dbError.message)")
+                }
             }
             return nil
         }
@@ -448,59 +274,35 @@ class SupabaseDataManager: ObservableObject {
     func fetchDeviceMetadata(for deviceId: String) async {
         print("👤 Fetching device metadata for device: \(deviceId)")
         
-        // URLの構築
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/device_metadata") else {
-            return
-        }
-        
-        // クエリパラメータの構築
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
-            URLQueryItem(name: "select", value: "*")
-        ]
-        
-        guard let requestURL = components?.url else {
-            return
-        }
-        
-        // リクエストの構築
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            // Supabase SDKの標準メソッドを使用
+            let metadataArray: [DeviceMetadata] = try await supabase
+                .from("device_metadata")
+                .select()
+                .eq("device_id", value: deviceId)
+                .execute()
+                .value
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                return
-            }
-            
-            print("📡 Device metadata response status: \(httpResponse.statusCode)")
-            
-            if httpResponse.statusCode == 200 {
-                let decoder = JSONDecoder()
-                
-                // レスポンスをまずArrayとしてデコード
-                let metadataArray = try decoder.decode([DeviceMetadata].self, from: data)
-                
-                // MainActorで@Publishedプロパティを更新
-                await MainActor.run { [weak self] in
-                    self?.deviceMetadata = metadataArray.first
-                    if let metadata = metadataArray.first {
-                        print("✅ Device metadata fetched successfully")
-                        print("   Name: \(metadata.name ?? "N/A")")
-                        print("   Age: \(metadata.age ?? 0)")
-                        print("   Gender: \(metadata.gender ?? "N/A")")
-                    } else {
-                        print("ℹ️ No device metadata found")
-                    }
+            // MainActorで@Publishedプロパティを更新
+            await MainActor.run { [weak self] in
+                self?.deviceMetadata = metadataArray.first
+                if let metadata = metadataArray.first {
+                    print("✅ Device metadata fetched successfully")
+                    print("   Name: \(metadata.name ?? "N/A")")
+                    print("   Age: \(metadata.age ?? 0)")
+                    print("   Gender: \(metadata.gender ?? "N/A")")
+                } else {
+                    print("ℹ️ No device metadata found")
                 }
             }
+            
         } catch {
             print("❌ Device metadata fetch error: \(error)")
+            // PostgrestErrorの詳細を表示
+            if let dbError = error as? PostgrestError {
+                print("   - コード: \(dbError.code ?? "不明")")
+                print("   - メッセージ: \(dbError.message)")
+            }
         }
     }
     

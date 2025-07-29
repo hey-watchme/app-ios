@@ -239,63 +239,43 @@ class SupabaseAuthManager: ObservableObject {
     
     // MARK: - ユーザープロファイル取得
     func fetchUserProfile(userId: String) {
-        guard let currentUser = currentUser else { return }
-        
         print("👤 ユーザープロファイル取得開始: \(userId)")
         
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/users?user_id=eq.\(userId)&select=*") else {
-            print("❌ プロファイルURL無効")
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(currentUser.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("❌ プロファイル取得エラー: \(error)")
-                    return
-                }
+        Task { @MainActor in
+            do {
+                // Supabase SDKの標準メソッドを使用
+                let profiles: [UserProfile] = try await supabase
+                    .from("users")
+                    .select()
+                    .eq("user_id", value: userId)
+                    .limit(1)
+                    .execute()
+                    .value
                 
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    print("❌ プロファイルレスポンス無効")
-                    return
-                }
-                
-                if let data = data {
-                    if let responseString = String(data: data, encoding: .utf8) {
-                        print("📡 プロファイルレスポンス(\(httpResponse.statusCode)): \(responseString)")
+                if let profile = profiles.first {
+                    // currentUserにプロファイルを設定
+                    if var updatedUser = self.currentUser {
+                        updatedUser.profile = profile
+                        self.currentUser = updatedUser
+                        self.saveUserToDefaults(updatedUser)
                     }
                     
-                    // JWTトークン期限切れの場合
-                    if httpResponse.statusCode == 401 {
-                        print("⚠️ プロファイル取得時にトークン期限切れ検知")
-                        // SDKが自動的にトークンをリフレッシュするはずなので、
-                        // ここでは何もしない
-                        return
-                    }
-                    
-                    if httpResponse.statusCode == 200 {
-                        do {
-                            let profiles = try JSONDecoder().decode([UserProfile].self, from: data)
-                            if let profile = profiles.first {
-                                // currentUserにプロファイルを設定
-                                self?.currentUser?.profile = profile
-                                self?.saveUserToDefaults(self?.currentUser ?? currentUser)
-                                
-                                print("✅ プロファイル取得成功")
-                            }
-                        } catch {
-                            print("❌ プロファイル解析エラー: \(error)")
-                        }
-                    }
+                    print("✅ プロファイル取得成功")
+                    print("   - 名前: \(profile.name ?? "未設定")")
+                    print("   - ステータス: \(profile.status ?? "未設定")")
+                } else {
+                    print("⚠️ プロファイルが見つかりません")
+                }
+                
+            } catch {
+                print("❌ プロファイル取得エラー: \(error)")
+                // データベースエラーの詳細を表示
+                if let dbError = error as? PostgrestError {
+                    print("   - コード: \(dbError.code ?? "不明")")
+                    print("   - メッセージ: \(dbError.message)")
                 }
             }
-        }.resume()
+        }
     }
     
     // MARK: - 確認メール再送機能
