@@ -19,12 +19,9 @@ class DeviceManager: ObservableObject {
     @Published var registrationError: String? = nil
     @Published var isLoading: Bool = false
     
-    // Supabase設定
+    // Supabase設定（URLとキーは参照用に残しておく）
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
-    
-    // Supabaseクライアント
-    private let supabase: SupabaseClient
     
     // UserDefaults キー
     private let localDeviceIdentifierKey = "watchme_device_id"  // UserDefaultsのキーは互換性のため維持
@@ -32,12 +29,6 @@ class DeviceManager: ObservableObject {
     private let platformIdentifierKey = "watchme_platform_identifier"
     
     init() {
-        // Supabaseクライアント初期化
-        self.supabase = SupabaseClient(
-            supabaseURL: URL(string: supabaseURL)!,
-            supabaseKey: supabaseAnonKey
-        )
-        
         checkDeviceRegistrationStatus()
     }
     
@@ -196,80 +187,85 @@ class DeviceManager: ObservableObject {
     
     // MARK: - ユーザーのデバイスを取得
     func fetchUserDevices(for userId: String) async {
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/devices") else {
-            print("❌ 無効なURL")
-            return
-        }
-        
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "owner_user_id", value: "eq.\(userId)"),
-            URLQueryItem(name: "select", value: "*")
-        ]
-        
-        guard let requestURL = components?.url else {
-            print("❌ URLの構築に失敗しました")
-            return
-        }
-        
-        print("📡 Fetching devices from: \(requestURL.absoluteString)")
-        
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
+        // Supabaseクライアントを使用してuser_devicesを取得
         do {
-            let (data, response) = try await URLSession.shared.data(for: request)
+            print("📡 Fetching user devices for userId: \(userId)")
             
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("❌ 無効なレスポンス")
+            // デバッグ: 現在の認証状態を確認
+            if let currentUser = try? await supabase.auth.session.user {
+                print("✅ 認証済みユーザー: \(currentUser.id)")
+            } else {
+                print("❌ 認証されていません - supabase.auth.session.userがnil")
+            }
+            
+            // Step 1: user_devicesテーブルからデータを取得
+            let userDevices: [UserDevice] = try await supabase
+                .from("user_devices")
+                .select("*")
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+            
+            print("📊 Decoded user_devices count: \(userDevices.count)")
+            for userDevice in userDevices {
+                print("   - Device: \(userDevice.device_id), Role: \(userDevice.role)")
+            }
+            
+            if userDevices.isEmpty {
+                print("⚠️ No devices found for user: \(userId)")
+                await MainActor.run {
+                    self.userDevices = []
+                    // ユーザーに紐付くデバイスがない場合、このデバイス自身のIDを使用
+                    if let localId = self.localDeviceIdentifier {
+                        self.selectedDeviceID = localId
+                        print("⚠️ Using local device: \(localId)")
+                    }
+                }
                 return
             }
             
-            print("📡 Response status: \(httpResponse.statusCode)")
+            print("📄 Found \(userDevices.count) user-device relationships")
             
-            // エラーレスポンスの詳細を表示
-            if httpResponse.statusCode != 200 {
-                if let errorData = String(data: data, encoding: .utf8) {
-                    print("❌ Error response: \(errorData)")
+            // Step 2: device_idのリストを作成してdevicesテーブルから詳細を取得
+            let deviceIds = userDevices.map { $0.device_id }
+            
+            // Step 3: devicesテーブルから詳細情報を取得
+            var devices: [Device] = try await supabase
+                .from("devices")
+                .select("*")
+                .in("device_id", values: deviceIds)
+                .execute()
+                .value
+            
+            print("📊 Fetched \(devices.count) device details")
+            
+            // Step 4: roleの情報をデバイスに付与
+            for i in devices.indices {
+                if let userDevice = userDevices.first(where: { $0.device_id == devices[i].device_id }) {
+                    devices[i].role = userDevice.role
                 }
             }
             
-            if httpResponse.statusCode == 200 {
-                if let rawResponse = String(data: data, encoding: .utf8) {
-                    print("📄 Device query response: \(rawResponse)")
-                }
+            await MainActor.run {
+                self.userDevices = devices
+                print("✅ Found \(devices.count) devices for user: \(userId)")
                 
-                let decoder = JSONDecoder()
-                let devices = try decoder.decode([Device].self, from: data)
+                // ownerロールのデバイスを優先的に選択
+                let ownerDevices = devices.filter { $0.role == "owner" }
+                let viewerDevices = devices.filter { $0.role == "viewer" }
                 
-                await MainActor.run {
-                    self.userDevices = devices
-                    print("✅ Found \(devices.count) devices for user: \(userId)")
-                    
-                    // デバイスが1つの場合は自動選択
-                    if devices.count == 1, let device = devices.first {
-                        self.selectedDeviceID = device.device_id
-                        print("🔍 Auto-selected device: \(device.device_id)")
-                    } else if devices.count > 1 {
-                        // 複数デバイスの場合は最初のものを選択
-                        if let firstDevice = devices.first {
-                            self.selectedDeviceID = firstDevice.device_id
-                            print("🔍 Selected first device: \(firstDevice.device_id)")
-                        }
-                    } else {
-                        // ユーザーに紐付くデバイスがない場合、このデバイス自身のIDを使用
-                        if let localId = self.localDeviceIdentifier {
-                            self.selectedDeviceID = localId
-                            print("⚠️ No devices found for user: \(userId), using local device: \(localId)")
-                        } else {
-                            print("⚠️ No devices found for user: \(userId)")
-                        }
-                    }
+                if let firstOwnerDevice = ownerDevices.first {
+                    self.selectedDeviceID = firstOwnerDevice.device_id
+                    print("🔍 Auto-selected owner device: \(firstOwnerDevice.device_id)")
+                } else if let firstViewerDevice = viewerDevices.first {
+                    self.selectedDeviceID = firstViewerDevice.device_id
+                    print("🔍 Auto-selected viewer device: \(firstViewerDevice.device_id)")
+                } else if let firstDevice = devices.first {
+                    self.selectedDeviceID = firstDevice.device_id
+                    print("🔍 Selected first device: \(firstDevice.device_id)")
                 }
             }
+            
         } catch {
             print("❌ Device fetch error: \(error)")
         }
@@ -344,6 +340,23 @@ struct Device: Codable {
     let device_type: String
     let platform_type: String
     let owner_user_id: String?
+    // user_devicesテーブルから取得した場合のrole情報を保持
+    var role: String?
+}
+
+// user_devicesテーブル用のモデル
+struct UserDevice: Codable {
+    let user_id: String
+    let device_id: String
+    let role: String
+    let created_at: String?
+}
+
+// user_devicesテーブルへのInsert用モデル
+struct UserDeviceInsert: Codable {
+    let user_id: String
+    let device_id: String
+    let role: String
 }
 
 // エラータイプ

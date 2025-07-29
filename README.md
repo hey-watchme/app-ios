@@ -41,7 +41,7 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
    - 一意のデバイスID（UUID形式）が生成される
    - 例：`device_id: "d067d407-cf73-4174-a9c1-d91fb60d64d0"`
 
-### データベース構造
+### データベース構造（v9.12.0で更新）
 
 ```sql
 -- devicesテーブル
@@ -50,8 +50,17 @@ CREATE TABLE devices (
     platform_identifier TEXT NOT NULL UNIQUE,
     device_type TEXT NOT NULL,
     platform_type TEXT NOT NULL,
-    owner_user_id UUID REFERENCES auth.users(id),
+    owner_user_id UUID REFERENCES auth.users(id),  -- 廃止予定
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- user_devicesテーブル（新規追加）
+CREATE TABLE user_devices (
+    user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+    device_id UUID NOT NULL REFERENCES devices(device_id) ON DELETE CASCADE,
+    role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('owner', 'viewer')),
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    PRIMARY KEY (user_id, device_id)
 );
 
 -- vibe_whisper_summaryテーブル（感情分析データ）
@@ -69,6 +78,22 @@ CREATE TABLE vibe_whisper_summary (
     processing_log JSONB,
     PRIMARY KEY (device_id, date)
 );
+```
+
+#### RLS（Row Level Security）の重要性
+
+**user_devicesテーブルには必ずRLSポリシーを設定してください：**
+
+```sql
+-- RLSを有効化
+ALTER TABLE user_devices ENABLE ROW LEVEL SECURITY;
+
+-- ユーザーは自分のレコードのみアクセス可能
+CREATE POLICY "Users can view their own device associations" ON user_devices
+    FOR SELECT USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own device associations" ON user_devices
+    FOR INSERT WITH CHECK (auth.uid() = user_id);
 ```
 
 ### 重要な注意点
@@ -371,19 +396,68 @@ Parameters:
 
 ## 開発時の注意点
 
-### 1. マイク権限
+### 1. Supabase認証の重要事項 🚨
+
+#### ❌ やってはいけないこと
+```swift
+// 手動でAPIを呼び出さない！
+URLSession.shared.dataTask(with: "supabaseURL/auth/v1/token") { ... }
+```
+
+#### ✅ 正しい実装
+```swift
+// Supabase SDKの標準メソッドを使用
+let session = try await supabase.auth.signIn(email: email, password: password)
+```
+
+#### 認証状態の復元（アプリ再起動時）
+```swift
+// 保存されたトークンでセッションを復元
+_ = try await supabase.auth.setSession(
+    accessToken: savedUser.accessToken,
+    refreshToken: savedUser.refreshToken
+)
+```
+
+#### グローバルSupabaseクライアントの使用
+```swift
+// SupabaseAuthManager.swiftで定義されているグローバルインスタンスを使用
+let supabase = SupabaseClient(...)  // グローバル定義
+
+// 各クラスで独自のクライアントを作成しない！
+// ❌ self.supabase = SupabaseClient(...)  // これはNG
+```
+
+### 2. RLS（Row Level Security）の設定
+
+新しいテーブルを作成する際は、必ずRLSポリシーを設定してください：
+
+1. **RLSを有効化**
+2. **適切なポリシーを設定**（認証ユーザーのみアクセス可能など）
+3. **テストユーザーでアクセス確認**
+
+### 3. デバイス管理の新アーキテクチャ（v9.12.0〜）
+
+- **user_devicesテーブル**を経由してデバイスを管理
+- ユーザーは複数デバイスを持てる（owner/viewerロール付き）
+- `DeviceManager.fetchUserDevices`は以下の流れ：
+  1. user_devicesテーブルからユーザーのデバイス一覧を取得
+  2. devicesテーブルから詳細情報を取得
+  3. role情報を付与してUIに反映
+
+### 4. マイク権限
 - Info.plistに`NSMicrophoneUsageDescription`が必要
 - 初回起動時にユーザーに権限を求める
 
-### 2. バックグラウンド処理
+### 5. バックグラウンド処理
 - Background Modesでaudioを有効化
 - アップロードはバックグラウンドでも継続
 
-### 3. ストレージ管理
+### 6. ストレージ管理
 - アップロード済みファイルの定期的な削除
 - ディスク容量の監視
 
-### 4. ストリーミングアップロード仕様（v9.7.0〜）
+### 7. ストリーミングアップロード仕様（v9.7.0〜）
 
 #### 概要
 従来の`Data(contentsOf:)`による一括メモリ読み込み方式から、ストリーミング方式に移行しました。これにより、ファイルサイズに関係なく安定したアップロードが可能になりました。
@@ -485,6 +559,32 @@ let uploadTask = URLSession.shared.uploadTask(with: request, fromFile: tempFileU
 - **アップロードが失敗する**: ネットワーク接続とサーバーURLを確認
 - **認証エラー**: Supabaseの設定とAPIキーを確認
 
+### 認証・データアクセスの問題
+
+#### デバイスデータが取得できない場合
+
+1. **認証状態の確認**
+   ```swift
+   // DeviceManagerのログで確認
+   "✅ 認証済みユーザー: [ID]" または "❌ 認証されていません"
+   ```
+
+2. **RLSポリシーの確認**
+   - user_devicesテーブルにRLSが有効か確認
+   - 適切なポリシーが設定されているか確認
+
+3. **一度ログアウトして再ログイン**
+   - 古い認証情報が残っている可能性
+   - 新しい認証フローで問題解決
+
+#### "Decoded user_devices count: 0"エラー
+
+**原因**: 認証トークンが正しく設定されていない
+**解決策**: 
+1. SupabaseAuthManagerが標準のSDKメソッドを使用しているか確認
+2. DeviceManagerがグローバルsupabaseクライアントを使用しているか確認
+3. checkAuthStatusでセッション復元が正しく行われているか確認
+
 ### タイムゾーン関連
 
 - **時刻がUTCで保存される**: `ISO8601DateFormatter`に明示的に`timeZone`を設定しているか確認
@@ -568,6 +668,31 @@ git push origin feature/機能名
 ```
 
 ## 更新履歴
+
+### 2025年7月29日
+- **v9.12.0 - user_devicesテーブル対応と認証フロー修正**
+  - **データベース構造の変更**
+    - `user_devices`中間テーブルに対応
+    - ユーザーとデバイスの多対多関係を実現
+    - owner/viewerロールによる権限管理
+    
+  - **認証フローの根本的修正**
+    - SupabaseAuthManagerの`signIn`を標準SDKメソッドに変更
+    - 手動のAPI呼び出しを廃止し、`supabase.auth.signIn()`を使用
+    - 認証トークンの自動管理を実現
+    
+  - **認証状態復元の実装**
+    - `checkAuthStatus`で`supabase.auth.setSession()`を呼び出し
+    - アプリ再起動時も認証状態を正しく維持
+    
+  - **DeviceManagerの改修**
+    - 独自のSupabaseクライアント初期化を削除
+    - グローバルな認証済みクライアントを使用
+    - `fetchUserDevices`をuser_devices経由に変更
+    
+  - **トラブルシューティング情報追加**
+    - RLSポリシーの重要性を強調
+    - 認証関連の問題解決方法を詳細化
 
 ### 2025年7月27日（追加修正）
 - **v9.11.1 - 日付選択機能の最終調整とコード整理**

@@ -38,16 +38,40 @@ class SupabaseAuthManager: ObservableObject {
     // MARK: - 認証状態確認
     private func checkAuthStatus() {
         if let savedUser = loadUserFromDefaults() {
-            self.currentUser = savedUser
-            self.isAuthenticated = true
-            print("✅ 保存された認証状態を復元: \(savedUser.email)")
-            print("🔄 認証状態復元: isAuthenticated = true")
-            
-            // プロファイルを取得
-            fetchUserProfile(userId: savedUser.id)
-            
-            // デバイス情報を取得
-            deviceManager.checkAndRegisterDevice(for: savedUser.id)
+            // 保存されたトークンでセッションを復元
+            Task { @MainActor in
+                do {
+                    // リフレッシュトークンがある場合のみセッションを復元
+                    if let refreshToken = savedUser.refreshToken {
+                        // アクセストークンとリフレッシュトークンを使ってセッションを設定
+                        _ = try await supabase.auth.setSession(
+                            accessToken: savedUser.accessToken,
+                            refreshToken: refreshToken
+                        )
+                    } else {
+                        // リフレッシュトークンがない場合は再ログインが必要
+                        throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "リフレッシュトークンがありません"])
+                    }
+                    
+                    self.currentUser = savedUser
+                    self.isAuthenticated = true
+                    print("✅ 保存された認証状態を復元: \(savedUser.email)")
+                    print("🔄 認証状態復元: isAuthenticated = true")
+                    print("🔑 セッショントークンも復元しました")
+                    
+                    // プロファイルを取得
+                    fetchUserProfile(userId: savedUser.id)
+                    
+                    // デバイス情報を取得
+                    deviceManager.checkAndRegisterDevice(for: savedUser.id)
+                    
+                } catch {
+                    print("❌ セッション復元エラー: \(error)")
+                    print("⚠️ 再ログインが必要です")
+                    // セッション復元に失敗した場合はクリア
+                    clearLocalAuthData()
+                }
+            }
         } else {
             print("⚠️ 保存された認証状態なし: isAuthenticated = false")
         }
@@ -60,90 +84,48 @@ class SupabaseAuthManager: ObservableObject {
         
         print("🔐 ログイン試行: \(email)")
         
-        let signInData = [
-            "email": email,
-            "password": password
-        ]
-        
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: signInData) else {
-            authError = "リクエストデータの作成に失敗しました"
-            isLoading = false
-            return
-        }
-        
-        guard let url = URL(string: "\(supabaseURL)/auth/v1/token?grant_type=password") else {
-            authError = "無効なURL"
-            isLoading = false
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.httpBody = jsonData
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                self?.isLoading = false
+        Task { @MainActor in
+            do {
+                // Supabaseクライアントの組み込みメソッドを使用
+                let session = try await supabase.auth.signIn(
+                    email: email,
+                    password: password
+                )
                 
-                if let error = error {
-                    self?.authError = "ネットワークエラー: \(error.localizedDescription)"
-                    print("❌ ログインエラー: \(error)")
-                    return
-                }
+                print("✅ ログイン成功: \(email)")
+                print("📡 認証レスポンス取得完了")
                 
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    self?.authError = "無効なレスポンス"
-                    return
-                }
+                // 認証情報を保存
+                let user = SupabaseUser(
+                    id: session.user.id.uuidString,
+                    email: session.user.email ?? email,
+                    accessToken: session.accessToken,
+                    refreshToken: session.refreshToken
+                )
                 
-                print("📡 認証レスポンスステータス: \(httpResponse.statusCode)")
+                self.currentUser = user
+                self.isAuthenticated = true
+                self.saveUserToDefaults(user)
                 
-                if let data = data {
-                    if let responseString = String(data: data, encoding: .utf8) {
-                        print("📡 認証レスポンス: \(responseString)")
-                    }
-                    
-                    if httpResponse.statusCode == 200 {
-                        // ログイン成功
-                        if let authResponse = try? JSONDecoder().decode(SupabaseAuthResponse.self, from: data) {
-                            let user = SupabaseUser(
-                                id: authResponse.user.id,
-                                email: authResponse.user.email,
-                                accessToken: authResponse.access_token,
-                                refreshToken: authResponse.refresh_token
-                            )
-                            
-                            self?.currentUser = user
-                            self?.isAuthenticated = true
-                            self?.saveUserToDefaults(user)
-                            
-                            print("✅ ログイン成功: \(user.email)")
-                            print("🔄 認証状態を更新: isAuthenticated = true")
-                            
-                            // ユーザープロファイルを取得
-                            self?.fetchUserProfile(userId: user.id)
-                            
-                            // デバイス登録とユーザーデバイス取得を実行
-                            self?.deviceManager.checkAndRegisterDevice(for: user.id)
-                        } else {
-                            self?.authError = "レスポンス解析エラー"
-                        }
-                    } else {
-                        // ログイン失敗
-                        if let errorResponse = try? JSONDecoder().decode(SupabaseErrorResponse.self, from: data) {
-                            self?.authError = errorResponse.error_description ?? "ログインに失敗しました"
-                        } else {
-                            self?.authError = "ログインに失敗しました (ステータス: \(httpResponse.statusCode))"
-                        }
-                    }
-                } else {
-                    self?.authError = "レスポンスデータが空です"
-                }
+                print("🔄 認証状態を更新: isAuthenticated = true")
+                
+                // ユーザープロファイルを取得
+                self.fetchUserProfile(userId: user.id)
+                
+                // デバイス登録とユーザーデバイス取得を実行
+                self.deviceManager.checkAndRegisterDevice(for: user.id)
+                
+                self.isLoading = false
+                
+            } catch {
+                self.isLoading = false
+                
+                // エラーハンドリング
+                self.authError = "ログインに失敗しました: \(error.localizedDescription)"
+                
+                print("❌ ログインエラー: \(error)")
             }
-        }.resume()
+        }
     }
     
     // MARK: - サインアップ機能
@@ -153,258 +135,93 @@ class SupabaseAuthManager: ObservableObject {
         
         print("📝 サインアップ試行: \(email)")
         
-        let signUpData = [
-            "email": email,
-            "password": password
-        ]
-        
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: signUpData) else {
-            authError = "リクエストデータの作成に失敗しました"
-            isLoading = false
-            return
-        }
-        
-        guard let url = URL(string: "\(supabaseURL)/auth/v1/signup") else {
-            authError = "無効なURL"
-            isLoading = false
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.httpBody = jsonData
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                self?.isLoading = false
+        Task { @MainActor in
+            do {
+                // Supabase SDKの標準メソッドを使用
+                let authResponse = try await supabase.auth.signUp(
+                    email: email,
+                    password: password
+                )
                 
-                if let error = error {
-                    self?.authError = "ネットワークエラー: \(error.localizedDescription)"
-                    print("❌ サインアップエラー: \(error)")
-                    return
-                }
+                print("✅ サインアップ成功")
+                print("📧 メール確認状態: \(authResponse.user.confirmedAt != nil ? "確認済み" : "未確認")")
                 
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    self?.authError = "無効なレスポンス"
-                    return
-                }
-                
-                print("📡 サインアップレスポンスステータス: \(httpResponse.statusCode)")
-                
-                if let data = data {
-                    if let responseString = String(data: data, encoding: .utf8) {
-                        print("📡 サインアップレスポンス: \(responseString)")
-                    }
-                    
-                    if httpResponse.statusCode == 200 {
-                        // サインアップ成功
-                        self?.authError = nil
-                        print("✅ サインアップ成功 - メール確認が必要な場合があります")
-                        
-                        // サインアップ後、自動的にログインを試行
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                            self?.signIn(email: email, password: password)
-                        }
-                    } else {
-                        // サインアップ失敗
-                        if let errorResponse = try? JSONDecoder().decode(SupabaseErrorResponse.self, from: data) {
-                            self?.authError = errorResponse.error_description ?? "サインアップに失敗しました"
-                        } else {
-                            self?.authError = "サインアップに失敗しました (ステータス: \(httpResponse.statusCode))"
-                        }
-                    }
+                // サインアップ成功後の処理
+                if authResponse.user.confirmedAt != nil {
+                    // メール確認済みの場合は自動的にログイン
+                    print("📧 メール確認済み - 自動ログイン実行")
+                    self.signIn(email: email, password: password)
                 } else {
-                    self?.authError = "レスポンスデータが空です"
+                    // メール確認が必要な場合
+                    self.authError = "サインアップ成功！確認メールをご確認ください。"
+                    print("📧 確認メールを送信しました")
                 }
+                
+                self.isLoading = false
+                
+            } catch {
+                self.isLoading = false
+                
+                // エラーハンドリング
+                self.authError = "サインアップに失敗しました: \(error.localizedDescription)"
+                
+                print("❌ サインアップエラー: \(error)")
             }
-        }.resume()
+        }
     }
     
     // MARK: - ユーザー情報取得（確認状態チェック用）
     func fetchUserInfo() {
-        guard let currentUser = currentUser else { return }
-        
         isLoading = true
         
-        guard let url = URL(string: "\(supabaseURL)/auth/v1/user") else {
-            isLoading = false
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "GET"
-        request.setValue("Bearer \(currentUser.accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                self?.isLoading = false
+        Task { @MainActor in
+            do {
+                // Supabase SDKの標準メソッドを使用して現在のユーザー情報を取得
+                let user = try await supabase.auth.session.user
                 
-                if let error = error {
-                    print("❌ ユーザー情報取得エラー: \(error)")
-                    return
+                print("📡 ユーザー情報取得成功")
+                print("📧 メール: \(user.email ?? "なし")")
+                print("📧 メール確認状態: \(user.confirmedAt != nil ? "確認済み" : "未確認")")
+                
+                if user.confirmedAt == nil {
+                    self.authError = "メール確認が完了していません"
                 }
                 
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    print("❌ 無効なレスポンス")
-                    return
-                }
+                self.isLoading = false
                 
-                if let data = data,
-                   let responseString = String(data: data, encoding: .utf8) {
-                    print("📡 ユーザー情報: \(responseString)")
-                    
-                    if httpResponse.statusCode == 403 && responseString.contains("token is expired") {
-                        print("🔄 トークン期限切れ検知 - リフレッシュ試行")
-                        self?.refreshToken()
-                        return
-                    }
-                    
-                    if httpResponse.statusCode == 200 {
-                        // JSONをパースしてemail_confirmed_atを確認
-                        if let jsonData = try? JSONSerialization.jsonObject(with: data, options: []) as? [String: Any] {
-                            let emailConfirmedAt = jsonData["email_confirmed_at"] as? String
-                            print("📧 メール確認状態: \(emailConfirmedAt ?? "未確認")")
-                            
-                            if emailConfirmedAt == nil {
-                                self?.authError = "メール確認が完了していません"
-                            }
-                        }
-                    }
+            } catch {
+                print("❌ ユーザー情報取得エラー: \(error)")
+                self.isLoading = false
+                
+                // セッションエラーの場合は再ログインを促す
+                if case AuthError.sessionMissing = error {
+                    self.authError = "セッションの有効期限が切れました。再度ログインしてください。"
+                    self.clearLocalAuthData()
                 }
             }
-        }.resume()
-    }
-    
-    // MARK: - トークンリフレッシュ
-    func refreshToken() {
-        guard let currentUser = currentUser,
-              let refreshToken = currentUser.refreshToken else {
-            print("❌ リフレッシュトークンが利用できません")
-            signOut()
-            return
         }
-        
-        print("🔄 トークンリフレッシュ開始")
-        
-        let refreshData = [
-            "refresh_token": refreshToken
-        ]
-        
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: refreshData) else {
-            print("❌ リフレッシュリクエストデータ作成失敗")
-            return
-        }
-        
-        guard let url = URL(string: "\(supabaseURL)/auth/v1/token?grant_type=refresh_token") else {
-            print("❌ リフレッシュURL無効")
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.httpBody = jsonData
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("❌ トークンリフレッシュエラー: \(error)")
-                    self?.signOut()
-                    return
-                }
-                
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    print("❌ リフレッシュレスポンス無効")
-                    self?.signOut()
-                    return
-                }
-                
-                if let data = data,
-                   let responseString = String(data: data, encoding: .utf8) {
-                    print("📡 リフレッシュレスポンス(\(httpResponse.statusCode)): \(responseString)")
-                    
-                    if httpResponse.statusCode == 200 {
-                        if let authResponse = try? JSONDecoder().decode(SupabaseAuthResponse.self, from: data) {
-                            let refreshedUser = SupabaseUser(
-                                id: authResponse.user.id,
-                                email: authResponse.user.email,
-                                accessToken: authResponse.access_token,
-                                refreshToken: authResponse.refresh_token
-                            )
-                            
-                            self?.currentUser = refreshedUser
-                            self?.saveUserToDefaults(refreshedUser)
-                            print("✅ トークンリフレッシュ成功")
-                            
-                            // プロファイルを再取得
-                            self?.fetchUserProfile(userId: refreshedUser.id)
-                        } else {
-                            print("❌ リフレッシュレスポンス解析失敗")
-                            self?.signOut()
-                        }
-                    } else {
-                        print("❌ トークンリフレッシュ失敗 - ログアウト実行")
-                        self?.signOut()
-                    }
-                }
-            }
-        }.resume()
     }
     
     // MARK: - ログアウト機能
     func signOut() {
         print("🚪 ログアウト開始")
         
-        // サーバー側ログアウト処理
-        if let currentUser = currentUser {
-            performServerLogout(accessToken: currentUser.accessToken)
-        } else {
-            // currentUserがない場合は直接ローカルデータをクリア
-            clearLocalAuthData()
-        }
-    }
-    
-    // サーバー側ログアウト処理
-    private func performServerLogout(accessToken: String) {
-        guard let url = URL(string: "\(supabaseURL)/auth/v1/logout") else {
-            print("❌ ログアウトURL無効")
-            clearLocalAuthData()
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        print("📡 サーバー側ログアウトリクエスト送信")
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                if let error = error {
-                    print("❌ サーバー側ログアウトエラー: \(error.localizedDescription)")
-                } else if let httpResponse = response as? HTTPURLResponse {
-                    print("📡 サーバー側ログアウトレスポンス: \(httpResponse.statusCode)")
-                    
-                    if httpResponse.statusCode == 204 || httpResponse.statusCode == 200 {
-                        print("✅ サーバー側ログアウト成功")
-                    } else {
-                        print("⚠️ サーバー側ログアウト部分的失敗 (ステータス: \(httpResponse.statusCode))")
-                        // サーバーエラーでもローカルデータはクリアする
-                    }
-                }
+        Task { @MainActor in
+            do {
+                // Supabase SDKの標準メソッドを使用
+                try await supabase.auth.signOut()
                 
-                // サーバー側の結果に関わらず、ローカルデータはクリア
-                self?.clearLocalAuthData()
+                print("✅ サーバー側ログアウト成功")
+                
+                // ローカルデータのクリア
+                self.clearLocalAuthData()
+                
+            } catch {
+                print("❌ ログアウトエラー: \(error)")
+                // エラーが発生してもローカルデータはクリアする
+                self.clearLocalAuthData()
             }
-        }.resume()
+        }
     }
     
     // クライアント側認証データクリア
@@ -454,10 +271,11 @@ class SupabaseAuthManager: ObservableObject {
                         print("📡 プロファイルレスポンス(\(httpResponse.statusCode)): \(responseString)")
                     }
                     
-                    // JWTトークン期限切れの場合はリフレッシュ
+                    // JWTトークン期限切れの場合
                     if httpResponse.statusCode == 401 {
-                        print("🔄 プロファイル取得時にトークン期限切れ検知 - リフレッシュ後に再試行")
-                        self?.refreshToken()
+                        print("⚠️ プロファイル取得時にトークン期限切れ検知")
+                        // SDKが自動的にトークンをリフレッシュするはずなので、
+                        // ここでは何もしない
                         return
                     }
                     
@@ -487,55 +305,25 @@ class SupabaseAuthManager: ObservableObject {
         
         print("📧 確認メール再送: \(email)")
         
-        let resendData = [
-            "email": email,
-            "type": "signup"
-        ]
-        
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: resendData) else {
-            authError = "リクエストデータの作成に失敗しました"
-            isLoading = false
-            return
-        }
-        
-        guard let url = URL(string: "\(supabaseURL)/auth/v1/resend") else {
-            authError = "無効なURL"
-            isLoading = false
-            return
-        }
-        
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.httpBody = jsonData
-        
-        URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
-            DispatchQueue.main.async {
-                self?.isLoading = false
+        Task { @MainActor in
+            do {
+                // Supabase SDKの標準メソッドを使用
+                try await supabase.auth.resend(
+                    email: email,
+                    type: .signup
+                )
                 
-                if let error = error {
-                    self?.authError = "ネットワークエラー: \(error.localizedDescription)"
-                    print("❌ 確認メール再送エラー: \(error)")
-                    return
-                }
+                self.authError = "確認メールを再送しました。メールボックスをご確認ください。"
+                print("✅ 確認メール再送成功")
                 
-                guard let httpResponse = response as? HTTPURLResponse else {
-                    self?.authError = "無効なレスポンス"
-                    return
-                }
+                self.isLoading = false
                 
-                print("📡 確認メール再送レスポンスステータス: \(httpResponse.statusCode)")
-                
-                if httpResponse.statusCode == 200 {
-                    self?.authError = "確認メールを再送しました。メールボックスをご確認ください。"
-                    print("✅ 確認メール再送成功")
-                } else {
-                    self?.authError = "確認メール再送に失敗しました"
-                }
+            } catch {
+                self.isLoading = false
+                self.authError = "確認メール再送に失敗しました: \(error.localizedDescription)"
+                print("❌ 確認メール再送エラー: \(error)")
             }
-        }.resume()
+        }
     }
     
     // MARK: - UserDefaults保存・読み込み
