@@ -62,8 +62,8 @@ class SupabaseAuthManager: ObservableObject {
                     // プロファイルを取得
                     fetchUserProfile(userId: savedUser.id)
                     
-                    // デバイス情報を取得
-                    deviceManager.checkAndRegisterDevice(for: savedUser.id)
+                    // デバイス情報を取得（登録はせず、既存のデバイス一覧のみ取得）
+                    await deviceManager.fetchUserDevices(for: savedUser.id)
                     
                 } catch {
                     print("❌ セッション復元エラー: \(error)")
@@ -112,8 +112,8 @@ class SupabaseAuthManager: ObservableObject {
                 // ユーザープロファイルを取得
                 self.fetchUserProfile(userId: user.id)
                 
-                // デバイス登録とユーザーデバイス取得を実行
-                self.deviceManager.checkAndRegisterDevice(for: user.id)
+                // ユーザーのデバイス一覧を取得（新規登録はしない）
+                await self.deviceManager.fetchUserDevices(for: user.id)
                 
                 self.isLoading = false
                 

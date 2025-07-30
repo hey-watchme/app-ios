@@ -61,8 +61,8 @@ class DeviceManager: ObservableObject {
         return UIDevice.current.identifierForVendor?.uuidString
     }
     
-    // MARK: - デバイス登録処理（Supabase直接Insert版）
-    func registerDevice(ownerUserID: String? = nil) {
+    // MARK: - デバイス登録処理（ユーザーが明示的に登録する場合のみ使用）
+    func registerDevice(userId: String) {
         guard let platformIdentifier = getPlatformIdentifier() else {
             registrationError = "デバイス識別子の取得に失敗しました"
             print("❌ identifierForVendor取得失敗")
@@ -72,23 +72,23 @@ class DeviceManager: ObservableObject {
         isLoading = true
         registrationError = nil
         
-        print("📱 Supabaseデバイス登録開始")
+        print("📱 Supabaseデバイス登録開始（ユーザーの明示的な操作による）")
         print("   - Platform Identifier: \(platformIdentifier)")
-        print("   - Owner User ID: \(ownerUserID ?? "ゲストユーザー")")
+        print("   - User ID: \(userId)")
         
         // Supabase直接Insert実装
-        registerDeviceToSupabase(platformIdentifier: platformIdentifier, ownerUserID: ownerUserID)
+        registerDeviceToSupabase(platformIdentifier: platformIdentifier, userId: userId)
     }
     
     // MARK: - Supabase UPSERT登録（改善版）
-    private func registerDeviceToSupabase(platformIdentifier: String, ownerUserID: String?) {
+    private func registerDeviceToSupabase(platformIdentifier: String, userId: String) {
         Task { @MainActor in
             do {
+                // --- ステップ1: devicesテーブルにデバイスを登録 ---
                 let deviceData = DeviceInsert(
                     platform_identifier: platformIdentifier,
                     device_type: "ios",
-                    platform_type: "iOS",
-                    owner_user_id: ownerUserID
+                    platform_type: "iOS"
                 )
                 
                 // UPSERT: INSERT ON CONFLICT DO UPDATE を使用
@@ -99,20 +99,63 @@ class DeviceManager: ObservableObject {
                     .execute()
                     .value
                 
-                if let device = response.first {
-                    self.saveSupabaseDeviceRegistration(
-                        deviceID: device.device_id,
-                        platformIdentifier: platformIdentifier
-                    )
-                    self.isLoading = false
-                    print("✅ デバイス情報を取得/登録完了: \(device.device_id)")
-                } else {
+                guard let device = response.first else {
                     throw DeviceRegistrationError.noDeviceReturned
                 }
                 
+                let newDeviceId = device.device_id
+                print("✅ Step 1: Device registered/fetched: \(newDeviceId)")
+                
+                // --- ステップ2: user_devicesテーブルに所有関係を登録 ---
+                let userDeviceRelation = UserDeviceInsert(
+                    user_id: userId,
+                    device_id: newDeviceId,
+                    role: "owner"
+                )
+                
+                // 競合した場合は何もしない (ON CONFLICT DO NOTHING相当)
+                do {
+                    try await supabase
+                        .from("user_devices")
+                        .insert(userDeviceRelation, returning: .minimal)
+                        .execute()
+                    
+                    print("✅ Step 2: User-Device ownership registered for user: \(userId)")
+                } catch {
+                    // エラーの詳細を確認
+                    print("❌ User-Device relation insert failed: \(error)")
+                    
+                    if let postgrestError = error as? PostgrestError {
+                        print("   - Code: \(postgrestError.code ?? "unknown")")
+                        print("   - Message: \(postgrestError.message)")
+                        print("   - Detail: \(postgrestError.detail ?? "none")")
+                        print("   - Hint: \(postgrestError.hint ?? "none")")
+                        
+                        // RLSエラーの場合の対処法を提案
+                        if postgrestError.code == "42501" {
+                            print("   ⚠️ RLS Policy Error: user_devicesテーブルのRLSポリシーを確認してください")
+                            print("   💡 解決方法: Supabaseダッシュボードで以下のSQLを実行してください:")
+                            print("      CREATE POLICY \"Users can insert their own device associations\"")
+                            print("      ON user_devices FOR INSERT")
+                            print("      WITH CHECK (auth.uid() = user_id);")
+                        }
+                    }
+                }
+                
+                // 最後にローカルのデバイス情報を保存
+                self.saveSupabaseDeviceRegistration(
+                    deviceID: newDeviceId,
+                    platformIdentifier: platformIdentifier
+                )
+                self.isLoading = false
+                self.registrationError = nil  // エラーをクリア
+                
+                // 登録成功後、ユーザーのデバイス一覧を再取得
+                await self.fetchUserDevices(for: userId)
+                
             } catch {
-                print("❌ デバイス情報取得エラー: \(error)")
-                self.registrationError = "デバイス情報の取得に失敗しました: \(error.localizedDescription)"
+                print("❌ デバイス登録処理全体でエラー: \(error)")
+                self.registrationError = "デバイス登録に失敗しました: \(error.localizedDescription)"
                 self.isLoading = false
             }
         }
@@ -126,11 +169,11 @@ class DeviceManager: ObservableObject {
         }
         
         do {
+            // --- ステップ1: devicesテーブルにデバイスを登録 ---
             let deviceData = DeviceInsert(
                 platform_identifier: platformIdentifier,
                 device_type: "ios",
-                platform_type: "iOS",
-                owner_user_id: userId
+                platform_type: "iOS"
             )
             
             // UPSERT: INSERT ON CONFLICT DO UPDATE を使用
@@ -141,20 +184,69 @@ class DeviceManager: ObservableObject {
                 .execute()
                 .value
             
-            if let device = response.first {
-                await MainActor.run {
-                    self.saveSupabaseDeviceRegistration(
-                        deviceID: device.device_id,
-                        platformIdentifier: platformIdentifier
-                    )
-                }
-                print("✅ デバイス情報を取得/登録完了: \(device.device_id)")
-            } else {
+            guard let device = response.first else {
                 throw DeviceRegistrationError.noDeviceReturned
             }
             
+            let newDeviceId = device.device_id
+            print("✅ Step 1: Device registered/fetched: \(newDeviceId)")
+            
+            // --- ステップ2: user_devicesテーブルに所有関係を登録 ---
+            
+            // 現在の認証セッションを確認
+            let currentSession = try? await supabase.auth.session
+            let currentAuthUserId = currentSession?.user.id.uuidString
+            
+            print("🔐 認証セッション確認:")
+            print("   - 渡されたuserId: \(userId)")
+            print("   - auth.session.user.id: \(currentAuthUserId ?? "nil")")
+            print("   - 一致: \(userId == currentAuthUserId ? "✅" : "❌")")
+            
+            let userDeviceRelation = UserDeviceInsert(
+                user_id: userId,
+                device_id: newDeviceId,
+                role: "owner"
+            )
+            
+            // 競合した場合は何もしない (ON CONFLICT DO NOTHING相当)
+            do {
+                try await supabase
+                    .from("user_devices")
+                    .insert(userDeviceRelation, returning: .minimal)
+                    .execute()
+                
+                print("✅ Step 2: User-Device ownership registered for user: \(userId)")
+            } catch {
+                // エラーの詳細を確認
+                print("❌ User-Device relation insert failed: \(error)")
+                
+                if let postgrestError = error as? PostgrestError {
+                    print("   - Code: \(postgrestError.code ?? "unknown")")
+                    print("   - Message: \(postgrestError.message)")
+                    print("   - Detail: \(postgrestError.detail ?? "none")")
+                    print("   - Hint: \(postgrestError.hint ?? "none")")
+                    
+                    // RLSエラーの場合の対処法を提案
+                    if postgrestError.code == "42501" {
+                        print("   ⚠️ RLS Policy Error: user_devicesテーブルのRLSポリシーを確認してください")
+                        print("   💡 解決方法: Supabaseダッシュボードで以下のSQLを実行してください:")
+                        print("      CREATE POLICY \"Users can insert their own device associations\"")
+                        print("      ON user_devices FOR INSERT")
+                        print("      WITH CHECK (auth.uid() = user_id);")
+                    }
+                }
+            }
+            
+            // 最後にローカルのデバイス情報を保存
+            await MainActor.run {
+                self.saveSupabaseDeviceRegistration(
+                    deviceID: newDeviceId,
+                    platformIdentifier: platformIdentifier
+                )
+            }
+            
         } catch {
-            print("❌ デバイス情報取得エラー: \(error)")
+            print("❌ デバイス登録処理全体でエラー: \(error)")
         }
     }
     
@@ -187,6 +279,11 @@ class DeviceManager: ObservableObject {
     
     // MARK: - ユーザーのデバイスを取得
     func fetchUserDevices(for userId: String) async {
+        // ローディング状態を設定
+        await MainActor.run {
+            self.isLoading = true
+        }
+        
         // Supabaseクライアントを使用してuser_devicesを取得
         do {
             print("📡 Fetching user devices for userId: \(userId)")
@@ -215,6 +312,7 @@ class DeviceManager: ObservableObject {
                 print("⚠️ No devices found for user: \(userId)")
                 await MainActor.run {
                     self.userDevices = []
+                    self.isLoading = false  // ローディング状態を解除
                     // ユーザーに紐付くデバイスがない場合、このデバイス自身のIDを使用
                     if let localId = self.localDeviceIdentifier {
                         self.selectedDeviceID = localId
@@ -246,7 +344,7 @@ class DeviceManager: ObservableObject {
                 }
             }
             
-            await MainActor.run {
+            await MainActor.run { [devices] in
                 self.userDevices = devices
                 print("✅ Found \(devices.count) devices for user: \(userId)")
                 
@@ -268,6 +366,11 @@ class DeviceManager: ObservableObject {
             
         } catch {
             print("❌ Device fetch error: \(error)")
+        }
+        
+        // ローディング状態を解除
+        await MainActor.run {
+            self.isLoading = false
         }
     }
     
@@ -297,22 +400,6 @@ class DeviceManager: ObservableObject {
         )
     }
     
-    // MARK: - Public Methods for Auth Integration
-    
-    /// ログイン成功後に呼ぶ統括関数：デバイス登録とユーザーデバイス取得を実行
-    func checkAndRegisterDevice(for userId: String) {
-        Task {
-            print("🔄 DeviceManager: デバイス登録とユーザーデバイス取得を開始")
-            
-            // 1. まず現在のデバイスをSupabaseに登録（既存の場合は更新）
-            await registerDeviceToSupabase(userId: userId)
-            
-            // 2. ユーザーのデバイスリストを取得
-            await fetchUserDevices(for: userId)
-            
-            print("✅ DeviceManager: デバイス処理が完了しました")
-        }
-    }
 }
 
 // MARK: - データモデル
@@ -330,7 +417,6 @@ struct DeviceInsert: Codable {
     let platform_identifier: String
     let device_type: String
     let platform_type: String
-    let owner_user_id: String?
 }
 
 // Supabase Response用データモデル

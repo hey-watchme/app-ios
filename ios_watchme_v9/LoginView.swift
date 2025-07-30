@@ -51,10 +51,13 @@ struct LoginView: View {
                             TextField("", text: $email)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .keyboardType(.emailAddress)
+                                .textContentType(.emailAddress)  // これにより自動補完が有効になります
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
                                 .foregroundColor(.primary)
                                 .accentColor(.blue)
+                                .font(.body)  // フォントサイズを少し大きく
+                                .padding(.vertical, 4)  // 縦方向の余白を追加
                         }
                     }
                     
@@ -80,9 +83,14 @@ struct LoginView: View {
                             if showPassword {
                                 TextField("パスワードを入力", text: $password)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .font(.body)
+                                    .padding(.vertical, 4)
                             } else {
                                 SecureField("パスワードを入力", text: $password)
                                     .textFieldStyle(RoundedBorderTextFieldStyle())
+                                    .textContentType(.password)
+                                    .font(.body)
+                                    .padding(.vertical, 4)
                             }
                         }
                     }

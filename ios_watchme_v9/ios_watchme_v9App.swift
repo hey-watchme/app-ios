@@ -55,7 +55,6 @@ struct MainAppView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showLogin = false
     @State private var hasInitialized = false
-    @State private var showDeviceRegistrationError = false
     
     var body: some View {
         Group {
@@ -67,7 +66,14 @@ struct MainAppView: View {
                     .environmentObject(dataManager)
                     .onAppear {
                         print("📱 MainAppView: 認証済み状態 - ContentView表示")
-                        checkAndRegisterDevice()
+                        // デバイスの自動登録は削除されました
+                        // ユーザーに紐付く全デバイスを取得
+                        if let userId = authManager.currentUser?.id {
+                            print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
+                            Task {
+                                await deviceManager.fetchUserDevices(for: userId)
+                            }
+                        }
                     }
             } else {
                 // 未ログイン：ログイン画面表示ボタン
@@ -118,22 +124,7 @@ struct MainAppView: View {
         .onAppear {
             initializeApp()
         }
-        .alert("デバイス登録エラー", isPresented: $showDeviceRegistrationError) {
-            Button("再試行") {
-                let ownerUserID = authManager.currentUser?.id
-                deviceManager.registerDevice(ownerUserID: ownerUserID)
-            }
-            Button("スキップ", role: .cancel) {
-                // デバイス登録をスキップして続行
-            }
-        } message: {
-            Text(deviceManager.registrationError ?? "デバイス登録に失敗しました。再試行してください。")
-        }
-        .onChange(of: deviceManager.registrationError) { oldValue, newValue in
-            if newValue != nil {
-                showDeviceRegistrationError = true
-            }
-        }
+        // デバイス登録エラーアラートは削除（自動登録を行わないため）
     }
     
     // MARK: - アプリ初期化
@@ -143,31 +134,14 @@ struct MainAppView: View {
         
         print("🚀 MainAppView: アプリ初期化開始")
         
-        // 認証状態に関係なく、未登録デバイスの場合は登録を実行
+        // デバイスの自動登録は削除されました
         if !deviceManager.isDeviceRegistered {
-            print("📱 未登録デバイス検知 - デバイス登録を実行")
-            let ownerUserID = authManager.currentUser?.id
-            deviceManager.registerDevice(ownerUserID: ownerUserID)
+            print("📱 未登録デバイス検知 - ユーザーの明示的な操作を待機")
         } else {
             print("📱 既存デバイス確認済み")
         }
     }
     
-    // MARK: - デバイス登録確認（認証済み状態で呼ばれる）
-    private func checkAndRegisterDevice() {
-        // 認証済みの場合、オーナーユーザーIDを更新する場合の処理
-        if !deviceManager.isDeviceRegistered {
-            print("📱 認証済み状態でのデバイス登録実行")
-            deviceManager.registerDevice(ownerUserID: authManager.currentUser?.id)
-        }
-        
-        // ユーザーに紐付く全デバイスを取得
-        if let userId = authManager.currentUser?.id {
-            print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
-            Task {
-                await deviceManager.fetchUserDevices(for: userId)
-            }
-        }
-    }
+    // checkAndRegisterDevice関数は削除されました（自動登録を行わないため）
 }
 
