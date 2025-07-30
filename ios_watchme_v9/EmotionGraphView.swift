@@ -174,15 +174,11 @@ struct EmotionGraphView: View {
                         .padding(.vertical, 12)
                         
                     } else {
-                        VStack(spacing: 20) {
-                            Image(systemName: "chart.line.uptrend.xyaxis")
-                                .font(.system(size: 60))
-                                .foregroundColor(.gray.opacity(0.5))
-                            
-                            Text("この日のデータがありません")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                        }
+                        // エンプティステート表示（共通コンポーネント使用）
+                        GraphEmptyStateView(
+                            graphType: .emotion,
+                            isDeviceLinked: !deviceManager.userDevices.isEmpty
+                        )
                         .padding(.top, 50)
                     }
                 }

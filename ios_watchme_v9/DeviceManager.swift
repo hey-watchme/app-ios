@@ -426,6 +426,7 @@ struct Device: Codable {
     let device_type: String
     let platform_type: String
     let owner_user_id: String?
+    let subject_id: String?
     // user_devicesテーブルから取得した場合のrole情報を保持
     var role: String?
 }

@@ -101,15 +101,11 @@ struct BehaviorGraphView: View {
                         .padding(.vertical, 12)
                         
                     } else {
-                        VStack(spacing: 20) {
-                            Image(systemName: "chart.bar.doc.horizontal")
-                                .font(.system(size: 60))
-                                .foregroundColor(.gray.opacity(0.5))
-                            
-                            Text("この日のデータがありません")
-                                .font(.headline)
-                                .foregroundColor(.secondary)
-                        }
+                        // エンプティステート表示（共通コンポーネント使用）
+                        GraphEmptyStateView(
+                            graphType: .behavior,
+                            isDeviceLinked: !deviceManager.userDevices.isEmpty
+                        )
                         .padding(.top, 50)
                     }
                 }

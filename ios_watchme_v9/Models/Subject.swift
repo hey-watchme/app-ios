@@ -1,5 +1,5 @@
 //
-//  DeviceMetadata.swift
+//  Subject.swift
 //  ios_watchme_v9
 //
 //  Created by Claude on 2025/07/28.
@@ -7,25 +7,27 @@
 
 import Foundation
 
-// MARK: - Device Metadata Model
-struct DeviceMetadata: Codable {
-    let deviceId: String
+// MARK: - Subject Model
+struct Subject: Codable {
+    let subjectId: String
     let name: String?
     let age: Int?
     let gender: String?
     let avatarUrl: String?
     let notes: String?
-    let updatedByAccountId: String?
+    let createdByUserId: String?
+    let createdAt: String?
     let updatedAt: String?
     
     enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
+        case subjectId = "subject_id"
         case name
         case age
         case gender
         case avatarUrl = "avatar_url"
         case notes
-        case updatedByAccountId = "updated_by_account_id"
+        case createdByUserId = "created_by_user_id"
+        case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
     

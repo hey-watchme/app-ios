@@ -43,7 +43,7 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
    - 一意のデバイスID（UUID形式）が生成される
    - 例：`device_id: "d067d407-cf73-4174-a9c1-d91fb60d64d0"`
 
-### データベース構造（v9.12.0で更新）
+### データベース構造（v9.14.0で更新）
 
 ```sql
 -- devicesテーブル
@@ -53,6 +53,7 @@ CREATE TABLE devices (
     device_type TEXT NOT NULL,
     platform_type TEXT NOT NULL,
     owner_user_id UUID REFERENCES auth.users(id),  -- 廃止予定
+    subject_id UUID REFERENCES subjects(subject_id),  -- v9.14.0で追加
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
@@ -63,6 +64,19 @@ CREATE TABLE user_devices (
     role TEXT NOT NULL DEFAULT 'viewer' CHECK (role IN ('owner', 'viewer')),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY (user_id, device_id)
+);
+
+-- subjectsテーブル（v9.14.0で追加）
+CREATE TABLE subjects (
+    subject_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    age INTEGER,
+    gender TEXT,
+    avatar_url TEXT,
+    notes TEXT,
+    created_by_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- vibe_whisper_summaryテーブル（感情分析データ）
@@ -690,11 +704,55 @@ git push origin feature/機能名
 ## 更新履歴
 
 ### 2025年7月30日
+- **v9.14.0 - 観測対象管理をsubjectsテーブルに移行**
+  - **データベース構造の変更**
+    - 新規`subjects`テーブルを追加（観測対象の情報を独立して管理）
+    - `devices`テーブルに`subject_id`フィールドを追加
+    - `device_metadata`テーブルの参照を`subjects`テーブルに変更（device_metadataは今後削除予定）
+    
+  - **観測対象管理の改善**
+    - 観測対象（subjects）をデバイスから独立して管理
+    - 1つのデバイスに1つの観測対象を紐付け
+    - 複数のデバイスが同じ観測対象を参照可能（デバイス買い替え時などに対応）
+    
+  - **アプリケーションの変更**
+    - `DeviceMetadata`モデルを`Subject`モデルに置き換え
+    - `SupabaseDataManager`の`fetchDeviceMetadata`を`fetchSubjectForDevice`に変更
+    - デバイスに観測対象が未登録の場合の表示を実装
+    
+  - **今後の拡張予定**
+    - 観測対象の登録・編集機能の追加
+    - 観測対象の切り替え機能の実装
+
+### 2025年7月30日
+- **v9.13.1 - デバイス未連携時の録音制御機能を実装**
+  - **録音開始時のデバイス連携チェック機能**
+    - デバイス未連携の状態で録音開始ボタンを押すと、デバイス連携を促すダイアログを表示
+    - 「デバイスが連携されていないため録音できません。このデバイスを連携しますか？」というメッセージで確認
+    - 「はい」を選択すると、デバイス連携処理を実行し、成功後に自動的に録音を開始
+    - 「キャンセル」を選択すると、録音は開始されない
+    
+  - **UI/UXの改善点**
+    - デバイス連携中は画面全体にオーバーレイを表示し、進行状況を明示
+    - 連携成功後は自動的に録音が開始されるため、ユーザーの手間を削減
+    - エラー時は適切なエラーメッセージを表示
+    
+  - **技術的な実装**
+    - RecordingViewに`showDeviceLinkAlert`と`isLinkingDevice`の状態管理を追加
+    - `linkDeviceAndStartRecording()`メソッドでデバイス連携と録音開始を連続実行
+    - デバイスIDなしでアップロードされる無効な録音データを防止
+    
+  - **グラフ表示のエラーメッセージ共通化**
+    - `GraphEmptyStateView`コンポーネントを作成し、エラー表示ロジックを一元化
+    - デバイス未連携時：「デバイスが連携されていません」（オレンジ色のアイコン）
+    - データなし時：「指定した日付のデータがありません」（グレー色のアイコン）
+    - 全グラフビュー（心理、行動、感情、ダッシュボード）で統一された表示
+
 - **v9.13.0 - ログイン時のデバイス自動登録機能を削除**
   - **デバイス登録の仕様変更**
     - ログイン時の自動デバイス登録を完全に削除
     - ユーザーが明示的に操作した場合のみデバイス登録を行うように変更
-    - 将来的に、録音ボタン押下時にデバイス未登録の場合は登録を促すUIを実装予定
+    - 録音ボタン押下時にデバイス未登録の場合は登録を促すUIを実装（v9.13.1で実装済み）
     
   - **コード変更の詳細**
     - `SupabaseAuthManager`から`checkAndRegisterDevice`の呼び出しを削除
@@ -727,7 +785,7 @@ git push origin feature/機能名
     - fetchDailyReportメソッドを`supabase.from("vibe_whisper_summary").select()`に変更
     - fetchBehaviorReportメソッドを`supabase.from("behavior_summary").select()`に変更
     - fetchEmotionReportメソッドを`supabase.from("emotion_opensmile_summary").select()`に変更
-    - fetchDeviceMetadataメソッドを`supabase.from("device_metadata").select()`に変更
+    - fetchDeviceMetadataメソッドを`supabase.from("device_metadata").select()`に変更（v9.14.0で`fetchSubjectForDevice`に変更）
     - fetchWeeklyReportsメソッドを`supabase.from("vibe_whisper_summary").select()`に変更
     
   - **認証情報の不整合問題を根本解決**
