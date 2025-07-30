@@ -55,11 +55,11 @@ struct ContentView: View {
                         print("デバイス選択")
                     }) {
                         HStack {
-                            Image(systemName: "iphone")
-                            Text(deviceManager.selectedDeviceID?.prefix(8) ?? "デバイス未選択")
+                            Image(systemName: deviceManager.userDevices.isEmpty ? "iphone.slash" : "iphone")
+                            Text(deviceManager.userDevices.isEmpty ? "デバイス連携: なし" : deviceManager.selectedDeviceID?.prefix(8) ?? "デバイス未選択")
                         }
                         .font(.subheadline)
-                        .foregroundColor(.blue)
+                        .foregroundColor(deviceManager.userDevices.isEmpty ? .orange : .blue)
                     }
                     
                     Spacer()
@@ -336,7 +336,9 @@ struct UserInfoSheetView: View {
                     // デバイス情報
                     InfoSection(title: "デバイス情報") {
                         // ユーザーのデバイス一覧
-                        if !deviceManager.userDevices.isEmpty {
+                        if deviceManager.isLoading {
+                            InfoRow(label: "状態", value: "デバイス情報を取得中...", icon: "arrow.clockwise", valueColor: .orange)
+                        } else if !deviceManager.userDevices.isEmpty {
                             ForEach(Array(deviceManager.userDevices.enumerated()), id: \.element.device_id) { index, device in
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("デバイス \(index + 1)")
@@ -360,7 +362,27 @@ struct UserInfoSheetView: View {
                                 }
                             }
                         } else {
-                            InfoRow(label: "状態", value: "デバイス情報を取得中...", icon: "arrow.clockwise", valueColor: .orange)
+                            VStack(spacing: 12) {
+                                InfoRow(label: "状態", value: "デバイスが連携されていません", icon: "iphone.slash", valueColor: .orange)
+                                
+                                Button(action: {
+                                    // デバイス連携処理を実行
+                                    if let userId = authManager.currentUser?.id {
+                                        deviceManager.registerDevice(userId: userId)
+                                    }
+                                }) {
+                                    HStack {
+                                        Image(systemName: "link.circle.fill")
+                                        Text("このデバイスを連携")
+                                    }
+                                    .frame(maxWidth: .infinity)
+                                    .padding(.vertical, 10)
+                                    .background(Color.blue)
+                                    .foregroundColor(.white)
+                                    .cornerRadius(8)
+                                }
+                                .disabled(deviceManager.isLoading)
+                            }
                         }
                         
                         // デバイス登録エラー表示
