@@ -25,8 +25,10 @@ struct DashboardView: View {
                 emotionGraphCard
                 
                 // 観測対象情報
-                if let metadata = dataManager.deviceMetadata {
-                    observationTargetCard(metadata)
+                if let subject = dataManager.subject {
+                    observationTargetCard(subject)
+                } else {
+                    noObservationTargetCard()
                 }
                 
                 Spacer(minLength: 100)
@@ -68,15 +70,11 @@ struct DashboardView: View {
             if let vibeReport = dataManager.dailyReport {
                 vibeReportContent(vibeReport)
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "chart.line.downtrend")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-                    Text("データがありません")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 100)
+                GraphEmptyStateView(
+                    graphType: .vibe,
+                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isCompact: true
+                )
             }
         }
         .padding()
@@ -149,15 +147,11 @@ struct DashboardView: View {
             if let behaviorReport = dataManager.dailyBehaviorReport {
                 behaviorReportContent(behaviorReport)
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "figure.walk.motion")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-                    Text("データがありません")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 100)
+                GraphEmptyStateView(
+                    graphType: .behavior,
+                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isCompact: true
+                )
             }
         }
         .padding()
@@ -221,15 +215,11 @@ struct DashboardView: View {
             if let emotionReport = dataManager.dailyEmotionReport {
                 emotionReportContent(emotionReport)
             } else {
-                VStack(spacing: 12) {
-                    Image(systemName: "heart.text.square")
-                        .font(.largeTitle)
-                        .foregroundColor(.gray)
-                    Text("データがありません")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 100)
+                GraphEmptyStateView(
+                    graphType: .emotion,
+                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isCompact: true
+                )
             }
         }
         .padding()
@@ -352,7 +342,7 @@ struct DashboardView: View {
     }
     
     // MARK: - 観測対象カード
-    private func observationTargetCard(_ metadata: DeviceMetadata) -> some View {
+    private func observationTargetCard(_ subject: Subject) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Image(systemName: "person.fill")
@@ -365,7 +355,7 @@ struct DashboardView: View {
             
             HStack(spacing: 20) {
                 // アバターエリア
-                if let avatarUrlString = metadata.avatarUrl,
+                if let avatarUrlString = subject.avatarUrl,
                    avatarUrlString.hasPrefix("data:image") {
                     // Base64データの場合
                     if let imageData = Data(base64Encoded: String(avatarUrlString.dropFirst(22)), options: .ignoreUnknownCharacters),
@@ -385,7 +375,7 @@ struct DashboardView: View {
                             .font(.system(size: 60))
                             .foregroundColor(.gray)
                     }
-                } else if let avatarUrlString = metadata.avatarUrl,
+                } else if let avatarUrlString = subject.avatarUrl,
                           let avatarUrl = URL(string: avatarUrlString) {
                     // URLの場合
                     AsyncImage(url: avatarUrl) { image in
@@ -411,19 +401,19 @@ struct DashboardView: View {
                 
                 // 情報エリア
                 VStack(alignment: .leading, spacing: 8) {
-                    if let name = metadata.name {
+                    if let name = subject.name {
                         Text(name)
                             .font(.title3)
                             .fontWeight(.semibold)
                     }
                     
-                    if let ageGender = metadata.ageGenderDisplay {
+                    if let ageGender = subject.ageGenderDisplay {
                         Text(ageGender)
                             .font(.subheadline)
                             .foregroundColor(.secondary)
                     }
                     
-                    if let notes = metadata.notes, !notes.isEmpty {
+                    if let notes = subject.notes, !notes.isEmpty {
                         Text(notes)
                             .font(.caption)
                             .foregroundColor(.secondary)
@@ -433,6 +423,41 @@ struct DashboardView: View {
                 
                 Spacer()
             }
+        }
+        .padding()
+        .background(Color(.systemBackground))
+        .cornerRadius(12)
+        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+    }
+    
+    // MARK: - 観測対象未登録カード
+    private func noObservationTargetCard() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Image(systemName: "person.fill")
+                    .font(.title2)
+                    .foregroundColor(.orange)
+                Text("観測対象")
+                    .font(.headline)
+                Spacer()
+            }
+            
+            VStack(spacing: 12) {
+                Image(systemName: "person.crop.circle.badge.questionmark")
+                    .font(.system(size: 50))
+                    .foregroundColor(.gray)
+                
+                Text("観測対象が登録されていません")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                
+                Text("観測対象を登録すると、詳細な情報を表示できます")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
         }
         .padding()
         .background(Color(.systemBackground))

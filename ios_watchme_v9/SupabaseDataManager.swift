@@ -19,7 +19,7 @@ class SupabaseDataManager: ObservableObject {
     @Published var dailyBehaviorReport: BehaviorReport? // 新しく追加
     @Published var dailyEmotionReport: EmotionReport?   // 新しく追加
     @Published var weeklyReports: [DailyVibeReport] = []
-    @Published var deviceMetadata: DeviceMetadata?
+    @Published var subject: Subject?
     @Published var isLoading = false
     @Published var errorMessage: String?
     
@@ -139,7 +139,7 @@ class SupabaseDataManager: ObservableObject {
         dailyBehaviorReport = nil
         dailyEmotionReport = nil
         weeklyReports = []
-        deviceMetadata = nil
+        subject = nil
         errorMessage = nil
     }
     
@@ -176,9 +176,9 @@ class SupabaseDataManager: ObservableObject {
                 }
             }
             
-            // デバイスメタデータの取得
+            // 観測対象情報の取得（デバイスに紐づくsubject_idを使用）
             group.addTask { [weak self] in
-                await self?.fetchDeviceMetadata(for: deviceId)
+                await self?.fetchSubjectForDevice(deviceId: deviceId)
             }
         }
         
@@ -270,34 +270,55 @@ class SupabaseDataManager: ObservableObject {
         }
     }
     
-    /// デバイスメタデータを取得
-    func fetchDeviceMetadata(for deviceId: String) async {
-        print("👤 Fetching device metadata for device: \(deviceId)")
+    /// デバイスに紐づく観測対象情報を取得
+    func fetchSubjectForDevice(deviceId: String) async {
+        print("👤 Fetching subject for device: \(deviceId)")
         
         do {
-            // Supabase SDKの標準メソッドを使用
-            let metadataArray: [DeviceMetadata] = try await supabase
-                .from("device_metadata")
+            // まずdevicesテーブルからsubject_idを取得
+            struct DeviceResponse: Codable {
+                let device_id: String
+                let subject_id: String?
+            }
+            
+            let devices: [DeviceResponse] = try await supabase
+                .from("devices")
                 .select()
                 .eq("device_id", value: deviceId)
                 .execute()
                 .value
             
+            guard let device = devices.first, let subjectId = device.subject_id else {
+                print("ℹ️ No subject assigned to this device")
+                await MainActor.run { [weak self] in
+                    self?.subject = nil
+                }
+                return
+            }
+            
+            // subject_idを使ってsubjectsテーブルから情報を取得
+            let subjects: [Subject] = try await supabase
+                .from("subjects")
+                .select()
+                .eq("subject_id", value: subjectId)
+                .execute()
+                .value
+            
             // MainActorで@Publishedプロパティを更新
             await MainActor.run { [weak self] in
-                self?.deviceMetadata = metadataArray.first
-                if let metadata = metadataArray.first {
-                    print("✅ Device metadata fetched successfully")
-                    print("   Name: \(metadata.name ?? "N/A")")
-                    print("   Age: \(metadata.age ?? 0)")
-                    print("   Gender: \(metadata.gender ?? "N/A")")
+                self?.subject = subjects.first
+                if let subject = subjects.first {
+                    print("✅ Subject fetched successfully")
+                    print("   Name: \(subject.name ?? "N/A")")
+                    print("   Age: \(subject.age ?? 0)")
+                    print("   Gender: \(subject.gender ?? "N/A")")
                 } else {
-                    print("ℹ️ No device metadata found")
+                    print("ℹ️ Subject not found in subjects table")
                 }
             }
             
         } catch {
-            print("❌ Device metadata fetch error: \(error)")
+            print("❌ Subject fetch error: \(error)")
             // PostgrestErrorの詳細を表示
             if let dbError = error as? PostgrestError {
                 print("   - コード: \(dbError.code ?? "不明")")
