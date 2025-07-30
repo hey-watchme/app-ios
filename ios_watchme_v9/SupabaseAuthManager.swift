@@ -21,6 +21,7 @@ class SupabaseAuthManager: ObservableObject {
     @Published var currentUser: SupabaseUser? = nil
     @Published var authError: String? = nil
     @Published var isLoading: Bool = false
+    @Published var isCheckingAuthStatus: Bool = true  // 認証状態確認中フラグ
     
     // DeviceManagerへの参照
     private let deviceManager: DeviceManager
@@ -59,6 +60,8 @@ class SupabaseAuthManager: ObservableObject {
                     print("🔄 認証状態復元: isAuthenticated = true")
                     print("🔑 セッショントークンも復元しました")
                     
+                    self.isCheckingAuthStatus = false  // 認証確認完了
+                    
                     // プロファイルを取得
                     fetchUserProfile(userId: savedUser.id)
                     
@@ -70,10 +73,12 @@ class SupabaseAuthManager: ObservableObject {
                     print("⚠️ 再ログインが必要です")
                     // セッション復元に失敗した場合はクリア
                     clearLocalAuthData()
+                    self.isCheckingAuthStatus = false  // 認証確認完了
                 }
             }
         } else {
             print("⚠️ 保存された認証状態なし: isAuthenticated = false")
+            self.isCheckingAuthStatus = false  // 認証確認完了
         }
     }
     

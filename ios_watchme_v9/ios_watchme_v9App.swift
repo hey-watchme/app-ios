@@ -58,7 +58,31 @@ struct MainAppView: View {
     
     var body: some View {
         Group {
-            if authManager.isAuthenticated {
+            if authManager.isCheckingAuthStatus {
+                // 認証状態確認中：ローディング画面
+                VStack {
+                    Spacer()
+                    
+                    // ロゴを表示
+                    Image("WatchMeLogo")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 200, height: 70)
+                    
+                    // ローディングインジケーター
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                        .scaleEffect(1.5)
+                        .padding(.top, 40)
+                    
+                    Text("認証状態を確認中...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.top, 10)
+                    
+                    Spacer()
+                }
+            } else if authManager.isAuthenticated {
                 // ログイン済み：メイン機能画面
                 ContentView()
                     .environmentObject(authManager)
