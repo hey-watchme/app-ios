@@ -18,9 +18,13 @@ struct ContentView: View {
     @State private var showUserIDChangeAlert = false
     @State private var newUserID = ""
     @State private var showLogoutConfirmation = false
-    @State private var showUserInfoSheet = false
     @State private var networkManager: NetworkManager?
     @State private var showRecordingSheet = false
+    @State private var showSubjectRegistration = false
+    @State private var showSubjectEdit = false
+    @State private var selectedDeviceForSubject: String? = nil
+    @State private var editingSubject: Subject? = nil
+    @State private var subjectsByDevice: [String: Subject] = [:]
     
     // 日付の選択状態を一元管理
     @State private var selectedDate = Date()
@@ -46,7 +50,8 @@ struct ContentView: View {
     
     var body: some View {
         if let networkManager = networkManager {
-            VStack(spacing: 0) { // ヘッダー、日付ナビゲーション、TabViewを縦に並べる
+            NavigationStack {
+                VStack(spacing: 0) { // ヘッダー、日付ナビゲーション、TabViewを縦に並べる
                 // 固定ヘッダー (デバイス選択、ユーザー情報、通知など)
                 HStack {
                     // デバイス選択ボタン (仮)
@@ -65,9 +70,16 @@ struct ContentView: View {
                     Spacer()
                     
                     // ユーザー情報/通知 (仮)
-                    Button(action: {
-                        showUserInfoSheet = true
-                    }) {
+                    NavigationLink(destination: 
+                        UserInfoView(
+                            authManager: authManager,
+                            deviceManager: deviceManager,
+                            showLogoutConfirmation: $showLogoutConfirmation
+                        )
+                        .environmentObject(dataManager)
+                        .environmentObject(deviceManager)
+                        .environmentObject(authManager)
+                    ) {
                         Image(systemName: "person.crop.circle.fill")
                             .font(.title2)
                             .foregroundColor(.blue)
@@ -202,16 +214,61 @@ struct ContentView: View {
             }
             .confirmationDialog("ログアウト確認", isPresented: $showLogoutConfirmation) {
                 Button("ログアウト", role: .destructive) {
-                    authManager.signOut()
-                    networkManager.resetToFallbackUserID()
-                    alertMessage = "ログアウトしました"
-                    showAlert = true
+                    // ログアウト処理を非同期で実行
+                    Task {
+                        // まずログアウト処理を実行
+                        authManager.signOut()
+                        
+                        // ネットワークマネージャーのリセット
+                        networkManager.resetToFallbackUserID()
+                        
+                        // データマネージャーのクリア
+                        dataManager.clearData()
+                        
+                        // デバイスマネージャーのクリア
+                        deviceManager.userDevices = []
+                        deviceManager.selectedDeviceID = nil
+                        
+                        // 少し待ってから通知を表示（UIの更新を確実にするため）
+                        try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒待機
+                        
+                        await MainActor.run {
+                            alertMessage = "ログアウトしました"
+                            showAlert = true
+                        }
+                    }
                 }
             } message: {
                 Text("本当にログアウトしますか？")
             }
-            .sheet(isPresented: $showUserInfoSheet) {
-                UserInfoSheetView(authManager: authManager, deviceManager: deviceManager, showLogoutConfirmation: $showLogoutConfirmation)
+            .sheet(isPresented: $showSubjectRegistration, onDismiss: {
+                loadSubjectsForAllDevices()
+            }) {
+                if let deviceID = selectedDeviceForSubject {
+                    SubjectRegistrationView(
+                        deviceID: deviceID,
+                        isPresented: $showSubjectRegistration,
+                        editingSubject: nil
+                    )
+                    .environmentObject(dataManager)
+                    .environmentObject(deviceManager)
+                    .environmentObject(authManager)
+                }
+            }
+            .sheet(isPresented: $showSubjectEdit, onDismiss: {
+                loadSubjectsForAllDevices()
+            }) {
+                if let deviceID = selectedDeviceForSubject,
+                   let subject = editingSubject {
+                    SubjectRegistrationView(
+                        deviceID: deviceID,
+                        isPresented: $showSubjectEdit,
+                        editingSubject: subject
+                    )
+                    .environmentObject(dataManager)
+                    .environmentObject(deviceManager)
+                    .environmentObject(authManager)
+                }
             }
             .sheet(isPresented: $showRecordingSheet) {
                 NavigationView {
@@ -258,6 +315,7 @@ struct ContentView: View {
                 // アプリ起動時またはViewが表示されたときにデータをフェッチ
                 fetchReports()
             }
+            }
         } else {
             ProgressView("初期化中...")
                 .onAppear {
@@ -290,17 +348,124 @@ struct ContentView: View {
         let tomorrow = Calendar.current.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
         return tomorrow <= Date()
     }
+    
+    // MARK: - Observation Target Methods
+    
+    @ViewBuilder
+    private func observationTargetSection(
+        for deviceId: String,
+        subjectsByDevice: [String: Subject],
+        onShowRegistration: @escaping (String) -> Void,
+        onShowEdit: @escaping (String, Subject) -> Void
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "person.fill")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                Text("観測対象")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Spacer()
+            }
+            
+            if let subject = subjectsByDevice[deviceId] {
+                // 観測対象が登録されている場合
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        InfoRowTwoLine(
+                            label: "名前",
+                            value: subject.name ?? "未設定",
+                            icon: "person.crop.circle",
+                            valueColor: .primary
+                        )
+                    }
+                    
+                    if let ageGender = subject.ageGenderDisplay {
+                        InfoRow(label: "年齢・性別", value: ageGender, icon: "info.circle")
+                    }
+                    
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            onShowEdit(deviceId, subject)
+                        }) {
+                            HStack {
+                                Image(systemName: "pencil")
+                                Text("編集")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+                .padding(.leading, 20)
+            } else {
+                // 観測対象が登録されていない場合
+                VStack(alignment: .leading, spacing: 6) {
+                    InfoRow(label: "状態", value: "未登録", icon: "person.crop.circle.badge.questionmark", valueColor: .secondary)
+                    
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            onShowRegistration(deviceId)
+                        }) {
+                            HStack {
+                                Image(systemName: "person.badge.plus")
+                                Text("観測対象を追加")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+                .padding(.leading, 20)
+            }
+        }
+    }
+    
+    private func loadSubjectsForAllDevices() {
+        Task {
+            var newSubjects: [String: Subject] = [:]
+            
+            for device in deviceManager.userDevices {
+                // 各デバイスの観測対象を取得
+                await dataManager.fetchSubjectForDevice(deviceId: device.device_id)
+                if let subject = dataManager.subject {
+                    newSubjects[device.device_id] = subject
+                }
+            }
+            
+            await MainActor.run {
+                self.subjectsByDevice = newSubjects
+            }
+        }
+    }
 }
 
-// MARK: - ユーザー情報シートビュー
-struct UserInfoSheetView: View {
+// MARK: - ユーザー情報ビュー
+struct UserInfoView: View {
     let authManager: SupabaseAuthManager
     let deviceManager: DeviceManager
     @Binding var showLogoutConfirmation: Bool
+    @State private var subjectsByDevice: [String: Subject] = [:]
+    @State private var showSubjectRegistration = false
+    @State private var showSubjectEdit = false
+    @State private var selectedDeviceForSubject: String? = nil
+    @State private var editingSubject: Subject? = nil
+    @EnvironmentObject var dataManager: SupabaseDataManager
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
+        ScrollView {
             VStack(spacing: 24) {
                 // ユーザーアバター
                 AvatarView(userId: authManager.currentUser?.id)
@@ -355,6 +520,9 @@ struct UserInfoSheetView: View {
                                         }
                                         .padding(.leading, 20)
                                     }
+                                    
+                                    // 観測対象情報
+                                    observationTargetInfo(for: device.device_id)
                                 }
                                 if index < deviceManager.userDevices.count - 1 {
                                     Divider()
@@ -405,7 +573,10 @@ struct UserInfoSheetView: View {
                 if authManager.isAuthenticated {
                     Button(action: {
                         dismiss()
-                        showLogoutConfirmation = true
+                        // シートが完全に閉じてからダイアログを表示
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            showLogoutConfirmation = true
+                        }
                     }) {
                         HStack {
                             Image(systemName: "rectangle.portrait.and.arrow.right.fill")
@@ -421,16 +592,13 @@ struct UserInfoSheetView: View {
                     .padding(.bottom, 20)
                 }
             }
-            .navigationTitle("ユーザー情報")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("閉じる") {
-                        dismiss()
-                    }
-                }
-            }
-            .onAppear {
+            .padding(.horizontal)
+        }
+        .navigationTitle("マイページ")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .onAppear {
                 // デバイス情報を再取得
                 if deviceManager.userDevices.isEmpty, let userId = authManager.currentUser?.id {
                     print("📱 UserInfoSheet: デバイス情報を取得")
@@ -438,6 +606,136 @@ struct UserInfoSheetView: View {
                         await deviceManager.fetchUserDevices(for: userId)
                     }
                 }
+                // 観測対象情報を読み込み
+                loadSubjectsForAllDevices()
+            }
+        .sheet(isPresented: $showSubjectRegistration, onDismiss: {
+            loadSubjectsForAllDevices()
+        }) {
+            if let deviceID = selectedDeviceForSubject {
+                SubjectRegistrationView(
+                    deviceID: deviceID,
+                    isPresented: $showSubjectRegistration,
+                    editingSubject: nil
+                )
+                .environmentObject(dataManager)
+                .environmentObject(deviceManager)
+                .environmentObject(authManager)
+            }
+        }
+        .sheet(isPresented: $showSubjectEdit, onDismiss: {
+            loadSubjectsForAllDevices()
+        }) {
+            if let deviceID = selectedDeviceForSubject,
+               let subject = editingSubject {
+                SubjectRegistrationView(
+                    deviceID: deviceID,
+                    isPresented: $showSubjectEdit,
+                    editingSubject: subject
+                )
+                .environmentObject(dataManager)
+                .environmentObject(deviceManager)
+                .environmentObject(authManager)
+            }
+        }
+    }
+    
+    // MARK: - Observation Target Info Methods
+    
+    @ViewBuilder
+    private func observationTargetInfo(for deviceId: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "person.fill")
+                    .font(.caption)
+                    .foregroundColor(.orange)
+                Text("観測対象")
+                    .font(.caption)
+                    .fontWeight(.medium)
+                Spacer()
+            }
+            
+            if let subject = subjectsByDevice[deviceId] {
+                // 観測対象が登録されている場合
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack {
+                        InfoRowTwoLine(
+                            label: "名前",
+                            value: subject.name ?? "未設定",
+                            icon: "person.crop.circle",
+                            valueColor: .primary
+                        )
+                    }
+                    
+                    if let ageGender = subject.ageGenderDisplay {
+                        InfoRow(label: "年齢・性別", value: ageGender, icon: "info.circle")
+                    }
+                    
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            selectedDeviceForSubject = deviceId
+                            editingSubject = subject
+                            showSubjectEdit = true
+                        }) {
+                            HStack {
+                                Image(systemName: "pencil")
+                                Text("編集")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.blue.opacity(0.1))
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+                .padding(.leading, 20)
+            } else {
+                // 観測対象が登録されていない場合
+                VStack(alignment: .leading, spacing: 6) {
+                    InfoRow(label: "状態", value: "未登録", icon: "person.crop.circle.badge.questionmark", valueColor: .secondary)
+                    
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            selectedDeviceForSubject = deviceId
+                            editingSubject = nil
+                            showSubjectRegistration = true
+                        }) {
+                            HStack {
+                                Image(systemName: "person.badge.plus")
+                                Text("観測対象を追加")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Color.orange.opacity(0.1))
+                            .cornerRadius(4)
+                        }
+                    }
+                }
+                .padding(.leading, 20)
+            }
+        }
+    }
+    
+    private func loadSubjectsForAllDevices() {
+        Task {
+            var newSubjects: [String: Subject] = [:]
+            
+            for device in deviceManager.userDevices {
+                // 各デバイスの観測対象を取得
+                await dataManager.fetchSubjectForDevice(deviceId: device.device_id)
+                if let subject = dataManager.subject {
+                    newSubjects[device.device_id] = subject
+                }
+            }
+            
+            await MainActor.run {
+                self.subjectsByDevice = newSubjects
             }
         }
     }

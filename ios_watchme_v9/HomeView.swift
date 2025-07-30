@@ -161,21 +161,11 @@ struct HomeView: View {
                         }
                     }
                 } else if !dataManager.isLoading && dataManager.errorMessage == nil {
-                    // 初期状態（データ未取得）
-                    VStack(spacing: 16) {
-                        Image(systemName: "chart.line.uptrend.xyaxis")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
-                        Text("レポートデータがありません")
-                            .font(.headline)
-                            .foregroundColor(.secondary)
-                        Text("録音データを収集すると\nここにレポートが表示されます")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                    }
-                    .frame(maxWidth: .infinity, minHeight: 300)
-                    .padding()
+                    // エンプティステート表示（共通コンポーネント使用）
+                    GraphEmptyStateView(
+                        graphType: .vibe,
+                        isDeviceLinked: !deviceManager.userDevices.isEmpty
+                    )
                 }
                 
                 Spacer(minLength: 50)

@@ -10,7 +10,10 @@ import SwiftUI
 struct DashboardView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var authManager: SupabaseAuthManager
     @Binding var selectedDate: Date
+    @State private var showSubjectRegistration = false
+    @State private var showSubjectEdit = false
     
     var body: some View {
         ScrollView {
@@ -50,6 +53,31 @@ struct DashboardView: View {
         .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
             Task {
                 await fetchAllReports()
+            }
+        }
+        .sheet(isPresented: $showSubjectRegistration) {
+            if let deviceID = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier {
+                SubjectRegistrationView(
+                    deviceID: deviceID, 
+                    isPresented: $showSubjectRegistration,
+                    editingSubject: nil
+                )
+                .environmentObject(dataManager)
+                .environmentObject(deviceManager)
+                .environmentObject(authManager)
+            }
+        }
+        .sheet(isPresented: $showSubjectEdit) {
+            if let deviceID = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier,
+               let subject = dataManager.subject {
+                SubjectRegistrationView(
+                    deviceID: deviceID,
+                    isPresented: $showSubjectEdit,
+                    editingSubject: subject
+                )
+                .environmentObject(dataManager)
+                .environmentObject(deviceManager)
+                .environmentObject(authManager)
             }
         }
     }
@@ -422,6 +450,21 @@ struct DashboardView: View {
                 }
                 
                 Spacer()
+                
+                Button(action: {
+                    showSubjectEdit = true
+                }) {
+                    HStack {
+                        Image(systemName: "pencil")
+                        Text("編集")
+                    }
+                    .font(.caption)
+                    .foregroundColor(.blue)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(Color.blue.opacity(0.1))
+                    .cornerRadius(6)
+                }
             }
         }
         .padding()
@@ -442,19 +485,38 @@ struct DashboardView: View {
                 Spacer()
             }
             
-            VStack(spacing: 12) {
+            VStack(spacing: 16) {
                 Image(systemName: "person.crop.circle.badge.questionmark")
                     .font(.system(size: 50))
                     .foregroundColor(.gray)
                 
-                Text("観測対象が登録されていません")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
+                VStack(spacing: 8) {
+                    Text("このデバイスで観測している人物のプロフィールを登録しましょう")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                    
+                    Text("観測対象を登録すると、詳細な情報を表示できます")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
                 
-                Text("観測対象を登録すると、詳細な情報を表示できます")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
+                Button(action: {
+                    showSubjectRegistration = true
+                }) {
+                    HStack {
+                        Image(systemName: "person.badge.plus")
+                        Text("観測対象を登録する")
+                    }
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 12)
+                    .background(Color.orange)
+                    .cornerRadius(8)
+                }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)

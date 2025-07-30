@@ -372,4 +372,123 @@ class SupabaseDataManager: ObservableObject {
             return nil
         }
     }
+    
+    // MARK: - Subject Management Methods
+    
+    /// 新しい観測対象を登録
+    func registerSubject(
+        name: String,
+        age: Int?,
+        gender: String?,
+        avatarUrl: String?,
+        notes: String?,
+        createdByUserId: String
+    ) async throws -> String {
+        print("👤 Registering new subject: \(name)")
+        
+        struct SubjectInsert: Codable {
+            let name: String
+            let age: Int?
+            let gender: String?
+            let avatar_url: String?
+            let notes: String?
+            let created_by_user_id: String
+        }
+        
+        let subjectInsert = SubjectInsert(
+            name: name,
+            age: age,
+            gender: gender,
+            avatar_url: avatarUrl,
+            notes: notes,
+            created_by_user_id: createdByUserId
+        )
+        
+        let subjects: [Subject] = try await supabase
+            .from("subjects")
+            .insert(subjectInsert)
+            .select()
+            .execute()
+            .value
+        
+        guard let subject = subjects.first else {
+            throw SupabaseDataError.noDataReturned
+        }
+        
+        print("✅ Subject registered successfully: \(subject.subjectId)")
+        return subject.subjectId
+    }
+    
+    /// デバイスのsubject_idを更新
+    func updateDeviceSubjectId(deviceId: String, subjectId: String) async throws {
+        print("🔗 Updating device subject_id: \(deviceId) -> \(subjectId)")
+        
+        struct DeviceUpdate: Codable {
+            let subject_id: String
+        }
+        
+        let deviceUpdate = DeviceUpdate(subject_id: subjectId)
+        
+        try await supabase
+            .from("devices")
+            .update(deviceUpdate)
+            .eq("device_id", value: deviceId)
+            .execute()
+        
+        print("✅ Device subject_id updated successfully")
+    }
+    
+    /// 観測対象を更新
+    func updateSubject(
+        subjectId: String,
+        name: String,
+        age: Int?,
+        gender: String?,
+        avatarUrl: String?,
+        notes: String?
+    ) async throws {
+        print("👤 Updating subject: \(subjectId)")
+        
+        struct SubjectUpdate: Codable {
+            let name: String
+            let age: Int?
+            let gender: String?
+            let avatar_url: String?
+            let notes: String?
+            let updated_at: String
+        }
+        
+        let now = ISO8601DateFormatter().string(from: Date())
+        let subjectUpdate = SubjectUpdate(
+            name: name,
+            age: age,
+            gender: gender,
+            avatar_url: avatarUrl,
+            notes: notes,
+            updated_at: now
+        )
+        
+        try await supabase
+            .from("subjects")
+            .update(subjectUpdate)
+            .eq("subject_id", value: subjectId)
+            .execute()
+        
+        print("✅ Subject updated successfully: \(subjectId)")
+    }
+}
+
+// MARK: - Error Types
+enum SupabaseDataError: Error, LocalizedError {
+    case noDataReturned
+    case invalidData
+    
+    var errorDescription: String? {
+        switch self {
+        case .noDataReturned:
+            return "データが返されませんでした"
+        case .invalidData:
+            return "無効なデータです"
+        }
+    }
 }

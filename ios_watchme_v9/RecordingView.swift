@@ -11,11 +11,15 @@ import Combine
 struct RecordingView: View {
     @ObservedObject var audioRecorder: AudioRecorder
     @ObservedObject var networkManager: NetworkManager
+    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var authManager: SupabaseAuthManager
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var selectedRecording: RecordingModel?
     @State private var uploadingTotalCount = 0
     @State private var uploadingCurrentIndex = 0
+    @State private var showDeviceLinkAlert = false
+    @State private var isLinkingDevice = false
     
     var body: some View {
         ScrollView {
@@ -191,7 +195,14 @@ struct RecordingView: View {
                 } else {
                     // 録音開始ボタン
                     VStack(spacing: 8) {
-                        Button(action: audioRecorder.startRecording) {
+                        Button(action: {
+                            // デバイス連携チェック
+                            if deviceManager.userDevices.isEmpty {
+                                showDeviceLinkAlert = true
+                            } else {
+                                audioRecorder.startRecording()
+                            }
+                        }) {
                             HStack {
                                 Image(systemName: "mic.fill")
                                 Text("録音開始")
@@ -202,6 +213,7 @@ struct RecordingView: View {
                             .foregroundColor(.white)
                             .cornerRadius(10)
                         }
+                        .disabled(isLinkingDevice)
                     }
                 }
             }
@@ -288,6 +300,97 @@ struct RecordingView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(alertMessage)
+        }
+        .alert("デバイス連携が必要です", isPresented: $showDeviceLinkAlert) {
+            Button("はい") {
+                // デバイス連携を実行
+                linkDeviceAndStartRecording()
+            }
+            Button("キャンセル", role: .cancel) { }
+        } message: {
+            Text("デバイスが連携されていないため録音できません。\nこのデバイスを連携しますか？")
+        }
+        .overlay(
+            // デバイス連携中の表示
+            Group {
+                if isLinkingDevice {
+                    ZStack {
+                        Color.black.opacity(0.4)
+                            .ignoresSafeArea()
+                        
+                        VStack(spacing: 16) {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.5)
+                            
+                            Text("デバイスを連携しています...")
+                                .font(.headline)
+                                .foregroundColor(.white)
+                        }
+                        .padding(40)
+                        .background(Color.black.opacity(0.8))
+                        .cornerRadius(20)
+                    }
+                }
+            }
+        )
+    }
+    
+    // デバイス連携後に録音を開始する
+    private func linkDeviceAndStartRecording() {
+        guard let userId = authManager.currentUser?.id else {
+            alertMessage = "ユーザー情報が取得できません"
+            showAlert = true
+            return
+        }
+        
+        isLinkingDevice = true
+        
+        // デバイス連携を実行
+        deviceManager.registerDevice(userId: userId)
+        
+        // デバイス連携の完了を監視
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            checkDeviceLinkingStatus()
+        }
+    }
+    
+    // デバイス連携の状態を定期的にチェック
+    private func checkDeviceLinkingStatus() {
+        if deviceManager.isLoading {
+            // まだ連携中なので、再度チェック
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                checkDeviceLinkingStatus()
+            }
+        } else {
+            // 連携完了
+            isLinkingDevice = false
+            
+            if let error = deviceManager.registrationError {
+                // エラーが発生した場合
+                alertMessage = "デバイス連携に失敗しました: \(error)"
+                showAlert = true
+            } else if deviceManager.isDeviceRegistered {
+                // 連携成功
+                alertMessage = "デバイス連携が完了しました"
+                showAlert = true
+                
+                // ユーザーのデバイス一覧を再取得
+                Task {
+                    if let userId = authManager.currentUser?.id {
+                        await deviceManager.fetchUserDevices(for: userId)
+                    }
+                    
+                    // 少し待ってから録音を開始
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                        audioRecorder.startRecording()
+                    }
+                }
+            } else {
+                // 予期しない状態
+                alertMessage = "デバイス連携の状態が不明です"
+                showAlert = true
+            }
         }
     }
     
