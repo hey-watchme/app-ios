@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var selectedDeviceForSubject: String? = nil
     @State private var editingSubject: Subject? = nil
     @State private var subjectsByDevice: [String: Subject] = [:]
+    @State private var showDeviceSelection = false
     
     // 日付の選択状態を一元管理
     @State private var selectedDate = Date()
@@ -54,10 +55,9 @@ struct ContentView: View {
                 VStack(spacing: 0) { // ヘッダー、日付ナビゲーション、TabViewを縦に並べる
                 // 固定ヘッダー (デバイス選択、ユーザー情報、通知など)
                 HStack {
-                    // デバイス選択ボタン (仮)
+                    // デバイス選択ボタン
                     Button(action: {
-                        // デバイス選択ロジック
-                        print("デバイス選択")
+                        showDeviceSelection = true
                     }) {
                         HStack {
                             Image(systemName: deviceManager.userDevices.isEmpty ? "iphone.slash" : "iphone")
@@ -240,6 +240,12 @@ struct ContentView: View {
                 }
             } message: {
                 Text("本当にログアウトしますか？")
+            }
+            .sheet(isPresented: $showDeviceSelection) {
+                DeviceSelectionView(isPresented: $showDeviceSelection)
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
+                    .environmentObject(authManager)
             }
             .sheet(isPresented: $showSubjectRegistration, onDismiss: {
                 loadSubjectsForAllDevices()
@@ -461,15 +467,43 @@ struct UserInfoView: View {
     @State private var showSubjectEdit = false
     @State private var selectedDeviceForSubject: String? = nil
     @State private var editingSubject: Subject? = nil
+    @State private var showAvatarPicker = false
+    @State private var isUploadingAvatar = false
+    @State private var avatarUploadError: String? = nil
     @EnvironmentObject var dataManager: SupabaseDataManager
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // ユーザーアバター
-                AvatarView(userId: authManager.currentUser?.id)
-                    .padding(.top, 20)
+                // ユーザーアバター編集可能なセクション
+                VStack(spacing: 12) {
+                    AvatarView(userId: authManager.currentUser?.id)
+                        .padding(.top, 20)
+                    
+                    Button(action: {
+                        showAvatarPicker = true
+                    }) {
+                        Label("アバターを編集", systemImage: "pencil.circle.fill")
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundColor(.blue)
+                    }
+                    .disabled(isUploadingAvatar)
+                    
+                    if isUploadingAvatar {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                            .scaleEffect(0.8)
+                    }
+                    
+                    if let error = avatarUploadError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.red)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal)
+                    }
+                }
                 
                 // ユーザー情報セクション
                 VStack(spacing: 16) {
@@ -638,6 +672,31 @@ struct UserInfoView: View {
                 .environmentObject(authManager)
             }
         }
+        .sheet(isPresented: $showAvatarPicker) {
+            NavigationView {
+                VStack {
+                    AvatarPickerView(
+                        currentAvatarURL: getAvatarURL(),
+                        onImageSelected: { image in
+                            uploadAvatar(image: image)
+                        },
+                        onDelete: nil // ユーザーアバターの削除は現時点では実装しない
+                    )
+                    .padding()
+                    
+                    Spacer()
+                }
+                .navigationTitle("アバターを選択")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("キャンセル") {
+                            showAvatarPicker = false
+                        }
+                    }
+                }
+            }
+        }
     }
     
     // MARK: - Observation Target Info Methods
@@ -736,6 +795,44 @@ struct UserInfoView: View {
             
             await MainActor.run {
                 self.subjectsByDevice = newSubjects
+            }
+        }
+    }
+    
+    // MARK: - Avatar Helper Methods
+    
+    private func getAvatarURL() -> URL? {
+        guard let userId = authManager.currentUser?.id else { return nil }
+        return AWSManager.shared.getAvatarURL(type: "users", id: userId)
+    }
+    
+    private func uploadAvatar(image: UIImage) {
+        guard let userId = authManager.currentUser?.id else { return }
+        
+        isUploadingAvatar = true
+        avatarUploadError = nil
+        showAvatarPicker = false
+        
+        Task {
+            do {
+                // ⚠️ ペンディング: アバターアップロード専用APIの実装待ち
+                // 現在はローカルファイルシステムに保存される暫定実装
+                let url = try await AWSManager.shared.uploadAvatar(
+                    image: image,
+                    type: "users",
+                    id: userId
+                )
+                
+                await MainActor.run {
+                    isUploadingAvatar = false
+                    // AvatarViewを強制的に更新
+                    NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
+                }
+            } catch {
+                await MainActor.run {
+                    isUploadingAvatar = false
+                    avatarUploadError = error.localizedDescription
+                }
             }
         }
     }
@@ -847,9 +944,11 @@ struct InfoRowTwoLine: View {
 struct AvatarView: View {
     let userId: String?
     let size: CGFloat = 80
+    let useS3: Bool = true // ⚠️ ペンディング: API実装後はS3のURLを使用予定
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var avatarUrl: URL?
     @State private var isLoadingAvatar = true
+    @State private var lastUpdateTime = Date()
     
     var body: some View {
         Group {
@@ -898,32 +997,48 @@ struct AvatarView: View {
             }
         }
         .onAppear {
-            // Viewが表示された時にアバターURLを取得する
-            Task {
-                guard let userId = userId else {
-                    print("⚠️ ユーザーIDが指定されていません")
-                    isLoadingAvatar = false
-                    return
-                }
-                
-                // DataManagerの新しい関数を呼び出す
-                self.avatarUrl = await dataManager.fetchAvatarUrl(for: userId)
-                self.isLoadingAvatar = false
-            }
+            loadAvatar()
         }
         .onChange(of: userId) { oldValue, newValue in
-            // ユーザーIDが変更されたら再取得
-            Task {
-                guard let userId = newValue else {
-                    self.avatarUrl = nil
-                    self.isLoadingAvatar = false
-                    return
-                }
-                
-                self.isLoadingAvatar = true
-                self.avatarUrl = await dataManager.fetchAvatarUrl(for: userId)
-                self.isLoadingAvatar = false
+            loadAvatar()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AvatarUpdated"))) { _ in
+            // アバターが更新されたら再読み込み
+            lastUpdateTime = Date()
+            loadAvatar()
+        }
+    }
+    
+    private func loadAvatar() {
+        Task {
+            guard let userId = userId else {
+                print("⚠️ ユーザーIDが指定されていません")
+                isLoadingAvatar = false
+                return
             }
+            
+            isLoadingAvatar = true
+            
+            if useS3 {
+                // 暫定実装: ローカルファイルから読み込み
+                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let fileURL = documentsPath.appendingPathComponent("users/\(userId)/avatar.jpg")
+                
+                if FileManager.default.fileExists(atPath: fileURL.path) {
+                    self.avatarUrl = fileURL
+                    print("📁 Loading local avatar from: \(fileURL)")
+                } else {
+                    // S3のURLを設定（実際には存在しない）
+                    let baseURL = AWSManager.shared.getAvatarURL(type: "users", id: userId)
+                    let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
+                    self.avatarUrl = URL(string: "\(baseURL.absoluteString)?t=\(timestamp)")
+                }
+            } else {
+                // Supabaseから取得（既存の実装）
+                self.avatarUrl = await dataManager.fetchAvatarUrl(for: userId)
+            }
+            
+            self.isLoadingAvatar = false
         }
     }
     

@@ -20,8 +20,16 @@ class SupabaseDataManager: ObservableObject {
     @Published var dailyEmotionReport: EmotionReport?   // 新しく追加
     @Published var weeklyReports: [DailyVibeReport] = []
     @Published var subject: Subject?
+    @Published var subjects: [Subject] = []  // 複数のSubjectを管理
     @Published var isLoading = false
     @Published var errorMessage: String?
+    
+    // 現在のユーザーID
+    var currentUserId: String? {
+        // Supabaseの現在のセッションからユーザーIDを取得
+        // 実際の実装では SupabaseAuthManager から取得する必要がある
+        return nil
+    }
     
     // MARK: - Private Properties
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
