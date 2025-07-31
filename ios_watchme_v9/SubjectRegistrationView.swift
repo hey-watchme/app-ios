@@ -24,11 +24,14 @@ struct SubjectRegistrationView: View {
     @State private var notes: String = ""
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImageData: Data? = nil
+    @State private var selectedImage: UIImage? = nil
+    @State private var showingAvatarPicker = false
     
     // UI状態
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showingSuccessAlert = false
+    @State private var isUploadingAvatar = false
     
     // 性別選択肢
     private let genderOptions = ["男性", "女性", "その他", "回答しない"]
@@ -150,31 +153,54 @@ struct SubjectRegistrationView: View {
             
             HStack {
                 // 写真表示
-                Group {
-                    if let imageData = selectedImageData,
-                       let uiImage = UIImage(data: imageData) {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFill()
-                    } else {
-                        Image(systemName: "person.crop.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.gray)
+                Button(action: {
+                    showingAvatarPicker = true
+                }) {
+                    Group {
+                        if let image = selectedImage {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                        } else if let subject = editingSubject {
+                            // 編集時: ローカルファイルまたはS3のURLから表示
+                            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                            let localURL = documentsPath.appendingPathComponent("subjects/\(subject.subjectId)/avatar.jpg")
+                            let imageURL = FileManager.default.fileExists(atPath: localURL.path) ? localURL : AWSManager.shared.getAvatarURL(type: "subjects", id: subject.subjectId)
+                            
+                            AsyncImage(url: imageURL) { phase in
+                                switch phase {
+                                case .success(let image):
+                                    image
+                                        .resizable()
+                                        .scaledToFill()
+                                case .failure(_), .empty:
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .font(.system(size: 60))
+                                        .foregroundColor(.gray)
+                                @unknown default:
+                                    Image(systemName: "person.crop.circle.fill")
+                                        .font(.system(size: 60))
+                                        .foregroundColor(.gray)
+                                }
+                            }
+                        } else {
+                            Image(systemName: "person.crop.circle.fill")
+                                .font(.system(size: 60))
+                                .foregroundColor(.gray)
+                        }
                     }
+                    .frame(width: 80, height: 80)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
                 }
-                .frame(width: 80, height: 80)
-                .clipShape(Circle())
-                .overlay(
-                    Circle()
-                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                )
                 
                 VStack(alignment: .leading, spacing: 8) {
-                    PhotosPicker(
-                        selection: $selectedItem,
-                        matching: .images,
-                        photoLibrary: .shared()
-                    ) {
+                    Button(action: {
+                        showingAvatarPicker = true
+                    }) {
                         HStack {
                             Image(systemName: "photo")
                             Text("写真を選択")
@@ -200,10 +226,32 @@ struct SubjectRegistrationView: View {
                 Spacer()
             }
         }
-        .onChange(of: selectedItem) { oldValue, newValue in
-            Task {
-                if let data = try? await newValue?.loadTransferable(type: Data.self) {
-                    selectedImageData = data
+        .sheet(isPresented: $showingAvatarPicker) {
+            NavigationView {
+                VStack {
+                    AvatarPickerView(
+                        currentAvatarURL: editingSubject != nil ? AWSManager.shared.getAvatarURL(type: "subjects", id: editingSubject!.subjectId) : nil,
+                        onImageSelected: { image in
+                            self.selectedImage = image
+                            self.selectedImageData = image.jpegData(compressionQuality: 0.8)
+                        },
+                        onDelete: {
+                            self.selectedImage = nil
+                            self.selectedImageData = nil
+                        }
+                    )
+                    .padding()
+                    
+                    Spacer()
+                }
+                .navigationTitle("アバターを選択")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("キャンセル") {
+                            showingAvatarPicker = false
+                        }
+                    }
                 }
             }
         }
@@ -306,12 +354,8 @@ struct SubjectRegistrationView: View {
             gender = subject.gender ?? ""
             notes = subject.notes ?? ""
             
-            // アバター画像の読み込み
-            if let avatarUrlString = subject.avatarUrl,
-               avatarUrlString.hasPrefix("data:image"),
-               let imageData = Data(base64Encoded: String(avatarUrlString.dropFirst(22)), options: .ignoreUnknownCharacters) {
-                selectedImageData = imageData
-            }
+            // S3からのアバター画像は、profileImageSectionのAsyncImageで直接表示されるため、
+            // ここでは何もロードしない
         }
     }
     
@@ -342,14 +386,6 @@ struct SubjectRegistrationView: View {
                 }
             }
             
-            // アバター画像の処理
-            var avatarUrl: String? = nil
-            if let imageData = selectedImageData {
-                // Base64エンコード
-                let base64String = imageData.base64EncodedString()
-                avatarUrl = "data:image/jpeg;base64,\(base64String)"
-            }
-            
             // 現在のユーザーIDを取得
             guard let currentUser = authManager.currentUser else {
                 await MainActor.run {
@@ -359,15 +395,40 @@ struct SubjectRegistrationView: View {
                 return
             }
             
-            // 観測対象を登録
+            // 観測対象を登録（アバターURL無しで）
             let subjectId = try await dataManager.registerSubject(
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
-                avatarUrl: avatarUrl,
+                avatarUrl: nil, // S3アップロード後に更新するため、一旦null
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 createdByUserId: currentUser.id
             )
+            
+            // アバター画像をアップロード
+            if let image = selectedImage {
+                await MainActor.run {
+                    isUploadingAvatar = true
+                }
+                
+                do {
+                    // ⚠️ ペンディング: アバターアップロード専用APIの実装待ち
+                    // 現在はローカルファイルシステムに保存される暫定実装
+                    let avatarUrl = try await AWSManager.shared.uploadAvatar(
+                        image: image,
+                        type: "subjects",
+                        id: subjectId
+                    )
+                    print("⚠️ PENDING: Subject avatar saved locally (API not implemented): \(avatarUrl)")
+                } catch {
+                    print("⚠️ Avatar upload failed: \(error)")
+                    // アバターアップロードに失敗しても、観測対象の登録は成功とする
+                }
+                
+                await MainActor.run {
+                    isUploadingAvatar = false
+                }
+            }
             
             // デバイスにsubject_idを設定
             try await dataManager.updateDeviceSubjectId(deviceId: deviceID, subjectId: subjectId)
@@ -418,23 +479,40 @@ struct SubjectRegistrationView: View {
                 }
             }
             
-            // アバター画像の処理
-            var avatarUrl: String? = nil
-            if let imageData = selectedImageData {
-                // Base64エンコード
-                let base64String = imageData.base64EncodedString()
-                avatarUrl = "data:image/jpeg;base64,\(base64String)"
-            }
-            
-            // 観測対象を更新
+            // 観測対象を更新（アバターURL無しで）
             try await dataManager.updateSubject(
                 subjectId: subject.subjectId,
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
-                avatarUrl: avatarUrl,
+                avatarUrl: nil, // S3のURLを使うため、DBにはnullを設定
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             )
+            
+            // アバター画像をアップロード
+            if let image = selectedImage {
+                await MainActor.run {
+                    isUploadingAvatar = true
+                }
+                
+                do {
+                    // ⚠️ ペンディング: アバターアップロード専用APIの実装待ち
+                    // 現在はローカルファイルシステムに保存される暫定実装
+                    let avatarUrl = try await AWSManager.shared.uploadAvatar(
+                        image: image,
+                        type: "subjects",
+                        id: subject.subjectId
+                    )
+                    print("⚠️ PENDING: Subject avatar updated locally (API not implemented): \(avatarUrl)")
+                } catch {
+                    print("⚠️ Avatar upload failed: \(error)")
+                    // アバターアップロードに失敗しても、観測対象の更新は成功とする
+                }
+                
+                await MainActor.run {
+                    isUploadingAvatar = false
+                }
+            }
             
             // データを再取得
             await dataManager.fetchAllReports(deviceId: deviceID, date: Date())

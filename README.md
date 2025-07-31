@@ -710,6 +710,41 @@ git push origin feature/機能名
 ## 更新履歴
 
 ### 2025年7月31日
+- **v9.16.0 - アバター機能の実装（ペンディング）**
+  - **⚠️ 現在ペンディング状態 ⚠️**
+    - アバターアップロード専用APIの実装待ち
+    - APIエンドポイントが提供され次第、実装を更新予定
+    - 現在はローカルファイルシステムに保存する暫定実装
+    
+  - **実装した機能**
+    - UserアバターとSubjectアバターの画像選択・編集機能
+    - 共通のアバター選択コンポーネント（AvatarPickerView）
+    - PHPickerViewControllerを使用した写真ライブラリからの選択
+    - カメラ撮影機能（UIImagePickerController）
+    - 画像トリミング機能（300x300の正方形）
+    
+  - **暫定実装の詳細**
+    - 画像はDocumentsディレクトリに保存
+    - パス形式: `Documents/{type}/{id}/avatar.jpg`
+    - typeは "users" または "subjects"
+    - JPEG形式、品質80%で保存
+    
+  - **API実装後の想定仕様**
+    - エンドポイント: `POST /api/avatar/upload`
+    - リクエスト: multipart/form-data
+      - file: 画像ファイル
+      - type: "users" or "subjects"
+      - id: ユーザーIDまたはサブジェクトID
+    - レスポンス: `{ url: "https://..." }`
+    - アップロード後はS3のURLを使用してアバターを表示
+    
+  - **実装ファイル**
+    - `AWSManager.swift`: アバターアップロード管理（ペンディング実装）
+    - `AvatarPickerView.swift`: 共通の画像選択・編集コンポーネント
+    - `ContentView.swift`: UserアバターのUI実装
+    - `SubjectRegistrationView.swift`: Subjectアバターの実装
+    - `DashboardView.swift`: Subjectアバター表示の更新
+
 - **v9.15.0 - QRコードによるデバイス追加機能の実装**
   - **QRコードスキャン機能**
     - デバイス選択画面に「デバイスを追加」ボタンを追加

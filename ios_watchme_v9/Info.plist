@@ -25,7 +25,9 @@
 	<key>UILaunchStoryboardName</key>
 	<string>Launch Screen</string>
 	<key>NSCameraUsageDescription</key>
-	<string>QRコードをスキャンしてデバイスを追加するためにカメラを使用します</string>
+	<string>QRコードをスキャンしてデバイスを追加するため、およびアバター写真を撮影するためにカメラを使用します</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>アバター画像を選択するためにフォトライブラリへのアクセスが必要です</string>
 	<key>UIRequiresFullScreen</key>
 	<false/>
 	<key>UISupportedInterfaceOrientations</key>

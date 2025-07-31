@@ -382,13 +382,15 @@ struct DashboardView: View {
             }
             
             HStack(spacing: 20) {
-                // アバターエリア
-                if let avatarUrlString = subject.avatarUrl,
-                   avatarUrlString.hasPrefix("data:image") {
-                    // Base64データの場合
-                    if let imageData = Data(base64Encoded: String(avatarUrlString.dropFirst(22)), options: .ignoreUnknownCharacters),
-                       let uiImage = UIImage(data: imageData) {
-                        Image(uiImage: uiImage)
+                // アバターエリア（ローカルファイルまたはS3から取得）
+                let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                let localURL = documentsPath.appendingPathComponent("subjects/\(subject.subjectId)/avatar.jpg")
+                let imageURL = FileManager.default.fileExists(atPath: localURL.path) ? localURL : AWSManager.shared.getAvatarURL(type: "subjects", id: subject.subjectId)
+                
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
                             .resizable()
                             .scaledToFill()
                             .frame(width: 60, height: 60)
@@ -397,34 +399,18 @@ struct DashboardView: View {
                                 Circle()
                                     .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
-                    } else {
+                    case .failure(_), .empty:
                         // デフォルトアバター
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 60))
                             .foregroundColor(.gray)
-                    }
-                } else if let avatarUrlString = subject.avatarUrl,
-                          let avatarUrl = URL(string: avatarUrlString) {
-                    // URLの場合
-                    AsyncImage(url: avatarUrl) { image in
-                        image
-                            .resizable()
-                            .scaledToFill()
-                    } placeholder: {
-                        ProgressView()
+                            .frame(width: 60, height: 60)
+                    @unknown default:
+                        Image(systemName: "person.crop.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.gray)
                             .frame(width: 60, height: 60)
                     }
-                    .frame(width: 60, height: 60)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
-                } else {
-                    // デフォルトアバター
-                    Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.gray)
                 }
                 
                 // 情報エリア
