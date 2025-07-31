@@ -27,9 +27,11 @@ class DeviceManager: ObservableObject {
     private let localDeviceIdentifierKey = "watchme_device_id"  // UserDefaultsのキーは互換性のため維持
     private let isRegisteredKey = "watchme_device_registered"
     private let platformIdentifierKey = "watchme_platform_identifier"
+    private let selectedDeviceIDKey = "watchme_selected_device_id"  // 選択中のデバイスID永続化用
     
     init() {
         checkDeviceRegistrationStatus()
+        restoreSelectedDevice()
     }
     
     // MARK: - デバイス登録状態確認
@@ -352,7 +354,12 @@ class DeviceManager: ObservableObject {
                 let ownerDevices = devices.filter { $0.role == "owner" }
                 let viewerDevices = devices.filter { $0.role == "viewer" }
                 
-                if let firstOwnerDevice = ownerDevices.first {
+                // 保存された選択デバイスがある場合はそれを優先
+                if let savedDeviceId = UserDefaults.standard.string(forKey: self.selectedDeviceIDKey),
+                   devices.contains(where: { $0.device_id == savedDeviceId }) {
+                    self.selectedDeviceID = savedDeviceId
+                    print("🔍 Restored previously selected device: \(savedDeviceId)")
+                } else if let firstOwnerDevice = ownerDevices.first {
                     self.selectedDeviceID = firstOwnerDevice.device_id
                     print("🔍 Auto-selected owner device: \(firstOwnerDevice.device_id)")
                 } else if let firstViewerDevice = viewerDevices.first {
@@ -378,7 +385,17 @@ class DeviceManager: ObservableObject {
     func selectDevice(_ deviceId: String) {
         if userDevices.contains(where: { $0.device_id == deviceId }) {
             selectedDeviceID = deviceId
-            print("📱 Selected device: \(deviceId)")
+            // 選択したデバイスIDを永続化
+            UserDefaults.standard.set(deviceId, forKey: selectedDeviceIDKey)
+            print("📱 Selected device saved: \(deviceId)")
+        }
+    }
+    
+    // MARK: - 選択中デバイスの復元
+    private func restoreSelectedDevice() {
+        if let savedDeviceId = UserDefaults.standard.string(forKey: selectedDeviceIDKey) {
+            selectedDeviceID = savedDeviceId
+            print("📱 Restored selected device: \(savedDeviceId)")
         }
     }
     

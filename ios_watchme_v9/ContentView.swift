@@ -25,6 +25,7 @@ struct ContentView: View {
     @State private var selectedDeviceForSubject: String? = nil
     @State private var editingSubject: Subject? = nil
     @State private var subjectsByDevice: [String: Subject] = [:]
+    @State private var showDeviceSelection = false
     
     // 日付の選択状態を一元管理
     @State private var selectedDate = Date()
@@ -54,10 +55,9 @@ struct ContentView: View {
                 VStack(spacing: 0) { // ヘッダー、日付ナビゲーション、TabViewを縦に並べる
                 // 固定ヘッダー (デバイス選択、ユーザー情報、通知など)
                 HStack {
-                    // デバイス選択ボタン (仮)
+                    // デバイス選択ボタン
                     Button(action: {
-                        // デバイス選択ロジック
-                        print("デバイス選択")
+                        showDeviceSelection = true
                     }) {
                         HStack {
                             Image(systemName: deviceManager.userDevices.isEmpty ? "iphone.slash" : "iphone")
@@ -240,6 +240,11 @@ struct ContentView: View {
                 }
             } message: {
                 Text("本当にログアウトしますか？")
+            }
+            .sheet(isPresented: $showDeviceSelection) {
+                DeviceSelectionView(isPresented: $showDeviceSelection)
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
             }
             .sheet(isPresented: $showSubjectRegistration, onDismiss: {
                 loadSubjectsForAllDevices()
