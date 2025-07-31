@@ -417,6 +417,54 @@ class DeviceManager: ObservableObject {
         )
     }
     
+    // MARK: - QRコードによるデバイス追加
+    func addDeviceByQRCode(_ deviceId: String, for userId: String) async throws {
+        // UUIDの妥当性チェック
+        guard UUID(uuidString: deviceId) != nil else {
+            throw DeviceAddError.invalidDeviceId
+        }
+        
+        // 既に追加済みかチェック
+        if userDevices.contains(where: { $0.device_id == deviceId }) {
+            throw DeviceAddError.alreadyAdded
+        }
+        
+        // まずdevicesテーブルにデバイスが存在するか確認
+        do {
+            let existingDevices: [Device] = try await supabase
+                .from("devices")
+                .select("*")
+                .eq("device_id", value: deviceId)
+                .execute()
+                .value
+            
+            if existingDevices.isEmpty {
+                throw DeviceAddError.deviceNotFound
+            }
+            
+            // user_devicesテーブルに追加（ownerロールで）
+            let userDevice = UserDeviceInsert(
+                user_id: userId,
+                device_id: deviceId,
+                role: "owner"  // デフォルトでownerロールに変更
+            )
+            
+            try await supabase
+                .from("user_devices")
+                .insert(userDevice)
+                .execute()
+            
+            print("✅ Device added via QR code: \(deviceId)")
+            
+            // デバイス一覧を再取得
+            await fetchUserDevices(for: userId)
+            
+        } catch {
+            print("❌ Failed to add device via QR code: \(error)")
+            throw error
+        }
+    }
+    
 }
 
 // MARK: - データモデル
@@ -477,6 +525,27 @@ enum DeviceRegistrationError: Error {
             return "Supabaseライブラリが利用できません"
         case .registrationFailed:
             return "デバイス登録処理に失敗しました"
+        }
+    }
+}
+
+// デバイス追加エラー
+enum DeviceAddError: Error, LocalizedError {
+    case invalidDeviceId
+    case deviceNotFound
+    case alreadyAdded
+    case unauthorized
+    
+    var errorDescription: String? {
+        switch self {
+        case .invalidDeviceId:
+            return "無効なデバイスIDです"
+        case .deviceNotFound:
+            return "デバイスが見つかりません"
+        case .alreadyAdded:
+            return "このデバイスは既に追加されています"
+        case .unauthorized:
+            return "デバイスの追加権限がありません"
         }
     }
 }

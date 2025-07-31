@@ -245,6 +245,7 @@ struct ContentView: View {
                 DeviceSelectionView(isPresented: $showDeviceSelection)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
+                    .environmentObject(authManager)
             }
             .sheet(isPresented: $showSubjectRegistration, onDismiss: {
                 loadSubjectsForAllDevices()

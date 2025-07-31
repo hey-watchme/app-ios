@@ -24,6 +24,8 @@
 	</dict>
 	<key>UILaunchStoryboardName</key>
 	<string>Launch Screen</string>
+	<key>NSCameraUsageDescription</key>
+	<string>QRコードをスキャンしてデバイスを追加するためにカメラを使用します</string>
 	<key>UIRequiresFullScreen</key>
 	<false/>
 	<key>UISupportedInterfaceOrientations</key>

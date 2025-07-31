@@ -24,6 +24,13 @@ class SupabaseDataManager: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     
+    // 現在のユーザーID
+    var currentUserId: String? {
+        // Supabaseの現在のセッションからユーザーIDを取得
+        // 実際の実装では SupabaseAuthManager から取得する必要がある
+        return nil
+    }
+    
     // MARK: - Private Properties
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
