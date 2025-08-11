@@ -92,9 +92,9 @@ class DeviceManager: ObservableObject {
                 print("🌍 デバイスタイムゾーン: \(timezone)")
                 
                 let deviceData = DeviceInsert(
-                    platform_identifier: platformIdentifier,
+                    platform_identifier: platformIdentifier,  // 互換性のため残す（将来nil設定可）
                     device_type: "ios",
-                    platform_type: "iOS",
+                    platform_type: "iOS",  // 互換性のため残す（将来nil設定可）
                     timezone: timezone
                 )
                 
@@ -182,9 +182,9 @@ class DeviceManager: ObservableObject {
             print("🌍 デバイスタイムゾーン: \(timezone)")
             
             let deviceData = DeviceInsert(
-                platform_identifier: platformIdentifier,
+                platform_identifier: platformIdentifier,  // 互換性のため残す（将来nil設定可）
                 device_type: "ios",
-                platform_type: "iOS",
+                platform_type: "iOS",  // 互換性のため残す（将来nil設定可）
                 timezone: timezone
             )
             
@@ -526,18 +526,18 @@ struct DeviceInfo {
 
 // Supabase Insert用データモデル
 struct DeviceInsert: Codable {
-    let platform_identifier: String
+    let platform_identifier: String?  // オプショナルに変更（既存デバイスとの互換性のため）
     let device_type: String
-    let platform_type: String
+    let platform_type: String?        // オプショナルに変更（既存デバイスとの互換性のため）
     let timezone: String // IANAタイムゾーン識別子（例: "Asia/Tokyo"）
 }
 
 // Supabase Response用データモデル
 struct Device: Codable {
     let device_id: String
-    let platform_identifier: String
+    let platform_identifier: String?  // オプショナルに変更（将来削除予定）
     let device_type: String
-    let platform_type: String
+    let platform_type: String?        // オプショナルに変更（将来削除予定）
     let timezone: String? // IANAタイムゾーン識別子（例: "Asia/Tokyo"）
     let owner_user_id: String?
     let subject_id: String?
