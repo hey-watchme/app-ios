@@ -266,7 +266,6 @@ struct DeviceSectionView_Previews: PreviewProvider {
                 device_id: "12345678-1234-1234-1234-123456789012",
                 platform_identifier: nil,  // 将来削除予定
                 device_type: "ios",
-                platform_type: nil,  // 将来削除予定
                 timezone: "Asia/Tokyo",
                 owner_user_id: "user1",
                 subject_id: nil,
@@ -276,7 +275,6 @@ struct DeviceSectionView_Previews: PreviewProvider {
                 device_id: "87654321-4321-4321-4321-210987654321",
                 platform_identifier: nil,  // 将来削除予定
                 device_type: "android",
-                platform_type: nil,  // 将来削除予定
                 timezone: "America/New_York",
                 owner_user_id: "user1",
                 subject_id: nil,
