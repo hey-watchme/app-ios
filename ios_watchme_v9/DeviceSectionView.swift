@@ -264,7 +264,6 @@ struct DeviceSectionView_Previews: PreviewProvider {
         let sampleDevices = [
             Device(
                 device_id: "12345678-1234-1234-1234-123456789012",
-                platform_identifier: nil,  // 将来削除予定
                 device_type: "ios",
                 timezone: "Asia/Tokyo",
                 owner_user_id: "user1",
@@ -273,7 +272,6 @@ struct DeviceSectionView_Previews: PreviewProvider {
             ),
             Device(
                 device_id: "87654321-4321-4321-4321-210987654321",
-                platform_identifier: nil,  // 将来削除予定
                 device_type: "android",
                 timezone: "America/New_York",
                 owner_user_id: "user1",

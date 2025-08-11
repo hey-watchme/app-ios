@@ -26,7 +26,6 @@ class DeviceManager: ObservableObject {
     // UserDefaults キー
     private let localDeviceIdentifierKey = "watchme_device_id"  // UserDefaultsのキーは互換性のため維持
     private let isRegisteredKey = "watchme_device_registered"
-    private let platformIdentifierKey = "watchme_platform_identifier"
     private let selectedDeviceIDKey = "watchme_selected_device_id"  // 選択中のデバイスID永続化用
     
     init() {
@@ -52,38 +51,23 @@ class DeviceManager: ObservableObject {
                 print("🗑️ 古いローカル登録データを削除")
                 UserDefaults.standard.removeObject(forKey: localDeviceIdentifierKey)
                 UserDefaults.standard.removeObject(forKey: isRegisteredKey)
-                UserDefaults.standard.removeObject(forKey: platformIdentifierKey)
             }
         }
     }
-    
-    
-    // MARK: - プラットフォーム識別子取得
-    private func getPlatformIdentifier() -> String? {
-        return UIDevice.current.identifierForVendor?.uuidString
-    }
-    
     // MARK: - デバイス登録処理（ユーザーが明示的に登録する場合のみ使用）
     func registerDevice(userId: String) {
-        guard let platformIdentifier = getPlatformIdentifier() else {
-            registrationError = "デバイス識別子の取得に失敗しました"
-            print("❌ identifierForVendor取得失敗")
-            return
-        }
-        
         isLoading = true
         registrationError = nil
         
         print("📱 Supabaseデバイス登録開始（ユーザーの明示的な操作による）")
-        print("   - Platform Identifier: \(platformIdentifier)")
         print("   - User ID: \(userId)")
         
         // Supabase直接Insert実装
-        registerDeviceToSupabase(platformIdentifier: platformIdentifier, userId: userId)
+        registerDeviceToSupabase(userId: userId)
     }
     
     // MARK: - Supabase UPSERT登録（改善版）
-    private func registerDeviceToSupabase(platformIdentifier: String, userId: String) {
+    private func registerDeviceToSupabase(userId: String) {
         Task { @MainActor in
             do {
                 // --- ステップ1: devicesテーブルにデバイスを登録 ---
@@ -92,7 +76,6 @@ class DeviceManager: ObservableObject {
                 print("🌍 デバイスタイムゾーン: \(timezone)")
                 
                 let deviceData = DeviceInsert(
-                    platform_identifier: platformIdentifier,  // 互換性のため残す（将来nil設定可）
                     device_type: "ios",
                     timezone: timezone
                 )
@@ -149,10 +132,7 @@ class DeviceManager: ObservableObject {
                 }
                 
                 // 最後にローカルのデバイス情報を保存
-                self.saveSupabaseDeviceRegistration(
-                    deviceID: newDeviceId,
-                    platformIdentifier: platformIdentifier
-                )
+                self.saveSupabaseDeviceRegistration(deviceID: newDeviceId)
                 self.isLoading = false
                 self.registrationError = nil  // エラーをクリア
                 
@@ -169,11 +149,6 @@ class DeviceManager: ObservableObject {
     
     // MARK: - ユーザーIDを指定したSupabase登録（内部用）
     private func registerDeviceToSupabase(userId: String) async {
-        guard let platformIdentifier = getPlatformIdentifier() else {
-            print("❌ デバイス識別子の取得に失敗しました")
-            return
-        }
-        
         do {
             // --- ステップ1: devicesテーブルにデバイスを登録 ---
             // iOSのIANAタイムゾーン識別子を取得
@@ -181,7 +156,6 @@ class DeviceManager: ObservableObject {
             print("🌍 デバイスタイムゾーン: \(timezone)")
             
             let deviceData = DeviceInsert(
-                platform_identifier: platformIdentifier,  // 互換性のため残す（将来nil設定可）
                 device_type: "ios",
                 timezone: timezone
             )
@@ -249,10 +223,7 @@ class DeviceManager: ObservableObject {
             
             // 最後にローカルのデバイス情報を保存
             await MainActor.run {
-                self.saveSupabaseDeviceRegistration(
-                    deviceID: newDeviceId,
-                    platformIdentifier: platformIdentifier
-                )
+                self.saveSupabaseDeviceRegistration(deviceID: newDeviceId)
             }
             
         } catch {
@@ -261,9 +232,8 @@ class DeviceManager: ObservableObject {
     }
     
     // MARK: - Supabaseデバイス登録情報保存
-    private func saveSupabaseDeviceRegistration(deviceID: String, platformIdentifier: String) {
+    private func saveSupabaseDeviceRegistration(deviceID: String) {
         UserDefaults.standard.set(deviceID, forKey: localDeviceIdentifierKey)
-        UserDefaults.standard.set(platformIdentifier, forKey: platformIdentifierKey)
         UserDefaults.standard.set(true, forKey: "watchme_supabase_registered")
         
         self.localDeviceIdentifier = deviceID
@@ -271,13 +241,11 @@ class DeviceManager: ObservableObject {
         
         print("💾 Supabaseデバイス登録完了")
         print("   - Device ID: \(deviceID)")
-        print("   - Platform Identifier: \(platformIdentifier)")
     }
     
     // MARK: - デバイス登録状態リセット（デバッグ用）
     func resetDeviceRegistration() {
         UserDefaults.standard.removeObject(forKey: localDeviceIdentifierKey)
-        UserDefaults.standard.removeObject(forKey: platformIdentifierKey)
         UserDefaults.standard.removeObject(forKey: "watchme_supabase_registered")
         
         self.localDeviceIdentifier = nil
@@ -412,14 +380,12 @@ class DeviceManager: ObservableObject {
         // 選択されたデバイスIDがあればそれを使用、なければこの物理デバイスのIDを使用
         let deviceID = selectedDeviceID ?? localDeviceIdentifier
         
-        guard let deviceID = deviceID,
-              let platformIdentifier = UserDefaults.standard.string(forKey: platformIdentifierKey) else {
+        guard let deviceID = deviceID else {
             return nil
         }
         
         return DeviceInfo(
             deviceID: deviceID,
-            platformIdentifier: platformIdentifier,
             deviceType: "ios"
         )
     }
@@ -516,13 +482,11 @@ class DeviceManager: ObservableObject {
 // デバイス情報
 struct DeviceInfo {
     let deviceID: String
-    let platformIdentifier: String
     let deviceType: String
 }
 
 // Supabase Insert用データモデル
 struct DeviceInsert: Codable {
-    let platform_identifier: String?  // オプショナルに変更（既存デバイスとの互換性のため）
     let device_type: String
     let timezone: String // IANAタイムゾーン識別子（例: "Asia/Tokyo"）
 }
@@ -530,7 +494,6 @@ struct DeviceInsert: Codable {
 // Supabase Response用データモデル
 struct Device: Codable {
     let device_id: String
-    let platform_identifier: String?  // オプショナルに変更（将来削除予定）
     let device_type: String
     let timezone: String? // IANAタイムゾーン識別子（例: "Asia/Tokyo"）
     let owner_user_id: String?
