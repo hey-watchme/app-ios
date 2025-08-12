@@ -85,7 +85,7 @@ struct DashboardView: View {
                 Image(systemName: "brain.head.profile")
                     .font(.title2)
                     .foregroundColor(.purple)
-                Text("心理状態")
+                Text("気分")
                     .font(.headline)
                 Spacer()
             }
@@ -113,22 +113,10 @@ struct DashboardView: View {
     @ViewBuilder
     private func vibeReportContent(_ vibeReport: DailyVibeReport) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            // 平均スコアとアイコン
-            HStack(spacing: 16) {
-                Text(vibeReport.emotionIcon(for: vibeReport.averageScore))
-                    .font(.system(size: 48))
-                
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("平均スコア")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("\(Int(vibeReport.averageScore))点")
-                        .font(.title)
-                        .fontWeight(.bold)
-                        .foregroundColor(vibeReport.scoreColor(for: vibeReport.averageScore))
-                }
-                
-                Spacer()
+            // 時間帯別グラフをメインに表示
+            if let vibeScores = vibeReport.vibeScores {
+                VibeLineChartView(vibeScores: vibeScores, vibeChanges: vibeReport.vibeChanges)
+                    .frame(height: 150) // カード用に高さを調整
             }
             
             // 時間分布
