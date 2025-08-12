@@ -135,7 +135,7 @@ struct HomeView: View {
                         
                         // 時間帯別グラフ (折れ線グラフ版)
                         if let vibeScores = report.vibeScores {
-                            VibeLineChartView(vibeScores: vibeScores, vibeChanges: report.vibeChanges)
+                            VibeLineChartView(vibeScores: vibeScores, vibeChanges: report.vibeChanges, showTitle: true, compactMode: false)
                         }
                     }
                 } else if !dataManager.isLoading && dataManager.errorMessage == nil {

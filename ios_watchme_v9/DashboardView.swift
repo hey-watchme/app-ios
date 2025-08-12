@@ -82,9 +82,9 @@ struct DashboardView: View {
     private var vibeGraphCard: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Image(systemName: "brain.head.profile")
+                Image(systemName: "heart.text.square")
                     .font(.title2)
-                    .foregroundColor(.purple)
+                    .foregroundColor(.pink)
                 Text("気分")
                     .font(.headline)
                 Spacer()
@@ -112,29 +112,14 @@ struct DashboardView: View {
     
     @ViewBuilder
     private func vibeReportContent(_ vibeReport: DailyVibeReport) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // 時間帯別グラフをメインに表示
+        VStack(alignment: .leading, spacing: 8) {
+            // 時間帯別グラフをメインに表示（タイトルなし、コンパクトモード）
             if let vibeScores = vibeReport.vibeScores {
-                VibeLineChartView(vibeScores: vibeScores, vibeChanges: vibeReport.vibeChanges)
-                    .frame(height: 150) // カード用に高さを調整
-            }
-            
-            // 時間分布
-            HStack(spacing: 12) {
-                TimeDistributionBadge(
-                    label: "ポジティブ",
-                    hours: vibeReport.positiveHours,
-                    color: .green
-                )
-                TimeDistributionBadge(
-                    label: "ニュートラル",
-                    hours: vibeReport.neutralHours,
-                    color: .gray
-                )
-                TimeDistributionBadge(
-                    label: "ネガティブ",
-                    hours: vibeReport.negativeHours,
-                    color: .red
+                VibeLineChartView(
+                    vibeScores: vibeScores,
+                    vibeChanges: vibeReport.vibeChanges,
+                    showTitle: false,
+                    compactMode: true
                 )
             }
             
@@ -144,6 +129,7 @@ struct DashboardView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .lineLimit(2)
+                    .padding(.horizontal, 4)
             }
         }
     }
@@ -154,7 +140,7 @@ struct DashboardView: View {
                 Image(systemName: "figure.walk")
                     .font(.title2)
                     .foregroundColor(.blue)
-                Text("行動パターン")
+                Text("行動")
                     .font(.headline)
                 Spacer()
             }
@@ -226,7 +212,7 @@ struct DashboardView: View {
                 Image(systemName: "heart.fill")
                     .font(.title2)
                     .foregroundColor(.pink)
-                Text("感情分析")
+                Text("感情")
                     .font(.headline)
                 Spacer()
             }
