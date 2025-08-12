@@ -91,7 +91,14 @@ struct SheetModifier: ViewModifier {
                     VStack {
                         DatePicker(
                             "日付を選択",
-                            selection: $selectedDate,
+                            selection: Binding(
+                                get: { selectedDate },
+                                set: { newDate in
+                                    selectedDate = newDate
+                                    // 日付が選択されたら即座にシートを閉じる
+                                    showDatePicker = false
+                                }
+                            ),
                             in: ...Date(),
                             displayedComponents: .date
                         )
@@ -108,12 +115,6 @@ struct SheetModifier: ViewModifier {
                             Button("キャンセル") {
                                 showDatePicker = false
                             }
-                        }
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            Button("完了") {
-                                showDatePicker = false
-                            }
-                            .fontWeight(.semibold)
                         }
                     }
                 }
