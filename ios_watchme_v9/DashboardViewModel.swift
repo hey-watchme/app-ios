@@ -40,7 +40,8 @@ class DashboardViewModel: ObservableObject {
     init(dataManager: SupabaseDataManager, deviceManager: DeviceManager, initialDate: Date) {
         self.dataManager = dataManager
         self.deviceManager = deviceManager
-        self.selectedDate = initialDate
+        // デバイスのタイムゾーンで日付を正規化
+        self.selectedDate = deviceManager.deviceCalendar.startOfDay(for: initialDate)
         self.selectedDeviceID = deviceManager.selectedDeviceID
         
         setupBindings()
@@ -75,7 +76,8 @@ class DashboardViewModel: ObservableObject {
     }
     
     func updateSelectedDate(_ date: Date) {
-        self.selectedDate = date
+        // デバイスのタイムゾーンで日付を正規化
+        self.selectedDate = deviceManager.deviceCalendar.startOfDay(for: date)
     }
     
     // MARK: - Cache Methods

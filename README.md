@@ -67,9 +67,7 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
 -- devicesテーブル
 CREATE TABLE devices (
     device_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    platform_identifier TEXT NOT NULL UNIQUE,
     device_type TEXT NOT NULL,
-    platform_type TEXT NOT NULL,
     timezone TEXT NOT NULL,  -- v9.17.0で追加（IANAタイムゾーン識別子）
     owner_user_id UUID REFERENCES auth.users(id),  -- 廃止予定
     subject_id UUID REFERENCES subjects(subject_id),  -- v9.14.0で追加

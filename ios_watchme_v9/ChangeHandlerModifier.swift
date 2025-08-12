@@ -35,6 +35,12 @@ struct ChangeHandlerModifier: ViewModifier {
             .onChange(of: selectedDate) { oldValue, newValue in
                 dashboardViewModel?.updateSelectedDate(newValue)
             }
+            .onChange(of: dashboardViewModel?.selectedDate) { oldValue, newValue in
+                // DashboardViewModelで正規化された日付をContentViewStateに反映
+                if let newValue = newValue {
+                    selectedDate = newValue
+                }
+            }
             .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
                 // ViewModelが自身のPublisherで検知するため、ここでの処理は不要
             }

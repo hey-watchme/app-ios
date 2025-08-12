@@ -1,5 +1,40 @@
 # 更新履歴
 
+### 2025年8月11日
+- **v9.17.3 - platform_identifierとplatform_typeカラムの完全削除**
+  - **データベース構造の簡素化**
+    - devicesテーブルからplatform_identifierカラムを削除
+    - devicesテーブルからplatform_typeカラムを削除
+    - 外部デバイス登録時の制約を排除
+    - QRコードデバイス追加のエラー「The data couldn't be read because it is missing」を解決
+    
+  - **iOSアプリケーションの簡素化**
+    - Device構造体からplatform_identifier/platform_typeフィールドを削除
+    - DeviceInsert構造体からplatform_identifier/platform_typeフィールドを削除
+    - DeviceInfo構造体からplatformIdentifier/platformTypeフィールドを削除
+    - getPlatformIdentifier()メソッドを削除
+    - platformIdentifierKey定数を削除
+    - デバイス登録処理の大幅な簡略化
+    - 45行のコード削除によるメンテナンス性向上
+    
+  - **外部デバイス対応の改善**
+    - 外部デバイス（観測専用デバイス）の登録が大幅に簡潔に
+    - platform情報不要でデバイス登録可能
+    - QRコードによるデバイス追加の信頼性向上
+    
+  - **データベース変更SQL**
+    ```sql
+    ALTER TABLE devices 
+    DROP COLUMN IF EXISTS platform_identifier,
+    DROP COLUMN IF EXISTS platform_type;
+    ```
+    
+  - **影響**
+    - 既存機能への影響なし（未使用フィールドの削除）
+    - Vault APIとの連携に影響なし
+    - 録音データ処理フローに影響なし
+    - コードの保守性とクリーンさが大幅に向上
+
 ### 2025年8月4日
 - **v9.17.0 - デバイスタイムゾーン中心の設計を全面実装**
   - **ライフログツールとしての設計思想を明確化**

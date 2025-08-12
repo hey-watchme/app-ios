@@ -64,6 +64,8 @@ struct SheetState {
 
 // MARK: - Navigation State
 struct NavigationState {
+    // NOTE: この日付は一時的なもので、DashboardViewModelで正規化される
+    // 将来的にはDashboardViewModelに完全に移行予定
     var selectedDate = Calendar.current.startOfDay(for: Date())
     var selectedTab = 0
 }

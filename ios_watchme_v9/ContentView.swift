@@ -157,6 +157,10 @@ struct ContentView: View {
                         deviceManager: deviceManager,
                         initialDate: viewState.navigation.selectedDate
                     )
+                    // DashboardViewModelで正規化された日付をContentViewStateに反映
+                    if let normalizedDate = viewState.dashboardViewModel?.selectedDate {
+                        viewState.navigation.selectedDate = normalizedDate
+                    }
                 }
                 // ViewModelのonAppearを呼び出す
                 viewState.dashboardViewModel?.onAppear()
