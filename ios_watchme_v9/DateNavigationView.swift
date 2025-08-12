@@ -27,12 +27,9 @@ struct DateNavigationView: View {
     }
     
     private var canGoToNextDay: Bool {
-        let tomorrow = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-        // デバイスのタイムゾーンでの「今日」を基準に判定
-        let deviceNow = Date()
-        let deviceToday = calendar.startOfDay(for: deviceNow)
-        let deviceTomorrow = calendar.date(byAdding: .day, value: 1, to: deviceToday) ?? deviceToday
-        return tomorrow <= deviceTomorrow
+        // selectedDateが「今日」でなければtrueを返す
+        // （今日より前の日付なら、次の日に進める）
+        return !calendar.isDateInToday(selectedDate)
     }
     
     var body: some View {
@@ -71,12 +68,9 @@ struct DateNavigationView: View {
             
             Button(action: {
                 withAnimation {
-                    let tomorrow = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-                    // デバイスのタイムゾーンでの判定
-                    let deviceToday = calendar.startOfDay(for: Date())
-                    let deviceTomorrow = calendar.date(byAdding: .day, value: 1, to: deviceToday) ?? deviceToday
-                    if tomorrow <= deviceTomorrow {
-                        selectedDate = tomorrow
+                    // 今日でない場合のみ、次の日に進む
+                    if !calendar.isDateInToday(selectedDate) {
+                        selectedDate = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
                     }
                 }
             }) {
