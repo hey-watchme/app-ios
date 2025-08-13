@@ -29,23 +29,38 @@ struct DashboardView: View {
                 
                 // 行動グラフハイライト
                 behaviorGraphCard
+                    .padding(.horizontal)
                 
                 // 感情グラフハイライト
                 emotionGraphCard
+                    .padding(.horizontal)
                 
                 // 観測対象情報
-                if let subject = viewModel.dataManager.subject {
-                    observationTargetCard(subject)
-                } else {
-                    noObservationTargetCard()
+                Group {
+                    if let subject = viewModel.dataManager.subject {
+                        observationTargetCard(subject)
+                    } else {
+                        noObservationTargetCard()
+                    }
                 }
+                .padding(.horizontal)
                 
                 Spacer(minLength: 100)
             }
-            .padding(.horizontal)
             .padding(.top, 20)
         }
-        .background(Color(.systemGray6))
+        .background(
+            // ダークな背景に変更
+            LinearGradient(
+                colors: [
+                    Color(red: 0.05, green: 0.06, blue: 0.08),
+                    Color(red: 0.08, green: 0.09, blue: 0.12)
+                ],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
         .onAppear {
             viewModel.onAppear()
         }
@@ -80,33 +95,44 @@ struct DashboardView: View {
     // MARK: - Subviews
     
     private var vibeGraphCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "heart.text.square")
-                    .font(.title2)
-                    .foregroundColor(.pink)
-                Text("気分")
-                    .font(.headline)
-                Spacer()
-            }
-            
+        Group {
             if let vibeReport = viewModel.dataManager.dailyReport {
-                vibeReportContent(vibeReport)
-            } else {
-                GraphEmptyStateView(
-                    graphType: .vibe,
-                    isDeviceLinked: !viewModel.deviceManager.userDevices.isEmpty,
-                    isCompact: true
+                // モダンな気分カードを使用
+                ModernVibeCard(
+                    vibeReport: vibeReport,
+                    onNavigateToDetail: {
+                        // 心理グラフタブに遷移
+                        selectedTab = 1
+                    }
                 )
+                    .padding(.horizontal)
+            } else {
+                // 従来のエンプティステート表示
+                VStack(alignment: .leading, spacing: 16) {
+                    HStack {
+                        Image(systemName: "heart.text.square")
+                            .font(.title2)
+                            .foregroundColor(.pink)
+                        Text("気分")
+                            .font(.headline)
+                        Spacer()
+                    }
+                    
+                    GraphEmptyStateView(
+                        graphType: .vibe,
+                        isDeviceLinked: !viewModel.deviceManager.userDevices.isEmpty,
+                        isCompact: true
+                    )
+                }
+                .padding()
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
+                .onTapGesture {
+                    // 心理グラフタブに遷移
+                    selectedTab = 1
+                }
             }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
-        .onTapGesture {
-            // 心理グラフタブに遷移
-            selectedTab = 1
         }
     }
     
