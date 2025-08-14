@@ -310,16 +310,21 @@ struct BurstBubbleView: View {
     }
     
     private func generateBurstBubbles() {
-        // バースト用に最適化された上昇パーティクル生成
-        bubbles = (0..<30).map { _ in
-            BurstBubble(
-                size: CGFloat.random(in: 30...100),  // 様々なサイズ
-                xPosition: CGFloat.random(in: -0.1...1.1),  // 画面全体＋少し外側
-                yPosition: CGFloat.random(in: 0.3...1.3),  // 画面の中央〜下部の広範囲から発生
-                delay: Double.random(in: 0...0.6),  // ランダムな遅延
-                duration: Double.random(in: 2...3.5),  // アニメーション時間
-                opacity: Double.random(in: 0.3...0.7),  // 透明度
-                angle: -Double.pi / 2  // 上方向（-90度）
+        // カード中心から放射状に広がる花火のようなパーティクル生成
+        bubbles = (0..<30).map { index in
+            // 360度を均等に分割し、ランダム性を加える
+            let baseAngle = (Double(index) / 30.0) * Double.pi * 2
+            let angleVariation = Double.random(in: -0.2...0.2)  // 角度に少しランダム性を加える
+            let finalAngle = baseAngle + angleVariation
+            
+            return BurstBubble(
+                size: CGFloat.random(in: 20...60),  // パーティクルサイズ
+                xPosition: 0.5,  // カード中心からスタート
+                yPosition: 0.5,  // カード中心からスタート
+                delay: Double.random(in: 0...0.2),  // 少しの遅延で自然な広がり
+                duration: Double.random(in: 1.5...2.5),  // アニメーション時間
+                opacity: 0.4,  // 明確に表示するため透明度0.4に固定
+                angle: finalAngle  // 放射状の角度
             )
         }
     }
@@ -336,11 +341,11 @@ struct BurstAnimationModifier: ViewModifier {
     
     func body(content: Content) -> some View {
         content
-            .scaleEffect(isAnimating ? 1.3 : 0.6)
-            .opacity(isAnimating ? 0 : 0.7)
+            .scaleEffect(isAnimating ? 0.1 : 1.0)  // 小さくなって消える
+            .opacity(isAnimating ? 0 : 0.4)  // 透明度0.4から始まり消える
             .offset(
-                x: isAnimating ? CGFloat.random(in: -80...80) : 0,  // 横方向の広いブレ
-                y: isAnimating ? -distance * 3 : 0  // 上方向への移動（画面全体をカバー）
+                x: isAnimating ? cos(angle) * distance : 0,  // 角度に応じたx方向へ移動
+                y: isAnimating ? sin(angle) * distance : 0   // 角度に応じたy方向へ移動
             )
             .animation(
                 Animation.easeOut(duration: duration)

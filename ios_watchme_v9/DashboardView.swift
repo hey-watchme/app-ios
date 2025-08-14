@@ -50,16 +50,9 @@ struct DashboardView: View {
             .padding(.top, 20)
         }
         .background(
-            // ダークな背景に変更
-            LinearGradient(
-                colors: [
-                    Color(red: 0.05, green: 0.06, blue: 0.08),
-                    Color(red: 0.08, green: 0.09, blue: 0.12)
-                ],
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            // ライトな背景に変更
+            Color(red: 0.937, green: 0.937, blue: 0.937) // #efefef
+                .ignoresSafeArea()
         )
         .onAppear {
             viewModel.onAppear()
@@ -161,18 +154,51 @@ struct DashboardView: View {
     }
     
     private var behaviorGraphCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "figure.walk")
-                    .font(.title2)
-                    .foregroundColor(.blue)
-                Text("行動")
-                    .font(.headline)
-                Spacer()
+        UnifiedCard(
+            title: "行動",
+            navigationLabel: "行動グラフ",
+            onNavigate: {
+                // 行動グラフタブに遷移
+                selectedTab = 2
             }
-            
+        ) {
             if let behaviorReport = viewModel.dataManager.dailyBehaviorReport {
-                behaviorReportContent(behaviorReport)
+                VStack(spacing: 8) {
+                    // 「その他」カテゴリを除外したランキングを取得
+                    // 「その他」は桁違いに数値が大きくなるため、意味のある行動を表示するために除外
+                    let filteredRanking = behaviorReport.summaryRanking.filter { $0.event.lowercased() != "other" && $0.event.lowercased() != "その他" }
+                    
+                    // 絵文字とメインメッセージ（最多行動）
+                    if let topBehavior = filteredRanking.first {
+                        VStack(spacing: 8) {
+                            // 絵文字（大きく表示）
+                            Text("🚶")
+                                .font(.system(size: 72))
+                            
+                            // ステータステキスト（小さく表示）
+                            Text(topBehavior.event)
+                                .font(.caption)
+                                .foregroundStyle(Color.blue)
+                                .textCase(.uppercase)
+                                .tracking(1.0)
+                            
+                            // 回数（1行で簡潔に）
+                            HStack(spacing: 4) {
+                                Text("今日のメイン:")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                                
+                                Text("\(topBehavior.count)回")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.blue.opacity(0.8))
+                            }
+                        }
+                    }
+                    
+                    // 既存のコンテンツ
+                    behaviorReportContent(behaviorReport)
+                }
             } else {
                 GraphEmptyStateView(
                     graphType: .behavior,
@@ -181,21 +207,15 @@ struct DashboardView: View {
                 )
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
-        .onTapGesture {
-            // 行動グラフタブに遷移
-            selectedTab = 2
-        }
     }
     
     @ViewBuilder
     private func behaviorReportContent(_ behaviorReport: BehaviorReport) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            // TOP3の行動
-            ForEach(Array(behaviorReport.summaryRanking.prefix(3)), id: \.event) { item in
+            // 「その他」を除外したTOP3の行動を表示
+            // 「その他」は桁違いに多く、分析価値が低いため除外
+            let filteredItems = behaviorReport.summaryRanking.filter { $0.event.lowercased() != "other" && $0.event.lowercased() != "その他" }
+            ForEach(Array(filteredItems.prefix(3)), id: \.event) { item in
                 HStack {
                     Text(getBehaviorEmoji(item.event))
                         .font(.title2)
@@ -233,18 +253,46 @@ struct DashboardView: View {
     }
     
     private var emotionGraphCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "heart.fill")
-                    .font(.title2)
-                    .foregroundColor(.pink)
-                Text("感情")
-                    .font(.headline)
-                Spacer()
+        UnifiedCard(
+            title: "感情",
+            navigationLabel: "感情グラフ",
+            onNavigate: {
+                // 感情グラフタブに遷移
+                selectedTab = 3
             }
-            
+        ) {
             if let emotionReport = viewModel.dataManager.dailyEmotionReport {
-                emotionReportContent(emotionReport)
+                VStack(spacing: 8) {
+                    // 顔文字とメインメッセージ（最多感情）
+                    let topEmotion = getTopEmotion(emotionReport)
+                    VStack(spacing: 8) {
+                        // 顔文字（大きく表示）
+                        Text(getEmotionEmoji(topEmotion.0))
+                            .font(.system(size: 72))
+                        
+                        // ステータステキスト（小さく表示）
+                        Text(getEmotionJapanese(topEmotion.0))
+                            .font(.caption)
+                            .foregroundStyle(Color.pink)
+                            .textCase(.uppercase)
+                            .tracking(1.0)
+                        
+                        // 強さ（1行で簡潔に）
+                        HStack(spacing: 4) {
+                            Text("今日の最大:")
+                                .font(.caption2)
+                                .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                            
+                            Text("\(topEmotion.1)")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.pink.opacity(0.8))
+                        }
+                    }
+                    
+                    // 既存のコンテンツ
+                    emotionReportContent(emotionReport)
+                }
             } else {
                 GraphEmptyStateView(
                     graphType: .emotion,
@@ -252,14 +300,6 @@ struct DashboardView: View {
                     isCompact: true
                 )
             }
-        }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
-        .onTapGesture {
-            // 感情グラフタブに遷移
-            selectedTab = 3
         }
     }
     
@@ -372,18 +412,41 @@ struct DashboardView: View {
         }
     }
     
+    private func getEmotionEmoji(_ emotion: String) -> String {
+        switch emotion {
+        case "Joy": return "😆"  // 笑顔
+        case "Trust": return "🤗"  // ハグ
+        case "Fear": return "😨"  // 恐怖
+        case "Surprise": return "😲"  // 驚き
+        case "Sadness": return "😢"  // 泣き顔
+        case "Disgust": return "🤢"  // 吐き気
+        case "Anger": return "😡"  // 怒り
+        case "Anticipation": return "🤩"  // 期待
+        default: return "😊"  // デフォルト
+        }
+    }
+    
+    private func getTopEmotion(_ emotionReport: EmotionReport) -> (String, Int) {
+        let totals = emotionReport.emotionTotals
+        let emotions = [
+            ("Joy", totals.joy),
+            ("Trust", totals.trust),
+            ("Fear", totals.fear),
+            ("Surprise", totals.surprise),
+            ("Sadness", totals.sadness),
+            ("Disgust", totals.disgust),
+            ("Anger", totals.anger),
+            ("Anticipation", totals.anticipation)
+        ]
+        
+        return emotions.max(by: { $0.1 < $1.1 }) ?? ("Joy", 0)
+    }
+    
     // MARK: - 観測対象カード
     private func observationTargetCard(_ subject: Subject) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "person.fill")
-                    .font(.title2)
-                    .foregroundColor(.orange)
-                Text("観測対象")
-                    .font(.headline)
-                Spacer()
-            }
-            
+        ObservationTargetCard(
+            title: "観測対象"
+        ) {
             HStack(spacing: 20) {
                 // アバターエリア（ローカルファイルまたはS3から取得）
                 let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
@@ -400,18 +463,18 @@ struct DashboardView: View {
                             .clipShape(Circle())
                             .overlay(
                                 Circle()
-                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    .stroke(.white.opacity(0.3), lineWidth: 1)
                             )
                     case .failure(_), .empty:
                         // デフォルトアバター
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 60))
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.white.opacity(0.7))
                             .frame(width: 60, height: 60)
                     @unknown default:
                         Image(systemName: "person.crop.circle.fill")
                             .font(.system(size: 60))
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.white.opacity(0.7))
                             .frame(width: 60, height: 60)
                     }
                 }
@@ -422,18 +485,19 @@ struct DashboardView: View {
                         Text(name)
                             .font(.title3)
                             .fontWeight(.semibold)
+                            .foregroundStyle(.white)
                     }
                     
                     if let ageGender = subject.ageGenderDisplay {
                         Text(ageGender)
                             .font(.subheadline)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.white.opacity(0.8))
                     }
                     
                     if let notes = subject.notes, !notes.isEmpty {
                         Text(notes)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(.white.opacity(0.7))
                             .lineLimit(2)
                     }
                 }
@@ -448,46 +512,35 @@ struct DashboardView: View {
                         Text("編集")
                     }
                     .font(.caption)
-                    .foregroundColor(.blue)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
-                    .background(Color.blue.opacity(0.1))
+                    .background(.white.opacity(0.2))
                     .cornerRadius(6)
                 }
             }
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
     }
     
     // MARK: - 観測対象未登録カード
     private func noObservationTargetCard() -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: "person.fill")
-                    .font(.title2)
-                    .foregroundColor(.orange)
-                Text("観測対象")
-                    .font(.headline)
-                Spacer()
-            }
-            
+        ObservationTargetCard(
+            title: "観測対象"
+        ) {
             VStack(spacing: 16) {
                 Image(systemName: "person.crop.circle.badge.questionmark")
                     .font(.system(size: 50))
-                    .foregroundColor(.gray)
+                    .foregroundStyle(.white.opacity(0.7))
                 
                 VStack(spacing: 8) {
                     Text("このデバイスで観測している人物のプロフィールを登録しましょう")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.white.opacity(0.9))
                         .multilineTextAlignment(.center)
                     
                     Text("観測対象を登録すると、詳細な情報を表示できます")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundStyle(.white.opacity(0.7))
                         .multilineTextAlignment(.center)
                 }
                 
@@ -500,20 +553,16 @@ struct DashboardView: View {
                     }
                     .font(.subheadline)
                     .fontWeight(.medium)
-                    .foregroundColor(.white)
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 20)
                     .padding(.vertical, 12)
-                    .background(Color.orange)
+                    .background(.white.opacity(0.2))
                     .cornerRadius(8)
                 }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)
         }
-        .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 5, x: 0, y: 2)
     }
 }
 

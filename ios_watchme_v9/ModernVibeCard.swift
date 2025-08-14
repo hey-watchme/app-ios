@@ -16,15 +16,8 @@ struct ModernVibeCard: View {
     @State private var showBurstBubbles = false
     @State private var burstScore: Double = 0
     
-    // ダークテーマのカラーパレット
-    private let darkBackground = LinearGradient(
-        colors: [
-            Color(red: 0.04, green: 0.05, blue: 0.15),
-            Color(red: 0.10, green: 0.12, blue: 0.23)
-        ],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-    )
+    // ライトテーマのカラーパレット
+    private let lightBackground = Color.white // #ffffff
     
     private let positiveGradient = LinearGradient(
         colors: [
@@ -46,22 +39,22 @@ struct ModernVibeCard: View {
     
     var body: some View {
         ZStack {
-            // 背景グラデーション
+            // 背景 (白)
             RoundedRectangle(cornerRadius: 24)
-                .fill(darkBackground)
-                .shadow(color: .black.opacity(0.3), radius: 20, x: 0, y: 10)
+                .fill(lightBackground)
+                .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
             
             // 波アニメーション（Phase 4: その他の演出）
             WaveAnimationView(
-                color: scoreColor.opacity(0.3),
+                color: scoreColor.opacity(0.1),
                 amplitude: 10,
                 frequency: 2
             )
-            .blendMode(.screen)
+            .blendMode(.multiply)
             
-            // グラスモーフィズム効果
+            // 軽い境界線
             RoundedRectangle(cornerRadius: 24)
-                .fill(.ultraThinMaterial.opacity(0.3))
+                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
             
             // バーストバブル（イベント時のみ表示）
             if showBurstBubbles {
@@ -116,7 +109,7 @@ struct ModernVibeCard: View {
             // シンプルな気分タイトル（大きく表示）
             Text("気分")
                 .font(.system(size: 40, weight: .bold))
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
             
             Spacer()
             
@@ -128,19 +121,19 @@ struct ModernVibeCard: View {
                 HStack(spacing: 4) {
                     Text("心理グラフ")
                         .font(.caption)
-                        .foregroundStyle(.white.opacity(0.8))
+                        .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
                     Image(systemName: "chevron.right")
                         .font(.caption2)
-                        .foregroundStyle(.white.opacity(0.6))
+                        .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(.white.opacity(0.1))
+                        .fill(Color.gray.opacity(0.1))
                         .overlay(
                             Capsule()
-                                .stroke(.white.opacity(0.2), lineWidth: 1)
+                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
                         )
                 )
             }
@@ -165,7 +158,7 @@ struct ModernVibeCard: View {
             HStack(spacing: 4) {
                 Text("Average Score:")
                     .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
                 
                 Text(String(format: "%.1f", vibeReport.averageScore))
                     .font(.caption)
@@ -235,11 +228,11 @@ struct ModernVibeCard: View {
                 
                 Text(String(format: "%.1fh", hours))
                     .font(.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
                 
                 Text(label)
                     .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.6))
+                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
             }
         }
         .frame(maxWidth: .infinity)

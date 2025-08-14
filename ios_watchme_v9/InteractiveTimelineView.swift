@@ -85,19 +85,19 @@ struct InteractiveTimelineView: View {
             HStack(spacing: 12) {
                 Text("TIME")
                     .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
                     .tracking(1.2)
                 
                 Text(currentTimeString)
                     .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
             }
             
             // 現在のスコア
             HStack(spacing: 12) {
                 Text("SCORE")
                     .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.4))
+                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
                     .tracking(1.2)
                 
                 HStack(spacing: 6) {
@@ -166,7 +166,7 @@ struct InteractiveTimelineView: View {
             }
             .stroke(
                 LinearGradient(
-                    colors: [.white.opacity(0.1), .white.opacity(0.3), .white.opacity(0.1)],
+                    colors: [Color.gray.opacity(0.2), Color.gray.opacity(0.4), Color.gray.opacity(0.2)],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
@@ -222,7 +222,7 @@ struct InteractiveTimelineView: View {
                 }
             }
             .stroke(
-                Color.white.opacity(0.7),
+                Color.gray.opacity(0.3),
                 lineWidth: 1
             )
             
@@ -263,7 +263,7 @@ struct InteractiveTimelineView: View {
             ForEach([0, 6, 12, 18, 23], id: \.self) { hour in
                 Text("\(hour):00")
                     .font(.caption2)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
                     .frame(maxWidth: .infinity, alignment: hour == 0 ? .leading : (hour == 23 ? .trailing : .center))
             }
         }
@@ -283,7 +283,7 @@ struct InteractiveTimelineView: View {
             }
             .stroke(
                 LinearGradient(
-                    colors: [.white.opacity(0.8), .cyan],
+                    colors: [Color.blue.opacity(0.6), Color.blue],
                     startPoint: .top,
                     endPoint: .bottom
                 ),
@@ -295,7 +295,7 @@ struct InteractiveTimelineView: View {
             Circle()
                 .fill(
                     RadialGradient(
-                        colors: [.white, .cyan],
+                        colors: [Color.blue.opacity(0.8), Color.blue],
                         center: .center,
                         startRadius: 0,
                         endRadius: 8
@@ -312,11 +312,11 @@ struct InteractiveTimelineView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(event.time)
                 .font(.caption2)
-                .foregroundStyle(.white.opacity(0.7))
+                .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
             
             Text(event.event)
                 .font(.caption)
-                .foregroundStyle(.white)
+                .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
                 .lineLimit(2)
             
             HStack {
@@ -331,7 +331,7 @@ struct InteractiveTimelineView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(.ultraThinMaterial.opacity(0.7))
+                .fill(Color.white.opacity(0.95))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
                         .stroke(.orange.opacity(0.5), lineWidth: 1)
