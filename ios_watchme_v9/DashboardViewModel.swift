@@ -17,6 +17,12 @@ class DashboardViewModel: ObservableObject {
     @Published private(set) var isLoading: Bool = false
     @Published private(set) var currentFetchID: UUID = UUID()
     
+    // MARK: - Display Data (ViewModelが管理する表示用データ)
+    @Published private(set) var vibeReport: DailyVibeReport?
+    @Published private(set) var behaviorReport: BehaviorReport?
+    @Published private(set) var emotionReport: EmotionReport?
+    @Published private(set) var subject: Subject?
+    
     // MARK: - Dependencies
     @Published private(set) var dataManager: SupabaseDataManager
     @Published private(set) var deviceManager: DeviceManager
@@ -172,10 +178,11 @@ class DashboardViewModel: ObservableObject {
                     // このタスクがまだ最新かチェック
                     guard self.currentFetchID == fetchID else { return }
                     
-                    dataManager.dailyReport = cached.vibeReport
-                    dataManager.dailyBehaviorReport = cached.behaviorReport
-                    dataManager.dailyEmotionReport = cached.emotionReport
-                    dataManager.subject = cached.subject
+                    // ViewModelの表示用プロパティを更新（dataManagerには触らない）
+                    self.vibeReport = cached.vibeReport
+                    self.behaviorReport = cached.behaviorReport
+                    self.emotionReport = cached.emotionReport
+                    self.subject = cached.subject
                     self.isLoading = false
                 }
                 print("📱 Using cached data for \(selectedDate)")
@@ -206,7 +213,18 @@ class DashboardViewModel: ObservableObject {
             )
             dataCache[cacheKey] = cachedData
             
+            // ViewModelの表示用プロパティを更新（fetchIDチェック後のみ）
             await MainActor.run {
+                // 最終確認：このタスクがまだ最新か
+                guard self.currentFetchID == fetchID else { 
+                    self.isLoading = false
+                    return 
+                }
+                
+                self.vibeReport = dataManager.dailyReport
+                self.behaviorReport = dataManager.dailyBehaviorReport
+                self.emotionReport = dataManager.dailyEmotionReport
+                self.subject = dataManager.subject
                 self.isLoading = false
             }
         }

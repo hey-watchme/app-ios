@@ -42,7 +42,7 @@ struct NewHomeView: View {
                 
                 // 観測対象カード
                 Group {
-                    if let subject = viewModel.dataManager.subject {
+                    if let subject = viewModel.subject {
                         observationTargetCard(subject)
                     } else {
                         noObservationTargetCard()
@@ -89,7 +89,7 @@ struct NewHomeView: View {
         }
         .sheet(isPresented: $showSubjectEdit) {
             if let deviceID = viewModel.deviceManager.selectedDeviceID ?? viewModel.deviceManager.localDeviceIdentifier,
-               let subject = viewModel.dataManager.subject {
+               let subject = viewModel.subject {
                 SubjectRegistrationView(
                     deviceID: deviceID,
                     isPresented: $showSubjectEdit,
@@ -105,7 +105,7 @@ struct NewHomeView: View {
     // MARK: - Vibe Graph Card
     private var vibeGraphCard: some View {
         Group {
-            if let vibeReport = viewModel.dataManager.dailyReport {
+            if let vibeReport = viewModel.vibeReport {
                 ModernVibeCard(
                     vibeReport: vibeReport,
                     onNavigateToDetail: {
@@ -144,7 +144,7 @@ struct NewHomeView: View {
                 selectedTab = 2
             }
         ) {
-            if let behaviorReport = viewModel.dataManager.dailyBehaviorReport {
+            if let behaviorReport = viewModel.behaviorReport {
                 VStack(spacing: 8) {
                     // 「その他」カテゴリを除外したランキングを取得
                     let filteredRanking = behaviorReport.summaryRanking.filter { 
@@ -198,7 +198,7 @@ struct NewHomeView: View {
                 selectedTab = 3
             }
         ) {
-            if let emotionReport = viewModel.dataManager.dailyEmotionReport {
+            if let emotionReport = viewModel.emotionReport {
                 VStack(spacing: 8) {
                     // 顔文字とメインメッセージ（最多感情）
                     let topEmotion = getTopEmotion(emotionReport)
