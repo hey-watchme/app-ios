@@ -12,8 +12,7 @@ import AVFoundation
 struct ios_watchme_v9App: App {
     @StateObject private var deviceManager = DeviceManager()
     @StateObject private var authManager: SupabaseAuthManager
-    // dataManagerは状態を持たないサービスになったため、StateObjectとして管理しない
-    private let dataManager = SupabaseDataManager()
+    @StateObject private var dataManager = SupabaseDataManager()
     
     init() {
         let deviceManager = DeviceManager()
@@ -21,6 +20,7 @@ struct ios_watchme_v9App: App {
         
         _deviceManager = StateObject(wrappedValue: deviceManager)
         _authManager = StateObject(wrappedValue: authManager)
+        _dataManager = StateObject(wrappedValue: SupabaseDataManager())
     }
     
     var body: some Scene {
@@ -28,7 +28,7 @@ struct ios_watchme_v9App: App {
             MainAppView()
                 .environmentObject(authManager)
                 .environmentObject(deviceManager)
-                // dataManagerはEnvironmentObjectとして渡さない
+                .environmentObject(dataManager)
                 .onAppear {
                     requestMicrophonePermission()
                 }
@@ -48,11 +48,11 @@ struct ios_watchme_v9App: App {
     }
 }
 
-// メインアプリビュー（ログイン状態に応じて画面切り替え）
+// メインアプリビュー
 struct MainAppView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
-    // dataManagerは削除（状態を持たないサービスのため）
+    @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showLogin = false
     @State private var hasInitialized = false
     
@@ -90,7 +90,6 @@ struct MainAppView: View {
                     .environmentObject(dataManager)
                     .onAppear {
                         print("📱 MainAppView: 認証済み状態 - ContentView表示")
-                        // デバイスの自動登録は削除されました
                         // ユーザーに紐付く全デバイスを取得
                         if let userId = authManager.currentUser?.id {
                             print("🔍 ユーザーの全デバイスを自動取得: \(userId)")

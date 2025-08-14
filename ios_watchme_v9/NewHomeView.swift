@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct NewHomeView: View {
-    // ViewModelを使用（既存のDashboardViewModelを流用）
+    // ViewModelを使用
     @ObservedObject var viewModel: DashboardViewModel
     
     // 認証と画面遷移のためのプロパティ
@@ -64,16 +64,14 @@ struct NewHomeView: View {
             lastRefreshDate = viewModel.selectedDate
         }
         .onChange(of: viewModel.selectedDate) { oldDate, newDate in
-            // 日付が変更されたらカウンターをインクリメント（ViewModelがデータ取得を行う）
+            // 日付が変更されたらカウンターをインクリメント
             if oldDate != newDate {
-                dateChangeCounter += 1  // 日付変更カウンターをインクリメント
-                // データ取得はViewModelが自動的に行うため、ここでは呼び出さない
+                dateChangeCounter += 1
             }
         }
         .onChange(of: viewModel.deviceManager.selectedDeviceID) { _, _ in
-            // デバイスが変更されたらカウンターをインクリメント（ViewModelがデータ取得を行う）
-            dateChangeCounter += 1  // デバイス変更時もカウンターをインクリメント
-            // データ取得はViewModelが自動的に行うため、ここでは呼び出さない
+            // デバイスが変更されたらカウンターをインクリメント
+            dateChangeCounter += 1
         }
         .sheet(isPresented: $showSubjectRegistration) {
             if let deviceID = viewModel.deviceManager.selectedDeviceID ?? viewModel.deviceManager.localDeviceIdentifier {
@@ -113,7 +111,7 @@ struct NewHomeView: View {
                     }
                 )
                 .padding(.horizontal)
-                // 日付変更カウンターを使用して確実にView再生成
+                // View再生成を確実にするためのID
                 .id("\(vibeReport.deviceId)_\(vibeReport.date)_\(dateChangeCounter)")
             } else {
                 // エンプティステート

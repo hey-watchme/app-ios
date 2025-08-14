@@ -178,7 +178,7 @@ class DashboardViewModel: ObservableObject {
                     // このタスクがまだ最新かチェック
                     guard self.currentFetchID == fetchID else { return }
                     
-                    // ViewModelの表示用プロパティを更新（dataManagerには触らない）
+                    // ViewModelの表示用プロパティを更新
                     self.vibeReport = cached.vibeReport
                     self.behaviorReport = cached.behaviorReport
                     self.emotionReport = cached.emotionReport

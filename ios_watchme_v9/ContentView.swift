@@ -11,7 +11,7 @@ import Combine
 struct ContentView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
-    // dataManagerは削除（ViewModelから取得）
+    @EnvironmentObject var dataManager: SupabaseDataManager
     @StateObject private var audioRecorder = AudioRecorder()
     @StateObject private var viewState = ContentViewState()
     
