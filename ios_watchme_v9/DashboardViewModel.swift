@@ -192,7 +192,7 @@ class DashboardViewModel: ObservableObject {
             // キャッシュにない場合は通常通りデータ取得
             // デバイスのタイムゾーンを渡す
             let timezone = deviceManager.getTimezone(for: deviceId)
-            await dataManager.fetchAllReports(deviceId: deviceId, date: selectedDate, timezone: timezone)
+            let fetchResult = await dataManager.fetchAllReports(deviceId: deviceId, date: selectedDate, timezone: timezone)
             
             // このタスクがまだ最新かチェック
             guard currentFetchID == fetchID else {
@@ -205,10 +205,10 @@ class DashboardViewModel: ObservableObject {
             // 取得したデータをキャッシュに保存
             let cacheKey = makeCacheKey(deviceId: deviceId, date: selectedDate)
             let cachedData = CachedData(
-                vibeReport: dataManager.dailyReport,
-                behaviorReport: dataManager.dailyBehaviorReport,
-                emotionReport: dataManager.dailyEmotionReport,
-                subject: dataManager.subject,
+                vibeReport: fetchResult.vibeReport,
+                behaviorReport: fetchResult.behaviorReport,
+                emotionReport: fetchResult.emotionReport,
+                subject: fetchResult.subject,
                 fetchedAt: Date()
             )
             dataCache[cacheKey] = cachedData
@@ -221,10 +221,10 @@ class DashboardViewModel: ObservableObject {
                     return 
                 }
                 
-                self.vibeReport = dataManager.dailyReport
-                self.behaviorReport = dataManager.dailyBehaviorReport
-                self.emotionReport = dataManager.dailyEmotionReport
-                self.subject = dataManager.subject
+                self.vibeReport = fetchResult.vibeReport
+                self.behaviorReport = fetchResult.behaviorReport
+                self.emotionReport = fetchResult.emotionReport
+                self.subject = fetchResult.subject
                 self.isLoading = false
             }
         }
@@ -258,14 +258,14 @@ class DashboardViewModel: ObservableObject {
         let tempDataManager = SupabaseDataManager()
         // デバイスのタイムゾーンを渡す
         let timezone = deviceManager.getTimezone(for: deviceId)
-        await tempDataManager.fetchAllReports(deviceId: deviceId, date: date, timezone: timezone)
+        let fetchResult = await tempDataManager.fetchAllReports(deviceId: deviceId, date: date, timezone: timezone)
         
         // 取得したデータをキャッシュに保存
         let cachedData = CachedData(
-            vibeReport: tempDataManager.dailyReport,
-            behaviorReport: tempDataManager.dailyBehaviorReport,
-            emotionReport: tempDataManager.dailyEmotionReport,
-            subject: tempDataManager.subject,
+            vibeReport: fetchResult.vibeReport,
+            behaviorReport: fetchResult.behaviorReport,
+            emotionReport: fetchResult.emotionReport,
+            subject: fetchResult.subject,
             fetchedAt: Date()
         )
         

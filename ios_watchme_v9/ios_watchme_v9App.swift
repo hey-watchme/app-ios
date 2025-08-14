@@ -12,7 +12,8 @@ import AVFoundation
 struct ios_watchme_v9App: App {
     @StateObject private var deviceManager = DeviceManager()
     @StateObject private var authManager: SupabaseAuthManager
-    @StateObject private var dataManager = SupabaseDataManager()
+    // dataManagerは状態を持たないサービスになったため、StateObjectとして管理しない
+    private let dataManager = SupabaseDataManager()
     
     init() {
         let deviceManager = DeviceManager()
@@ -20,7 +21,6 @@ struct ios_watchme_v9App: App {
         
         _deviceManager = StateObject(wrappedValue: deviceManager)
         _authManager = StateObject(wrappedValue: authManager)
-        _dataManager = StateObject(wrappedValue: SupabaseDataManager())
     }
     
     var body: some Scene {
@@ -28,7 +28,7 @@ struct ios_watchme_v9App: App {
             MainAppView()
                 .environmentObject(authManager)
                 .environmentObject(deviceManager)
-                .environmentObject(dataManager)
+                // dataManagerはEnvironmentObjectとして渡さない
                 .onAppear {
                     requestMicrophonePermission()
                 }
@@ -52,7 +52,7 @@ struct ios_watchme_v9App: App {
 struct MainAppView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
-    @EnvironmentObject var dataManager: SupabaseDataManager
+    // dataManagerは削除（状態を持たないサービスのため）
     @State private var showLogin = false
     @State private var hasInitialized = false
     

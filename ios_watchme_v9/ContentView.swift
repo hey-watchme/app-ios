@@ -11,7 +11,7 @@ import Combine
 struct ContentView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
-    @EnvironmentObject var dataManager: SupabaseDataManager
+    // dataManagerは削除（ViewModelから取得）
     @StateObject private var audioRecorder = AudioRecorder()
     @StateObject private var viewState = ContentViewState()
     
@@ -69,9 +69,9 @@ struct ContentView: View {
                     DatePagingView(selectedDate: $viewState.navigation.selectedDate, dashboardViewModel: viewState.dashboardViewModel) { date in
                         HomeView(
                             vibeReport: viewState.dashboardViewModel?.getCachedData(for: date)?.vibeReport 
-                                      ?? (date == viewState.navigation.selectedDate ? dataManager.dailyReport : nil),
+                                      ?? (date == viewState.navigation.selectedDate ? viewState.dashboardViewModel?.vibeReport : nil),
                             subject: viewState.dashboardViewModel?.getCachedData(for: date)?.subject 
-                                   ?? (date == viewState.navigation.selectedDate ? dataManager.subject : nil)
+                                   ?? (date == viewState.navigation.selectedDate ? viewState.dashboardViewModel?.subject : nil)
                         )
                     }
                     .tabItem {
@@ -162,7 +162,7 @@ struct ContentView: View {
                 // DashboardViewModelを初期化
                 if viewState.dashboardViewModel == nil {
                     viewState.dashboardViewModel = DashboardViewModel(
-                        dataManager: dataManager,
+                        dataManager: SupabaseDataManager(),  // 新しいインスタンスを作成
                         deviceManager: deviceManager,
                         initialDate: viewState.navigation.selectedDate
                     )
