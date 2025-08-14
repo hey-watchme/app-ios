@@ -23,6 +23,9 @@ struct NewHomeView: View {
     @State private var lastRefreshDate: Date? = nil
     @State private var isRefreshing = false
     
+    // 日付変更カウンター（View再生成を確実にするため）
+    @State private var dateChangeCounter: Int = 0
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -63,11 +66,13 @@ struct NewHomeView: View {
         .onChange(of: viewModel.selectedDate) { oldDate, newDate in
             // 日付が変更されたら確実にデータを更新
             if oldDate != newDate {
+                dateChangeCounter += 1  // 日付変更カウンターをインクリメント
                 refreshData(for: newDate)
             }
         }
         .onChange(of: viewModel.deviceManager.selectedDeviceID) { _, _ in
             // デバイスが変更されたら確実にデータを更新
+            dateChangeCounter += 1  // デバイス変更時もカウンターをインクリメント
             refreshData(for: viewModel.selectedDate)
         }
         .sheet(isPresented: $showSubjectRegistration) {
@@ -108,8 +113,8 @@ struct NewHomeView: View {
                     }
                 )
                 .padding(.horizontal)
-                // データ変更時に確実にカード全体を再生成
-                .id("\(vibeReport.deviceId)_\(vibeReport.date)_\(Date().timeIntervalSince1970)")
+                // 日付変更カウンターを使用して確実にView再生成
+                .id("\(vibeReport.deviceId)_\(vibeReport.date)_\(dateChangeCounter)")
             } else {
                 // エンプティステート
                 UnifiedCard(
