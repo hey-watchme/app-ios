@@ -174,6 +174,15 @@ class DashboardViewModel: ObservableObject {
         }
     }
     
+    // 強制的にキャッシュをクリアしてデータを再取得するメソッド
+    func forceRefreshData() async {
+        // キャッシュをクリア
+        dataCache.removeAll()
+        
+        // データを再取得
+        await fetchAllReports()
+    }
+    
     private func makeCacheKey(deviceId: String, date: Date) -> String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"

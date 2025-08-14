@@ -71,10 +71,15 @@ struct InteractiveTimelineView: View {
         }
         .onAppear {
             // 自動ループ再生を開始
-            startAutoPlayback()
+            resetAndStartPlayback()
         }
         .onDisappear {
             stopPlayback()
+        }
+        // データが変更されたらリセット
+        .onChange(of: vibeScores) { _, newScores in
+            print("🔄 InteractiveTimelineView: vibeScoresが変更されました")
+            resetAndStartPlayback()
         }
     }
     
@@ -398,6 +403,25 @@ struct InteractiveTimelineView: View {
                     self.stopPlayback()
                 }
             }
+        }
+    }
+    
+    private func resetAndStartPlayback() {
+        // すべての状態をリセット
+        stopPlayback()
+        currentTimeIndex = 0
+        isDragging = false
+        showEventDetail = false
+        selectedEvent = nil
+        triggerBurst = false
+        showParticles = false
+        dragEndTime = nil
+        
+        print("🎆 InteractiveTimelineView: 状態をリセットして再生開始")
+        
+        // 少し遅延してから再生開始（アニメーションのため）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.startAutoPlayback()
         }
     }
     

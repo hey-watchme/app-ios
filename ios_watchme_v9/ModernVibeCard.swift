@@ -80,6 +80,8 @@ struct ModernVibeCard: View {
                             triggerBurst(score: score)
                         }
                     )
+                    // データが変わったら確実にViewを再生成
+                    .id("\(vibeReport.deviceId)_\(vibeReport.date)")
                 }
                 
                 // 時間分布バー

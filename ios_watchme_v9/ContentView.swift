@@ -15,6 +15,9 @@ struct ContentView: View {
     @StateObject private var audioRecorder = AudioRecorder()
     @StateObject private var viewState = ContentViewState()
     
+    // フィーチャーフラグ: 新しいデザインシステムを使用するかどうか
+    private let useNewDesign = true  // true: 新デザイン, false: 旧デザイン
+    
     private func initializeNetworkManager() {
         // AudioRecorderにDeviceManagerを設定
         audioRecorder.deviceManager = deviceManager
@@ -46,13 +49,19 @@ struct ContentView: View {
                     // ダッシュボードタブ
                     Group {
                         if let viewModel = viewState.dashboardViewModel {
-                            DashboardView(viewModel: viewModel, selectedTab: $viewState.navigation.selectedTab)
+                            if useNewDesign {
+                                // 新しいホーム画面（ダッシュボード）
+                                NewHomeView(viewModel: viewModel, selectedTab: $viewState.navigation.selectedTab)
+                            } else {
+                                // 従来のダッシュボード
+                                DashboardView(viewModel: viewModel, selectedTab: $viewState.navigation.selectedTab)
+                            }
                         } else {
                             ProgressView("初期化中...")
                         }
                     }
                     .tabItem {
-                        Label("ダッシュボード", systemImage: "square.grid.2x2")
+                        Label(useNewDesign ? "ホーム" : "ダッシュボード", systemImage: "square.grid.2x2")
                     }
                     .tag(0)
                     
