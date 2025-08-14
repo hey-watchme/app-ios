@@ -393,14 +393,25 @@ struct InteractiveTimelineView: View {
         // 既存のタイマーがあれば停止
         stopPlayback()
         
+        // 有効なデータの最後のインデックスを見つける
+        let lastValidIndex = findLastValidDataIndex()
+        
+        // 有効なデータがない場合は再生しない
+        guard lastValidIndex >= 0 else {
+            print("⚠️ InteractiveTimelineView: 有効なデータがないため再生をスキップ")
+            return
+        }
+        
         playbackTimer = Timer.scheduledTimer(withTimeInterval: playbackSpeed, repeats: true) { _ in
             withAnimation(.linear(duration: self.playbackSpeed)) {
-                if self.currentTimeIndex < self.vibeScores.count - 1 {
+                // 有効なデータの範囲内でのみ移動
+                if self.currentTimeIndex < lastValidIndex {
                     self.currentTimeIndex += 1
                     self.checkForEvent()
                 } else {
-                    // 最後まで到達したら停止（ループしない）
+                    // 有効なデータの最後まで到達したら停止
                     self.stopPlayback()
+                    print("✅ InteractiveTimelineView: 有効データの最後（インデックス: \(lastValidIndex)）に到達、再生停止")
                 }
             }
         }
@@ -513,6 +524,18 @@ struct InteractiveTimelineView: View {
               let minute = Int(hourMin[1]) else { return nil }
         
         return hour * 2 + (minute >= 30 ? 1 : 0)
+    }
+    
+    // 有効なデータの最後のインデックスを見つける
+    private func findLastValidDataIndex() -> Int {
+        // 後ろから検索して、nilでないデータを見つける
+        for index in stride(from: vibeScores.count - 1, through: 0, by: -1) {
+            if vibeScores[index] != nil {
+                return index
+            }
+        }
+        // すべてnilの場合は-1を返す
+        return -1
     }
     
     // MARK: - Computed Properties
