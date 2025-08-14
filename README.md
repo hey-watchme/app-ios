@@ -250,49 +250,49 @@ DeviceManagerは以下の3つの主要なプロパティでデバイス情報を
 ```
 ios_watchme_v9/
 ├── ios_watchme_v9App.swift        # アプリエントリーポイント
-├── ContentView.swift              # 日付選択とTabViewを使用したグローバルナビゲーション
+├── ContentView.swift              # メインビュー（シンプルな日付管理）
+├── SimpleDashboardView.swift      # ダッシュボード（.task(id:)でデータ取得）
 ├── HomeView.swift                 # 心理グラフ（Vibe Graph）表示
 ├── BehaviorGraphView.swift        # 行動グラフ
 ├── EmotionGraphView.swift         # 感情グラフ
 ├── RecordingView.swift            # 録音機能とファイル管理
 ├── LoginView.swift                # ログインUI
-├── ReportTestView.swift           # デバッグ用Vibeデータ表示
 ├── AudioRecorder.swift            # 録音管理
 ├── NetworkManager.swift           # API通信
 ├── DeviceManager.swift            # デバイス管理
 ├── SupabaseAuthManager.swift      # 認証管理
-├── SupabaseDataManager.swift      # 統合データ管理
+├── SupabaseDataManager.swift      # データ取得管理
 ├── Models/
 │   ├── BehaviorReport.swift       # 行動レポートモデル
-│   └── EmotionReport.swift        # 感情レポートモデル
+│   ├── EmotionReport.swift        # 感情レポートモデル
+│   └── Subject.swift              # 観測対象モデル
 ├── DailyVibeReport.swift          # Vibeレポートモデル
 ├── RecordingModel.swift           # 録音データモデル
 ├── SlotTimeUtility.swift          # 時刻スロット管理
-├── ConnectionStatus.swift         # 接続状態管理
-├── UploadUIUpdateTest.swift       # アップロードUIテスト
 ├── Assets.xcassets/               # アプリアイコンとカラーセット
 └── Info.plist                     # アプリ設定
 ```
 
 ### 主要コンポーネント
 
-#### UI/ナビゲーション（v9.11.0で階層構造化）
-1. **「デバイス → 日付 → グラフ」階層構造**
-   - **最上位階層**: ContentViewでデバイスと日付を一元管理
-   - **固定ヘッダー**: デバイス選択ボタンとユーザー情報ボタンを配置
-   - **日付ナビゲーション**: TabViewの上に配置され、全グラフで共有（前日/次日ボタンと日付表示）
-   - **タブ構成**: 心理グラフ、行動グラフ、感情グラフ、録音
+#### UI/ナビゲーション（v9.18.0でシンプル化）
+1. **シンプルな階層構造**
+   - **ContentView**: メインビューとして日付とタブを管理
+   - **固定ヘッダー**: デバイス選択ボタンとユーザー情報ボタン
+   - **日付ナビゲーション**: シンプルな前日/次日ボタンと日付表示
+   - **タブ構成**: ダッシュボード、心理グラフ、行動グラフ、感情グラフ、録音
 
-2. **統合データフロー**
-   - デバイスまたは日付の変更時に、全グラフのデータを一括取得
-   - 各グラフビューは個別のデータ取得を行わず、SupabaseDataManagerの`@Published`プロパティを参照
-   - データの一貫性と効率性を保証
+2. **データ取得の簡素化**
+   - SwiftUIの`.task(id:)`モディファイアで日付変更を検知
+   - 日付が変更されると自動的にデータを再取得
+   - ViewModelやキャッシュシステムを使用しない
+   - 各ビューが独立してデータを取得
 
-3. **疎結合アーキテクチャ**
-   - 各Viewが独立した責務を持つ
-   - ContentViewは日付・デバイス選択とデータフロー制御に特化
-   - 各グラフビューは表示に特化し、データフェッチは行わない
-   - 機能ごとに分離されたView構造
+3. **標準的なSwiftUIパターン**
+   - `@State`による直接的な状態管理
+   - `@EnvironmentObject`での共有オブジェクト管理
+   - 複雑な状態管理ライブラリやパターンを避ける
+   - SwiftUIの標準機能を最大限活用
 
 #### データ管理
 1. **AudioRecorder**
@@ -306,15 +306,11 @@ ios_watchme_v9/
    - multipart/form-dataでのファイルアップロード
    - エラーハンドリングとリトライ機能
 
-3. **SupabaseDataManager**（v9.11.0で統合データ管理を実装）
-   - **統合データ取得**: `fetchAllReports`メソッドで全グラフデータを並行取得
-   - **Published プロパティ**:
-     - `dailyReport`: 心理グラフ用データ
-     - `dailyBehaviorReport`: 行動グラフ用データ
-     - `dailyEmotionReport`: 感情グラフ用データ
-   - **一元化されたデータ管理**: `@EnvironmentObject`パターンによりアプリ全体で単一インスタンスを共有
-   - **データの一貫性保証**: 全ビューが同じデータソースを参照し、状態同期を自動化
-   - **Swift 6対応**: TaskブロックとMainActor.runに`[weak self]`を追加
+3. **SupabaseDataManager**（v9.18.0でシンプル化）
+   - **データ取得**: `fetchAllReports`メソッドで必要なデータを取得
+   - **RPC関数の活用**: `get_dashboard_data`で効率的にデータ取得
+   - **シンプルな構造**: ViewModelパターンを使用せず、直接データを返す
+   - **`.task(id:)`との連携**: 各ビューが独立してデータを取得
 
 4. **認証・デバイス管理**
    - SupabaseAuthManager: ユーザー認証とセッション管理

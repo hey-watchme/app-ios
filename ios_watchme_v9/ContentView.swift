@@ -2,209 +2,355 @@
 //  ContentView.swift
 //  ios_watchme_v9
 //
-//  Created by Kaya Matsumoto on 2025/06/11.
+//  シンプルな実装 - 日付変更バグ修正版
 //
 
 import SwiftUI
-import Combine
 
 struct ContentView: View {
     @EnvironmentObject var authManager: SupabaseAuthManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
+    
+    // シンプルな状態管理
+    @State private var selectedDate = Date()
+    @State private var selectedTab = 0
+    @State private var showDeviceSelection = false
+    @State private var showLogoutConfirmation = false
+    @State private var showRecordingSheet = false
+    
+    // NetworkManagerの初期化（録音機能のため必要）
     @StateObject private var audioRecorder = AudioRecorder()
-    @StateObject private var viewState = ContentViewState()
-    
-    // フィーチャーフラグ: 新しいデザインシステムを使用するかどうか
-    private let useNewDesign = true  // true: 新デザイン, false: 旧デザイン
-    
-    private func initializeNetworkManager() {
-        // AudioRecorderにDeviceManagerを設定
-        audioRecorder.deviceManager = deviceManager
-        viewState.networkManager = NetworkManager(authManager: authManager, deviceManager: deviceManager)
-        
-        if let authUser = authManager.currentUser {
-            viewState.networkManager?.updateToAuthenticatedUserID(authUser.id)
-        }
-        print("🔧 NetworkManager初期化完了")
-    }
+    @State private var networkManager: NetworkManager?
+    @State private var subjectsByDevice: [String: Subject] = [:]
     
     var body: some View {
-        if let networkManager = viewState.networkManager {
-            NavigationStack {
-                VStack(spacing: 0) { // ヘッダー、日付ナビゲーション、TabViewを縦に並べる
-                // 固定ヘッダー (デバイス選択、ユーザー情報、通知など)
+        NavigationStack {
+            VStack(spacing: 0) {
+                // ヘッダー（既存のHeaderViewを使用）
                 HeaderView(
-                    showDeviceSelection: $viewState.sheets.showDeviceSelection,
-                    showLogoutConfirmation: $viewState.alerts.showLogoutConfirmation
+                    showDeviceSelection: $showDeviceSelection,
+                    showLogoutConfirmation: $showLogoutConfirmation
                 )
                 
-                // 日付ナビゲーション
-                DateNavigationView(
-                    selectedDate: $viewState.navigation.selectedDate,
-                    showDatePicker: $viewState.sheets.showDatePicker
-                )
+                // シンプルな日付ナビゲーション
+                SimpleDateNavigation(selectedDate: $selectedDate)
                 
-                TabView(selection: $viewState.navigation.selectedTab) {
-                    // ダッシュボードタブ
-                    Group {
-                        if let viewModel = viewState.dashboardViewModel {
-                            if useNewDesign {
-                                // 新しいホーム画面（ダッシュボード）
-                                NewHomeView(viewModel: viewModel, selectedTab: $viewState.navigation.selectedTab)
-                            } else {
-                                // 従来のダッシュボード
-                                DashboardView(viewModel: viewModel, selectedTab: $viewState.navigation.selectedTab)
-                            }
-                        } else {
-                            ProgressView("初期化中...")
+                // タブビュー（DatePagingViewを使わない）
+                TabView(selection: $selectedTab) {
+                    // ダッシュボード（シンプル版）
+                    SimpleDashboardView(selectedDate: selectedDate, selectedTab: $selectedTab)
+                        .tabItem {
+                            Label("ダッシュボード", systemImage: "square.grid.2x2")
                         }
-                    }
-                    .tabItem {
-                        Label(useNewDesign ? "ホーム" : "ダッシュボード", systemImage: "square.grid.2x2")
-                    }
-                    .tag(0)
+                        .tag(0)
                     
-                    // 心理グラフタブ (Vibe Graph) - プロトタイプ版
-                    DatePagingView(selectedDate: $viewState.navigation.selectedDate, dashboardViewModel: viewState.dashboardViewModel) { date in
-                        HomeView(
-                            vibeReport: viewState.dashboardViewModel?.getCachedData(for: date)?.vibeReport 
-                                      ?? (date == viewState.navigation.selectedDate ? viewState.dashboardViewModel?.vibeReport : nil),
-                            subject: viewState.dashboardViewModel?.getCachedData(for: date)?.subject 
-                                   ?? (date == viewState.navigation.selectedDate ? viewState.dashboardViewModel?.subject : nil)
-                        )
-                    }
-                    .tabItem {
-                        Label("心理グラフ", systemImage: "brain")
-                    }
-                    .tag(1)
+                    // 心理グラフ
+                    SimpleVibeView(selectedDate: selectedDate)
+                        .tabItem {
+                            Label("心理グラフ", systemImage: "brain")
+                        }
+                        .tag(1)
                     
-                    // 行動グラフタブ (Behavior Graph)
-                    DatePagingView(selectedDate: $viewState.navigation.selectedDate, dashboardViewModel: viewState.dashboardViewModel) { date in
-                        BehaviorGraphView(
-                            behaviorReport: viewState.dashboardViewModel?.getCachedData(for: date)?.behaviorReport
-                                          ?? (date == viewState.navigation.selectedDate ? dataManager.dailyBehaviorReport : nil)
-                        )
-                    }
-                    .tabItem {
-                        Label("行動グラフ", systemImage: "figure.walk.motion")
-                    }
-                    .tag(2)
+                    // 行動グラフ
+                    SimpleBehaviorView(selectedDate: selectedDate)
+                        .tabItem {
+                            Label("行動グラフ", systemImage: "figure.walk.motion")
+                        }
+                        .tag(2)
                     
-                    // 感情グラフタブ (Emotion Graph)
-                    DatePagingView(selectedDate: $viewState.navigation.selectedDate, dashboardViewModel: viewState.dashboardViewModel) { date in
-                        EmotionGraphView(
-                            emotionReport: viewState.dashboardViewModel?.getCachedData(for: date)?.emotionReport
-                                         ?? (date == viewState.navigation.selectedDate ? dataManager.dailyEmotionReport : nil)
-                        )
-                    }
-                    .tabItem {
-                        Label("感情グラフ", systemImage: "heart.text.square")
-                    }
-                    .tag(3)
+                    // 感情グラフ
+                    SimpleEmotionView(selectedDate: selectedDate)
+                        .tabItem {
+                            Label("感情グラフ", systemImage: "heart.text.square")
+                        }
+                        .tag(3)
                     
-                    // 録音タブ（タップでモーダル表示）
+                    // 録音タブ
                     Text("")
                         .tabItem {
                             Label("録音", systemImage: "mic.circle.fill")
                         }
                         .tag(4)
                         .onAppear {
-                            if viewState.navigation.selectedTab == 4 {
-                                viewState.sheets.showRecordingSheet = true
-                                // タブを前の位置に戻す
-                                viewState.navigation.selectedTab = 0
+                            if selectedTab == 4 {
+                                showRecordingSheet = true
+                                selectedTab = 0
                             }
                         }
                 }
             }
-            .modifier(AlertModifier(
-                showAlert: $viewState.alerts.showAlert,
-                alertMessage: $viewState.alerts.alertMessage,
-                showUserIDChangeAlert: $viewState.alerts.showUserIDChangeAlert,
-                newUserID: $viewState.alerts.newUserID,
-                showLogoutConfirmation: $viewState.alerts.showLogoutConfirmation,
-                networkManager: networkManager,
-                authManager: authManager,
-                deviceManager: deviceManager,
-                dataManager: dataManager
-            ))
-            .modifier(SheetModifier(
-                showDeviceSelection: $viewState.sheets.showDeviceSelection,
-                showSubjectRegistration: $viewState.sheets.showSubjectRegistration,
-                showSubjectEdit: $viewState.sheets.showSubjectEdit,
-                showRecordingSheet: $viewState.sheets.showRecordingSheet,
-                showDatePicker: $viewState.sheets.showDatePicker,
-                selectedDate: $viewState.navigation.selectedDate,
-                subjectsByDevice: $viewState.data.subjectsByDevice,
-                selectedDeviceForSubject: $viewState.sheets.selectedDeviceForSubject,
-                editingSubject: $viewState.data.editingSubject,
-                selectedTab: $viewState.navigation.selectedTab,
-                networkManager: networkManager,
-                audioRecorder: audioRecorder,
-                authManager: authManager,
-                deviceManager: deviceManager,
-                dataManager: dataManager,
-                loadSubjectsForAllDevices: loadSubjectsForAllDevices
-            ))
-            .modifier(ChangeHandlerModifier(
-                showAlert: $viewState.alerts.showAlert,
-                alertMessage: $viewState.alerts.alertMessage,
-                selectedDate: $viewState.navigation.selectedDate,
-                selectedTab: $viewState.navigation.selectedTab,
-                showRecordingSheet: $viewState.sheets.showRecordingSheet,
-                networkManager: networkManager,
-                deviceManager: deviceManager,
-                dashboardViewModel: viewState.dashboardViewModel
-            ))
-            .onAppear {
-                initializeNetworkManager()
-                // DashboardViewModelを初期化
-                if viewState.dashboardViewModel == nil {
-                    viewState.dashboardViewModel = DashboardViewModel(
-                        dataManager: SupabaseDataManager(),  // 新しいインスタンスを作成
-                        deviceManager: deviceManager,
-                        initialDate: viewState.navigation.selectedDate
-                    )
-                    // DashboardViewModelで正規化された日付をContentViewStateに反映
-                    if let normalizedDate = viewState.dashboardViewModel?.selectedDate {
-                        viewState.navigation.selectedDate = normalizedDate
-                    }
-                }
-                // ViewModelのonAppearを呼び出す
-                viewState.dashboardViewModel?.onAppear()
+        }
+        .sheet(isPresented: $showDeviceSelection) {
+            DeviceSelectionView(isPresented: $showDeviceSelection, subjectsByDevice: $subjectsByDevice)
+        }
+        .sheet(isPresented: $showRecordingSheet) {
+            if let networkManager = networkManager {
+                RecordingView(audioRecorder: audioRecorder, networkManager: networkManager)
             }
-            }
-        } else {
-            ProgressView("初期化中...")
-                .onAppear {
-                    initializeNetworkManager()
+        }
+        .alert("ログアウト確認", isPresented: $showLogoutConfirmation) {
+            Button("キャンセル", role: .cancel) { }
+            Button("ログアウト", role: .destructive) {
+                Task {
+                    await authManager.signOut()
                 }
+            }
+        } message: {
+            Text("本当にログアウトしますか？")
+        }
+        .onAppear {
+            initializeNetworkManager()
         }
     }
     
-    // MARK: - Private Methods
-    
-    private func loadSubjectsForAllDevices() {
-        Task {
-            var newSubjects: [String: Subject] = [:]
-            
-            for device in deviceManager.userDevices {
-                // 各デバイスの観測対象を取得
-                await dataManager.fetchSubjectForDevice(deviceId: device.device_id)
-                if let subject = dataManager.subject {
-                    newSubjects[device.device_id] = subject
-                }
-            }
-            
-            await MainActor.run {
-                self.viewState.data.subjectsByDevice = newSubjects
-            }
+    private func initializeNetworkManager() {
+        audioRecorder.deviceManager = deviceManager
+        networkManager = NetworkManager(authManager: authManager, deviceManager: deviceManager)
+        
+        if let authUser = authManager.currentUser {
+            networkManager?.updateToAuthenticatedUserID(authUser.id)
         }
     }
 }
 
+// シンプルな日付ナビゲーション
+struct SimpleDateNavigation: View {
+    @Binding var selectedDate: Date
+    @EnvironmentObject var deviceManager: DeviceManager
+    @State private var showDatePicker = false
+    
+    private var dateFormatter: DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年MM月dd日"
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.timeZone = deviceManager.selectedDeviceTimezone
+        return formatter
+    }
+    
+    private var calendar: Calendar {
+        deviceManager.deviceCalendar
+    }
+    
+    private var canGoToNextDay: Bool {
+        !calendar.isDateInToday(selectedDate)
+    }
+    
+    var body: some View {
+        HStack {
+            // 前日ボタン
+            Button(action: {
+                withAnimation {
+                    selectedDate = calendar.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
+                }
+            }) {
+                Image(systemName: "chevron.left")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+                    .frame(width: 44, height: 44)
+            }
+            
+            Spacer()
+            
+            // 日付表示とピッカー
+            Button(action: {
+                showDatePicker = true
+            }) {
+                VStack(spacing: 4) {
+                    Text(dateFormatter.string(from: selectedDate))
+                        .font(.title2)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.primary)
+                    
+                    if calendar.isDateInToday(selectedDate) {
+                        Text("今日")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .sheet(isPresented: $showDatePicker) {
+                NavigationView {
+                    DatePicker("日付を選択", selection: $selectedDate, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .padding()
+                        .navigationTitle("日付を選択")
+                        .navigationBarTitleDisplayMode(.inline)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("完了") {
+                                    showDatePicker = false
+                                }
+                            }
+                        }
+                }
+            }
+            
+            Spacer()
+            
+            // 翌日ボタン
+            Button(action: {
+                withAnimation {
+                    if canGoToNextDay {
+                        selectedDate = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
+                    }
+                }
+            }) {
+                Image(systemName: "chevron.right")
+                    .font(.title2)
+                    .foregroundColor(canGoToNextDay ? .blue : .gray.opacity(0.3))
+                    .frame(width: 44, height: 44)
+            }
+            .disabled(!canGoToNextDay)
+        }
+        .padding(.horizontal)
+        .padding(.vertical, 8)
+        .background(Color(.systemBackground).shadow(radius: 1))
+    }
+}
 
-#Preview {
-    ContentView()
+// シンプルな心理グラフビュー
+struct SimpleVibeView: View {
+    let selectedDate: Date
+    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
+    
+    @State private var vibeReport: DailyVibeReport?
+    @State private var subject: Subject?
+    @State private var isLoading = false
+    
+    var body: some View {
+        ScrollView {
+            VStack {
+                if isLoading {
+                    ProgressView("読み込み中...")
+                        .padding()
+                } else if let report = vibeReport {
+                    HomeView(vibeReport: report, subject: subject)
+                } else {
+                    Text("データがありません")
+                        .foregroundColor(.secondary)
+                        .padding()
+                }
+            }
+        }
+        .task(id: selectedDate) {
+            await loadData()
+        }
+    }
+    
+    private func loadData() async {
+        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+            return
+        }
+        
+        isLoading = true
+        defer { isLoading = false }
+        
+        let timezone = deviceManager.getTimezone(for: deviceId)
+        let result = await dataManager.fetchAllReports(
+            deviceId: deviceId,
+            date: selectedDate,
+            timezone: timezone
+        )
+        
+        self.vibeReport = result.vibeReport
+        self.subject = result.subject
+    }
+}
+
+// シンプルな行動グラフビュー
+struct SimpleBehaviorView: View {
+    let selectedDate: Date
+    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
+    
+    @State private var behaviorReport: BehaviorReport?
+    @State private var isLoading = false
+    
+    var body: some View {
+        ScrollView {
+            VStack {
+                if isLoading {
+                    ProgressView("読み込み中...")
+                        .padding()
+                } else if let report = behaviorReport {
+                    BehaviorGraphView(behaviorReport: report)
+                } else {
+                    Text("データがありません")
+                        .foregroundColor(.secondary)
+                        .padding()
+                }
+            }
+        }
+        .task(id: selectedDate) {
+            await loadData()
+        }
+    }
+    
+    private func loadData() async {
+        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+            return
+        }
+        
+        isLoading = true
+        defer { isLoading = false }
+        
+        let timezone = deviceManager.getTimezone(for: deviceId)
+        let result = await dataManager.fetchAllReports(
+            deviceId: deviceId,
+            date: selectedDate,
+            timezone: timezone
+        )
+        
+        self.behaviorReport = result.behaviorReport
+    }
+}
+
+// シンプルな感情グラフビュー
+struct SimpleEmotionView: View {
+    let selectedDate: Date
+    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
+    
+    @State private var emotionReport: EmotionReport?
+    @State private var isLoading = false
+    
+    var body: some View {
+        ScrollView {
+            VStack {
+                if isLoading {
+                    ProgressView("読み込み中...")
+                        .padding()
+                } else if let report = emotionReport {
+                    EmotionGraphView(emotionReport: report)
+                } else {
+                    Text("データがありません")
+                        .foregroundColor(.secondary)
+                        .padding()
+                }
+            }
+        }
+        .task(id: selectedDate) {
+            await loadData()
+        }
+    }
+    
+    private func loadData() async {
+        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+            return
+        }
+        
+        isLoading = true
+        defer { isLoading = false }
+        
+        let timezone = deviceManager.getTimezone(for: deviceId)
+        let result = await dataManager.fetchAllReports(
+            deviceId: deviceId,
+            date: selectedDate,
+            timezone: timezone
+        )
+        
+        self.emotionReport = result.emotionReport
+    }
 }

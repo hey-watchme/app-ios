@@ -1,5 +1,35 @@
 # 更新履歴
 
+### 2025年8月14日
+- **v9.18.0 - ダッシュボード日付変更バグの根本的修正**
+  - **問題の根本原因**
+    - 過剰な設計（DashboardViewModel、キャッシュ、fetchID、DatePagingView）が原因
+    - 日付変更という基本的な機能に複雑すぎる実装を使用していた
+    
+  - **解決策：SwiftUIの標準機能への回帰**
+    - `.task(id:)`モディファイアのみで日付変更を処理
+    - ViewModelパターンを廃止し、シンプルな`@State`管理に変更
+    - 複雑なキャッシュシステムとプリロード機能を削除
+    - DatePagingViewのForEachループを削除
+    
+  - **削除したファイル**
+    - DashboardViewModel.swift（複雑なViewModel）
+    - DatePagingView.swift（複雑なページング機構）
+    - DashboardView.swift、NewHomeView.swift（旧ダッシュボード）
+    - ContentViewState.swift、ChangeHandlerModifier.swift等のヘルパー
+    
+  - **新しいアーキテクチャ**
+    - SimpleDashboardView.swift：`.task(id: selectedDate)`でデータ取得
+    - 各グラフビューが独立してデータを取得
+    - 日付が変更されると自動的に新しいデータを取得
+    - SwiftUIの標準的な動作に依存
+    
+  - **成果**
+    - 日付変更時のデータ表示バグを完全に解消
+    - コードベースを大幅に簡素化（数百行のコード削除）
+    - 保守性と可読性が大幅に向上
+    - 「過剰な設計」の典型例からの脱却
+
 ### 2025年8月11日
 - **v9.17.3 - platform_identifierとplatform_typeカラムの完全削除**
   - **データベース構造の簡素化**

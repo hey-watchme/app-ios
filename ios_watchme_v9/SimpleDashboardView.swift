@@ -1,0 +1,391 @@
+//
+//  SimpleDashboardView.swift
+//  ios_watchme_v9
+//
+//  シンプルなダッシュボード実装（日付バグ修正版）
+//
+
+import SwiftUI
+
+struct SimpleDashboardView: View {
+    let selectedDate: Date
+    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
+    @Binding var selectedTab: Int
+    
+    // 各データを個別に管理（シンプルに）
+    @State private var vibeReport: DailyVibeReport?
+    @State private var behaviorReport: BehaviorReport?
+    @State private var emotionReport: EmotionReport?
+    @State private var subject: Subject?
+    @State private var isLoading = false
+    
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                if isLoading {
+                    ProgressView("読み込み中...")
+                        .frame(maxWidth: .infinity, minHeight: 200)
+                } else {
+                    // 心理グラフカード
+                    vibeGraphCard
+                    
+                    // 行動グラフカード
+                    behaviorGraphCard
+                        .padding(.horizontal)
+                    
+                    // 感情グラフカード
+                    emotionGraphCard
+                        .padding(.horizontal)
+                    
+                    // 観測対象カード
+                    Group {
+                        if let subject = subject {
+                            observationTargetCard(subject)
+                        } else {
+                            noObservationTargetCard()
+                        }
+                    }
+                    .padding(.horizontal)
+                    
+                    Spacer(minLength: 100)
+                }
+            }
+            .padding(.top, 20)
+        }
+        .background(
+            Color(red: 0.937, green: 0.937, blue: 0.937)
+                .ignoresSafeArea()
+        )
+        .task(id: selectedDate) {  // 👈 これが重要！日付が変わると自動実行
+            await loadAllData()
+        }
+    }
+    
+    // MARK: - View Components
+    
+    private var vibeGraphCard: some View {
+        Group {
+            if let vibeReport = vibeReport {
+                ModernVibeCard(
+                    vibeReport: vibeReport,
+                    onNavigateToDetail: {
+                        selectedTab = 1
+                    }
+                )
+                .padding(.horizontal)
+            } else {
+                UnifiedCard(
+                    title: "気分",
+                    navigationLabel: "心理グラフ",
+                    onNavigate: {
+                        selectedTab = 1
+                    }
+                ) {
+                    GraphEmptyStateView(
+                        graphType: .vibe,
+                        isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                        isCompact: true
+                    )
+                }
+                .padding(.horizontal)
+            }
+        }
+    }
+    
+    private var behaviorGraphCard: some View {
+        UnifiedCard(
+            title: "行動",
+            navigationLabel: "行動グラフ",
+            onNavigate: {
+                selectedTab = 2
+            }
+        ) {
+            if let behaviorReport = behaviorReport {
+                VStack(spacing: 8) {
+                    let filteredRanking = behaviorReport.summaryRanking.filter { 
+                        $0.event.lowercased() != "other" && $0.event.lowercased() != "その他" 
+                    }
+                    
+                    if let topBehavior = filteredRanking.first {
+                        VStack(spacing: 8) {
+                            Text("🚶")
+                                .font(.system(size: 72))
+                            
+                            Text(topBehavior.event)
+                                .font(.caption)
+                                .foregroundStyle(Color.blue)
+                                .textCase(.uppercase)
+                                .tracking(1.0)
+                            
+                            HStack(spacing: 4) {
+                                Text("今日のメイン:")
+                                    .font(.caption2)
+                                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                
+                                Text("\(topBehavior.count)回")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.blue.opacity(0.8))
+                            }
+                        }
+                    }
+                    
+                    behaviorReportContent(behaviorReport)
+                }
+            } else {
+                GraphEmptyStateView(
+                    graphType: .behavior,
+                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isCompact: true
+                )
+            }
+        }
+    }
+    
+    private var emotionGraphCard: some View {
+        UnifiedCard(
+            title: "感情",
+            navigationLabel: "感情グラフ",
+            onNavigate: {
+                selectedTab = 3
+            }
+        ) {
+            if let emotionReport = emotionReport {
+                emotionReportContent(emotionReport)
+            } else {
+                GraphEmptyStateView(
+                    graphType: .emotion,
+                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isCompact: true
+                )
+            }
+        }
+    }
+    
+    private func observationTargetCard(_ subject: Subject) -> some View {
+        ObservationTargetCard(
+            title: "観測対象"
+        ) {
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 16) {
+                    // アバター
+                    if let avatarURL = subject.avatarUrl, !avatarURL.isEmpty {
+                        AsyncImage(url: URL(string: avatarURL)) { image in
+                            image
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: 60, height: 60)
+                                .clipShape(Circle())
+                        } placeholder: {
+                            Circle()
+                                .fill(Color.gray.opacity(0.2))
+                                .frame(width: 60, height: 60)
+                                .overlay(
+                                    Image(systemName: "person.fill")
+                                        .foregroundColor(.gray)
+                                )
+                        }
+                    } else {
+                        Circle()
+                            .fill(Color.gray.opacity(0.2))
+                            .frame(width: 60, height: 60)
+                            .overlay(
+                                Image(systemName: "person.fill")
+                                    .foregroundColor(.gray)
+                            )
+                    }
+                    
+                    // 情報
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(subject.name ?? "名前未設定")
+                            .font(.headline)
+                        
+                        HStack(spacing: 12) {
+                            if let age = subject.age {
+                                Label("\(age)歳", systemImage: "calendar")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                            
+                            if let gender = subject.gender {
+                                Label(gender, systemImage: "person")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                    
+                    Spacer()
+                }
+            }
+            .padding(.vertical, 4)
+        }
+    }
+    
+    private func noObservationTargetCard() -> some View {
+        UnifiedCard(
+            title: "観測対象",
+            navigationLabel: nil,
+            onNavigate: nil
+        ) {
+            VStack(spacing: 12) {
+                Image(systemName: "person.crop.circle.badge.questionmark")
+                    .font(.system(size: 48))
+                    .foregroundColor(.gray.opacity(0.5))
+                
+                Text("観測対象が未設定です")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 8)
+        }
+    }
+    
+    private func behaviorReportContent(_ report: BehaviorReport) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            let filteredRanking = report.summaryRanking.filter {
+                $0.event.lowercased() != "other" && $0.event.lowercased() != "その他"
+            }
+            
+            if filteredRanking.count > 1 {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(Array(filteredRanking.prefix(3).enumerated()), id: \.element.id) { index, behavior in
+                        HStack(spacing: 8) {
+                            Text("\(index + 1)")
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundStyle(Color(red: 0.3, green: 0.3, blue: 0.3))
+                                .frame(width: 20, alignment: .leading)
+                            
+                            Text(behavior.event)
+                                .font(.subheadline)
+                                .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                .lineLimit(1)
+                            
+                            Spacer()
+                            
+                            Text("\(behavior.count)")
+                                .font(.caption)
+                                .foregroundStyle(Color(red: 0.5, green: 0.5, blue: 0.5))
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(red: 0.96, green: 0.96, blue: 0.96))
+                .cornerRadius(8)
+            }
+        }
+    }
+    
+    private func emotionReportContent(_ report: EmotionReport) -> some View {
+        VStack(spacing: 16) {
+            if !report.emotionGraph.isEmpty {
+                // 全時間の感情の平均を計算
+                let avgJoy = report.emotionGraph.map { $0.joy }.reduce(0, +) / report.emotionGraph.count
+                let avgTrust = report.emotionGraph.map { $0.trust }.reduce(0, +) / report.emotionGraph.count
+                let avgFear = report.emotionGraph.map { $0.fear }.reduce(0, +) / report.emotionGraph.count
+                let avgSurprise = report.emotionGraph.map { $0.surprise }.reduce(0, +) / report.emotionGraph.count
+                let avgSadness = report.emotionGraph.map { $0.sadness }.reduce(0, +) / report.emotionGraph.count
+                let avgDisgust = report.emotionGraph.map { $0.disgust }.reduce(0, +) / report.emotionGraph.count
+                let avgAnger = report.emotionGraph.map { $0.anger }.reduce(0, +) / report.emotionGraph.count
+                let avgAnticipation = report.emotionGraph.map { $0.anticipation }.reduce(0, +) / report.emotionGraph.count
+                
+                let emotions = [
+                    ("joy", avgJoy, "😊", Color.yellow),
+                    ("trust", avgTrust, "🤝", Color.green),
+                    ("fear", avgFear, "😨", Color.purple),
+                    ("surprise", avgSurprise, "😲", Color.cyan),
+                    ("sadness", avgSadness, "😢", Color.blue),
+                    ("disgust", avgDisgust, "🤢", Color.brown),
+                    ("anger", avgAnger, "😠", Color.red),
+                    ("anticipation", avgAnticipation, "🎯", Color.orange)
+                ]
+                
+                let topEmotions = emotions.sorted { $0.1 > $1.1 }.prefix(3)
+                
+                // トップ感情を絵文字で表示
+                HStack(spacing: 16) {
+                    ForEach(Array(topEmotions.enumerated()), id: \.element.0) { index, emotion in
+                        VStack(spacing: 4) {
+                            Text(emotion.2)
+                                .font(.system(size: 36))
+                            
+                            Text("\(emotion.1)%")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
+                }
+                
+                // 感情バー
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(Array(topEmotions.enumerated()), id: \.element.0) { index, emotion in
+                        HStack {
+                            Text(emotionLabel(for: emotion.0))
+                                .font(.caption)
+                                .frame(width: 80, alignment: .leading)
+                            
+                            GeometryReader { geometry in
+                                ZStack(alignment: .leading) {
+                                    Rectangle()
+                                        .fill(Color.gray.opacity(0.2))
+                                        .frame(height: 6)
+                                        .cornerRadius(3)
+                                    
+                                    Rectangle()
+                                        .fill(emotion.3)
+                                        .frame(width: geometry.size.width * CGFloat(emotion.1) / 100, height: 6)
+                                        .cornerRadius(3)
+                                }
+                            }
+                            .frame(height: 6)
+                        }
+                    }
+                }
+                .padding()
+                .background(Color(red: 0.96, green: 0.96, blue: 0.96))
+                .cornerRadius(8)
+            }
+        }
+    }
+    
+    private func emotionLabel(for key: String) -> String {
+        switch key.lowercased() {
+        case "joy": return "喜び"
+        case "trust": return "信頼"
+        case "fear": return "恐れ"
+        case "surprise": return "驚き"
+        case "sadness": return "悲しみ"
+        case "disgust": return "嫌悪"
+        case "anger": return "怒り"
+        case "anticipation": return "期待"
+        default: return key
+        }
+    }
+    
+    private func loadAllData() async {
+        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+            return
+        }
+        
+        // ローディング開始
+        isLoading = true
+        defer { isLoading = false }
+        
+        // データ取得
+        let timezone = deviceManager.getTimezone(for: deviceId)
+        let result = await dataManager.fetchAllReports(
+            deviceId: deviceId,
+            date: selectedDate,
+            timezone: timezone
+        )
+        
+        // 取得したデータを設定
+        self.vibeReport = result.vibeReport
+        self.behaviorReport = result.behaviorReport
+        self.emotionReport = result.emotionReport
+        self.subject = result.subject
+    }
+}
