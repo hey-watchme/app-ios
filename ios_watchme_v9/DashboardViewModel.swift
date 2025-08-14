@@ -14,6 +14,8 @@ class DashboardViewModel: ObservableObject {
     // MARK: - Published Properties
     @Published var selectedDate: Date = Date()
     @Published var selectedDeviceID: String? = nil
+    @Published private(set) var isLoading: Bool = false
+    @Published private(set) var currentFetchID: UUID = UUID()
     
     // MARK: - Dependencies
     @Published private(set) var dataManager: SupabaseDataManager
@@ -132,14 +134,34 @@ class DashboardViewModel: ObservableObject {
     
     // MARK: - Private Methods
     private func fetchAllReports() async {
+        // 新しいfetchIDを生成
+        let fetchID = UUID()
+        currentFetchID = fetchID
+        
         // 既存のタスクをキャンセル
         fetchTask?.cancel()
         
         fetchTask = Task {
             guard !Task.isCancelled else { return }
             
+            // ローディング状態を開始
+            await MainActor.run {
+                self.isLoading = true
+            }
+            
             // デバイスIDの確認
             guard let deviceId = selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+                return
+            }
+            
+            // このタスクがまだ最新かチェック
+            guard currentFetchID == fetchID else {
+                await MainActor.run {
+                    self.isLoading = false
+                }
                 return
             }
             
@@ -147,10 +169,14 @@ class DashboardViewModel: ObservableObject {
             if let cached = getCachedData(for: selectedDate) {
                 // キャッシュからデータを適用
                 await MainActor.run {
+                    // このタスクがまだ最新かチェック
+                    guard self.currentFetchID == fetchID else { return }
+                    
                     dataManager.dailyReport = cached.vibeReport
                     dataManager.dailyBehaviorReport = cached.behaviorReport
                     dataManager.dailyEmotionReport = cached.emotionReport
                     dataManager.subject = cached.subject
+                    self.isLoading = false
                 }
                 print("📱 Using cached data for \(selectedDate)")
                 return
@@ -160,6 +186,14 @@ class DashboardViewModel: ObservableObject {
             // デバイスのタイムゾーンを渡す
             let timezone = deviceManager.getTimezone(for: deviceId)
             await dataManager.fetchAllReports(deviceId: deviceId, date: selectedDate, timezone: timezone)
+            
+            // このタスクがまだ最新かチェック
+            guard currentFetchID == fetchID else {
+                await MainActor.run {
+                    self.isLoading = false
+                }
+                return
+            }
             
             // 取得したデータをキャッシュに保存
             let cacheKey = makeCacheKey(deviceId: deviceId, date: selectedDate)
@@ -171,6 +205,10 @@ class DashboardViewModel: ObservableObject {
                 fetchedAt: Date()
             )
             dataCache[cacheKey] = cachedData
+            
+            await MainActor.run {
+                self.isLoading = false
+            }
         }
     }
     

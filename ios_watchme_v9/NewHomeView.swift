@@ -64,16 +64,16 @@ struct NewHomeView: View {
             lastRefreshDate = viewModel.selectedDate
         }
         .onChange(of: viewModel.selectedDate) { oldDate, newDate in
-            // 日付が変更されたら確実にデータを更新
+            // 日付が変更されたらカウンターをインクリメント（ViewModelがデータ取得を行う）
             if oldDate != newDate {
                 dateChangeCounter += 1  // 日付変更カウンターをインクリメント
-                refreshData(for: newDate)
+                // データ取得はViewModelが自動的に行うため、ここでは呼び出さない
             }
         }
         .onChange(of: viewModel.deviceManager.selectedDeviceID) { _, _ in
-            // デバイスが変更されたら確実にデータを更新
+            // デバイスが変更されたらカウンターをインクリメント（ViewModelがデータ取得を行う）
             dateChangeCounter += 1  // デバイス変更時もカウンターをインクリメント
-            refreshData(for: viewModel.selectedDate)
+            // データ取得はViewModelが自動的に行うため、ここでは呼び出さない
         }
         .sheet(isPresented: $showSubjectRegistration) {
             if let deviceID = viewModel.deviceManager.selectedDeviceID ?? viewModel.deviceManager.localDeviceIdentifier {
@@ -530,37 +530,21 @@ struct NewHomeView: View {
     }
     
     // MARK: - Data Refresh
+    // 注: データ取得の責務はDashboardViewModelに一元化されました。
+    // ViewModelが日付・デバイス変更を自動的に検知してデータを取得します。
+    // 以下のメソッドは後方互換性のために残していますが、使用は推奨されません。
+    
+    @available(*, deprecated, message: "データ取得はDashboardViewModelが自動的に行います")
     private func refreshData(for date: Date) {
-        guard !isRefreshing else { return }
-        
-        isRefreshing = true
+        // ViewModelのforceRefreshDataを呼び出す
         Task {
-            // キャッシュをクリアして強制的に新しいデータを取得
-            await forceRefreshData(for: date)
-            
-            await MainActor.run {
-                isRefreshing = false
-                lastRefreshDate = date
-            }
+            await viewModel.forceRefreshData()
         }
     }
     
+    @available(*, deprecated, message: "データ取得はDashboardViewModelが自動的に行います")
     private func forceRefreshData(for date: Date) async {
-        guard let deviceId = viewModel.deviceManager.selectedDeviceID ?? viewModel.deviceManager.localDeviceIdentifier else {
-            return
-        }
-        
-        // デバイスのタイムゾーンを取得
-        let timezone = viewModel.deviceManager.getTimezone(for: deviceId)
-        
-        // 直接データマネージャーを更新（キャッシュを無視）
-        await viewModel.dataManager.fetchAllReports(
-            deviceId: deviceId,
-            date: date,
-            timezone: timezone
-        )
-        
-        // ViewModelのキャッシュも更新されるようにトリガー
-        await viewModel.onAppear()
+        // ViewModelのforceRefreshDataを呼び出す
+        await viewModel.forceRefreshData()
     }
 }
