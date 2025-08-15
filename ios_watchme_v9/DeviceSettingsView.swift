@@ -8,25 +8,36 @@
 
 import SwiftUI
 
+// 編集コンテキストを定義（SwiftUIのベストプラクティス）
+struct SubjectEditingContext: Identifiable {
+    let id = UUID()
+    let deviceID: String
+    let editingSubject: Subject?
+    
+    var isEditing: Bool {
+        editingSubject != nil
+    }
+}
+
 struct DeviceSettingsView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var authManager: SupabaseAuthManager
     @State private var subjectsByDevice: [String: Subject] = [:]
+    @State private var isLoadingSubjects = true  // 明示的なローディング状態
     @State private var showQRScanner = false
     @State private var showAddDeviceAlert = false
     @State private var addDeviceError: String?
     @State private var showSuccessAlert = false
     @State private var addedDeviceId: String?
-    @State private var showSubjectRegistration = false
-    @State private var showSubjectEdit = false
-    @State private var selectedDeviceForSubject: String? = nil
-    @State private var editingSubject: Subject? = nil
+    
+    // sheet(item:)パターン用の状態管理
+    @State private var editingContext: SubjectEditingContext? = nil
     
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                if deviceManager.isLoading {
+                if deviceManager.isLoading || isLoadingSubjects {
                     ProgressView("デバイス一覧を読み込み中...")
                         .frame(maxWidth: .infinity, minHeight: 200)
                 } else if deviceManager.userDevices.isEmpty {
@@ -50,8 +61,10 @@ struct DeviceSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color(.systemBackground), for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .onAppear {
-            loadSubjectsForAllDevices()
+        .task {
+            // iOS 15+の推奨パターン：.taskモディファイアで非同期処理
+            await loadSubjectsForAllDevices()
+            isLoadingSubjects = false
         }
         .sheet(isPresented: $showQRScanner) {
             QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in
@@ -60,34 +73,20 @@ struct DeviceSettingsView: View {
                 }
             }
         }
-        .sheet(isPresented: $showSubjectRegistration, onDismiss: {
-            loadSubjectsForAllDevices()
-        }) {
-            if let deviceID = selectedDeviceForSubject {
-                SubjectRegistrationView(
-                    deviceID: deviceID,
-                    isPresented: $showSubjectRegistration,
-                    editingSubject: nil
-                )
-                .environmentObject(dataManager)
-                .environmentObject(deviceManager)
-                .environmentObject(authManager)
+        // SwiftUIベストプラクティス：sheet(item:)パターン
+        .sheet(item: $editingContext, onDismiss: {
+            Task {
+                await loadSubjectsForAllDevices()
             }
-        }
-        .sheet(isPresented: $showSubjectEdit, onDismiss: {
-            loadSubjectsForAllDevices()
-        }) {
-            if let deviceID = selectedDeviceForSubject,
-               let subject = editingSubject {
-                SubjectRegistrationView(
-                    deviceID: deviceID,
-                    isPresented: $showSubjectEdit,
-                    editingSubject: subject
-                )
-                .environmentObject(dataManager)
-                .environmentObject(deviceManager)
-                .environmentObject(authManager)
-            }
+        }) { context in
+            SubjectRegistrationView(
+                deviceID: context.deviceID,
+                isPresented: .constant(false),  // itemベースなので不要
+                editingSubject: context.editingSubject
+            )
+            .environmentObject(dataManager)
+            .environmentObject(deviceManager)
+            .environmentObject(authManager)
         }
         .alert("デバイス追加エラー", isPresented: $showAddDeviceAlert, presenting: addDeviceError) { _ in
             Button("OK", role: .cancel) { }
@@ -140,13 +139,18 @@ struct DeviceSettingsView: View {
                         deviceManager.selectDevice(device.device_id)
                     },
                     onEditSubject: { subject in
-                        selectedDeviceForSubject = device.device_id
-                        editingSubject = subject
-                        showSubjectEdit = true
+                        // sheet(item:)パターンで編集コンテキストを設定
+                        editingContext = SubjectEditingContext(
+                            deviceID: device.device_id,
+                            editingSubject: subject
+                        )
                     },
                     onAddSubject: {
-                        selectedDeviceForSubject = device.device_id
-                        showSubjectRegistration = true
+                        // sheet(item:)パターンで新規追加コンテキストを設定
+                        editingContext = SubjectEditingContext(
+                            deviceID: device.device_id,
+                            editingSubject: nil
+                        )
                     }
                 )
                 .padding(.horizontal)
@@ -199,21 +203,23 @@ struct DeviceSettingsView: View {
     }
     
     // MARK: - Helper Methods
-    private func loadSubjectsForAllDevices() {
-        Task {
-            var newSubjects: [String: Subject] = [:]
-            
-            for device in deviceManager.userDevices {
-                // 各デバイスの観測対象を取得
-                await dataManager.fetchSubjectForDevice(deviceId: device.device_id)
-                if let subject = dataManager.subject {
-                    newSubjects[device.device_id] = subject
-                }
+    private func loadSubjectsForAllDevices() async {
+        var newSubjects: [String: Subject] = [:]
+        
+        for device in deviceManager.userDevices {
+            // 各デバイスの観測対象を取得（RPC経由で効率的に）
+            let result = await dataManager.fetchAllReports(
+                deviceId: device.device_id,
+                date: Date(),  // 日付は任意（Subjectのみ必要）
+                timezone: deviceManager.getTimezone(for: device.device_id)
+            )
+            if let subject = result.subject {
+                newSubjects[device.device_id] = subject
             }
-            
-            await MainActor.run {
-                self.subjectsByDevice = newSubjects
-            }
+        }
+        
+        await MainActor.run {
+            self.subjectsByDevice = newSubjects
         }
     }
     
@@ -240,7 +246,7 @@ struct DeviceSettingsView: View {
                 addedDeviceId = code
                 showSuccessAlert = true
                 // サブジェクト情報を再読み込み
-                loadSubjectsForAllDevices()
+                await loadSubjectsForAllDevices()
             } else {
                 addDeviceError = "ユーザー情報の取得に失敗しました。"
                 showAddDeviceAlert = true

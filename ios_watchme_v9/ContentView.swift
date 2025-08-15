@@ -13,13 +13,39 @@ struct ContentView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     
     // シンプルな状態管理
-    @State private var selectedDate = Date()
+    @State private var selectedDate: Date = {
+        // 初期値は今日の開始時刻（時間を00:00:00にリセット）
+        let calendar = Calendar.current
+        return calendar.startOfDay(for: Date())
+    }()
     @State private var showLogoutConfirmation = false
     @State private var showRecordingSheet = false
     
     // NetworkManagerの初期化（録音機能のため必要）
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var networkManager: NetworkManager?
+    
+    // TabView用の日付範囲（過去1年分）
+    private var dateRange: [Date] {
+        let calendar = deviceManager.deviceCalendar
+        let today = calendar.startOfDay(for: Date())
+        
+        // 1年前の日付を取得
+        guard let oneYearAgo = calendar.date(byAdding: .year, value: -1, to: today) else {
+            return [today]
+        }
+        
+        var dates: [Date] = []
+        var currentDate = oneYearAgo
+        
+        // 1年前から今日までの日付の配列を生成
+        while currentDate <= today {
+            dates.append(currentDate)
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
+        }
+        
+        return dates
+    }
     
     var body: some View {
         ZStack {
@@ -31,44 +57,53 @@ struct ContentView: View {
                         showRecordingSheet: $showRecordingSheet
                     )
                     
-                    // シンプルな日付ナビゲーション
+                    // シンプルな日付ナビゲーション（スワイプと連動）
                     SimpleDateNavigation(selectedDate: $selectedDate)
                     
-                    // ダッシュボードを直接表示（TabViewを削除）
-                    SimpleDashboardView(selectedDate: selectedDate)
+                    // TabViewでラップしてスワイプ対応
+                    TabView(selection: $selectedDate) {
+                        ForEach(dateRange, id: \.self) { date in
+                            SimpleDashboardView(selectedDate: date)
+                                .tag(date) // 日付を各ページに紐付け
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .never)) // 横スワイプのスタイル、ドットは非表示
                 }
             }
             
             // Floating Action Button (FAB)
-            VStack {
-                Spacer()
-                HStack {
+            // deviceManagerのshouldShowFABプロパティで表示制御
+            if deviceManager.shouldShowFAB {
+                VStack {
                     Spacer()
-                    
-                    Button(action: {
-                        showRecordingSheet = true
-                    }) {
-                        ZStack {
-                            // 背景の円（影付き）
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [Color.red, Color.red.opacity(0.8)]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
+                    HStack {
+                        Spacer()
+                        
+                        Button(action: {
+                            showRecordingSheet = true
+                        }) {
+                            ZStack {
+                                // 背景の円（影付き）
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [Color.red, Color.red.opacity(0.8)]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
                                     )
-                                )
-                                .frame(width: 56, height: 56)
-                                .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 4)
-                            
-                            // マイクアイコン
-                            Image(systemName: "mic.fill")
-                                .font(.system(size: 24, weight: .semibold))
-                                .foregroundColor(.white)
+                                    .frame(width: 56, height: 56)
+                                    .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 4)
+                                
+                                // マイクアイコン
+                                Image(systemName: "mic.fill")
+                                    .font(.system(size: 24, weight: .semibold))
+                                    .foregroundColor(.white)
+                            }
                         }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 20)
                     }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 20)
                 }
             }
         }
@@ -89,6 +124,24 @@ struct ContentView: View {
         }
         .onAppear {
             initializeNetworkManager()
+            // selectedDateがdateRangeに含まれていることを確認
+            let calendar = deviceManager.deviceCalendar
+            let normalizedDate = calendar.startOfDay(for: selectedDate)
+            
+            // 今日より未来の場合は今日に設定
+            let today = calendar.startOfDay(for: Date())
+            if normalizedDate > today {
+                selectedDate = today
+            } else {
+                selectedDate = normalizedDate
+            }
+            
+            // デバッグログ
+            print("🔍 ContentView onAppear - selectedDate: \(selectedDate)")
+            print("🔍 DateRange count: \(dateRange.count)")
+            if let first = dateRange.first, let last = dateRange.last {
+                print("🔍 DateRange: \(first) to \(last)")
+            }
         }
     }
     

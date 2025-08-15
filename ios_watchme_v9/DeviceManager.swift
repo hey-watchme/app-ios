@@ -390,6 +390,20 @@ class DeviceManager: ObservableObject {
         )
     }
     
+    // MARK: - FAB表示判定
+    /// 選択中のデバイスタイプがobserverの場合はFABを非表示
+    var shouldShowFAB: Bool {
+        // デバイスが選択されていない場合はデフォルトで表示
+        guard let deviceId = selectedDeviceID,
+              let device = userDevices.first(where: { $0.device_id == deviceId }) else {
+            return true
+        }
+        
+        // device_typeが "observer" の場合のみFABを非表示
+        // それ以外（ios, android, その他）の場合は表示
+        return device.device_type.lowercased() != "observer"
+    }
+    
     // MARK: - タイムゾーン関連
     /// 選択中のデバイスのタイムゾーンを取得
     var selectedDeviceTimezone: TimeZone {

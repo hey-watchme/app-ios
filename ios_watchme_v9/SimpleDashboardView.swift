@@ -19,6 +19,11 @@ struct SimpleDashboardView: View {
     @State private var subject: Subject?
     @State private var isLoading = false
     
+    // モーダル表示管理
+    @State private var showVibeSheet = false
+    @State private var showBehaviorSheet = false
+    @State private var showEmotionSheet = false
+    
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -59,6 +64,54 @@ struct SimpleDashboardView: View {
         .task(id: selectedDate) {  // 👈 これが重要！日付が変わると自動実行
             await loadAllData()
         }
+        .sheet(isPresented: $showVibeSheet) {
+            NavigationView {
+                HomeView(vibeReport: vibeReport, subject: subject)
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
+                    .navigationBarTitleDisplayMode(.large)
+                    .navigationTitle("心理グラフ")
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("閉じる") {
+                                showVibeSheet = false
+                            }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showBehaviorSheet) {
+            NavigationView {
+                BehaviorGraphView(behaviorReport: behaviorReport)
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
+                    .navigationBarTitleDisplayMode(.large)
+                    .navigationTitle("行動グラフ")
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("閉じる") {
+                                showBehaviorSheet = false
+                            }
+                        }
+                    }
+            }
+        }
+        .sheet(isPresented: $showEmotionSheet) {
+            NavigationView {
+                EmotionGraphView(emotionReport: emotionReport)
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
+                    .navigationBarTitleDisplayMode(.large)
+                    .navigationTitle("感情グラフ")
+                    .toolbar {
+                        ToolbarItem(placement: .navigationBarLeading) {
+                            Button("閉じる") {
+                                showEmotionSheet = false
+                            }
+                        }
+                    }
+            }
+        }
     }
     
     // MARK: - View Components
@@ -66,59 +119,40 @@ struct SimpleDashboardView: View {
     private var vibeGraphCard: some View {
         Group {
             if let vibeReport = vibeReport {
-                NavigationLink(destination: 
-                    HomeView(vibeReport: vibeReport, subject: subject)
-                        .environmentObject(deviceManager)
-                        .environmentObject(dataManager)
-                        .navigationBarTitleDisplayMode(.large)
-                        .navigationTitle("心理グラフ")
+                ModernVibeCard(
+                    vibeReport: vibeReport,
+                    onNavigateToDetail: { }
+                )
+                .padding(.horizontal)
+                .onTapGesture {
+                    showVibeSheet = true
+                }
+            } else {
+                UnifiedCard(
+                    title: "気分",
+                    navigationLabel: "心理グラフ",
+                    onNavigate: { }
                 ) {
-                    ModernVibeCard(
-                        vibeReport: vibeReport,
-                        onNavigateToDetail: { }
+                    GraphEmptyStateView(
+                        graphType: .vibe,
+                        isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                        isCompact: true
                     )
                 }
-                .buttonStyle(PlainButtonStyle())
                 .padding(.horizontal)
-            } else {
-                NavigationLink(destination: 
-                    HomeView(vibeReport: nil, subject: subject)
-                        .environmentObject(deviceManager)
-                        .environmentObject(dataManager)
-                        .navigationBarTitleDisplayMode(.large)
-                        .navigationTitle("心理グラフ")
-                ) {
-                    UnifiedCard(
-                        title: "気分",
-                        navigationLabel: "心理グラフ",
-                        onNavigate: { }
-                    ) {
-                        GraphEmptyStateView(
-                            graphType: .vibe,
-                            isDeviceLinked: !deviceManager.userDevices.isEmpty,
-                            isCompact: true
-                        )
-                    }
+                .onTapGesture {
+                    showVibeSheet = true
                 }
-                .buttonStyle(PlainButtonStyle())
-                .padding(.horizontal)
             }
         }
     }
     
     private var behaviorGraphCard: some View {
-        NavigationLink(destination: 
-            BehaviorGraphView(behaviorReport: behaviorReport)
-                .environmentObject(deviceManager)
-                .environmentObject(dataManager)
-                .navigationBarTitleDisplayMode(.large)
-                .navigationTitle("行動グラフ")
+        UnifiedCard(
+            title: "行動",
+            navigationLabel: "行動グラフ",
+            onNavigate: { }
         ) {
-            UnifiedCard(
-                title: "行動",
-                navigationLabel: "行動グラフ",
-                onNavigate: { }
-            ) {
             if let behaviorReport = behaviorReport {
                 VStack(spacing: 8) {
                     let filteredRanking = behaviorReport.summaryRanking.filter { 
@@ -159,23 +193,17 @@ struct SimpleDashboardView: View {
                 )
             }
         }
+        .onTapGesture {
+            showBehaviorSheet = true
         }
-        .buttonStyle(PlainButtonStyle())
     }
     
     private var emotionGraphCard: some View {
-        NavigationLink(destination: 
-            EmotionGraphView(emotionReport: emotionReport)
-                .environmentObject(deviceManager)
-                .environmentObject(dataManager)
-                .navigationBarTitleDisplayMode(.large)
-                .navigationTitle("感情グラフ")
+        UnifiedCard(
+            title: "感情",
+            navigationLabel: "感情グラフ",
+            onNavigate: { }
         ) {
-            UnifiedCard(
-                title: "感情",
-                navigationLabel: "感情グラフ",
-                onNavigate: { }
-            ) {
             if let emotionReport = emotionReport {
                 emotionReportContent(emotionReport)
             } else {
@@ -186,8 +214,9 @@ struct SimpleDashboardView: View {
                 )
             }
         }
+        .onTapGesture {
+            showEmotionSheet = true
         }
-        .buttonStyle(PlainButtonStyle())
     }
     
     private func observationTargetCard(_ subject: Subject) -> some View {
@@ -397,8 +426,14 @@ struct SimpleDashboardView: View {
     
     private func loadAllData() async {
         guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+            print("⚠️ SimpleDashboardView: No device ID available")
             return
         }
+        
+        // デバッグログ
+        print("🔍 SimpleDashboardView loading data for date: \(selectedDate)")
+        print("🔍 Device ID: \(deviceId)")
+        print("🔍 Timezone: \(deviceManager.getTimezone(for: deviceId))")
         
         // ローディング開始
         isLoading = true
@@ -417,5 +452,11 @@ struct SimpleDashboardView: View {
         self.behaviorReport = result.behaviorReport
         self.emotionReport = result.emotionReport
         self.subject = result.subject
+        
+        // デバッグログ - 取得結果
+        print("🔍 Data loaded - Vibe: \(result.vibeReport != nil), Behavior: \(result.behaviorReport != nil), Emotion: \(result.emotionReport != nil)")
+        if let vibe = result.vibeReport {
+            print("🔍 Vibe date: \(vibe.date), average: \(vibe.averageScore)")
+        }
     }
 }

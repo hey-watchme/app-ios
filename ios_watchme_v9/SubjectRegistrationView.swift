@@ -12,9 +12,10 @@ struct SubjectRegistrationView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var authManager: SupabaseAuthManager
+    @Environment(\.dismiss) private var dismiss  // iOS 15+の推奨パターン
     
     let deviceID: String
-    @Binding var isPresented: Bool
+    @Binding var isPresented: Bool  // 互換性のため残す
     let editingSubject: Subject? // 編集対象の観測対象（nilの場合は新規登録）
     
     // フォーム入力項目
@@ -42,7 +43,7 @@ struct SubjectRegistrationView: View {
     }
     
     var body: some View {
-        NavigationStack {
+        NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
                     // ヘッダー
@@ -67,7 +68,7 @@ struct SubjectRegistrationView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("キャンセル") {
-                        isPresented = false
+                        dismiss()  // iOS 15+の推奨パターン
                     }
                 }
                 
@@ -89,7 +90,7 @@ struct SubjectRegistrationView: View {
             }
             .alert(isEditing ? "更新完了" : "登録完了", isPresented: $showingSuccessAlert) {
                 Button("OK") {
-                    isPresented = false
+                    dismiss()  // iOS 15+の推奨パターン
                 }
             } message: {
                 Text(isEditing ? "観測対象の更新が完了しました。" : "観測対象の登録が完了しました。")

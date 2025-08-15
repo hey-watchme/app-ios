@@ -36,4 +36,12 @@ class HapticManager: ObservableObject {
     func playSelectionHaptic() {
         selectionFeedback.selectionChanged()
     }
+    
+    // MARK: - General Impact
+    
+    func impact(style: UIImpactFeedbackGenerator.FeedbackStyle) {
+        let generator = UIImpactFeedbackGenerator(style: style)
+        generator.prepare()
+        generator.impactOccurred()
+    }
 }
