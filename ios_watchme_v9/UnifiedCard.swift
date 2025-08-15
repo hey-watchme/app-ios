@@ -56,6 +56,7 @@ struct UnifiedCard<Content: View>: View {
                                     )
                             )
                         }
+                        .allowsHitTesting(false) // タップイベントを透過させる
                     }
                 }
                 

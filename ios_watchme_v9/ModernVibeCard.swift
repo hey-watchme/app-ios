@@ -138,6 +138,7 @@ struct ModernVibeCard: View {
                         )
                 )
             }
+            .allowsHitTesting(false) // タップイベントを透過させる
         }
     }
     

@@ -268,6 +268,7 @@ struct DeviceSectionView_Previews: PreviewProvider {
                 timezone: "Asia/Tokyo",
                 owner_user_id: "user1",
                 subject_id: nil,
+                created_at: nil,
                 role: "owner"
             ),
             Device(
@@ -276,6 +277,7 @@ struct DeviceSectionView_Previews: PreviewProvider {
                 timezone: "America/New_York",
                 owner_user_id: "user1",
                 subject_id: nil,
+                created_at: nil,
                 role: "viewer"
             )
         ]

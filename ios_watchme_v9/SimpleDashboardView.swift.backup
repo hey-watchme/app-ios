@@ -159,7 +159,6 @@ struct SimpleDashboardView: View {
                 )
             }
         }
-        }
         .buttonStyle(PlainButtonStyle())
     }
     
@@ -185,7 +184,6 @@ struct SimpleDashboardView: View {
                     isCompact: true
                 )
             }
-        }
         }
         .buttonStyle(PlainButtonStyle())
     }

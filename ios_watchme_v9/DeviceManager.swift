@@ -498,6 +498,7 @@ struct Device: Codable {
     let timezone: String? // IANAタイムゾーン識別子（例: "Asia/Tokyo"）
     let owner_user_id: String?
     let subject_id: String?
+    let created_at: String? // デバイス登録日時
     // user_devicesテーブルから取得した場合のrole情報を保持
     var role: String?
 }

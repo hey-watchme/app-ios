@@ -22,8 +22,9 @@ struct RecordingView: View {
     @State private var isLinkingDevice = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 20) {
                 // WatchMe Pro プロモーションセクション
                 VStack(spacing: 16) {
                     VStack(spacing: 12) {
@@ -155,67 +156,26 @@ struct RecordingView: View {
                 .cornerRadius(12)
             }
             
-            // 録音コントロール
-            VStack(spacing: 16) {
-                if audioRecorder.isRecording {
-                    // 録音中の表示
-                    VStack(spacing: 8) {
-                        Text("🔴 録音中...")
-                            .font(.headline)
-                            .foregroundColor(.red)
-                        
-                        Text(audioRecorder.formatTime(audioRecorder.recordingTime))
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(.red)
-                        
-                        Text(audioRecorder.getCurrentSlotInfo())
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    .padding()
-                    .background(Color.red.opacity(0.1))
-                    .cornerRadius(12)
+            // 録音状態の表示エリア
+            if audioRecorder.isRecording {
+                // 録音中の表示
+                VStack(spacing: 8) {
+                    Text("🔴 録音中...")
+                        .font(.headline)
+                        .foregroundColor(.red)
                     
-                    // 録音停止ボタン
-                    Button(action: {
-                        audioRecorder.stopRecording()
-                        print("💾 録音停止完了 - 手動でアップロードしてください")
-                    }) {
-                        HStack {
-                            Image(systemName: "stop.fill")
-                            Text("録音停止")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.red)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                    }
-                } else {
-                    // 録音開始ボタン
-                    VStack(spacing: 8) {
-                        Button(action: {
-                            // デバイス連携チェック
-                            if deviceManager.userDevices.isEmpty {
-                                showDeviceLinkAlert = true
-                            } else {
-                                audioRecorder.startRecording()
-                            }
-                        }) {
-                            HStack {
-                                Image(systemName: "mic.fill")
-                                Text("録音開始")
-                            }
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(Color.blue)
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                        }
-                        .disabled(isLinkingDevice)
-                    }
+                    Text(audioRecorder.formatTime(audioRecorder.recordingTime))
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(.red)
+                    
+                    Text(audioRecorder.getCurrentSlotInfo())
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
+                .padding()
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(12)
             }
             
             // 録音一覧
@@ -293,8 +253,18 @@ struct RecordingView: View {
                     .foregroundColor(.secondary)
                     .padding()
             }
+                }
+                .padding()
             }
-            .padding()
+            .navigationTitle("録音")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("閉じる") {
+                    // シートを閉じる処理はContentView側で管理
+                }
+            }
+        }
         }
         .alert("通知", isPresented: $showAlert) {
             Button("OK", role: .cancel) { }
@@ -334,6 +304,12 @@ struct RecordingView: View {
                 }
             }
         )
+        .onDisappear {
+            // ビューが非表示になったら録音を停止
+            if audioRecorder.isRecording {
+                audioRecorder.stopRecording()
+            }
+        }
     }
     
     // デバイス連携後に録音を開始する

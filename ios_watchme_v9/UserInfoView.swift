@@ -10,17 +10,10 @@ import SwiftUI
 // MARK: - ユーザー情報ビュー
 struct UserInfoView: View {
     let authManager: SupabaseAuthManager
-    let deviceManager: DeviceManager
     @Binding var showLogoutConfirmation: Bool
-    @State private var subjectsByDevice: [String: Subject] = [:]
-    @State private var showSubjectRegistration = false
-    @State private var showSubjectEdit = false
-    @State private var selectedDeviceForSubject: String? = nil
-    @State private var editingSubject: Subject? = nil
     @State private var showAvatarPicker = false
     @State private var isUploadingAvatar = false
     @State private var avatarUploadError: String? = nil
-    @EnvironmentObject var dataManager: SupabaseDataManager
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -115,59 +108,6 @@ struct UserInfoView: View {
                         }
                     }
                     
-                    // デバイス情報
-                    InfoSection(title: "デバイス情報") {
-                        // ユーザーのデバイス一覧
-                        if deviceManager.isLoading {
-                            InfoRow(label: "状態", value: "デバイス情報を取得中...", icon: "arrow.clockwise", valueColor: .orange)
-                        } else if !deviceManager.userDevices.isEmpty {
-                            // DeviceSectionViewを使用
-                            DeviceSectionView(
-                                devices: deviceManager.userDevices,
-                                selectedDeviceID: deviceManager.selectedDeviceID,
-                                subjectsByDevice: subjectsByDevice,
-                                showSelectionUI: false,
-                                isCompact: false,
-                                onEditSubject: { deviceId, subject in
-                                    selectedDeviceForSubject = deviceId
-                                    editingSubject = subject
-                                    showSubjectEdit = true
-                                },
-                                onAddSubject: { deviceId in
-                                    selectedDeviceForSubject = deviceId
-                                    editingSubject = nil
-                                    showSubjectRegistration = true
-                                }
-                            )
-                        } else {
-                            VStack(spacing: 12) {
-                                InfoRow(label: "状態", value: "デバイスが連携されていません", icon: "iphone.slash", valueColor: .orange)
-                                
-                                Button(action: {
-                                    // デバイス連携処理を実行
-                                    if let userId = authManager.currentUser?.id {
-                                        deviceManager.registerDevice(userId: userId)
-                                    }
-                                }) {
-                                    HStack {
-                                        Image(systemName: "link.circle.fill")
-                                        Text("このデバイスを連携")
-                                    }
-                                    .frame(maxWidth: .infinity)
-                                    .padding(.vertical, 10)
-                                    .background(Color.blue)
-                                    .foregroundColor(.white)
-                                    .cornerRadius(8)
-                                }
-                                .disabled(deviceManager.isLoading)
-                            }
-                        }
-                        
-                        // デバイス登録エラー表示
-                        if let error = deviceManager.registrationError {
-                            InfoRow(label: "エラー", value: error, icon: "exclamationmark.triangle.fill", valueColor: .red)
-                        }
-                    }
                 }
                 
                 Spacer()
@@ -201,46 +141,6 @@ struct UserInfoView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color(.systemBackground), for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
-        .onAppear {
-                // デバイス情報を再取得
-                if deviceManager.userDevices.isEmpty, let userId = authManager.currentUser?.id {
-                    print("📱 UserInfoSheet: デバイス情報を取得")
-                    Task {
-                        await deviceManager.fetchUserDevices(for: userId)
-                    }
-                }
-                // 観測対象情報を読み込み
-                loadSubjectsForAllDevices()
-            }
-        .sheet(isPresented: $showSubjectRegistration, onDismiss: {
-            loadSubjectsForAllDevices()
-        }) {
-            if let deviceID = selectedDeviceForSubject {
-                SubjectRegistrationView(
-                    deviceID: deviceID,
-                    isPresented: $showSubjectRegistration,
-                    editingSubject: nil
-                )
-                .environmentObject(dataManager)
-                .environmentObject(deviceManager)
-                .environmentObject(authManager)
-            }
-        }
-        .sheet(isPresented: $showSubjectEdit, onDismiss: {
-            loadSubjectsForAllDevices()
-        }) {
-            if let deviceID = selectedDeviceForSubject,
-               let subject = editingSubject {
-                SubjectRegistrationView(
-                    deviceID: deviceID,
-                    isPresented: $showSubjectEdit,
-                    editingSubject: subject
-                )
-                .environmentObject(dataManager)
-                .environmentObject(deviceManager)
-                .environmentObject(authManager)
-            }
-        }
         .sheet(isPresented: $showAvatarPicker) {
             NavigationView {
                 AvatarPickerView(
@@ -259,24 +159,6 @@ struct UserInfoView: View {
                         }
                     }
                 }
-            }
-        }
-    }
-    
-    private func loadSubjectsForAllDevices() {
-        Task {
-            var newSubjects: [String: Subject] = [:]
-            
-            for device in deviceManager.userDevices {
-                // 各デバイスの観測対象を取得
-                await dataManager.fetchSubjectForDevice(deviceId: device.device_id)
-                if let subject = dataManager.subject {
-                    newSubjects[device.device_id] = subject
-                }
-            }
-            
-            await MainActor.run {
-                self.subjectsByDevice = newSubjects
             }
         }
     }
