@@ -474,6 +474,18 @@ CREATE TABLE audio_files (
 - 個別API呼び出しを廃止し、完全にRPC関数ベースに移行しました
 - Subject（観測対象）情報もRPC関数から取得されます
 - 個別取得メソッドは非推奨（@deprecated）となりました
+- **レガシーメソッド削除完了**：195行のコード削除、保守性向上
+
+#### 🔧 **改善予定（将来のリファクタリング）**
+以下のファイルで非推奨メソッドを使用している箇所があります。将来的にRPC版に移行予定：
+
+1. **ReportTestView.swift**
+   - `fetchDailyReport` → `fetchAllReports`（RPC版）に変更予定
+   - テスト用画面のため優先度低
+
+2. **UserInfoView.swift** 
+   - `fetchSubjectForDevice` → `fetchAllReports`（RPC版）に変更予定
+   - マイページでの観測対象表示用、現在は警告表示済み
 
 1. **統合データ取得関数 `get_dashboard_data`**
    - 単一のRPC呼び出しで全グラフデータを取得
