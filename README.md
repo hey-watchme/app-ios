@@ -466,8 +466,14 @@ CREATE TABLE audio_files (
 
 本アプリケーションは、Supabaseのデータベース関数（RPC）を使用して、複数テーブルからのデータ取得を最適化しています。
 
-#### ⚠️ 重要: RPC関数の実装について
-**このアプリケーションの正常動作には、Supabase側で`get_dashboard_data` RPC関数が正しく実装されている必要があります。**
+#### 🚨 極めて重要: RPC関数は必須です！
+**このアプリケーションはSupabase RPC関数 `get_dashboard_data` を使用しています。**
+**RPC関数が存在しない、または正しく実装されていない場合、データが表示されません。**
+
+⚠️ **2025年8月15日更新**: 
+- 個別API呼び出しを廃止し、完全にRPC関数ベースに移行しました
+- Subject（観測対象）情報もRPC関数から取得されます
+- 個別取得メソッドは非推奨（@deprecated）となりました
 
 1. **統合データ取得関数 `get_dashboard_data`**
    - 単一のRPC呼び出しで全グラフデータを取得
@@ -527,10 +533,11 @@ $$;
 
 2. **SupabaseDataManagerの実装**
    ```swift
-   // RPCを使った高速データ取得
-   func fetchAllReports(deviceId: String, date: Date) async {
+   // 🚀 RPCを使った高速データ取得（必須実装）
+   func fetchAllReportsData(deviceId: String, date: Date) async -> DashboardData {
        let params = ["p_device_id": deviceId, "p_date": dateString]
-       let response: [DashboardData] = try await supabase.rpc("get_dashboard_data", params: params).execute().value
+       let response: [RPCDashboardResponse] = try await supabase.rpc("get_dashboard_data", params: params).execute().value
+       // Subject情報も含めて一括取得
    }
    ```
 
@@ -566,6 +573,38 @@ $$;
    - Xcodeのコンソールで送信されているパラメータを確認
    - Supabaseのダッシュボードで直接RPC関数をテスト
    - 各テーブルのデータを個別に確認
+
+#### 📈 RPC関数の拡張方法（今後の開発用）
+
+新しいデータを追加する場合は、以下の手順で拡張してください：
+
+1. **Supabase側（SQL）**：RPC関数に新しいフィールドを追加
+   ```sql
+   -- 例：新しいテーブルのデータを追加
+   (SELECT to_jsonb(n) FROM new_table n 
+    WHERE n.device_id = p_device_id AND n.date = p_date::date 
+    LIMIT 1) AS new_report
+   ```
+
+2. **iOS側（Swift）**：構造体を更新
+   ```swift
+   // RPCDashboardResponseに新フィールドを追加
+   struct RPCDashboardResponse: Codable {
+       let vibe_report: DailyVibeReport?
+       let behavior_report: BehaviorReport?
+       let emotion_report: EmotionReport?
+       let subject_info: Subject?
+       let new_report: NewReport?  // 新規追加（オプショナル）
+   }
+   ```
+
+3. **互換性の維持**
+   - 新フィールドは必ずオプショナル（`?`）で定義
+   - 既存フィールドの名前や型は変更しない
+   - RPC関数のパラメータ名も変更しない
+
+⚠️ **重要**: RPC関数の更新が必要な場合は、開発者に連絡してください。
+Supabase側の更新と、iOS側の構造体更新が必要です。
 
 ### 心理グラフ（Vibe Graph）の実装
 

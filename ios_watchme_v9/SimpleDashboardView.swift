@@ -177,22 +177,26 @@ struct SimpleDashboardView: View {
                                 .aspectRatio(contentMode: .fill)
                                 .frame(width: 60, height: 60)
                                 .clipShape(Circle())
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                                )
                         } placeholder: {
                             Circle()
-                                .fill(Color.gray.opacity(0.2))
+                                .fill(Color.white.opacity(0.2))
                                 .frame(width: 60, height: 60)
                                 .overlay(
                                     Image(systemName: "person.fill")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(.white.opacity(0.6))
                                 )
                         }
                     } else {
                         Circle()
-                            .fill(Color.gray.opacity(0.2))
+                            .fill(Color.white.opacity(0.2))
                             .frame(width: 60, height: 60)
                             .overlay(
                                 Image(systemName: "person.fill")
-                                    .foregroundColor(.gray)
+                                    .foregroundColor(.white.opacity(0.6))
                             )
                     }
                     
@@ -200,18 +204,19 @@ struct SimpleDashboardView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(subject.name ?? "名前未設定")
                             .font(.headline)
+                            .foregroundColor(.white)
                         
                         HStack(spacing: 12) {
                             if let age = subject.age {
                                 Label("\(age)歳", systemImage: "calendar")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.white.opacity(0.8))
                             }
                             
                             if let gender = subject.gender {
                                 Label(gender, systemImage: "person")
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.white.opacity(0.8))
                             }
                         }
                     }
@@ -224,19 +229,17 @@ struct SimpleDashboardView: View {
     }
     
     private func noObservationTargetCard() -> some View {
-        UnifiedCard(
-            title: "観測対象",
-            navigationLabel: nil,
-            onNavigate: nil
+        ObservationTargetCard(
+            title: "観測対象"
         ) {
             VStack(spacing: 12) {
                 Image(systemName: "person.crop.circle.badge.questionmark")
                     .font(.system(size: 48))
-                    .foregroundColor(.gray.opacity(0.5))
+                    .foregroundColor(.white.opacity(0.7))
                 
                 Text("観測対象が未設定です")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(.white.opacity(0.9))
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 8)

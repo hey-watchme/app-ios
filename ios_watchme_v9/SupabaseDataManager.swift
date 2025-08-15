@@ -17,6 +17,24 @@ struct DashboardData {
     let subject: Subject?
 }
 
+// MARK: - RPC Response Structure
+/// Supabase RPC関数 'get_dashboard_data' からの応答構造
+/// ⚠️ 重要: この構造はSupabase側のRPC関数の出力と完全に一致する必要があります
+/// RPC関数の変更時は、必ずこの構造体も更新してください
+struct RPCDashboardResponse: Codable {
+    let vibe_report: DailyVibeReport?
+    let behavior_report: BehaviorReport?
+    let emotion_report: EmotionReport?
+    let subject_info: Subject?
+    
+    private enum CodingKeys: String, CodingKey {
+        case vibe_report
+        case behavior_report
+        case emotion_report
+        case subject_info
+    }
+}
+
 // MARK: - Supabaseデータ管理クラス
 // vibe_whisper_summaryテーブルからデータを取得・管理する責務を持つ
 @MainActor
@@ -299,11 +317,21 @@ class SupabaseDataManager: ObservableObject {
     
     /// 統合データフェッチメソッド - すべてのグラフデータを一括で取得
     /// DashboardDataを返し、互換性のため@Publishedプロパティも更新
+    /// すべてのレポートを取得するメインメソッド
+    /// 
+    /// 🚀 このメソッドは内部でRPC関数 'get_dashboard_data' を使用します
+    /// 1回のAPIコールで全データ（vibe, behavior, emotion, subject）を取得
+    ///
+    /// - Parameters:
+    ///   - deviceId: デバイスID
+    ///   - date: 取得したい日付
+    ///   - timezone: タイムゾーン（現在は未使用、将来の拡張用）
+    /// - Returns: DashboardData（すべてのレポートを含む）
     func fetchAllReports(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
         isLoading = true
         errorMessage = nil
         
-        // 新しいメソッドを呼び出し
+        // 🎯 RPC関数を使用して全データを一括取得
         let dashboardData = await fetchAllReportsData(deviceId: deviceId, date: date)
         
         // @Publishedプロパティも更新（互換性のため）
@@ -311,74 +339,110 @@ class SupabaseDataManager: ObservableObject {
             self.dailyReport = dashboardData.vibeReport
             self.dailyBehaviorReport = dashboardData.behaviorReport
             self.dailyEmotionReport = dashboardData.emotionReport
-            self.subject = dashboardData.subject
+            self.subject = dashboardData.subject  // ✅ Subject情報も正しく設定
             self.isLoading = false
         }
         
-        print("✅ All reports fetching completed")
+        print("✅ [RPC] All reports fetching completed with subject info")
         return dashboardData
     }
     
     // MARK: - Data Fetching Methods
     
     /// 統合データフェッチメソッド - すべてのグラフデータを一括で取得
-    /// ViewModelから呼び出され、DashboardDataを返す
+    /// 
+    /// ⚠️ 重要: このメソッドはSupabase RPC関数 'get_dashboard_data' を使用します
+    /// RPC関数は1回のAPIコールで以下のデータをすべて取得します：
+    /// - vibe_report (心理データ)
+    /// - behavior_report (行動データ)
+    /// - emotion_report (感情データ)
+    /// - subject_info (観測対象データ)
+    ///
+    /// 📝 RPC関数の更新が必要な場合：
+    /// 1. Supabase側でRPC関数を更新
+    /// 2. RPCDashboardResponse構造体を更新
+    /// 3. 必要に応じてDashboardData構造体も更新
+    ///
+    /// - Parameters:
+    ///   - deviceId: デバイスID（UUID形式）
+    ///   - date: 取得したい日付
+    /// - Returns: DashboardData（すべてのレポートを含む）
     func fetchAllReportsData(deviceId: String, date: Date) async -> DashboardData {
         let dateString = dateFormatter.string(from: date)
-        print("🔄 Fetching all reports data for device: \(deviceId), date: \(dateString)")
+        print("🚀 [RPC] Fetching all dashboard data via RPC function")
+        print("   Device: \(deviceId)")
+        print("   Date: \(dateString)")
         
-        // 各レポートを格納する変数
-        var vibeReport: DailyVibeReport?
-        var behaviorReport: BehaviorReport?
-        var emotionReport: EmotionReport?
-        let subjectInfo: Subject? = nil
-        
-        // 並行してすべてのレポートを取得
-        await withTaskGroup(of: Void.self) { group in
-            // Vibeレポートの取得
-            group.addTask { [weak self] in
-                guard let self = self else { return }
-                if let report = await self.fetchDailyReportData(for: deviceId, date: date) {
-                    vibeReport = report
-                }
+        do {
+            // RPC関数のパラメータを準備
+            let params = [
+                "p_device_id": deviceId,
+                "p_date": dateString
+            ]
+            
+            // 📡 Supabase RPC関数を呼び出し（1回のAPIコールですべてのデータを取得）
+            let response: [RPCDashboardResponse] = try await supabase
+                .rpc("get_dashboard_data", params: params)
+                .execute()
+                .value
+            
+            // 最初の結果を取得（RPCは配列で返すが、通常1件のみ）
+            guard let rpcData = response.first else {
+                print("⚠️ [RPC] No data returned from RPC function")
+                return DashboardData(
+                    vibeReport: nil,
+                    behaviorReport: nil,
+                    emotionReport: nil,
+                    subject: nil
+                )
             }
             
-            // 行動レポートの取得
-            group.addTask { [weak self] in
-                guard let self = self else { return }
-                do {
-                    if let report = try await self.fetchBehaviorReport(deviceId: deviceId, date: dateString) {
-                        behaviorReport = report
-                    }
-                } catch {
-                    print("❌ Failed to fetch behavior report: \(error)")
-                }
-            }
+            print("✅ [RPC] Successfully fetched all dashboard data")
+            print("   - Vibe Report: \(rpcData.vibe_report != nil ? "✓" : "✗")")
+            print("   - Behavior Report: \(rpcData.behavior_report != nil ? "✓" : "✗")")
+            print("   - Emotion Report: \(rpcData.emotion_report != nil ? "✓" : "✗")")
+            print("   - Subject Info: \(rpcData.subject_info != nil ? "✓" : "✗")")
             
-            // 感情レポートの取得
-            group.addTask { [weak self] in
-                guard let self = self else { return }
-                do {
-                    if let report = try await self.fetchEmotionReport(deviceId: deviceId, date: dateString) {
-                        emotionReport = report
-                    }
-                } catch {
-                    print("❌ Failed to fetch emotion report: \(error)")
-                }
-            }
+            // RPCレスポンスをDashboardDataに変換
+            return DashboardData(
+                vibeReport: rpcData.vibe_report,
+                behaviorReport: rpcData.behavior_report,
+                emotionReport: rpcData.emotion_report,
+                subject: rpcData.subject_info  // ✅ Subject情報も正しく取得
+            )
+            
+        } catch {
+            print("❌ [RPC] Failed to fetch dashboard data: \(error)")
+            print("   Error details: \(error.localizedDescription)")
+            
+            // エラー時は空のデータを返す
+            return DashboardData(
+                vibeReport: nil,
+                behaviorReport: nil,
+                emotionReport: nil,
+                subject: nil
+            )
         }
-        
-        print("✅ All reports data fetching completed")
-        
+    }
+    
+    /// ⚠️ 非推奨: 個別にデータを取得する旧メソッド
+    /// このメソッドは互換性のために残していますが、新規実装では使用しないでください
+    /// 代わりに fetchAllReportsData を使用してください（RPC関数による高速取得）
+    @available(*, deprecated, message: "Use fetchAllReportsData instead (RPC-based)")
+    private func fetchAllReportsDataLegacy(deviceId: String, date: Date) async -> DashboardData {
+        // 旧実装（個別取得）のコード
+        // この実装は保守されません
         return DashboardData(
-            vibeReport: vibeReport,
-            behaviorReport: behaviorReport,
-            emotionReport: emotionReport,
-            subject: subjectInfo
+            vibeReport: nil,
+            behaviorReport: nil,
+            emotionReport: nil,
+            subject: nil
         )
     }
     
     /// 日次Vibeレポートを取得
+    /// ⚠️ 非推奨: このメソッドは個別取得用です。fetchAllReportsData（RPC版）の使用を推奨します
+    @available(*, deprecated, message: "Use fetchAllReportsData instead (RPC-based)")
     private func fetchDailyReportData(for deviceId: String, date: Date) async -> DailyVibeReport? {
         let dateString = dateFormatter.string(from: date)
         print("📊 日次レポートを取得中: device=\(deviceId), date=\(dateString)")
@@ -612,8 +676,11 @@ class SupabaseDataManager: ObservableObject {
     // MARK: - Subject Management Methods
     
     /// デバイスに関連付けられた観測対象を取得
+    /// 観測対象（Subject）情報を取得
+    /// ⚠️ 非推奨: fetchAllReportsData（RPC版）がSubject情報も含むため、個別取得は不要です
+    @available(*, deprecated, message: "Use fetchAllReportsData instead (includes subject info via RPC)")
     func fetchSubjectForDevice(deviceId: String) async {
-        print("👤 Fetching subject for device: \(deviceId)")
+        print("👤 [Legacy] Fetching subject for device: \(deviceId)")
         
         do {
             // まずdevicesテーブルからsubject_idを取得

@@ -26,155 +26,181 @@ struct EmotionGraphView: View {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
                     } else if let report = emotionReport ?? dataManager.dailyEmotionReport {
-                        // Emotion Ranking Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "list.number")
-                                    .foregroundColor(.blue)
-                                Text("1日の感情ランキング")
-                                    .font(.headline)
-                                Spacer()
-                            }
-                            .padding(.horizontal)
-                            
-                            ForEach(Array(report.emotionRanking.prefix(8).enumerated()), id: \.offset) { index, emotion in
-                                if emotion.value > 0 {
-                                    HStack {
-                                        Text("\(index + 1).")
-                                            .font(.subheadline)
-                                            .fontWeight(.medium)
-                                            .foregroundColor(.secondary)
-                                            .frame(width: 25, alignment: .trailing)
+                        // 感情ランキングカード
+                        UnifiedCard(title: "感情ランキング") {
+                            VStack(spacing: 12) {
+                                ForEach(Array(report.emotionRanking.prefix(8).enumerated()), id: \.offset) { index, emotion in
+                                    if emotion.value > 0 {
+                                        HStack(spacing: 16) {
+                                            // ランク表示
+                                            ZStack {
+                                                Circle()
+                                                    .fill(rankBackgroundColor(for: index))
+                                                    .frame(width: 32, height: 32)
+                                                Text("\(index + 1)")
+                                                    .font(.callout)
+                                                    .fontWeight(.bold)
+                                                    .foregroundColor(.white)
+                                            }
+                                            
+                                            // 感情インジケーター
+                                            Circle()
+                                                .fill(emotion.color)
+                                                .frame(width: 16, height: 16)
+                                            
+                                            Text(emotion.name)
+                                                .font(.body)
+                                                .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                            
+                                            Spacer()
+                                            
+                                            // スコア表示
+                                            Text("\(emotion.value)")
+                                                .font(.callout)
+                                                .fontWeight(.semibold)
+                                                .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.3))
+                                                .padding(.horizontal, 12)
+                                                .padding(.vertical, 4)
+                                                .background(
+                                                    Capsule()
+                                                        .fill(emotion.color.opacity(0.1))
+                                                )
+                                        }
                                         
-                                        Circle()
-                                            .fill(emotion.color)
-                                            .frame(width: 12, height: 12)
-                                        
-                                        Text(emotion.name)
-                                            .font(.subheadline)
-                                        
-                                        Spacer()
-                                        
-                                        Text("\(emotion.value)")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                                        if index < min(7, report.emotionRanking.filter { $0.value > 0 }.count - 1) {
+                                            Divider()
+                                                .background(Color.gray.opacity(0.2))
+                                        }
                                     }
-                                    .padding(.horizontal)
-                                    .padding(.vertical, 4)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .fill(Color(.systemGray6))
-                                    )
-                                    .padding(.horizontal)
                                 }
                             }
                         }
-                        .padding(.vertical, 12)
+                        .padding(.horizontal)
                         
-                        Divider()
-                            .padding(.horizontal)
-                        
-                        // Emotion Chart Section
-                        VStack(alignment: .leading, spacing: 12) {
-                            HStack {
-                                Image(systemName: "chart.line")
-                                    .foregroundColor(.blue)
-                                Text("時間帯別感情推移")
-                                    .font(.headline)
-                                Spacer()
-                                Button(action: { showingLegend.toggle() }) {
-                                    Image(systemName: showingLegend ? "eye.fill" : "eye.slash.fill")
-                                        .foregroundColor(.blue)
-                                }
-                            }
-                            .padding(.horizontal)
-                            
-                            // Line Chart
-                            if report.activeTimePoints.count > 0 {
-                                Chart {
-                                    ForEach(EmotionType.allCases, id: \.self) { emotionType in
-                                        if selectedEmotions.contains(emotionType) {
-                                            ForEach(report.emotionGraph, id: \.time) { point in
-                                                LineMark(
-                                                    x: .value("時間", point.timeValue),
-                                                    y: .value("値", getValue(for: emotionType, from: point))
-                                                )
-                                                .foregroundStyle(emotionType.color)
-                                                .lineStyle(StrokeStyle(lineWidth: 2))
-                                                .symbol(Circle().strokeBorder(lineWidth: 2))
-                                                .symbolSize(30)
-                                                .interpolationMethod(.catmullRom)
-                                            }
-                                        }
-                                    }
-                                }
-                                .frame(height: 300)
-                                .padding(.horizontal)
-                                .chartXScale(domain: 0...24)
-                                .chartXAxis {
-                                    AxisMarks(values: [0, 6, 12, 18, 24]) { value in
-                                        AxisGridLine()
-                                        AxisTick()
-                                        AxisValueLabel {
-                                            if let hour = value.as(Double.self) {
-                                                Text("\(Int(hour)):00")
-                                            }
-                                        }
-                                    }
-                                }
-                                .chartYScale(domain: 0...10)
-                                .chartYAxis {
-                                    AxisMarks(position: .leading)
-                                }
-                                
-                                // Legend
-                                if showingLegend {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("感情の種類")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .padding(.horizontal)
-                                        
-                                        LazyVGrid(columns: [
-                                            GridItem(.flexible()),
-                                            GridItem(.flexible())
-                                        ], spacing: 8) {
-                                            ForEach(EmotionType.allCases, id: \.self) { emotionType in
-                                                Button(action: {
-                                                    toggleEmotion(emotionType)
-                                                }) {
-                                                    HStack(spacing: 6) {
-                                                        Circle()
-                                                            .fill(emotionType.color)
-                                                            .frame(width: 10, height: 10)
-                                                        Text(emotionType.rawValue)
-                                                            .font(.caption)
-                                                            .foregroundColor(selectedEmotions.contains(emotionType) ? .primary : .secondary)
-                                                        Spacer()
-                                                    }
-                                                    .padding(.horizontal, 12)
-                                                    .padding(.vertical, 6)
-                                                    .background(
-                                                        RoundedRectangle(cornerRadius: 6)
-                                                            .fill(selectedEmotions.contains(emotionType) ? emotionType.lightColor : Color(.systemGray6))
+                        // 感情推移グラフカード
+                        UnifiedCard(
+                            title: "時間帯別推移",
+                            navigationLabel: showingLegend ? "凡例を非表示" : "凡例を表示",
+                            onNavigate: { showingLegend.toggle() }
+                        ) {
+                            VStack(spacing: 16) {
+                                if report.activeTimePoints.count > 0 {
+                                    Chart {
+                                        ForEach(EmotionType.allCases, id: \.self) { emotionType in
+                                            if selectedEmotions.contains(emotionType) {
+                                                ForEach(report.emotionGraph, id: \.time) { point in
+                                                    LineMark(
+                                                        x: .value("時間", point.timeValue),
+                                                        y: .value("値", getValue(for: emotionType, from: point))
                                                     )
+                                                    .foregroundStyle(emotionType.color)
+                                                    .lineStyle(StrokeStyle(lineWidth: 2))
+                                                    .symbol(Circle().strokeBorder(lineWidth: 2))
+                                                    .symbolSize(30)
+                                                    .interpolationMethod(.catmullRom)
                                                 }
-                                                .buttonStyle(PlainButtonStyle())
                                             }
                                         }
-                                        .padding(.horizontal)
                                     }
-                                    .padding(.top, 8)
-                                }
-                            } else {
-                                Text("データがありません")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .frame(height: 260)
+                                    .chartXScale(domain: 0...24)
+                                    .chartXAxis {
+                                        AxisMarks(values: [0, 6, 12, 18, 24]) { value in
+                                            AxisGridLine()
+                                            AxisTick()
+                                            AxisValueLabel {
+                                                if let hour = value.as(Double.self) {
+                                                    Text("\(Int(hour)):00")
+                                                        .font(.caption2)
+                                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                                }
+                                            }
+                                        }
+                                    }
+                                    .chartYScale(domain: 0...10)
+                                    .chartYAxis {
+                                        AxisMarks(position: .leading) { value in
+                                            AxisGridLine()
+                                            AxisTick()
+                                            AxisValueLabel {
+                                                if let val = value.as(Int.self) {
+                                                    Text("\(val)")
+                                                        .font(.caption2)
+                                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                                }
+                                            }
+                                        }
+                                    }
+                                } else {
+                                    VStack(spacing: 12) {
+                                        Image(systemName: "chart.line.uptrend.xyaxis")
+                                            .font(.largeTitle)
+                                            .foregroundColor(Color(red: 0.7, green: 0.7, blue: 0.7))
+                                        Text("データがありません")
+                                            .font(.body)
+                                            .foregroundColor(Color(red: 0.5, green: 0.5, blue: 0.5))
+                                    }
                                     .frame(height: 200)
                                     .frame(maxWidth: .infinity)
+                                }
                             }
                         }
-                        .padding(.vertical, 12)
+                        .padding(.horizontal)
+                        
+                        // 凡例カード（表示時のみ）
+                        if showingLegend && report.activeTimePoints.count > 0 {
+                            UnifiedCard(title: "感情の種類") {
+                                LazyVGrid(columns: [
+                                    GridItem(.flexible()),
+                                    GridItem(.flexible())
+                                ], spacing: 12) {
+                                    ForEach(EmotionType.allCases, id: \.self) { emotionType in
+                                        Button(action: {
+                                            toggleEmotion(emotionType)
+                                        }) {
+                                            HStack(spacing: 8) {
+                                                Circle()
+                                                    .fill(emotionType.color)
+                                                    .frame(width: 14, height: 14)
+                                                Text(emotionType.rawValue)
+                                                    .font(.body)
+                                                    .foregroundColor(
+                                                        selectedEmotions.contains(emotionType) 
+                                                        ? Color(red: 0.2, green: 0.2, blue: 0.2)
+                                                        : Color(red: 0.6, green: 0.6, blue: 0.6)
+                                                    )
+                                                Spacer()
+                                                if selectedEmotions.contains(emotionType) {
+                                                    Image(systemName: "checkmark.circle.fill")
+                                                        .font(.body)
+                                                        .foregroundColor(emotionType.color)
+                                                }
+                                            }
+                                            .padding(.horizontal, 12)
+                                            .padding(.vertical, 10)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .fill(selectedEmotions.contains(emotionType) 
+                                                        ? emotionType.color.opacity(0.08)
+                                                        : Color.gray.opacity(0.05)
+                                                    )
+                                                    .overlay(
+                                                        RoundedRectangle(cornerRadius: 10)
+                                                            .stroke(
+                                                                selectedEmotions.contains(emotionType) 
+                                                                ? emotionType.color.opacity(0.3)
+                                                                : Color.gray.opacity(0.2),
+                                                                lineWidth: 1
+                                                            )
+                                                    )
+                                            )
+                                        }
+                                        .buttonStyle(PlainButtonStyle())
+                                    }
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
                         
                     } else {
                         // エンプティステート表示（共通コンポーネント使用）
@@ -187,6 +213,7 @@ struct EmotionGraphView: View {
                 }
                 .padding(.bottom, 20)
             }
+        .background(Color(red: 0.937, green: 0.937, blue: 0.937))
         .navigationTitle("感情グラフ")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -209,6 +236,19 @@ struct EmotionGraphView: View {
         case .sadness: return point.sadness
         case .surprise: return point.surprise
         case .anticipation: return point.anticipation
+        }
+    }
+    
+    private func rankBackgroundColor(for index: Int) -> Color {
+        switch index {
+        case 0:
+            return Color(red: 1.0, green: 0.84, blue: 0.0) // Gold
+        case 1:
+            return Color(red: 0.75, green: 0.75, blue: 0.75) // Silver
+        case 2:
+            return Color(red: 0.8, green: 0.5, blue: 0.2) // Bronze
+        default:
+            return Color(red: 0.4, green: 0.4, blue: 0.4) // Gray
         }
     }
 }
