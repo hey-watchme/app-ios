@@ -1191,6 +1191,61 @@ git push origin feature/機能名
 
 詳細な更新履歴は [`CHANGELOG.md`](./CHANGELOG.md) を参照してください。
 
+## 🔒 セキュリティ関連の重要事項
+
+### ✅ 実施済みのセキュリティ対策
+
+1. **HTTPS通信の強制**（2025-08-16完了）
+   - すべてのAPI通信がHTTPS経由に移行
+   - Info.plistのATS例外設定（`NSAllowsArbitraryLoads`）を削除
+   - 中間者攻撃のリスクを排除
+
+2. **UUID正規化**
+   - アバターアップロード時にUUIDを小文字に統一
+   - S3パスの一貫性を保証
+
+### ⚠️ 未対応のセキュリティリスク（要対応）
+
+#### 🔴 Avatar Uploader APIの認証機能が無効化中
+
+**現在の問題：**
+- Avatar Uploader API（`https://api.hey-watch.me/avatar/`）が認証なしでアクセス可能
+- 悪意のある第三者が他人のアバターを自由に変更可能
+- user_idを知っていれば誰でもアバターを上書きできる
+
+**必要な対応：**
+1. Avatar Uploader APIの`app.py`で認証処理を有効化
+2. Supabase JWTトークンの検証を実装
+3. user_idとトークンの所有者が一致することを確認
+
+**iOS側で実装済みの認証コード：**
+```swift
+// AWSManager.swift（72-74行目）
+if let token = authToken {
+    request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+}
+
+// UserInfoView.swift（188-189行目）
+let authToken = authManager.getAccessToken()  // トークン取得済み
+```
+
+**API側で必要な実装：**
+詳細は[Avatar Uploader APIのREADME](../projects/watchme/api/avatar-uploader/README.md)を参照
+
+### 📋 本番環境移行前のチェックリスト
+
+- [x] すべてのAPIエンドポイントをHTTPS化
+- [x] Info.plistのATS例外設定を削除
+- [x] アプリ側で認証トークンを送信
+- [ ] **Avatar Uploader APIの認証機能を有効化**（未対応）
+- [ ] APIのレート制限を実装（推奨）
+- [ ] CloudFront CDNの設定（オプション）
+
+### 🚨 重要な注意
+
+**現在のAvatar Uploader APIは開発・テスト用の設定です。**
+本番環境で使用する前に、必ず認証機能を有効化してください。
+
 ## ライセンス
 
 プロプライエタリ

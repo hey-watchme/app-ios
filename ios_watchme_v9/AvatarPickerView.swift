@@ -23,6 +23,13 @@ struct AvatarPickerView: View {
     @State private var showingCamera = false
     @State private var showingPhotoPicker = false
     @State private var isProcessing = false
+    @State private var imageSource: ImageSource = .none
+    
+    enum ImageSource {
+        case none
+        case camera
+        case photoPicker
+    }
     
     // MARK: - Body
     var body: some View {
@@ -50,12 +57,14 @@ struct AvatarPickerView: View {
             // 写真ライブラリから選択
             Button("写真を選択") {
                 showingPhotoPicker = true
+                imageSource = .photoPicker
             }
             
             // カメラが利用可能な場合のみ表示
             if UIImagePickerController.isSourceTypeAvailable(.camera) {
                 Button("カメラで撮影") {
                     showingCamera = true
+                    imageSource = .camera
                 }
             }
             
@@ -75,25 +84,35 @@ struct AvatarPickerView: View {
                 await loadImage(from: newValue)
             }
         }
+        .sheet(isPresented: $showingCamera) {
+            CameraView { image in
+                // カメラからの画像を受け取る
+                self.selectedImage = image
+                self.imageSource = .camera
+            }
+            .onDisappear {
+                // カメラが閉じた後に処理
+                if imageSource == .camera && selectedImage != nil {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        self.showingImageCropper = true
+                    }
+                }
+            }
+        }
         .sheet(isPresented: $showingImageCropper) {
             if let image = selectedImage {
                 NavigationView {
                     ImageCropperView(image: image) { croppedImage in
                         onImageSelected(croppedImage)
                         showingImageCropper = false
+                        selectedImage = nil  // 画像をクリア
+                        imageSource = .none  // ソースをリセット
                     }
                 }
-            }
-        }
-        .sheet(isPresented: $showingCamera) {
-            CameraView { image in
-                DispatchQueue.main.async {
-                    self.selectedImage = image
-                    self.showingCamera = false
-                    // 少し遅延させてからトリミング画面を表示
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self.showingImageCropper = true
-                    }
+                .onDisappear {
+                    // トリミングがキャンセルされた場合
+                    selectedImage = nil
+                    imageSource = .none
                 }
             }
         }
@@ -183,9 +202,11 @@ struct AvatarPickerView: View {
                         self.selectedImage = uiImage
                         self.isProcessing = false
                         self.showingPhotoPicker = false
-                        // 少し遅延させてからトリミング画面を表示
+                        // フォトピッカーが完全に閉じてからトリミング画面を表示
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            self.showingImageCropper = true
+                            if self.imageSource == .photoPicker {
+                                self.showingImageCropper = true
+                            }
                         }
                     }
                 } else {
@@ -381,7 +402,7 @@ struct ImageCropperView: View {
 /// カメラ撮影用のビュー
 struct CameraView: UIViewControllerRepresentable {
     let onImageCaptured: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
+    @Environment(\.presentationMode) var presentationMode
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
@@ -435,19 +456,17 @@ struct CameraView: UIViewControllerRepresentable {
         
         func imagePickerController(_ picker: UIImagePickerController,
                                  didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
-            // メインスレッドで処理
-            DispatchQueue.main.async {
-                if let image = info[.originalImage] as? UIImage {
-                    self.parent.onImageCaptured(image)
-                }
-                self.parent.dismiss()
+            if let image = info[.originalImage] as? UIImage {
+                // 画像をコールバックで渡す
+                self.parent.onImageCaptured(image)
             }
+            // SwiftUIのpresentationModeを使って閉じる
+            self.parent.presentationMode.wrappedValue.dismiss()
         }
         
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            DispatchQueue.main.async {
-                self.parent.dismiss()
-            }
+            // SwiftUIのpresentationModeを使って閉じる
+            self.parent.presentationMode.wrappedValue.dismiss()
         }
     }
 }

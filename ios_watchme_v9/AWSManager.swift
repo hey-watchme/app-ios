@@ -42,11 +42,13 @@ class AWSManager: ObservableObject {
     ///   - authToken: 認証トークン（オプション）
     /// - Returns: アップロードされた画像のURL
     func uploadAvatar(image: UIImage, type: String, id: String, authToken: String? = nil) async throws -> URL {
-        print("📤 Starting avatar upload for \(type)/\(id)")
+        // UUIDを小文字に変換（S3パスの一貫性のため）
+        let lowercaseId = id.lowercased()
+        print("📤 Starting avatar upload for \(type)/\(lowercaseId)")
         
         // UUIDの形式チェック
-        guard UUID(uuidString: id) != nil else {
-            throw AWSError.invalidID("IDはUUID形式である必要があります: \(id)")
+        guard UUID(uuidString: lowercaseId) != nil else {
+            throw AWSError.invalidID("IDはUUID形式である必要があります: \(lowercaseId)")
         }
         
         // 画像をJPEGに変換（品質80%）
@@ -54,8 +56,8 @@ class AWSManager: ObservableObject {
             throw AWSError.imageConversionFailed
         }
         
-        // APIエンドポイントURL
-        let endpoint = "\(currentAPIBaseURL)/v1/\(type)/\(id)/avatar"
+        // APIエンドポイントURL（小文字のIDを使用）
+        let endpoint = "\(currentAPIBaseURL)/v1/\(type)/\(lowercaseId)/avatar"
         guard let url = URL(string: endpoint) else {
             throw AWSError.invalidURL
         }
@@ -174,8 +176,10 @@ class AWSManager: ObservableObject {
     ///   - id: ユーザーIDまたはサブジェクトID
     /// - Returns: アバター画像のURL
     func getAvatarURL(type: String, id: String) -> URL {
+        // UUIDを小文字に変換（S3パスの一貫性のため）
+        let lowercaseId = id.lowercased()
         // S3の実際のURL形式（ap-southeast-2リージョン、watchme-avatarsバケット）
-        let s3URL = "https://watchme-avatars.s3.ap-southeast-2.amazonaws.com/\(type)/\(id)/avatar.jpg"
+        let s3URL = "https://watchme-avatars.s3.ap-southeast-2.amazonaws.com/\(type)/\(lowercaseId)/avatar.jpg"
         print("🔗 Avatar URL: \(s3URL)")
         return URL(string: s3URL)!
     }
