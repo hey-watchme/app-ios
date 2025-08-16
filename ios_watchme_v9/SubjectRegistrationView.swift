@@ -34,6 +34,13 @@ struct SubjectRegistrationView: View {
     @State private var showingSuccessAlert = false
     @State private var isUploadingAvatar = false
     
+    // Avatar ViewModel
+    @StateObject private var avatarViewModel = AvatarUploadViewModel(
+        avatarType: .subject,
+        entityId: "",  // 実際のIDはonAppearで設定
+        authToken: nil
+    )
+    
     // 性別選択肢
     private let genderOptions = ["男性", "女性", "その他", "回答しない"]
     
@@ -87,6 +94,9 @@ struct SubjectRegistrationView: View {
             }
             .onAppear {
                 loadEditingData()
+                // ViewModelの初期化
+                avatarViewModel.entityId = editingSubject?.subjectId ?? ""
+                avatarViewModel.authToken = authManager.getAccessToken()
             }
             .alert(isEditing ? "更新完了" : "登録完了", isPresented: $showingSuccessAlert) {
                 Button("OK") {
@@ -126,6 +136,43 @@ struct SubjectRegistrationView: View {
         }
     }
     
+    // MARK: - Avatar Image View
+    @ViewBuilder
+    private var avatarImageView: some View {
+        if let image = selectedImage {
+            // 新規選択した画像を優先表示
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+        } else if let subject = editingSubject, selectedImageData == nil {
+            // 編集時で新規画像が選択されていない場合: S3から表示
+            let baseURL = AWSManager.shared.getAvatarURL(type: "subjects", id: subject.subjectId)
+            // タイムスタンプを追加してキャッシュを回避
+            let avatarURL = URL(string: "\(baseURL.absoluteString)?t=\(Date().timeIntervalSince1970)")
+            AsyncImage(url: avatarURL) { phase in
+                switch phase {
+                case .success(let image):
+                    image
+                        .resizable()
+                        .scaledToFill()
+                case .failure(_), .empty:
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                @unknown default:
+                    Image(systemName: "person.crop.circle.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.gray)
+                }
+            }
+        } else {
+            // 新規登録時またはデフォルト
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
+        }
+    }
+    
     // MARK: - Header Section
     private var headerSection: some View {
         VStack(spacing: 12) {
@@ -157,45 +204,13 @@ struct SubjectRegistrationView: View {
                 Button(action: {
                     showingAvatarPicker = true
                 }) {
-                    Group {
-                        if let image = selectedImage {
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFill()
-                        } else if let subject = editingSubject {
-                            // 編集時: ローカルファイルまたはS3のURLから表示
-                            let documentsPath = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-                            let localURL = documentsPath.appendingPathComponent("subjects/\(subject.subjectId)/avatar.jpg")
-                            let imageURL = FileManager.default.fileExists(atPath: localURL.path) ? localURL : AWSManager.shared.getAvatarURL(type: "subjects", id: subject.subjectId)
-                            
-                            AsyncImage(url: imageURL) { phase in
-                                switch phase {
-                                case .success(let image):
-                                    image
-                                        .resizable()
-                                        .scaledToFill()
-                                case .failure(_), .empty:
-                                    Image(systemName: "person.crop.circle.fill")
-                                        .font(.system(size: 60))
-                                        .foregroundColor(.gray)
-                                @unknown default:
-                                    Image(systemName: "person.crop.circle.fill")
-                                        .font(.system(size: 60))
-                                        .foregroundColor(.gray)
-                                }
-                            }
-                        } else {
-                            Image(systemName: "person.crop.circle.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(.gray)
-                        }
-                    }
-                    .frame(width: 80, height: 80)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
+                    avatarImageView
+                        .frame(width: 80, height: 80)
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
                 }
                 
                 VStack(alignment: .leading, spacing: 8) {
@@ -214,9 +229,10 @@ struct SubjectRegistrationView: View {
                         .cornerRadius(8)
                     }
                     
-                    if selectedImageData != nil {
+                    if selectedImage != nil || selectedImageData != nil {
                         Button("削除") {
                             selectedItem = nil
+                            selectedImage = nil
                             selectedImageData = nil
                         }
                         .font(.caption)
@@ -229,28 +245,17 @@ struct SubjectRegistrationView: View {
         }
         .sheet(isPresented: $showingAvatarPicker) {
             NavigationStack {
-                VStack {
-                    AvatarPickerView(
-                        currentAvatarURL: editingSubject != nil ? AWSManager.shared.getAvatarURL(type: "subjects", id: editingSubject!.subjectId) : nil,
-                        onImageSelected: { image in
-                            self.selectedImage = image
-                            self.selectedImageData = image.jpegData(compressionQuality: 0.8)
-                        },
-                        onDelete: {
-                            self.selectedImage = nil
-                            self.selectedImageData = nil
-                        }
-                    )
-                    .padding()
-                    
-                    Spacer()
-                }
+                AvatarPickerView(
+                    viewModel: avatarViewModel,
+                    currentAvatarURL: editingSubject != nil ? AWSManager.shared.getAvatarURL(type: "subjects", id: editingSubject!.subjectId) : nil
+                )
                 .navigationTitle("アバターを選択")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("キャンセル") {
                             showingAvatarPicker = false
+                            avatarViewModel.reset()
                         }
                     }
                 }
@@ -424,6 +429,14 @@ struct SubjectRegistrationView: View {
                         authToken: authToken
                     )
                     print("✅ Subject avatar uploaded to S3: \(avatarUrl)")
+                    
+                    // AvatarViewを更新
+                    await MainActor.run {
+                        NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
+                        // アップロード成功後、選択画像をクリア（S3の画像を表示するため）
+                        self.selectedImage = nil
+                        self.selectedImageData = nil
+                    }
                 } catch {
                     print("❌ Avatar upload failed: \(error)")
                     // アバターアップロードに失敗しても、観測対象の登録は成功とする
@@ -511,6 +524,14 @@ struct SubjectRegistrationView: View {
                         authToken: authToken
                     )
                     print("✅ Subject avatar updated on S3: \(avatarUrl)")
+                    
+                    // AvatarViewを更新
+                    await MainActor.run {
+                        NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
+                        // アップロード成功後、選択画像をクリア（S3の画像を表示するため）
+                        self.selectedImage = nil
+                        self.selectedImageData = nil
+                    }
                 } catch {
                     print("❌ Avatar upload failed: \(error)")
                     // アバターアップロードに失敗しても、観測対象の更新は成功とする
@@ -526,7 +547,13 @@ struct SubjectRegistrationView: View {
             
             await MainActor.run {
                 isLoading = false
-                showingSuccessAlert = true
+                // プロフィール更新の場合のみ成功アラートを表示
+                if trimmedName != (editingSubject?.name ?? "") ||
+                   ageInt != editingSubject?.age ||
+                   (gender.isEmpty ? nil : gender) != editingSubject?.gender ||
+                   (notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)) != editingSubject?.notes {
+                    showingSuccessAlert = true
+                }
             }
             
         } catch {

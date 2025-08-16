@@ -502,7 +502,7 @@ class SupabaseDataManager: ObservableObject {
                 .value
             
             if let subject = subjects.first {
-                print("✅ Subject found: \(subject.name)")
+                print("✅ Subject found: \(subject.name ?? "名前なし")")
                 await MainActor.run { [weak self] in
                     self?.subject = subject
                 }

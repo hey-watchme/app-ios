@@ -5,10 +5,41 @@
 
 import SwiftUI
 
+// アバタータイプの列挙型
+enum AvatarType {
+    case user
+    case subject
+    
+    var s3Type: String {
+        switch self {
+        case .user:
+            return "users"
+        case .subject:
+            return "subjects"
+        }
+    }
+}
+
 struct AvatarView: View {
-    let userId: String?
-    let size: CGFloat = 80
+    let type: AvatarType
+    let id: String?
+    let size: CGFloat
     let useS3: Bool = true // ✅ Avatar Uploader APIを使用してS3に保存
+    
+    // 互換性のための初期化（既存のuser用）
+    init(userId: String?, size: CGFloat = 80) {
+        self.type = .user
+        self.id = userId
+        self.size = size
+    }
+    
+    // 汎用的な初期化
+    init(type: AvatarType, id: String?, size: CGFloat = 80) {
+        self.type = type
+        self.id = id
+        self.size = size
+    }
+    
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var avatarUrl: URL?
     @State private var isLoadingAvatar = true
@@ -63,7 +94,7 @@ struct AvatarView: View {
         .onAppear {
             loadAvatar()
         }
-        .onChange(of: userId) { oldValue, newValue in
+        .onChange(of: id) { oldValue, newValue in
             loadAvatar()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AvatarUpdated"))) { _ in
@@ -75,8 +106,8 @@ struct AvatarView: View {
     
     private func loadAvatar() {
         Task {
-            guard let userId = userId else {
-                print("⚠️ ユーザーIDが指定されていません")
+            guard let id = id else {
+                print("⚠️ IDが指定されていません（type: \(type)）")
                 isLoadingAvatar = false
                 return
             }
@@ -85,13 +116,19 @@ struct AvatarView: View {
             
             if useS3 {
                 // S3のURLを設定（Avatar Uploader API経由でアップロード済み）
-                let baseURL = AWSManager.shared.getAvatarURL(type: "users", id: userId)
+                let baseURL = AWSManager.shared.getAvatarURL(type: type.s3Type, id: id)
                 let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
                 self.avatarUrl = URL(string: "\(baseURL.absoluteString)?t=\(timestamp)")
-                print("🌐 Loading avatar from S3: \(self.avatarUrl?.absoluteString ?? "nil")")
+                print("🌐 Loading \(type.s3Type) avatar from S3: \(self.avatarUrl?.absoluteString ?? "nil")")
             } else {
-                // Supabaseから取得（既存の実装）
-                self.avatarUrl = await dataManager.fetchAvatarUrl(for: userId)
+                // Supabaseから取得（既存の実装、userのみ対応）
+                if type == .user {
+                    self.avatarUrl = await dataManager.fetchAvatarUrl(for: id)
+                } else {
+                    // subjectの場合はS3のみ対応
+                    print("⚠️ Subject avatars are only supported via S3")
+                    self.avatarUrl = nil
+                }
             }
             
             self.isLoadingAvatar = false

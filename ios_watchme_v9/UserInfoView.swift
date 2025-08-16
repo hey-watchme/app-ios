@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import PhotosUI
 
 // MARK: - ユーザー情報ビュー
 struct UserInfoView: View {
@@ -15,6 +16,13 @@ struct UserInfoView: View {
     @State private var isUploadingAvatar = false
     @State private var avatarUploadError: String? = nil
     @Environment(\.dismiss) private var dismiss
+    
+    // ViewModelを初期化
+    @StateObject private var avatarViewModel = AvatarUploadViewModel(
+        avatarType: .user,
+        entityId: "",  // 実際のIDはonAppearで設定
+        authToken: nil
+    )
     
     var body: some View {
         ScrollView(.vertical, showsIndicators: true) {
@@ -144,11 +152,8 @@ struct UserInfoView: View {
         .sheet(isPresented: $showAvatarPicker) {
             NavigationView {
                 AvatarPickerView(
-                    currentAvatarURL: getAvatarURL(),
-                    onImageSelected: { image in
-                        uploadAvatar(image: image)
-                    },
-                    onDelete: nil // ユーザーアバターの削除は現時点では実装しない
+                    viewModel: avatarViewModel,
+                    currentAvatarURL: getAvatarURL()
                 )
                 .navigationTitle("アバターを選択")
                 .navigationBarTitleDisplayMode(.inline)
@@ -156,9 +161,17 @@ struct UserInfoView: View {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("キャンセル") {
                             showAvatarPicker = false
+                            avatarViewModel.reset()
                         }
                     }
                 }
+            }
+        }
+        .onAppear {
+            // ViewModelの初期化
+            if avatarViewModel.entityId?.isEmpty ?? true {
+                avatarViewModel.entityId = authManager.currentUser?.id
+                avatarViewModel.authToken = authManager.getAccessToken()
             }
         }
     }
@@ -170,51 +183,7 @@ struct UserInfoView: View {
         return AWSManager.shared.getAvatarURL(type: "users", id: userId)
     }
     
-    private func uploadAvatar(image: UIImage) {
-        guard let userId = authManager.currentUser?.id else { 
-            print("❌ User ID not found")
-            return 
-        }
-        
-        print("🚀 Starting avatar upload for user: \(userId)")
-        print("📐 Image size: \(image.size), Scale: \(image.scale)")
-        
-        isUploadingAvatar = true
-        avatarUploadError = nil
-        showAvatarPicker = false
-        
-        Task {
-            do {
-                // Supabase認証トークンを取得
-                let authToken = authManager.getAccessToken()
-                
-                // ✅ Avatar Uploader APIを使用してS3にアップロード
-                let url = try await AWSManager.shared.uploadAvatar(
-                    image: image,
-                    type: "users",
-                    id: userId,
-                    authToken: authToken
-                )
-                
-                await MainActor.run {
-                    isUploadingAvatar = false
-                    // AvatarViewを強制的に更新
-                    NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
-                    print("✅ アバターアップロード成功: \(url)")
-                    
-                    // 成功メッセージを表示（オプション）
-                    // TODO: アラートやトーストで成功を通知
-                }
-            } catch {
-                await MainActor.run {
-                    isUploadingAvatar = false
-                    avatarUploadError = error.localizedDescription
-                    print("❌ アバターアップロードエラー: \(error)")
-                    print("📝 Error details: \(error.localizedDescription)")
-                }
-            }
-        }
-    }
+    // uploadAvatar関数は削除（ViewModelが処理を担当）
 }
 
 

@@ -78,33 +78,22 @@ struct DeviceCard: View {
                     
                     // 観測対象情報
                     HStack(spacing: 12) {
-                        // 観測対象アバター
-                        if let subject = subject, let avatarURL = subject.avatarUrl, !avatarURL.isEmpty {
-                            AsyncImage(url: URL(string: avatarURL)) { image in
-                                image
-                                    .resizable()
-                                    .aspectRatio(contentMode: .fill)
-                                    .frame(width: 50, height: 50)
-                                    .clipShape(Circle())
-                                    .overlay(
-                                        Circle()
-                                            .stroke(isSelected ? Color.white.opacity(0.3) : Color.gray.opacity(0.2), lineWidth: 2)
-                                    )
-                            } placeholder: {
+                        // 観測対象アバター（AvatarViewコンポーネントを使用）
+                        if let subject = subject {
+                            ZStack {
+                                AvatarView(type: .subject, id: subject.subjectId, size: 50)
+                                
+                                // 選択時の枠線
                                 Circle()
-                                    .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                    .stroke(isSelected ? Color.white.opacity(0.3) : Color.gray.opacity(0.2), lineWidth: 2)
                                     .frame(width: 50, height: 50)
-                                    .overlay(
-                                        Image(systemName: "person.fill")
-                                            .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
-                                    )
                             }
                         } else {
                             Circle()
                                 .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
                                 .frame(width: 50, height: 50)
                                 .overlay(
-                                    Image(systemName: subject != nil ? "person.fill" : "person.fill.questionmark")
+                                    Image(systemName: "person.fill.questionmark")
                                         .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
                                 )
                         }

@@ -2,442 +2,262 @@
 //  AvatarPickerView.swift
 //  ios_watchme_v9
 //
-//  Created by Claude on 2025/07/31.
+//  アバター選択・アップロード機能を提供するビュー
+//  シートの二重表示問題を解決した実装
 //
 
 import SwiftUI
 import PhotosUI
 
-// MARK: - Avatar Picker View
-/// 共通のアバター選択・編集コンポーネント
 struct AvatarPickerView: View {
-    // MARK: - Properties
+    @ObservedObject var viewModel: AvatarUploadViewModel
     let currentAvatarURL: URL?
-    let onImageSelected: (UIImage) -> Void
-    let onDelete: (() -> Void)?
+    @Environment(\.dismiss) private var dismiss
     
-    @State private var selectedItem: PhotosPickerItem?
-    @State private var selectedImage: UIImage?
-    @State private var showingImageCropper = false
-    @State private var showingActionSheet = false
+    // 写真選択
+    @State private var selectedItem: PhotosPickerItem? = nil
+    @State private var selectedImage: UIImage? = nil
+    
+    // カメラ
     @State private var showingCamera = false
-    @State private var showingPhotoPicker = false
+    @State private var cameraImage: UIImage? = nil
+    
+    // トリミング
+    @State private var imageToEdit: UIImage? = nil
+    @State private var showingCropper = false
+    
+    // UI状態
     @State private var isProcessing = false
-    @State private var imageSource: ImageSource = .none
+    @State private var errorMessage: String? = nil
     
-    enum ImageSource {
-        case none
-        case camera
-        case photoPicker
-    }
-    
-    // MARK: - Body
     var body: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 0) {
             // 現在のアバター表示
-            avatarDisplay
-                .onTapGesture {
-                    showingActionSheet = true
-                }
+            avatarPreviewSection
+                .padding(.top, 20)
+                .padding(.bottom, 30)
             
-            // 選択ボタン
-            Button(action: {
-                showingActionSheet = true
-            }) {
-                Label("アバターを変更", systemImage: "camera.fill")
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 20)
-                    .padding(.vertical, 10)
-                    .background(Color.blue)
-                    .cornerRadius(20)
-            }
-        }
-        .confirmationDialog("アバターの選択", isPresented: $showingActionSheet, titleVisibility: .visible) {
-            // 写真ライブラリから選択
-            Button("写真を選択") {
-                showingPhotoPicker = true
-                imageSource = .photoPicker
-            }
-            
-            // カメラが利用可能な場合のみ表示
-            if UIImagePickerController.isSourceTypeAvailable(.camera) {
-                Button("カメラで撮影") {
+            // 選択オプション
+            VStack(spacing: 16) {
+                // カメラボタン
+                Button(action: {
                     showingCamera = true
-                    imageSource = .camera
+                }) {
+                    HStack {
+                        Image(systemName: "camera.fill")
+                            .frame(width: 30)
+                        Text("写真を撮る")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(12)
                 }
-            }
-            
-            if currentAvatarURL != nil && onDelete != nil {
-                Button("アバターを削除", role: .destructive) {
-                    onDelete?()
+                
+                // PhotosPicker（ビューとして埋め込み、別シートではない）
+                PhotosPicker(
+                    selection: $selectedItem,
+                    matching: .images,
+                    photoLibrary: .shared()
+                ) {
+                    HStack {
+                        Image(systemName: "photo.on.rectangle")
+                            .frame(width: 30)
+                        Text("写真を選択")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .padding()
+                    .background(Color(.secondarySystemBackground))
+                    .cornerRadius(12)
                 }
-            }
-            
-            Button("キャンセル", role: .cancel) {}
-        }
-        message: {
-            Text("プロフィール写真を選択してください")
-        }
-        .onChange(of: selectedItem) { oldValue, newValue in
-            Task {
-                await loadImage(from: newValue)
-            }
-        }
-        .sheet(isPresented: $showingCamera) {
-            CameraView { image in
-                // カメラからの画像を受け取る
-                self.selectedImage = image
-                self.imageSource = .camera
-            }
-            .onDisappear {
-                // カメラが閉じた後に処理
-                if imageSource == .camera && selectedImage != nil {
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                        self.showingImageCropper = true
+                .onChange(of: selectedItem) { newItem in
+                    Task {
+                        await loadImage(from: newItem)
                     }
                 }
             }
+            .padding(.horizontal)
+            
+            Spacer()
+            
+            // エラーメッセージ
+            if let errorMessage = errorMessage {
+                Text(errorMessage)
+                    .font(.caption)
+                    .foregroundColor(.red)
+                    .padding()
+                    .multilineTextAlignment(.center)
+            }
+            
+            // アップロード状態表示
+            if viewModel.phase != .idle {
+                uploadStateView
+                    .padding()
+            }
         }
-        .sheet(isPresented: $showingImageCropper) {
-            if let image = selectedImage {
-                NavigationView {
-                    ImageCropperView(image: image) { croppedImage in
-                        onImageSelected(croppedImage)
-                        showingImageCropper = false
-                        selectedImage = nil  // 画像をクリア
-                        imageSource = .none  // ソースをリセット
+        .disabled(isProcessing || viewModel.phase == .uploading)
+        .fullScreenCover(isPresented: $showingCamera) {
+            CameraView(selectedImage: $cameraImage)
+                .ignoresSafeArea()
+        }
+        .sheet(isPresented: $showingCropper) {
+            if let imageToEdit = imageToEdit {
+                ImageCropperView(image: imageToEdit) { croppedImage in
+                    Task {
+                        await uploadImage(croppedImage)
                     }
-                }
-                .onDisappear {
-                    // トリミングがキャンセルされた場合
-                    selectedImage = nil
-                    imageSource = .none
+                    showingCropper = false
                 }
             }
         }
-        .photosPicker(
-            isPresented: $showingPhotoPicker,
-            selection: $selectedItem,
-            matching: .images,
-            photoLibrary: .shared()
-        )
+        .onChange(of: cameraImage) { newImage in
+            if let newImage = newImage {
+                imageToEdit = newImage
+                showingCropper = true
+                cameraImage = nil
+            }
+        }
+        .onChange(of: viewModel.phase) { newPhase in
+            if case .success = newPhase {
+                // アップロード成功時は自動的に閉じる
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    dismiss()
+                }
+            }
+        }
     }
     
-    // MARK: - Avatar Display
-    private var avatarDisplay: some View {
-        ZStack {
-            if let url = currentAvatarURL {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: 150, height: 150)
-                            .clipShape(Circle())
-                    case .failure(let error):
-                        // エラーの詳細をログ出力
-                        let _ = {
-                            print("❌ Failed to load avatar image: \(error)")
-                            print("📍 URL: \(url)")
-                        }()
-                        defaultAvatar
-                    case .empty:
-                        // 読み込み中
-                        ZStack {
-                            defaultAvatar
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                        }
-                    @unknown default:
-                        defaultAvatar
-                    }
+    // MARK: - Avatar Preview Section
+    private var avatarPreviewSection: some View {
+        VStack(spacing: 12) {
+            // 現在のアバターまたは選択した画像を表示
+            if let selectedImage = selectedImage {
+                Image(uiImage: selectedImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.blue, lineWidth: 3)
+                    )
+            } else if let url = currentAvatarURL {
+                AsyncImage(url: url) { image in
+                    image
+                        .resizable()
+                        .scaledToFill()
+                } placeholder: {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .foregroundColor(.gray)
                 }
+                .frame(width: 120, height: 120)
+                .clipShape(Circle())
             } else {
-                defaultAvatar
+                Image(systemName: "person.circle.fill")
+                    .resizable()
+                    .foregroundColor(.gray)
+                    .frame(width: 120, height: 120)
             }
             
-            // カメラアイコンオーバーレイ
-            VStack {
-                Spacer()
-                HStack {
-                    Spacer()
-                    Image(systemName: "camera.fill")
-                        .foregroundColor(.white)
-                        .padding(8)
-                        .background(Color.black.opacity(0.6))
-                        .clipShape(Circle())
-                }
-            }
-            .frame(width: 150, height: 150)
+            Text(currentAvatarURL != nil ? "現在のアバター" : "アバター未設定")
+                .font(.caption)
+                .foregroundColor(.secondary)
         }
     }
     
-    private var defaultAvatar: some View {
-        Image(systemName: "person.crop.circle.fill")
-            .font(.system(size: 150))
-            .foregroundColor(.gray.opacity(0.5))
+    // MARK: - Upload State View
+    private var uploadStateView: some View {
+        VStack(spacing: 12) {
+            switch viewModel.phase {
+            case .uploading:
+                HStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                    Text("アップロード中...")
+                        .font(.subheadline)
+                }
+                .padding()
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(10)
+                
+            case .success:
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .foregroundColor(.green)
+                        .font(.title2)
+                    Text("アップロード完了!")
+                        .font(.subheadline)
+                        .foregroundColor(.green)
+                }
+                .padding()
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(10)
+                
+            case .error(let message):
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
+                        .font(.title2)
+                    Text("エラー")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                    Text(message)
+                        .font(.caption)
+                        .multilineTextAlignment(.center)
+                }
+                .padding()
+                .background(Color.red.opacity(0.1))
+                .cornerRadius(10)
+                
+            case .idle, .selectingSource, .takingPhoto, .loadingImage, .cropping:
+                EmptyView()
+            }
+        }
     }
     
-    // MARK: - Helper Methods
+    // MARK: - Helper Functions
     private func loadImage(from item: PhotosPickerItem?) async {
         guard let item = item else { return }
         
-        print("📸 Loading image from PhotosPickerItem")
-        
-        await MainActor.run {
-            isProcessing = true
-        }
+        isProcessing = true
+        errorMessage = nil
         
         do {
-            // 画像データを読み込む
-            if let data = try await item.loadTransferable(type: Data.self) {
-                print("📊 Image data loaded: \(data.count) bytes")
-                
-                if let uiImage = UIImage(data: data) {
-                    print("✅ UIImage created successfully - Size: \(uiImage.size), Scale: \(uiImage.scale)")
-                    
-                    await MainActor.run {
-                        self.selectedImage = uiImage
-                        self.isProcessing = false
-                        self.showingPhotoPicker = false
-                        // フォトピッカーが完全に閉じてからトリミング画面を表示
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            if self.imageSource == .photoPicker {
-                                self.showingImageCropper = true
-                            }
-                        }
-                    }
-                } else {
-                    print("❌ Failed to create UIImage from data")
-                    await MainActor.run {
-                        isProcessing = false
-                    }
-                }
-            } else {
+            if let data = try await item.loadTransferable(type: Data.self),
+               let uiImage = UIImage(data: data) {
                 await MainActor.run {
-                    isProcessing = false
-                    print("⚠️ 画像データを取得できませんでした")
+                    self.imageToEdit = uiImage
+                    self.selectedImage = uiImage
+                    self.showingCropper = true
+                    self.isProcessing = false
                 }
             }
         } catch {
             await MainActor.run {
-                print("❌ 画像の読み込みに失敗: \(error)")
-                isProcessing = false
+                self.errorMessage = "画像の読み込みに失敗しました"
+                self.isProcessing = false
             }
         }
     }
-}
-
-// MARK: - Image Cropper View
-/// 画像を正方形にトリミングするビュー
-struct ImageCropperView: View {
-    let image: UIImage
-    let onComplete: (UIImage) -> Void
     
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-    @Environment(\.dismiss) private var dismiss
-    
-    var body: some View {
-            GeometryReader { geometry in
-                ZStack {
-                    Color.black.ignoresSafeArea()
-                    
-                    VStack {
-                        Spacer()
-                        
-                        // トリミングエリア
-                        ZStack {
-                            // 画像
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fit)
-                                .scaleEffect(scale)
-                                .offset(offset)
-                                .gesture(
-                                    SimultaneousGesture(
-                                        MagnificationGesture()
-                                            .onChanged { value in
-                                                scale = lastScale * value
-                                            }
-                                            .onEnded { value in
-                                                lastScale = scale
-                                            },
-                                        DragGesture()
-                                            .onChanged { value in
-                                                offset = CGSize(
-                                                    width: lastOffset.width + value.translation.width,
-                                                    height: lastOffset.height + value.translation.height
-                                                )
-                                            }
-                                            .onEnded { value in
-                                                lastOffset = offset
-                                            }
-                                    )
-                                )
-                            
-                            // トリミング枠
-                            Rectangle()
-                                .stroke(Color.white, lineWidth: 2)
-                                .frame(width: min(geometry.size.width - 40, 300),
-                                       height: min(geometry.size.width - 40, 300))
-                                .overlay(
-                                    // グリッド線
-                                    GeometryReader { geo in
-                                        Path { path in
-                                            let width = geo.size.width
-                                            let height = geo.size.height
-                                            
-                                            // 縦線
-                                            path.move(to: CGPoint(x: width / 3, y: 0))
-                                            path.addLine(to: CGPoint(x: width / 3, y: height))
-                                            path.move(to: CGPoint(x: width * 2 / 3, y: 0))
-                                            path.addLine(to: CGPoint(x: width * 2 / 3, y: height))
-                                            
-                                            // 横線
-                                            path.move(to: CGPoint(x: 0, y: height / 3))
-                                            path.addLine(to: CGPoint(x: width, y: height / 3))
-                                            path.move(to: CGPoint(x: 0, y: height * 2 / 3))
-                                            path.addLine(to: CGPoint(x: width, y: height * 2 / 3))
-                                        }
-                                        .stroke(Color.white.opacity(0.3), lineWidth: 0.5)
-                                    }
-                                )
-                        }
-                        .frame(width: min(geometry.size.width - 40, 300),
-                               height: min(geometry.size.width - 40, 300))
-                        .clipped()
-                        
-                        Spacer()
-                    }
-                }
-            }
-            .navigationTitle("画像をトリミング")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
-                        dismiss()
-                    }
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") {
-                        if let croppedImage = cropImage() {
-                            onComplete(croppedImage)
-                        }
-                    }
-                    .fontWeight(.bold)
-                }
-            }
-    }
-    
-    private func cropImage() -> UIImage? {
-        let targetSize: CGFloat = 300
-        
-        // デバッグログ
-        print("🖼️ Cropping image - Original size: \(image.size), Scale: \(scale), Offset: \(offset)")
-        
-        // 画像の実際のサイズを取得
-        let imageSize = image.size
-        
-        // 画像が小さすぎる場合のチェック
-        guard imageSize.width > 0 && imageSize.height > 0 else {
-            print("❌ Invalid image size: \(imageSize)")
-            return nil
-        }
-        
-        // アスペクト比を保持しながら、300x300の枠を完全に覆う最小スケール
-        let minScale = max(targetSize / imageSize.width, targetSize / imageSize.height)
-        let finalScale = max(self.scale * minScale, minScale)
-        
-        // スケール後の画像サイズ
-        let scaledWidth = imageSize.width * finalScale
-        let scaledHeight = imageSize.height * finalScale
-        
-        print("📏 Scaled size: \(scaledWidth) x \(scaledHeight), Final scale: \(finalScale)")
-        
-        // UIGraphicsで画像をレンダリング
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: targetSize, height: targetSize))
-        
-        let croppedImage = renderer.image { context in
-            // 背景を透明にする（白ではなく）
-            context.cgContext.clear(CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
-            
-            // クリッピングマスクを設定
-            context.cgContext.addRect(CGRect(x: 0, y: 0, width: targetSize, height: targetSize))
-            context.cgContext.clip()
-            
-            // 画像の中心を計算
-            let centerX = targetSize / 2
-            let centerY = targetSize / 2
-            
-            // オフセットを適用した描画位置
-            let drawX = centerX - (scaledWidth / 2) + offset.width
-            let drawY = centerY - (scaledHeight / 2) + offset.height
-            
-            // 画像を描画
-            let drawRect = CGRect(
-                x: drawX,
-                y: drawY,
-                width: scaledWidth,
-                height: scaledHeight
-            )
-            
-            print("🎯 Draw rect: \(drawRect)")
-            
-            image.draw(in: drawRect)
-        }
-        
-        print("✅ Image cropped successfully")
-        return croppedImage
+    private func uploadImage(_ image: UIImage) async {
+        selectedImage = image
+        errorMessage = nil
+        viewModel.uploadCroppedImage(image)
     }
 }
 
 // MARK: - Camera View
-/// カメラ撮影用のビュー
 struct CameraView: UIViewControllerRepresentable {
-    let onImageCaptured: (UIImage) -> Void
-    @Environment(\.presentationMode) var presentationMode
+    @Binding var selectedImage: UIImage?
+    @Environment(\.dismiss) private var dismiss
     
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        
-        // カメラが利用可能かチェック
-        guard UIImagePickerController.isSourceTypeAvailable(.camera) else {
-            print("❌ Camera is not available on this device")
-            picker.sourceType = .photoLibrary
-            picker.allowsEditing = false
-            picker.delegate = context.coordinator
-            return picker
-        }
-        
         picker.sourceType = .camera
-        picker.allowsEditing = false
         picker.delegate = context.coordinator
-        
-        // カメラ設定
-        picker.cameraCaptureMode = .photo
-        
-        // 利用可能なカメラデバイスをチェック
-        if UIImagePickerController.isCameraDeviceAvailable(.rear) {
-            picker.cameraDevice = .rear
-        } else if UIImagePickerController.isCameraDeviceAvailable(.front) {
-            picker.cameraDevice = .front
-        }
-        
-        // フラッシュモードの設定
-        if UIImagePickerController.isFlashAvailable(for: picker.cameraDevice) {
-            picker.cameraFlashMode = .off
-        }
-        
-        // iPadでのポップオーバー対応
-        picker.modalPresentationStyle = .fullScreen
-        
+        picker.allowsEditing = false
         return picker
     }
     
@@ -454,19 +274,121 @@ struct CameraView: UIViewControllerRepresentable {
             self.parent = parent
         }
         
-        func imagePickerController(_ picker: UIImagePickerController,
-                                 didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
+        func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let image = info[.originalImage] as? UIImage {
-                // 画像をコールバックで渡す
-                self.parent.onImageCaptured(image)
+                parent.selectedImage = image
             }
-            // SwiftUIのpresentationModeを使って閉じる
-            self.parent.presentationMode.wrappedValue.dismiss()
+            parent.dismiss()
         }
         
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
-            // SwiftUIのpresentationModeを使って閉じる
-            self.parent.presentationMode.wrappedValue.dismiss()
+            parent.dismiss()
         }
+    }
+}
+
+// MARK: - Image Cropper View
+struct ImageCropperView: View {
+    let image: UIImage
+    let onComplete: (UIImage) -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var scale: CGFloat = 1.0
+    @State private var offset: CGSize = .zero
+    @State private var lastOffset: CGSize = .zero
+    
+    var body: some View {
+        NavigationView {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                
+                VStack {
+                    Spacer()
+                    
+                    // トリミングエリア
+                    ZStack {
+                        // 画像
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                            .scaleEffect(scale)
+                            .offset(offset)
+                            .gesture(
+                                DragGesture()
+                                    .onChanged { value in
+                                        offset = CGSize(
+                                            width: lastOffset.width + value.translation.width,
+                                            height: lastOffset.height + value.translation.height
+                                        )
+                                    }
+                                    .onEnded { _ in
+                                        lastOffset = offset
+                                    }
+                            )
+                            .gesture(
+                                MagnificationGesture()
+                                    .onChanged { value in
+                                        scale = max(1.0, value)
+                                    }
+                            )
+                        
+                        // マスク（正方形の穴）
+                        Rectangle()
+                            .fill(Color.black.opacity(0.5))
+                            .mask(
+                                Rectangle()
+                                    .fill(Color.black)
+                                    .overlay(
+                                        Circle()
+                                            .frame(width: 250, height: 250)
+                                            .blendMode(.destinationOut)
+                                    )
+                                    .compositingGroup()
+                            )
+                            .allowsHitTesting(false)
+                        
+                        // ガイドライン
+                        Circle()
+                            .stroke(Color.white, lineWidth: 2)
+                            .frame(width: 250, height: 250)
+                            .allowsHitTesting(false)
+                    }
+                    
+                    Spacer()
+                }
+            }
+            .navigationTitle("画像をトリミング")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") {
+                        dismiss()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") {
+                        let croppedImage = cropImage()
+                        onComplete(croppedImage)
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+    
+    private func cropImage() -> UIImage {
+        // 簡易的なトリミング実装
+        // 実際の本番環境では、より精密なトリミング処理が必要
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 250, height: 250))
+        let croppedImage = renderer.image { context in
+            // 中央の250x250の領域を切り出す
+            let drawRect = CGRect(
+                x: -offset.width * (image.size.width / 250) / scale,
+                y: -offset.height * (image.size.height / 250) / scale,
+                width: image.size.width / scale,
+                height: image.size.height / scale
+            )
+            image.draw(in: drawRect)
+        }
+        return croppedImage
     }
 }
