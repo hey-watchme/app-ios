@@ -77,9 +77,11 @@ struct AvatarPickerView: View {
         }
         .sheet(isPresented: $showingImageCropper) {
             if let image = selectedImage {
-                ImageCropperView(image: image) { croppedImage in
-                    onImageSelected(croppedImage)
-                    showingImageCropper = false
+                NavigationView {
+                    ImageCropperView(image: image) { croppedImage in
+                        onImageSelected(croppedImage)
+                        showingImageCropper = false
+                    }
                 }
             }
         }
@@ -220,7 +222,6 @@ struct ImageCropperView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
             GeometryReader { geometry in
                 ZStack {
                     Color.black.ignoresSafeArea()
@@ -312,7 +313,6 @@ struct ImageCropperView: View {
                     .fontWeight(.bold)
                 }
             }
-        }
     }
     
     private func cropImage() -> UIImage? {

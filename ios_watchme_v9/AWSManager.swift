@@ -39,8 +39,9 @@ class AWSManager: ObservableObject {
     ///   - image: アップロードする画像
     ///   - type: アバターのタイプ（"users" または "subjects"）
     ///   - id: ユーザーIDまたはサブジェクトID（UUID形式必須）
+    ///   - authToken: 認証トークン（オプション）
     /// - Returns: アップロードされた画像のURL
-    func uploadAvatar(image: UIImage, type: String, id: String) async throws -> URL {
+    func uploadAvatar(image: UIImage, type: String, id: String, authToken: String? = nil) async throws -> URL {
         print("📤 Starting avatar upload for \(type)/\(id)")
         
         // UUIDの形式チェック
@@ -67,11 +68,13 @@ class AWSManager: ObservableObject {
         request.httpMethod = "POST"
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
         
-        // 認証トークンがある場合は追加（Supabaseトークンなど）
-        // TODO: AuthManagerからトークンを取得して設定
-        // if let token = await AuthManager.shared.getAccessToken() {
-        //     request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        // }
+        // 認証トークンがある場合は追加
+        if let token = authToken {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            print("🔐 Authorization header added")
+        } else {
+            print("⚠️ No authorization token provided")
+        }
         
         // multipart/form-dataのボディを構築
         var body = Data()
@@ -101,23 +104,46 @@ class AWSManager: ObservableObject {
             }
             
             print("📡 Response status: \(httpResponse.statusCode)")
+            print("📍 Endpoint URL: \(url)")
             
-            if httpResponse.statusCode == 200 {
+            // レスポンスボディを常に出力（デバッグ用）
+            if let responseString = String(data: data, encoding: .utf8) {
+                print("📝 Response body: \(responseString)")
+            }
+            
+            if httpResponse.statusCode == 200 || httpResponse.statusCode == 201 {
                 // レスポンスJSONをパース
                 struct AvatarUploadResponse: Codable {
-                    let avatarUrl: String
+                    let avatarUrl: String?
+                    let avatar_url: String?  // APIがsnake_caseの場合に対応
                 }
                 
                 let decoder = JSONDecoder()
                 let result = try decoder.decode(AvatarUploadResponse.self, from: data)
                 
-                guard let avatarURL = URL(string: result.avatarUrl) else {
+                // avatarUrlまたはavatar_urlを取得
+                let urlString = result.avatarUrl ?? result.avatar_url
+                guard let urlString = urlString, let avatarURL = URL(string: urlString) else {
                     throw AWSError.invalidURL
                 }
                 
                 print("✅ Avatar uploaded successfully: \(avatarURL)")
                 return avatarURL
                 
+            } else if httpResponse.statusCode == 401 {
+                // 認証エラー
+                let errorMsg = String(data: data, encoding: .utf8) ?? "Unauthorized"
+                print("❌ Authentication error: \(errorMsg)")
+                throw AWSError.authenticationError(errorMsg)
+            } else if httpResponse.statusCode == 403 {
+                // 権限エラー
+                let errorMsg = String(data: data, encoding: .utf8) ?? "Forbidden"
+                print("❌ Permission error: \(errorMsg)")
+                throw AWSError.permissionError(errorMsg)
+            } else if httpResponse.statusCode == 404 {
+                // エンドポイントが見つからない
+                print("❌ Endpoint not found: \(url)")
+                throw AWSError.endpointNotFound(url.absoluteString)
             } else if httpResponse.statusCode == 422 {
                 // バリデーションエラー
                 if let errorString = String(data: data, encoding: .utf8) {
@@ -128,12 +154,16 @@ class AWSManager: ObservableObject {
             } else {
                 // その他のエラー
                 if let errorString = String(data: data, encoding: .utf8) {
-                    print("❌ Upload error: \(errorString)")
+                    print("❌ Upload error (status \(httpResponse.statusCode)): \(errorString)")
                 }
                 throw AWSError.uploadFailed(statusCode: httpResponse.statusCode)
             }
+        } catch let error as AWSError {
+            // AWSError の場合はそのまま再スロー
+            throw error
         } catch {
             print("❌ Network error: \(error)")
+            print("📍 Failed endpoint: \(url)")
             throw AWSError.networkError(error)
         }
     }
@@ -144,10 +174,8 @@ class AWSManager: ObservableObject {
     ///   - id: ユーザーIDまたはサブジェクトID
     /// - Returns: アバター画像のURL
     func getAvatarURL(type: String, id: String) -> URL {
-        // S3の実際のURL形式
-        // 注意: us-east-1形式のURLが返される（APIレスポンスと同じ形式）
-        // 実際はap-southeast-2にリダイレクトされる
-        let s3URL = "https://watchme-vault.s3.us-east-1.amazonaws.com/\(type)/\(id)/avatar.jpg"
+        // S3の実際のURL形式（ap-southeast-2リージョン、watchme-avatarsバケット）
+        let s3URL = "https://watchme-avatars.s3.ap-southeast-2.amazonaws.com/\(type)/\(id)/avatar.jpg"
         print("🔗 Avatar URL: \(s3URL)")
         return URL(string: s3URL)!
     }
@@ -163,6 +191,9 @@ enum AWSError: Error, LocalizedError {
     case uploadFailed(statusCode: Int)
     case validationError(String)
     case networkError(Error)
+    case authenticationError(String)
+    case permissionError(String)
+    case endpointNotFound(String)
     
     var errorDescription: String? {
         switch self {
@@ -180,6 +211,12 @@ enum AWSError: Error, LocalizedError {
             return "検証エラー: \(message)"
         case .networkError(let error):
             return "ネットワークエラー: \(error.localizedDescription)"
+        case .authenticationError(let message):
+            return "認証エラー: \(message)"
+        case .permissionError(let message):
+            return "権限エラー: \(message)"
+        case .endpointNotFound(let url):
+            return "APIエンドポイントが見つかりません: \(url)"
         }
     }
 }

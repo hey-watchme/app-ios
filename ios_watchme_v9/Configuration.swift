@@ -21,11 +21,10 @@ struct APIConfiguration {
         // 現在の環境
         static var currentURL: String {
             #if DEBUG
-            // 開発時はEC2に直接アクセス
-            // TODO: Nginx設定が完了したら本番URLに切り替え
-            return developmentURL
+            // 本番環境（Nginx経由）を使用
+            return productionURL
             #else
-            // リリースビルドでは本番URL
+            // リリースビルドでも本番URL
             return productionURL
             #endif
         }

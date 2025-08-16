@@ -36,6 +36,11 @@ class SupabaseAuthManager: ObservableObject {
         checkAuthStatus()
     }
     
+    // MARK: - アクセストークン取得
+    func getAccessToken() -> String? {
+        return currentUser?.accessToken
+    }
+    
     // MARK: - 認証状態確認
     private func checkAuthStatus() {
         if let savedUser = loadUserFromDefaults() {

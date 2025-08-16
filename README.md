@@ -40,8 +40,23 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
 - **タイムゾーン対応**: ユーザーのローカルタイムゾーンでの記録管理
 - **ユーザープロフィール管理**: 
   - ニュースレター配信設定（ON/OFF）の管理
-  - アバター画像のアップロード（AWS S3経由）
+  - アバター画像のアップロード（Avatar Uploader API経由でS3に保存）
   - ユーザー情報（マイページ）からプロフィール設定を変更可能
+
+### アバター機能（v9.20.0〜）
+- **セキュアなアップロード**: Avatar Uploader API（http://3.24.16.82:8014）経由
+  - クライアントにAWS認証情報を持たない安全な実装
+  - Supabase認証トークンによる権限管理
+- **対応アバタータイプ**:
+  - ユーザーアバター（マイページ）
+  - 観測対象アバター（Subject）
+- **画像処理機能**:
+  - カメラ撮影またはフォトライブラリから選択
+  - 正方形にトリミング（ImageCropperView）
+  - 自動リサイズ（サーバー側で512x512pxに最適化）
+- **S3ストレージ**:
+  - バケット: `watchme-avatars`（ap-southeast-2リージョン）
+  - パブリックアクセス設定済み（画像の表示用）
 
 ## 重要：ユーザーIDとデバイスIDの関係
 
@@ -266,6 +281,10 @@ ios_watchme_v9/
 ├── DeviceManager.swift            # デバイス管理
 ├── SupabaseAuthManager.swift      # 認証管理
 ├── SupabaseDataManager.swift      # データ取得管理
+├── AvatarView.swift               # アバター表示コンポーネント
+├── AvatarPickerView.swift         # アバター選択・編集UI
+├── AWSManager.swift               # Avatar Uploader APIクライアント
+├── Configuration.swift            # API設定管理
 ├── Models/
 │   ├── BehaviorReport.swift       # 行動レポートモデル
 │   ├── EmotionReport.swift        # 感情レポートモデル
@@ -830,7 +849,15 @@ let supabase = SupabaseClient(...)  // グローバル定義
 - アップロード済みファイルの定期的な削除
 - ディスク容量の監視
 
-### 7. ストリーミングアップロード仕様（v9.7.0〜）
+### 7. アバター機能の開発（v9.20.0〜）
+- **API設定**: `Configuration.swift`でAvatar Uploader APIのエンドポイントを管理
+  - 開発環境: `http://3.24.16.82:8014`（EC2直接）
+  - 本番環境: `https://api.hey-watch.me/avatar`（Nginx経由、将来実装予定）
+- **認証トークン**: `SupabaseAuthManager.getAccessToken()`でトークンを取得
+- **エラーハンドリング**: `AWSManager`でHTTPステータスコードに応じた詳細なエラー処理
+- **画像処理**: 大きい画像でのメモリ問題に注意（トリミング前のリサイズを検討）
+
+### 8. ストリーミングアップロード仕様（v9.7.0〜）
 
 #### 概要
 従来の`Data(contentsOf:)`による一括メモリ読み込み方式から、ストリーミング方式に移行しました。これにより、ファイルサイズに関係なく安定したアップロードが可能になりました。
@@ -883,7 +910,7 @@ let uploadTask = URLSession.shared.uploadTask(with: request, fromFile: tempFileU
 }
 ```
 
-### 5. Xcodeビルドエラーの対処
+### 9. Xcodeビルドエラーの対処
 
 #### "Missing package product 'Supabase'" エラー
 
@@ -931,6 +958,10 @@ let uploadTask = URLSession.shared.uploadTask(with: request, fromFile: tempFileU
 - **録音が開始されない**: マイク権限を確認
 - **アップロードが失敗する**: ネットワーク接続とサーバーURLを確認
 - **認証エラー**: Supabaseの設定とAPIキーを確認
+- **アバターが表示されない**: 
+  - Avatar Uploader APIの稼働状態を確認（http://3.24.16.82:8014/health）
+  - S3のURL形式を確認（`watchme-avatars.s3.ap-southeast-2.amazonaws.com`）
+  - Xcodeコンソールでアップロードログを確認
 
 ### 認証・データアクセスの問題
 
@@ -1142,6 +1173,15 @@ git push origin feature/機能名
 ```
 
 ## 更新履歴
+
+### v9.20.0 (2025-08-16)
+- **アバター機能の完全実装**: ユーザーと観測対象のアバター管理機能を実装
+  - Avatar Uploader API経由でのセキュアなアップロード
+  - S3（watchme-avatars）への画像保存と表示
+  - 画像の選択・トリミング・アップロードの完全なフロー
+- **セキュリティ強化**: AWS認証情報をクライアントから完全に排除
+- **API統合**: Avatar Uploader API（http://3.24.16.82:8014）との連携
+- **Supabase認証トークン**: アバターアップロード時の認証実装
 
 ### v9.19.0 (2025-08-15)
 - **ダッシュボードスワイプ機能**: TabViewによる日付切り替えを実装

@@ -413,11 +413,15 @@ struct SubjectRegistrationView: View {
                 }
                 
                 do {
+                    // Supabase認証トークンを取得
+                    let authToken = authManager.getAccessToken()
+                    
                     // ✅ Avatar Uploader APIを使用してS3にアップロード
                     let avatarUrl = try await AWSManager.shared.uploadAvatar(
                         image: image,
                         type: "subjects",
-                        id: subjectId
+                        id: subjectId,
+                        authToken: authToken
                     )
                     print("✅ Subject avatar uploaded to S3: \(avatarUrl)")
                 } catch {
@@ -496,11 +500,15 @@ struct SubjectRegistrationView: View {
                 }
                 
                 do {
+                    // Supabase認証トークンを取得
+                    let authToken = authManager.getAccessToken()
+                    
                     // ✅ Avatar Uploader APIを使用してS3にアップロード
                     let avatarUrl = try await AWSManager.shared.uploadAvatar(
                         image: image,
                         type: "subjects",
-                        id: subject.subjectId
+                        id: subject.subjectId,
+                        authToken: authToken
                     )
                     print("✅ Subject avatar updated on S3: \(avatarUrl)")
                 } catch {

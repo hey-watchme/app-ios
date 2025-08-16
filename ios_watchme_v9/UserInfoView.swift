@@ -185,11 +185,15 @@ struct UserInfoView: View {
         
         Task {
             do {
+                // Supabase認証トークンを取得
+                let authToken = authManager.getAccessToken()
+                
                 // ✅ Avatar Uploader APIを使用してS3にアップロード
                 let url = try await AWSManager.shared.uploadAvatar(
                     image: image,
                     type: "users",
-                    id: userId
+                    id: userId,
+                    authToken: authToken
                 )
                 
                 await MainActor.run {
