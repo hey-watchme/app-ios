@@ -31,21 +31,21 @@ struct BehaviorGraphView: View {
                                 HStack {
                                     Text("本日の総行動数")
                                         .font(.caption)
-                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                     Spacer()
                                     Text("\(report.totalEventCount)")
                                         .font(.title2)
                                         .fontWeight(.bold)
-                                        .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                                     Text("件")
                                         .font(.caption)
-                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                 }
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 12)
                                 .background(
                                     RoundedRectangle(cornerRadius: 12)
-                                        .fill(Color.blue.opacity(0.05))
+                                        .fill(Color.safeColor("PrimaryActionColor").opacity(0.05))
                                 )
                                 
                                 // ランキングリスト
@@ -65,7 +65,7 @@ struct BehaviorGraphView: View {
                                             
                                             Text(event.event)
                                                 .font(.body)
-                                                .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                                .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                                             
                                             Spacer()
                                             
@@ -73,16 +73,16 @@ struct BehaviorGraphView: View {
                                                 Text("\(event.count)")
                                                     .font(.callout)
                                                     .fontWeight(.semibold)
-                                                    .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.3))
+                                                    .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                                 Text("回")
                                                     .font(.caption)
-                                                    .foregroundColor(Color(red: 0.5, green: 0.5, blue: 0.5))
+                                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
                                             }
                                         }
                                         
                                         if index < min(4, report.summaryRanking.count - 1) {
                                             Divider()
-                                                .background(Color.gray.opacity(0.2))
+                                                .background(Color.safeColor("BehaviorBackgroundSecondary"))
                                         }
                                     }
                                 }
@@ -97,15 +97,15 @@ struct BehaviorGraphView: View {
                                 HStack {
                                     Text("アクティブな時間帯")
                                         .font(.caption)
-                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                     Spacer()
                                     Text("\(report.activeTimeBlocks.count)")
                                         .font(.title3)
                                         .fontWeight(.semibold)
-                                        .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                                     Text("/ 48 スロット")
                                         .font(.caption)
-                                        .foregroundColor(Color(red: 0.5, green: 0.5, blue: 0.5))
+                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
                                 }
                                 
                                 // 時間帯グリッド
@@ -139,7 +139,7 @@ struct BehaviorGraphView: View {
                 }
                 .padding(.bottom, 20)
             }
-        .background(Color(red: 0.937, green: 0.937, blue: 0.937))
+        .background(Color.safeColor("BehaviorBackgroundPrimary"))
         .navigationTitle("行動グラフ")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -155,13 +155,13 @@ struct BehaviorGraphView: View {
     private func rankColor(for index: Int) -> Color {
         switch index {
         case 0:
-            return Color(red: 1.0, green: 0.84, blue: 0.0) // Gold
+            return Color.safeColor("BehaviorGoldMedal") // Gold
         case 1:
-            return Color(red: 0.75, green: 0.75, blue: 0.75) // Silver
+            return Color.safeColor("BehaviorSilverMedal") // Silver
         case 2:
-            return Color(red: 0.8, green: 0.5, blue: 0.2) // Bronze
+            return Color.safeColor("BehaviorBronzeMedal") // Bronze
         default:
-            return Color(red: 0.4, green: 0.4, blue: 0.4) // Gray
+            return Color.safeColor("BehaviorTextSecondary") // Gray
         }
     }
 }
@@ -178,20 +178,20 @@ struct TimeBlockCell: View {
                 Text(timeBlock.displayTime)
                     .font(.caption2)
                     .fontWeight(.medium)
-                    .foregroundColor(timeBlock.isEmpty ? Color(red: 0.6, green: 0.6, blue: 0.6) : Color(red: 0.3, green: 0.3, blue: 0.3))
+                    .foregroundColor(timeBlock.isEmpty ? Color.safeColor("BehaviorTextTertiary") : Color.safeColor("BehaviorTextSecondary"))
                 
                 if timeBlock.isEmpty {
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color.gray.opacity(0.1))
+                        .fill(Color.safeColor("BehaviorBackgroundSecondary").opacity(0.5))
                         .frame(height: 28)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                .stroke(Color.safeColor("BehaviorBackgroundSecondary"), lineWidth: 1)
                         )
                         .overlay(
                             Text("-")
                                 .font(.caption)
-                                .foregroundColor(Color(red: 0.7, green: 0.7, blue: 0.7))
+                                .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
                         )
                 } else {
                     RoundedRectangle(cornerRadius: 8)

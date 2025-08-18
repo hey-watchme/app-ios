@@ -52,14 +52,14 @@ struct GraphEmptyStateView: View {
             // アイコン
             Image(systemName: isDeviceLinked ? graphType.defaultIcon : "iphone.slash")
                 .font(isCompact ? .largeTitle : .system(size: 60))
-                .foregroundColor(isDeviceLinked ? .gray.opacity(0.5) : .orange)
+                .foregroundColor(isDeviceLinked ? Color.safeColor("BorderLight").opacity(0.5) : Color.safeColor("WarningColor"))
             
             // メッセージ
             if isCompact {
                 // ダッシュボード用の簡潔な表示
                 Text(isDeviceLinked ? "データがありません" : "デバイス未連携")
                     .font(.subheadline)
-                    .foregroundColor(isDeviceLinked ? .secondary : .orange)
+                    .foregroundColor(isDeviceLinked ? .secondary : Color.safeColor("WarningColor"))
             } else {
                 // 通常のグラフビュー用の詳細な表示
                 VStack(spacing: 8) {
@@ -97,7 +97,7 @@ struct GraphEmptyStateView_Previews: PreviewProvider {
             GraphEmptyStateView(graphType: .emotion, isDeviceLinked: false, isCompact: true)
                 .previewDisplayName("Emotion - Compact No Device")
                 .frame(height: 200)
-                .background(Color.gray.opacity(0.1))
+                .background(Color.safeColor("BorderLight").opacity(0.1))
         }
     }
 }

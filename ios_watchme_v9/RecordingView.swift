@@ -30,7 +30,7 @@ struct RecordingView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "applewatch.radiowaves.left.and.right")
                             .font(.system(size: 50))
-                            .foregroundColor(.blue)
+                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
                         
                         Text("ウェアラブルデバイス「WatchMe」を使って簡単に24時間ノータッチでこころの分析が可能です。WatchMe Pro プランに切り替えて、始めてみましょう。")
                             .font(.subheadline)
@@ -57,7 +57,7 @@ struct RecordingView: View {
                         .padding(.vertical, 14)
                         .background(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                                gradient: Gradient(colors: [Color.safeColor("PrimaryActionColor"), Color.safeColor("PrimaryActionColor").opacity(0.8)]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -79,7 +79,7 @@ struct RecordingView: View {
                 VStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title)
-                        .foregroundColor(.green)
+                        .foregroundColor(Color.safeColor("StatusNormal"))
                     
                     Text("アップロード済み")
                         .font(.subheadline)
@@ -90,18 +90,18 @@ struct RecordingView: View {
                     Text("\(uploadedCount)")
                         .font(.largeTitle)
                         .fontWeight(.bold)
-                        .foregroundColor(.green)
+                        .foregroundColor(Color.safeColor("StatusNormal"))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
-                .background(Color.green.opacity(0.1))
+                .background(Color.safeColor("StatusNormal").opacity(0.1))
                 .cornerRadius(16)
                 
                 // アップロード待ち
                 VStack(spacing: 8) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.title)
-                        .foregroundColor(.orange)
+                        .foregroundColor(Color.safeColor("WarningColor"))
                     
                     Text("アップロード待ち")
                         .font(.subheadline)
@@ -112,11 +112,11 @@ struct RecordingView: View {
                     Text("\(pendingCount)")
                         .font(.largeTitle)
                         .fontWeight(.bold)
-                        .foregroundColor(.orange)
+                        .foregroundColor(Color.safeColor("WarningColor"))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 20)
-                .background(Color.orange.opacity(0.1))
+                .background(Color.safeColor("WarningColor").opacity(0.1))
                 .cornerRadius(16)
             }
             .padding(.horizontal)
@@ -143,7 +143,7 @@ struct RecordingView: View {
                     }
                     
                     ProgressView(value: networkManager.uploadProgress, total: 1.0)
-                        .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                        .progressViewStyle(LinearProgressViewStyle(tint: Color.safeColor("UploadActive")))
                     
                     if let fileName = networkManager.currentUploadingFile {
                         Text("ファイル: \(fileName)")
@@ -152,7 +152,7 @@ struct RecordingView: View {
                     }
                 }
                 .padding()
-                .background(Color.blue.opacity(0.1))
+                .background(Color.safeColor("UploadActive").opacity(0.1))
                 .cornerRadius(12)
             }
             
@@ -162,19 +162,19 @@ struct RecordingView: View {
                 VStack(spacing: 8) {
                     Text("🔴 録音中...")
                         .font(.headline)
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.safeColor("RecordingActive"))
                     
                     Text(audioRecorder.formatTime(audioRecorder.recordingTime))
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.safeColor("RecordingActive"))
                     
                     Text(audioRecorder.getCurrentSlotInfo())
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
                 .padding()
-                .background(Color.red.opacity(0.1))
+                .background(Color.safeColor("RecordingActive").opacity(0.1))
                 .cornerRadius(12)
             }
             
@@ -199,7 +199,7 @@ struct RecordingView: View {
                                 .font(.caption)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.blue)
+                                .background(Color.safeColor("UploadActive"))
                                 .foregroundColor(.white)
                                 .cornerRadius(8)
                             }
@@ -223,7 +223,7 @@ struct RecordingView: View {
                                 .font(.caption)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 6)
-                                .background(Color.orange)
+                                .background(Color.safeColor("WarningColor"))
                                 .foregroundColor(.white)
                                 .cornerRadius(8)
                             }
@@ -476,14 +476,14 @@ struct RecordingRowView: View {
                         if recording.uploadAttempts > 0 {
                             Text("試行: \(recording.uploadAttempts)/3")
                                 .font(.caption)
-                                .foregroundColor(.orange)
+                                .foregroundColor(Color.safeColor("WarningColor"))
                         }
                         
                         // アップロード可能チェック
                         if !recording.canUpload {
                             Text("アップロード不可")
                                 .font(.caption)
-                                .foregroundColor(.red)
+                                .foregroundColor(Color.safeColor("RecordingActive"))
                         }
                     }
                     
@@ -494,7 +494,7 @@ struct RecordingRowView: View {
                 if let error = recording.lastUploadError {
                     Text("エラー: \(error)")
                         .font(.caption)
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.safeColor("RecordingActive"))
                         .lineLimit(2)
                 }
             }
@@ -509,14 +509,14 @@ struct RecordingRowView: View {
                         print("🔄 アップロード状態リセット: \(recording.fileName)")
                     }) {
                         Image(systemName: "arrow.clockwise")
-                            .foregroundColor(.orange)
+                            .foregroundColor(Color.safeColor("WarningColor"))
                     }
                 }
                 
                 // 削除ボタン
                 Button(action: { onDelete(recording) }) {
                     Image(systemName: "trash")
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.safeColor("RecordingActive"))
                 }
             }
         }

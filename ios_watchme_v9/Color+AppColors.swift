@@ -1,0 +1,247 @@
+//
+//  Color+AppColors.swift
+//  ios_watchme_v9
+//
+//  Created by Claude on 2025/08/18.
+//  カラーの一元管理のための拡張ファイル
+//
+
+import SwiftUI
+
+extension Color {
+    // MARK: - Chart Colors (グラフ関連の色)
+    
+    // Vibe Graph Colors
+    static let graphLineColor = Color("GraphLineColor")  // メインのグラフ線の色
+    static let vibeChangeIndicatorColor = Color("VibeChangeIndicatorColor")  // 注目ポイントの色
+    static let scorePositiveColor = Color("ScorePositiveColor")  // スコアが良い時の色
+    static let scoreNormalColor = Color("ScoreNormalColor")  // スコアが普通な時の色  
+    static let scoreNeutralColor = Color("ScoreNeutralColor")  // スコアが中間の時の色
+    static let scoreNegativeColor = Color("ScoreNegativeColor")  // スコアが低い時の色
+    static let scoreVeryNegativeColor = Color("ScoreVeryNegativeColor")  // スコアが非常に低い時の色
+    static let chartBackgroundColor = Color("ChartBackgroundColor")  // グラフの背景色
+    static let zeroLineColor = Color("ZeroLineColor")  // ゼロ基準線の色
+    
+    // Behavior Graph Colors
+    static let behaviorTextPrimary = Color("BehaviorTextPrimary")  // 主要テキストの色
+    static let behaviorTextSecondary = Color("BehaviorTextSecondary")  // 副次的テキストの色
+    static let behaviorTextTertiary = Color("BehaviorTextTertiary")  // 第三のテキストの色
+    static let behaviorBackgroundPrimary = Color("BehaviorBackgroundPrimary")  // 主要背景色
+    static let behaviorBackgroundSecondary = Color("BehaviorBackgroundSecondary")  // 副次的背景色
+    static let behaviorGoldMedal = Color("BehaviorGoldMedal")  // 金メダルの色
+    static let behaviorSilverMedal = Color("BehaviorSilverMedal")  // 銀メダルの色
+    static let behaviorBronzeMedal = Color("BehaviorBronzeMedal")  // 銅メダルの色
+    
+    // Emotion Graph Colors
+    static let emotionJoy = Color("EmotionJoy")  // 喜びの色
+    static let emotionTrust = Color("EmotionTrust")  // 信頼の色
+    static let emotionFear = Color("EmotionFear")  // 恐れの色
+    static let emotionSurprise = Color("EmotionSurprise")  // 驚きの色
+    static let emotionSadness = Color("EmotionSadness")  // 悲しみの色
+    static let emotionDisgust = Color("EmotionDisgust")  // 嫌悪の色
+    static let emotionAnger = Color("EmotionAnger")  // 怒りの色
+    static let emotionAnticipation = Color("EmotionAnticipation")  // 期待の色
+    
+    // MARK: - UI Colors (UI全般の色)
+    
+    static let primaryActionColor = Color("PrimaryActionColor")  // 主要アクションボタンの色
+    static let secondaryActionColor = Color("SecondaryActionColor")  // 副次的アクションボタンの色
+    static let warningColor = Color("WarningColor")  // 警告の色
+    static let successColor = Color("SuccessColor")  // 成功の色
+    static let errorColor = Color("ErrorColor")  // エラーの色
+    static let infoColor = Color("InfoColor")  // 情報の色
+    static let appAccentColor = Color("AppAccentColor")  // アプリ全体のアクセントカラー（紫）
+    
+    // MARK: - Background Colors (背景色)
+    
+    static let primaryBackground = Color("PrimaryBackground")  // 主要背景色
+    static let secondaryBackground = Color("SecondaryBackground")  // 副次的背景色
+    static let tertiaryBackground = Color("TertiaryBackground")  // 第三の背景色
+    static let cardBackground = Color("CardBackground")  // カードの背景色
+    
+    // MARK: - Text Colors (テキスト色)
+    
+    static let primaryText = Color("PrimaryText")  // 主要テキスト色
+    static let secondaryText = Color("SecondaryText")  // 副次的テキスト色
+    static let tertiaryText = Color("TertiaryText")  // 第三のテキスト色
+    static let placeholderText = Color("PlaceholderText")  // プレースホルダーテキスト色
+    
+    // MARK: - Recording & Status Colors (録音・状態関連)
+    
+    static let recordingActive = Color("RecordingActive")  // 録音中
+    static let recordingInactive = Color("RecordingInactive")  // 録音停止中
+    static let uploadActive = Color("UploadActive")  // アップロード中
+    static let statusNormal = Color("StatusNormal")  // 通常状態
+    
+    // MARK: - Border & Separator Colors (境界線・区切り線)
+    
+    static let borderLight = Color("BorderLight")  // 薄い境界線
+    static let borderMedium = Color("BorderMedium")  // 中間の境界線
+    static let separatorColor = Color("SeparatorColor")  // 区切り線
+    
+    // MARK: - Timeline Indicator Colors (タイムライン関連)
+    
+    static let timelineIndicator = Color("TimelineIndicator")  // 現在時刻インジケーター
+    static let timelineActive = Color("TimelineActive")  // アクティブなタイムライン
+    
+    // MARK: - Fallback Colors (フォールバック用の色定義)
+    // Assets.xcassetsで色が定義されていない場合のフォールバック
+    
+    static func fallbackColor(for name: String) -> Color {
+        switch name {
+        // Chart Colors
+        case "GraphLineColor":
+            return Color(red: 0.384, green: 0, blue: 1)  // 紫色
+        case "VibeChangeIndicatorColor":
+            return Color(red: 0.384, green: 0, blue: 1)  // 紫色
+        case "ScorePositiveColor":
+            return .green
+        case "ScoreNormalColor":
+            return .blue
+        case "ScoreNeutralColor":
+            return .gray
+        case "ScoreNegativeColor":
+            return .purple
+        case "ScoreVeryNegativeColor":
+            return .red
+        case "ChartBackgroundColor":
+            return Color(.systemGray6)
+        case "ZeroLineColor":
+            return Color.gray.opacity(0.5)
+            
+        // Behavior Graph Colors
+        case "BehaviorTextPrimary":
+            return Color(red: 0.2, green: 0.2, blue: 0.2)
+        case "BehaviorTextSecondary":
+            return Color(red: 0.4, green: 0.4, blue: 0.4)
+        case "BehaviorTextTertiary":
+            return Color(red: 0.6, green: 0.6, blue: 0.6)
+        case "BehaviorBackgroundPrimary":
+            return Color(red: 0.98, green: 0.98, blue: 0.98)  // #fafafa
+        case "BehaviorBackgroundSecondary":
+            return Color.gray.opacity(0.2)
+        case "BehaviorGoldMedal":
+            return Color(red: 1.0, green: 0.84, blue: 0.0)
+        case "BehaviorSilverMedal":
+            return Color(red: 0.75, green: 0.75, blue: 0.75)
+        case "BehaviorBronzeMedal":
+            return Color(red: 0.8, green: 0.5, blue: 0.2)
+            
+        // Emotion Colors
+        case "EmotionJoy":
+            return .yellow
+        case "EmotionTrust":
+            return .green
+        case "EmotionFear":
+            return .purple
+        case "EmotionSurprise":
+            return .cyan
+        case "EmotionSadness":
+            return .blue
+        case "EmotionDisgust":
+            return .brown
+        case "EmotionAnger":
+            return .red
+        case "EmotionAnticipation":
+            return .orange
+            
+        // UI Colors
+        case "PrimaryActionColor":
+            return .blue
+        case "SecondaryActionColor":
+            return .gray
+        case "WarningColor":
+            return .orange
+        case "SuccessColor":
+            return .green
+        case "ErrorColor":
+            return .red
+        case "InfoColor":
+            return .blue
+        case "AppAccentColor":
+            return Color(red: 0.384, green: 0, blue: 1)  // 紫色（アプリのメインカラー）
+            
+        // Background Colors
+        case "PrimaryBackground":
+            return Color(.systemBackground)
+        case "SecondaryBackground":
+            return Color(.secondarySystemBackground)
+        case "TertiaryBackground":
+            return Color(.tertiarySystemBackground)
+        case "CardBackground":
+            return Color(.systemGray6)
+            
+        // Text Colors
+        case "PrimaryText":
+            return Color(.label)
+        case "SecondaryText":
+            return Color(.secondaryLabel)
+        case "TertiaryText":
+            return Color(.tertiaryLabel)
+        case "PlaceholderText":
+            return Color(.placeholderText)
+            
+        // Recording & Status Colors
+        case "RecordingActive":
+            return .red
+        case "RecordingInactive":
+            return .gray
+        case "UploadActive":
+            return .blue
+        case "StatusNormal":
+            return .green
+            
+        // Border & Separator Colors
+        case "BorderLight":
+            return Color.gray.opacity(0.2)
+        case "BorderMedium":
+            return Color.gray.opacity(0.5)
+        case "SeparatorColor":
+            return Color.gray.opacity(0.3)
+            
+        // Timeline Indicator Colors
+        case "TimelineIndicator":
+            return Color(red: 0.384, green: 0, blue: 1)  // 紫色（AppAccentColorと同じ）
+        case "TimelineActive":
+            return .cyan  // アクティブなタイムライン
+            
+        default:
+            return .gray
+        }
+    }
+    
+    // MARK: - Safe Color Initializer
+    // Assets.xcassetsに色が定義されていない場合でもクラッシュしない
+    
+    static func safeColor(_ name: String) -> Color {
+        // まずAssets.xcassetsから色を取得を試みる
+        if UIColor(named: name) != nil {
+            return Color(name)
+        } else {
+            // 定義されていない場合はフォールバックを使用
+            print("⚠️ Color '\(name)' not found in Assets.xcassets. Using fallback color.")
+            return fallbackColor(for: name)
+        }
+    }
+}
+
+// MARK: - Convenience Extensions
+
+extension Color {
+    // 現在使用されている直接定義色をマイグレーションするための便利メソッド
+    
+    static func vibeScoreColor(for score: Double) -> Color {
+        switch score {
+        case 60...:
+            return safeColor("ScorePositiveColor")
+        case 20..<60:
+            return safeColor("ScoreNormalColor")
+        case -20..<20:
+            return safeColor("ScoreNeutralColor")
+        case -60..<(-20):
+            return safeColor("ScoreNegativeColor")
+        default:
+            return safeColor("ScoreVeryNegativeColor")
+        }
+    }
+}

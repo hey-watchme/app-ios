@@ -22,7 +22,7 @@ struct UnifiedCard<Content: View>: View {
             
             // 軽い境界線
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                .stroke(Color.safeColor("BorderLight").opacity(0.1), lineWidth: 1)
             
             VStack(spacing: 24) {
                 // ヘッダー部分
@@ -30,7 +30,7 @@ struct UnifiedCard<Content: View>: View {
                     // タイトル（アイコンなし）
                     Text(title)
                         .font(.system(size: 40, weight: .bold))
-                        .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
+                        .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
                     
                     Spacer()
                     
@@ -40,19 +40,19 @@ struct UnifiedCard<Content: View>: View {
                             HStack(spacing: 4) {
                                 Text(navigationLabel)
                                     .font(.caption)
-                                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                                 Image(systemName: "chevron.right")
                                     .font(.caption2)
-                                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color.gray.opacity(0.1))
+                                    .fill(Color.safeColor("BorderLight").opacity(0.1))
                                     .overlay(
                                         Capsule()
-                                            .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                            .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)
                                     )
                             )
                         }
@@ -79,6 +79,6 @@ struct UnifiedCard_Previews: PreviewProvider {
             Text("コンテンツ")
         }
         .padding()
-        .background(Color(red: 0.937, green: 0.937, blue: 0.937))
+        .background(Color.safeColor("BehaviorBackgroundPrimary"))
     }
 }

@@ -86,13 +86,13 @@ extension DailyVibeReport {
     func scoreColor(for score: Double) -> Color {
         switch score {
         case 0..<3:
-            return .red
+            return Color.safeColor("ErrorColor")
         case 3..<7:
-            return .orange
+            return Color.safeColor("WarningColor")
         case 7...10:
-            return .green
+            return Color.safeColor("SuccessColor")
         default:
-            return .gray
+            return Color.safeColor("BorderLight")
         }
     }
     
@@ -115,5 +115,29 @@ extension DailyVibeReport {
     
     var averageScoreIcon: String {
         emotionIcon(for: averageScore)
+    }
+    
+    // 絵文字バージョン（顔文字以外）
+    func emotionEmoji(for score: Double) -> String {
+        switch score {
+        case 50...100:
+            return "👏"
+        case 30..<50:
+            return "✌️"
+        case 0..<30:
+            return "👍"
+        case -30..<0:
+            return "👌"
+        case -50..<(-30):
+            return "💪"
+        case -100..<(-50):
+            return "💔"
+        default:
+            return "❓"  // 不明
+        }
+    }
+    
+    var averageScoreEmoji: String {
+        emotionEmoji(for: averageScore)
     }
 }

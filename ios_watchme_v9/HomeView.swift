@@ -39,7 +39,7 @@ struct HomeView: View {
                     VStack(spacing: 12) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.largeTitle)
-                            .foregroundColor(.orange)
+                            .foregroundColor(Color.safeColor("WarningColor"))
                         Text("データを取得できませんでした")
                             .font(.headline)
                             .foregroundColor(.primary)
@@ -51,7 +51,7 @@ struct HomeView: View {
                     }
                     .padding()
                     .frame(maxWidth: .infinity)
-                    .background(Color.orange.opacity(0.1))
+                    .background(Color.safeColor("WarningColor").opacity(0.1))
                     .cornerRadius(12)
                     .padding(.horizontal)
                 }
@@ -59,21 +59,20 @@ struct HomeView: View {
                 // レポート表示（引数で渡されたデータを優先）
                 if let report = vibeReport ?? dataManager.dailyReport {
                     VStack(spacing: 16) {
-                        // 感情サマリーカード
-                        UnifiedCard(title: "感情サマリー") {
+                        // 概要カード
+                        UnifiedCard(title: "概要") {
                             HStack {
                                 VStack(alignment: .leading, spacing: 8) {
                                     Text("平均スコア")
                                         .font(.caption)
-                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
-                                    Text(String(format: "%.1f", report.averageScore))
+                                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+                                    Text(String(format: "%.1f pt", report.averageScore))
                                         .font(.system(size: 56, weight: .bold, design: .rounded))
                                         .foregroundColor(report.averageScoreColor)
                                 }
                                 Spacer()
-                                Image(systemName: report.averageScoreIcon)
+                                Text(report.averageScoreEmoji)
                                     .font(.system(size: 70))
-                                    .foregroundColor(report.averageScoreColor)
                                     .padding()
                                     .background(
                                         Circle()
@@ -90,19 +89,19 @@ struct HomeView: View {
                                     label: "ポジティブ",
                                     hours: report.positiveHours,
                                     percentage: report.positivePercentage,
-                                    color: .green
+                                    color: Color.safeColor("SuccessColor")
                                 )
                                 EmotionTimeBar(
                                     label: "ニュートラル",
                                     hours: report.neutralHours,
                                     percentage: report.neutralPercentage,
-                                    color: .gray
+                                    color: Color.safeColor("BorderLight")
                                 )
                                 EmotionTimeBar(
                                     label: "ネガティブ",
                                     hours: report.negativeHours,
                                     percentage: report.negativePercentage,
-                                    color: .red
+                                    color: Color.safeColor("ErrorColor")
                                 )
                             }
                         }
@@ -115,16 +114,16 @@ struct HomeView: View {
                                     ForEach(Array(report.insights.enumerated()), id: \.offset) { index, insight in
                                         HStack(alignment: .top, spacing: 12) {
                                             Image(systemName: "lightbulb.fill")
-                                                .foregroundColor(.orange)
+                                                .foregroundColor(Color.safeColor("WarningColor"))
                                                 .font(.body)
                                             Text(insight)
                                                 .font(.body)
-                                                .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                                .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                                                 .fixedSize(horizontal: false, vertical: true)
                                         }
                                         if index < report.insights.count - 1 {
                                             Divider()
-                                                .background(Color.gray.opacity(0.2))
+                                                .background(Color.safeColor("BorderLight").opacity(0.2))
                                         }
                                     }
                                 }
@@ -152,7 +151,7 @@ struct HomeView: View {
                 Spacer(minLength: 50)
             }
         }
-        .background(Color(red: 0.937, green: 0.937, blue: 0.937))
+        .background(Color.safeColor("BehaviorBackgroundPrimary"))
         .navigationTitle("心理グラフ")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -175,19 +174,19 @@ struct EmotionTimeBar: View {
                         .frame(width: 10, height: 10)
                     Text(label)
                         .font(.body)
-                        .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                 }
                 Spacer()
                 Text("\(String(format: "%.1f", hours))時間")
                     .font(.callout)
                     .fontWeight(.medium)
-                    .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.3))
+                    .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
             }
             
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.gray.opacity(0.1))
+                        .fill(Color.safeColor("BorderLight").opacity(0.1))
                         .frame(height: 12)
                     
                     RoundedRectangle(cornerRadius: 6)
@@ -201,7 +200,7 @@ struct EmotionTimeBar: View {
                 Spacer()
                 Text("\(String(format: "%.0f", percentage))%")
                     .font(.caption)
-                    .foregroundColor(Color(red: 0.5, green: 0.5, blue: 0.5))
+                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
             }
         }
     }

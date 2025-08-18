@@ -54,7 +54,7 @@ struct DeviceSettingsView: View {
             .padding(.top, 20)
         }
         .background(
-            Color(red: 0.937, green: 0.937, blue: 0.937)
+            Color.safeColor("BehaviorBackgroundPrimary")
                 .ignoresSafeArea()
         )
         .navigationTitle("デバイス設定")
@@ -166,7 +166,7 @@ struct DeviceSettingsView: View {
                 HStack {
                     Image(systemName: "qrcode.viewfinder")
                         .font(.title2)
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
                     
                     VStack(alignment: .leading, spacing: 4) {
                         Text("QRコードでデバイスを追加")
@@ -194,7 +194,7 @@ struct DeviceSettingsView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(Color.blue)
+                    .background(Color.safeColor("PrimaryActionColor"))
                     .cornerRadius(12)
                 }
             }

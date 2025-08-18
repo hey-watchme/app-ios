@@ -50,7 +50,7 @@ struct EmotionGraphView: View {
                                             
                                             Text(emotion.name)
                                                 .font(.body)
-                                                .foregroundColor(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                                .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                                             
                                             Spacer()
                                             
@@ -58,7 +58,7 @@ struct EmotionGraphView: View {
                                             Text("\(emotion.value)")
                                                 .font(.callout)
                                                 .fontWeight(.semibold)
-                                                .foregroundColor(Color(red: 0.3, green: 0.3, blue: 0.3))
+                                                .foregroundColor(Color.safeColor("BehaviorTextPrimary").opacity(0.8))
                                                 .padding(.horizontal, 12)
                                                 .padding(.vertical, 4)
                                                 .background(
@@ -112,7 +112,7 @@ struct EmotionGraphView: View {
                                                 if let hour = value.as(Double.self) {
                                                     Text("\(Int(hour)):00")
                                                         .font(.caption2)
-                                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                                 }
                                             }
                                         }
@@ -126,7 +126,7 @@ struct EmotionGraphView: View {
                                                 if let val = value.as(Int.self) {
                                                     Text("\(val)")
                                                         .font(.caption2)
-                                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                                 }
                                             }
                                         }
@@ -135,10 +135,10 @@ struct EmotionGraphView: View {
                                     VStack(spacing: 12) {
                                         Image(systemName: "chart.line.uptrend.xyaxis")
                                             .font(.largeTitle)
-                                            .foregroundColor(Color(red: 0.7, green: 0.7, blue: 0.7))
+                                            .foregroundColor(Color.safeColor("BehaviorTextTertiary").opacity(0.8))
                                         Text("データがありません")
                                             .font(.body)
-                                            .foregroundColor(Color(red: 0.5, green: 0.5, blue: 0.5))
+                                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                     }
                                     .frame(height: 200)
                                     .frame(maxWidth: .infinity)
@@ -166,8 +166,8 @@ struct EmotionGraphView: View {
                                                     .font(.body)
                                                     .foregroundColor(
                                                         selectedEmotions.contains(emotionType) 
-                                                        ? Color(red: 0.2, green: 0.2, blue: 0.2)
-                                                        : Color(red: 0.6, green: 0.6, blue: 0.6)
+                                                        ? Color.safeColor("BehaviorTextPrimary")
+                                                        : Color.safeColor("BehaviorTextTertiary")
                                                     )
                                                 Spacer()
                                                 if selectedEmotions.contains(emotionType) {
@@ -213,7 +213,7 @@ struct EmotionGraphView: View {
                 }
                 .padding(.bottom, 20)
             }
-        .background(Color(red: 0.937, green: 0.937, blue: 0.937))
+        .background(Color.safeColor("BehaviorBackgroundPrimary"))
         .navigationTitle("感情グラフ")
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -242,13 +242,13 @@ struct EmotionGraphView: View {
     private func rankBackgroundColor(for index: Int) -> Color {
         switch index {
         case 0:
-            return Color(red: 1.0, green: 0.84, blue: 0.0) // Gold
+            return Color.safeColor("BehaviorGoldMedal") // Gold
         case 1:
-            return Color(red: 0.75, green: 0.75, blue: 0.75) // Silver
+            return Color.safeColor("BehaviorSilverMedal") // Silver
         case 2:
-            return Color(red: 0.8, green: 0.5, blue: 0.2) // Bronze
+            return Color.safeColor("BehaviorBronzeMedal") // Bronze
         default:
-            return Color(red: 0.4, green: 0.4, blue: 0.4) // Gray
+            return Color.safeColor("BehaviorTextSecondary") // Gray
         }
     }
 }

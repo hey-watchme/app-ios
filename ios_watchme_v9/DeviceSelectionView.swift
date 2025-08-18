@@ -29,7 +29,7 @@ struct DeviceSelectionView: View {
                     VStack(spacing: 20) {
                         Image(systemName: "iphone.slash")
                             .font(.system(size: 60))
-                            .foregroundColor(.gray)
+                            .foregroundColor(Color.safeColor("BorderLight"))
                         
                         Text("連携されたデバイスがありません")
                             .font(.title3)
@@ -74,7 +74,7 @@ struct DeviceSelectionView: View {
                                 .padding(.vertical, 12)
                             }
                             .foregroundColor(.white)
-                            .background(Color.blue)
+                            .background(Color.safeColor("PrimaryActionColor"))
                             .cornerRadius(10)
                         }
                         .listRowBackground(Color.clear)

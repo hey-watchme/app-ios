@@ -57,34 +57,34 @@ struct ReportTestView: View {
                             }
                             .pickerStyle(MenuPickerStyle())
                             .padding()
-                            .background(Color.gray.opacity(0.1))
+                            .background(Color.safeColor("BorderLight").opacity(0.1))
                             .cornerRadius(10)
                         }
                     } else if deviceManager.userDevices.isEmpty {
                         // デバイスが見つからない場合
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundColor(.orange)
+                                .foregroundColor(Color.safeColor("WarningColor"))
                             Text("デバイスを取得中...")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 8)
-                        .background(Color.orange.opacity(0.1))
+                        .background(Color.safeColor("WarningColor").opacity(0.1))
                         .cornerRadius(8)
                     } else if let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier {
                         // デバイスが1つの場合は単純表示
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
+                                .foregroundColor(Color.safeColor("SuccessColor"))
                             Text("デバイスID: \(deviceId)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                         .padding(.horizontal)
                         .padding(.vertical, 8)
-                        .background(Color.green.opacity(0.1))
+                        .background(Color.safeColor("SuccessColor").opacity(0.1))
                         .cornerRadius(8)
                     }
                 }
@@ -103,7 +103,7 @@ struct ReportTestView: View {
                             Text(dateFormatter.string(from: selectedDate))
                         }
                         .padding()
-                        .background(Color.blue.opacity(0.1))
+                        .background(Color.safeColor("PrimaryActionColor").opacity(0.1))
                         .cornerRadius(10)
                     }
                     
@@ -114,7 +114,7 @@ struct ReportTestView: View {
                                  displayedComponents: .date)
                             .datePickerStyle(GraphicalDatePickerStyle())
                             .padding()
-                            .background(Color.gray.opacity(0.1))
+                            .background(Color.safeColor("BorderLight").opacity(0.1))
                             .cornerRadius(10)
                     }
                 }
@@ -130,7 +130,7 @@ struct ReportTestView: View {
                             Text("今日のレポートを取得")
                         }
                         .padding()
-                        .background(Color.blue)
+                        .background(Color.safeColor("PrimaryActionColor"))
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
@@ -143,7 +143,7 @@ struct ReportTestView: View {
                             Text("選択日のレポート")
                         }
                         .padding()
-                        .background(Color.green)
+                        .background(Color.safeColor("SuccessColor"))
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
@@ -161,16 +161,16 @@ struct ReportTestView: View {
                     VStack {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.largeTitle)
-                            .foregroundColor(.red)
+                            .foregroundColor(Color.safeColor("ErrorColor"))
                         Text("エラー")
                             .font(.headline)
-                            .foregroundColor(.red)
+                            .foregroundColor(Color.safeColor("ErrorColor"))
                         Text(error)
                             .font(.caption)
                             .multilineTextAlignment(.center)
                     }
                     .padding()
-                    .background(Color.red.opacity(0.1))
+                    .background(Color.safeColor("ErrorColor").opacity(0.1))
                     .cornerRadius(10)
                     .padding(.horizontal)
                 }
@@ -197,21 +197,21 @@ struct ReportTestView: View {
                             VStack(alignment: .leading, spacing: 10) {
                                 HStack {
                                     Label("ポジティブ", systemImage: "face.smiling")
-                                        .foregroundColor(.green)
+                                        .foregroundColor(Color.safeColor("SuccessColor"))
                                     Spacer()
                                     Text("\(String(format: "%.1f", report.positiveHours))時間 (\(String(format: "%.1f", report.positivePercentage))%)")
                                 }
                                 
                                 HStack {
                                     Label("ネガティブ", systemImage: "face.dashed")
-                                        .foregroundColor(.red)
+                                        .foregroundColor(Color.safeColor("ErrorColor"))
                                     Spacer()
                                     Text("\(String(format: "%.1f", report.negativeHours))時間 (\(String(format: "%.1f", report.negativePercentage))%)")
                                 }
                                 
                                 HStack {
                                     Label("ニュートラル", systemImage: "face.smiling.inverse")
-                                        .foregroundColor(.gray)
+                                        .foregroundColor(Color.safeColor("BorderLight"))
                                     Spacer()
                                     Text("\(String(format: "%.1f", report.neutralHours))時間 (\(String(format: "%.1f", report.neutralPercentage))%)")
                                 }
@@ -225,7 +225,7 @@ struct ReportTestView: View {
                                     ForEach(Array(report.insights.enumerated()), id: \.offset) { index, insight in
                                         HStack(alignment: .top) {
                                             Text("•")
-                                                .foregroundColor(.blue)
+                                                .foregroundColor(Color.safeColor("PrimaryActionColor"))
                                             Text(insight)
                                                 .font(.callout)
                                         }
@@ -266,7 +266,7 @@ struct ReportTestView: View {
                         }
                     }
                     .padding()
-                    .background(Color.gray.opacity(0.05))
+                    .background(Color.safeColor("BorderLight").opacity(0.05))
                     .cornerRadius(15)
                     .padding(.horizontal)
                 }
@@ -333,13 +333,13 @@ struct ReportTestView: View {
     private func scoreColor(for score: Double) -> Color {
         switch score {
         case 0..<3:
-            return Color.red.opacity(0.2)
+            return Color.safeColor("ErrorColor").opacity(0.2)
         case 3..<7:
-            return Color.yellow.opacity(0.2)
+            return Color.safeColor("EmotionJoy").opacity(0.2)
         case 7...10:
-            return Color.green.opacity(0.2)
+            return Color.safeColor("SuccessColor").opacity(0.2)
         default:
-            return Color.gray.opacity(0.2)
+            return Color.safeColor("BorderLight").opacity(0.2)
         }
     }
 }

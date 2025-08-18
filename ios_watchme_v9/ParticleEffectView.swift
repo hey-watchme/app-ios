@@ -160,7 +160,7 @@ class ParticleSystem: ObservableObject {
             ),
             size: CGFloat.random(in: 2...5),
             opacity: Double.random(in: 0.3...0.6),
-            color: Color.gray.opacity(0.6),
+            color: Color.safeColor("BorderLight").opacity(0.6),
             lifespan: Double.random(in: 1...2),
             rotation: Double.random(in: 0...360)
         )
@@ -330,7 +330,7 @@ struct SparkleEffect: View {
                         .font(.system(size: sparkle.size))
                         .foregroundStyle(
                             LinearGradient(
-                                colors: [.white, .cyan, .blue],
+                                colors: [.white, Color.safeColor("EmotionSurprise"), Color.safeColor("PrimaryActionColor")],
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )

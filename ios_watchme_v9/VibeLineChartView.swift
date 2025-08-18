@@ -105,14 +105,14 @@ struct VibeLineChartView: View {
                 // ゼロライン（コンパクトモードでは非表示）
                 if !compactMode {
                     RuleMark(y: .value("Zero", 0))
-                        .foregroundStyle(Color.gray.opacity(0.5))
+                        .foregroundStyle(Color.safeColor("ZeroLineColor"))
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
                 }
                 
                 // 選択されたポイントの縦線
                 if let selectedSlot = selectedTimeSlot {
                     RuleMark(x: .value("Selected", selectedSlot))
-                        .foregroundStyle(Color.blue.opacity(0.3))
+                        .foregroundStyle(Color.safeColor("VibeChangeIndicatorColor").opacity(0.3))
                         .lineStyle(StrokeStyle(lineWidth: 2))
                 }
                 
@@ -124,17 +124,13 @@ struct VibeLineChartView: View {
                             x: .value("時間", Double(point.timeSlot)),
                             y: .value("スコア", point.score)
                         )
-                        .foregroundStyle(vibeChangeAt(slot: point.timeSlot) != nil ? Color.orange : scoreColor(for: point.score))
+                        .foregroundStyle(vibeChangeAt(slot: point.timeSlot) != nil ? Color.safeColor("VibeChangeIndicatorColor") : scoreColor(for: point.score))
                         .symbolSize(vibeChangeAt(slot: point.timeSlot) != nil ? 150 : (compactMode ? 30 : 100))
                         .symbol {
                             if vibeChangeAt(slot: point.timeSlot) != nil {
                                 Circle()
-                                    .fill(Color.orange)
+                                    .fill(Color.safeColor("VibeChangeIndicatorColor"))
                                     .frame(width: 12, height: 12)
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color.white, lineWidth: 2)
-                                    )
                             } else {
                                 Circle()
                                     .fill(scoreColor(for: point.score))
@@ -148,7 +144,7 @@ struct VibeLineChartView: View {
                                 x: .value("時間", Double(point.timeSlot)),
                                 y: .value("スコア", point.score)
                             )
-                            .foregroundStyle(Color.blue)
+                            .foregroundStyle(Color.safeColor("GraphLineColor"))
                             .lineStyle(StrokeStyle(lineWidth: 2))
                             .interpolationMethod(.catmullRom)
                         }
@@ -195,7 +191,7 @@ struct VibeLineChartView: View {
                                 let label = score == 100 ? "ポジ" : (score == -100 ? "ネガ" : "\(score)")
                                 Text(label)
                                     .font(.caption2)
-                                    .foregroundColor(score == 100 ? .green : (score == -100 ? .red : .secondary))
+                                    .foregroundColor(score == 100 ? Color.safeColor("SuccessColor") : (score == -100 ? Color.safeColor("ErrorColor") : .secondary))
                             }
                         }
                     }
@@ -215,7 +211,7 @@ struct VibeLineChartView: View {
             .chartXSelection(value: $selectedTimeSlot)
             .background(
                 compactMode ? nil : RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.systemGray6))
+                    .fill(Color.safeColor("ChartBackgroundColor"))
             )
             .padding(.horizontal, compactMode ? 0 : 16)
             .overlay(alignment: .topLeading) {
@@ -321,18 +317,7 @@ struct VibeLineChartView: View {
     
     // スコアに基づく色を返す
     private func scoreColor(for score: Double) -> Color {
-        switch score {
-        case 60...:
-            return .green
-        case 20..<60:
-            return .blue
-        case -20..<20:
-            return .gray
-        case -60..<(-20):
-            return .orange
-        default:
-            return .red
-        }
+        return Color.vibeScoreColor(for: score)
     }
 }
 

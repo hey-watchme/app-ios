@@ -51,7 +51,7 @@ struct AvatarView: View {
                 // 読み込み中
                 ZStack {
                     Circle()
-                        .fill(Color.gray.opacity(0.1))
+                        .fill(Color.safeColor("BorderLight").opacity(0.1))
                         .frame(width: size, height: size)
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
@@ -68,7 +68,7 @@ struct AvatarView: View {
                             .clipShape(Circle())
                             .overlay(
                                 Circle()
-                                    .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                    .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)
                             )
                     case .failure(_):
                         // エラー時のデフォルトアイコン
@@ -77,7 +77,7 @@ struct AvatarView: View {
                         // 読み込み中
                         ZStack {
                             Circle()
-                                .fill(Color.gray.opacity(0.1))
+                                .fill(Color.safeColor("BorderLight").opacity(0.1))
                                 .frame(width: size, height: size)
                             ProgressView()
                                 .progressViewStyle(CircularProgressViewStyle())
@@ -138,6 +138,6 @@ struct AvatarView: View {
     private var defaultAvatarView: some View {
         Image(systemName: "person.crop.circle.fill")
             .font(.system(size: size))
-            .foregroundColor(.blue)
+            .foregroundColor(Color.safeColor("PrimaryActionColor"))
     }
 }

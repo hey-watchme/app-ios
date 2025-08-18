@@ -24,7 +24,7 @@ struct UploadUIUpdateTestView: View {
                 Text("更新回数: \(updateCount)")
             }
             .padding()
-            .background(Color.gray.opacity(0.1))
+            .background(Color.safeColor("BorderLight").opacity(0.1))
             .cornerRadius(10)
             
             // 状態変更ボタン
@@ -35,7 +35,7 @@ struct UploadUIUpdateTestView: View {
                     print("✅ markAsUploaded呼び出し - isUploaded: \(testRecording.isUploaded)")
                 }
                 .padding()
-                .background(Color.green)
+                .background(Color.safeColor("SuccessColor"))
                 .foregroundColor(.white)
                 .cornerRadius(8)
                 
@@ -45,7 +45,7 @@ struct UploadUIUpdateTestView: View {
                     print("🔄 resetUploadStatus呼び出し - isUploaded: \(testRecording.isUploaded)")
                 }
                 .padding()
-                .background(Color.orange)
+                .background(Color.safeColor("WarningColor"))
                 .foregroundColor(.white)
                 .cornerRadius(8)
             }

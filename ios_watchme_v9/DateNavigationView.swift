@@ -41,7 +41,7 @@ struct DateNavigationView: View {
             }) {
                 Image(systemName: "chevron.left")
                     .font(.title2)
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
                     .frame(width: 44, height: 44)
             }
             
@@ -76,7 +76,7 @@ struct DateNavigationView: View {
             }) {
                 Image(systemName: "chevron.right")
                     .font(.title2)
-                    .foregroundColor(canGoToNextDay ? .blue : .gray.opacity(0.3))
+                    .foregroundColor(canGoToNextDay ? Color.safeColor("PrimaryActionColor") : Color.safeColor("BorderLight").opacity(0.3))
                     .frame(width: 44, height: 44)
             }
             .disabled(!canGoToNextDay)

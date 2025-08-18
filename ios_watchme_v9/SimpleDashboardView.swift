@@ -59,7 +59,7 @@ struct SimpleDashboardView: View {
             .padding(.top, 20)
         }
         .background(
-            Color(red: 0.937, green: 0.937, blue: 0.937)
+            Color.safeColor("BehaviorBackgroundPrimary")
                 .ignoresSafeArea()
         )
         .task(id: selectedDate) {  // 👈 これが重要！日付が変わると自動実行
@@ -165,19 +165,19 @@ struct SimpleDashboardView: View {
                             
                             Text(topBehavior.event)
                                 .font(.caption)
-                                .foregroundStyle(Color.blue)
+                                .foregroundStyle(Color.safeColor("PrimaryActionColor"))
                                 .textCase(.uppercase)
                                 .tracking(1.0)
                             
                             HStack(spacing: 4) {
                                 Text("今日のメイン:")
                                     .font(.caption2)
-                                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
                                 
                                 Text("\(topBehavior.count)回")
                                     .font(.caption)
                                     .fontWeight(.semibold)
-                                    .foregroundStyle(Color.blue.opacity(0.8))
+                                    .foregroundStyle(Color.safeColor("PrimaryActionColor").opacity(0.8))
                             }
                         }
                     }
@@ -314,24 +314,24 @@ struct SimpleDashboardView: View {
                             Text("\(index + 1)")
                                 .font(.caption)
                                 .fontWeight(.medium)
-                                .foregroundStyle(Color(red: 0.3, green: 0.3, blue: 0.3))
+                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
                                 .frame(width: 20, alignment: .leading)
                             
                             Text(behavior.event)
                                 .font(.subheadline)
-                                .foregroundStyle(Color(red: 0.2, green: 0.2, blue: 0.2))
+                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
                                 .lineLimit(1)
                             
                             Spacer()
                             
                             Text("\(behavior.count)")
                                 .font(.caption)
-                                .foregroundStyle(Color(red: 0.5, green: 0.5, blue: 0.5))
+                                .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
                         }
                     }
                 }
                 .padding()
-                .background(Color(red: 0.96, green: 0.96, blue: 0.96))
+                .background(Color.safeColor("CardBackground"))
                 .cornerRadius(8)
             }
         }
@@ -351,14 +351,14 @@ struct SimpleDashboardView: View {
                 let avgAnticipation = report.emotionGraph.map { $0.anticipation }.reduce(0, +) / report.emotionGraph.count
                 
                 let emotions = [
-                    ("joy", avgJoy, "😊", Color.yellow),
-                    ("trust", avgTrust, "🤝", Color.green),
-                    ("fear", avgFear, "😨", Color.purple),
-                    ("surprise", avgSurprise, "😲", Color.cyan),
-                    ("sadness", avgSadness, "😢", Color.blue),
-                    ("disgust", avgDisgust, "🤢", Color.brown),
-                    ("anger", avgAnger, "😠", Color.red),
-                    ("anticipation", avgAnticipation, "🎯", Color.orange)
+                    ("joy", avgJoy, "😊", Color.safeColor("EmotionJoy")),
+                    ("trust", avgTrust, "🤝", Color.safeColor("EmotionTrust")),
+                    ("fear", avgFear, "😨", Color.safeColor("EmotionFear")),
+                    ("surprise", avgSurprise, "😲", Color.safeColor("EmotionSurprise")),
+                    ("sadness", avgSadness, "😢", Color.safeColor("EmotionSadness")),
+                    ("disgust", avgDisgust, "🤢", Color.safeColor("EmotionDisgust")),
+                    ("anger", avgAnger, "😠", Color.safeColor("EmotionAnger")),
+                    ("anticipation", avgAnticipation, "🎯", Color.safeColor("EmotionAnticipation"))
                 ]
                 
                 let topEmotions = emotions.sorted { $0.1 > $1.1 }.prefix(3)
@@ -388,7 +388,7 @@ struct SimpleDashboardView: View {
                             GeometryReader { geometry in
                                 ZStack(alignment: .leading) {
                                     Rectangle()
-                                        .fill(Color.gray.opacity(0.2))
+                                        .fill(Color.safeColor("BorderLight").opacity(0.2))
                                         .frame(height: 6)
                                         .cornerRadius(3)
                                     
@@ -403,7 +403,7 @@ struct SimpleDashboardView: View {
                     }
                 }
                 .padding()
-                .background(Color(red: 0.96, green: 0.96, blue: 0.96))
+                .background(Color.safeColor("CardBackground"))
                 .cornerRadius(8)
             }
         }

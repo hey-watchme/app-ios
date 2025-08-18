@@ -49,7 +49,7 @@ struct InfoRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.blue)
+                .foregroundColor(Color.safeColor("PrimaryActionColor"))
                 .frame(width: 20)
             
             Text(label)
@@ -85,7 +85,7 @@ struct InfoRowTwoLine: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(.blue)
+                .foregroundColor(Color.safeColor("PrimaryActionColor"))
                 .frame(width: 20)
                 .padding(.top, 2)
             

@@ -21,12 +21,12 @@ struct DeviceCard: View {
             ZStack {
                 // 背景 - 選択時はパープル、通常時は白
                 RoundedRectangle(cornerRadius: 24)
-                    .fill(isSelected ? Color(red: 0.384, green: 0, blue: 1) : Color.white) // パープル #6200ff
+                    .fill(isSelected ? Color.safeColor("AppAccentColor") : Color.white) // パープル #6200ff
                     .shadow(color: .black.opacity(isSelected ? 0.15 : 0.1), radius: 10, x: 0, y: 5)
                     .overlay(
                         RoundedRectangle(cornerRadius: 24)
                             .stroke(
-                                isSelected ? Color.clear : Color.gray.opacity(0.1),
+                                isSelected ? Color.clear : Color.safeColor("BorderLight").opacity(0.1),
                                 lineWidth: 1
                             )
                     )
@@ -44,7 +44,7 @@ struct DeviceCard: View {
                                 Image(systemName: "checkmark")
                                     .font(.caption)
                                     .fontWeight(.bold)
-                                    .foregroundColor(Color(red: 0.384, green: 0, blue: 1))
+                                    .foregroundColor(Color.safeColor("AppAccentColor"))
                             }
                         }
                     }
@@ -54,7 +54,7 @@ struct DeviceCard: View {
                         // デバイスアイコン
                         ZStack {
                             Circle()
-                                .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                .fill(isSelected ? Color.white.opacity(0.2) : Color.safeColor("BorderLight").opacity(0.1))
                                 .frame(width: 50, height: 50)
                             
                             Image(systemName: getDeviceIcon())
@@ -85,12 +85,12 @@ struct DeviceCard: View {
                                 
                                 // 選択時の枠線
                                 Circle()
-                                    .stroke(isSelected ? Color.white.opacity(0.3) : Color.gray.opacity(0.2), lineWidth: 2)
+                                    .stroke(isSelected ? Color.white.opacity(0.3) : Color.safeColor("BorderLight").opacity(0.2), lineWidth: 2)
                                     .frame(width: 50, height: 50)
                             }
                         } else {
                             Circle()
-                                .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                .fill(isSelected ? Color.white.opacity(0.2) : Color.safeColor("BorderLight").opacity(0.1))
                                 .frame(width: 50, height: 50)
                                 .overlay(
                                     Image(systemName: "person.fill.questionmark")
@@ -119,7 +119,7 @@ struct DeviceCard: View {
                             icon: "gear",
                             label: "デバイスタイプ",
                             value: getDeviceTypeDisplayName(),
-                            iconColor: isSelected ? .white.opacity(0.9) : .gray,
+                            iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("BorderLight"),
                             isSelected: isSelected
                         )
                         
@@ -128,7 +128,7 @@ struct DeviceCard: View {
                             icon: "globe",
                             label: "タイムゾーン",
                             value: device.timezone ?? "未設定",
-                            iconColor: isSelected ? .white.opacity(0.9) : .blue,
+                            iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("PrimaryActionColor"),
                             isSelected: isSelected
                         )
                         
@@ -138,7 +138,7 @@ struct DeviceCard: View {
                                 icon: role == "owner" ? "crown.fill" : "eye.fill",
                                 label: "権限",
                                 value: role == "owner" ? "オーナー" : "閲覧者",
-                                iconColor: isSelected ? .white.opacity(0.9) : (role == "owner" ? .orange : .blue),
+                                iconColor: isSelected ? .white.opacity(0.9) : (role == "owner" ? Color.safeColor("WarningColor") : Color.safeColor("PrimaryActionColor")),
                                 isSelected: isSelected
                             )
                         }
@@ -149,7 +149,7 @@ struct DeviceCard: View {
                                 icon: "calendar.badge.plus",
                                 label: "登録日",
                                 value: formatCreatedDate(createdAt),
-                                iconColor: isSelected ? .white.opacity(0.9) : .green,
+                                iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("SuccessColor"),
                                 isSelected: isSelected
                             )
                         }
@@ -170,12 +170,12 @@ struct DeviceCard: View {
                                         Text("観測対象を編集")
                                     }
                                     .font(.caption)
-                                    .foregroundColor(isSelected ? Color(red: 0.384, green: 0, blue: 1) : .blue)
+                                    .foregroundColor(isSelected ? Color.safeColor("AppAccentColor") : Color.safeColor("PrimaryActionColor"))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
                                     .background(
                                         Capsule()
-                                            .fill(isSelected ? Color.white : Color.blue.opacity(0.1))
+                                            .fill(isSelected ? Color.white : Color.safeColor("PrimaryActionColor").opacity(0.1))
                                     )
                                 }
                             }
@@ -188,12 +188,12 @@ struct DeviceCard: View {
                                         Text("観測対象を追加")
                                     }
                                     .font(.caption)
-                                    .foregroundColor(isSelected ? .orange : .orange)
+                                    .foregroundColor(isSelected ? Color.safeColor("WarningColor") : Color.safeColor("WarningColor"))
                                     .padding(.horizontal, 12)
                                     .padding(.vertical, 6)
                                     .background(
                                         Capsule()
-                                            .fill(isSelected ? Color.white : Color.orange.opacity(0.1))
+                                            .fill(isSelected ? Color.white : Color.safeColor("WarningColor").opacity(0.1))
                                     )
                                 }
                             }
@@ -369,6 +369,6 @@ struct DeviceCard_Previews: PreviewProvider {
             )
         }
         .padding()
-        .background(Color(red: 0.937, green: 0.937, blue: 0.937))
+        .background(Color.safeColor("BehaviorBackgroundPrimary"))
     }
 }

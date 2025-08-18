@@ -105,14 +105,14 @@ struct EmotionReport: Codable {
     var emotionRanking: [(name: String, value: Int, color: Color)] {
         let totals = emotionTotals
         let emotions: [(String, Int, Color)] = [
-            ("Joy", totals.joy, .yellow),
-            ("Trust", totals.trust, .green),
-            ("Anticipation", totals.anticipation, .orange),
-            ("Surprise", totals.surprise, .cyan),
-            ("Fear", totals.fear, .purple),
-            ("Sadness", totals.sadness, .blue),
-            ("Disgust", totals.disgust, .brown),
-            ("Anger", totals.anger, .red)
+            ("Joy", totals.joy, Color.safeColor("EmotionJoy")),
+            ("Trust", totals.trust, Color.safeColor("SuccessColor")),
+            ("Anticipation", totals.anticipation, Color.safeColor("WarningColor")),
+            ("Surprise", totals.surprise, Color.safeColor("EmotionSurprise")),
+            ("Fear", totals.fear, Color.safeColor("AppAccentColor")),
+            ("Sadness", totals.sadness, Color.safeColor("PrimaryActionColor")),
+            ("Disgust", totals.disgust, Color.safeColor("EmotionDisgust")),
+            ("Anger", totals.anger, Color.safeColor("ErrorColor"))
         ]
         return emotions.sorted(by: { $0.1 > $1.1 })
     }
@@ -148,14 +148,14 @@ enum EmotionType: String, CaseIterable {
     
     var color: Color {
         switch self {
-        case .joy: return .yellow
-        case .fear: return .purple
-        case .anger: return .red
-        case .trust: return .green
-        case .disgust: return .brown
-        case .sadness: return .blue
-        case .surprise: return .cyan
-        case .anticipation: return .orange
+        case .joy: return Color.safeColor("EmotionJoy")
+        case .fear: return Color.safeColor("AppAccentColor")
+        case .anger: return Color.safeColor("ErrorColor")
+        case .trust: return Color.safeColor("SuccessColor")
+        case .disgust: return Color.safeColor("EmotionDisgust")
+        case .sadness: return Color.safeColor("PrimaryActionColor")
+        case .surprise: return Color.safeColor("EmotionSurprise")
+        case .anticipation: return Color.safeColor("WarningColor")
         }
     }
     

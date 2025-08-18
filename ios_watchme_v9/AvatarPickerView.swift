@@ -84,7 +84,7 @@ struct AvatarPickerView: View {
             if let errorMessage = errorMessage {
                 Text(errorMessage)
                     .font(.caption)
-                    .foregroundColor(.red)
+                    .foregroundColor(Color.safeColor("ErrorColor"))
                     .padding()
                     .multilineTextAlignment(.center)
             }
@@ -143,7 +143,7 @@ struct AvatarPickerView: View {
                     .clipShape(Circle())
                     .overlay(
                         Circle()
-                            .stroke(Color.blue, lineWidth: 3)
+                            .stroke(Color.safeColor("PrimaryActionColor"), lineWidth: 3)
                     )
             } else if let url = currentAvatarURL {
                 AsyncImage(url: url) { image in
@@ -153,14 +153,14 @@ struct AvatarPickerView: View {
                 } placeholder: {
                     Image(systemName: "person.circle.fill")
                         .resizable()
-                        .foregroundColor(.gray)
+                        .foregroundColor(Color.safeColor("BorderLight"))
                 }
                 .frame(width: 120, height: 120)
                 .clipShape(Circle())
             } else {
                 Image(systemName: "person.circle.fill")
                     .resizable()
-                    .foregroundColor(.gray)
+                    .foregroundColor(Color.safeColor("BorderLight"))
                     .frame(width: 120, height: 120)
             }
             
@@ -182,26 +182,26 @@ struct AvatarPickerView: View {
                         .font(.subheadline)
                 }
                 .padding()
-                .background(Color.blue.opacity(0.1))
+                .background(Color.safeColor("PrimaryActionColor").opacity(0.1))
                 .cornerRadius(10)
                 
             case .success:
                 HStack(spacing: 12) {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(.green)
+                        .foregroundColor(Color.safeColor("SuccessColor"))
                         .font(.title2)
                     Text("アップロード完了!")
                         .font(.subheadline)
-                        .foregroundColor(.green)
+                        .foregroundColor(Color.safeColor("SuccessColor"))
                 }
                 .padding()
-                .background(Color.green.opacity(0.1))
+                .background(Color.safeColor("SuccessColor").opacity(0.1))
                 .cornerRadius(10)
                 
             case .error(let message):
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.safeColor("ErrorColor"))
                         .font(.title2)
                     Text("エラー")
                         .font(.subheadline)
@@ -211,7 +211,7 @@ struct AvatarPickerView: View {
                         .multilineTextAlignment(.center)
                 }
                 .padding()
-                .background(Color.red.opacity(0.1))
+                .background(Color.safeColor("ErrorColor").opacity(0.1))
                 .cornerRadius(10)
                 
             case .idle, .selectingSource, .takingPhoto, .loadingImage, .cropping:

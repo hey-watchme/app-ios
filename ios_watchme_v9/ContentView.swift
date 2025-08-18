@@ -87,13 +87,13 @@ struct ContentView: View {
                                 Circle()
                                     .fill(
                                         LinearGradient(
-                                            gradient: Gradient(colors: [Color.red, Color.red.opacity(0.8)]),
+                                            gradient: Gradient(colors: [Color.safeColor("RecordingActive"), Color.safeColor("RecordingActive").opacity(0.8)]),
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
                                         )
                                     )
                                     .frame(width: 56, height: 56)
-                                    .shadow(color: Color.red.opacity(0.4), radius: 8, x: 0, y: 4)
+                                    .shadow(color: Color.safeColor("RecordingActive").opacity(0.4), radius: 8, x: 0, y: 4)
                                 
                                 // マイクアイコン
                                 Image(systemName: "mic.fill")
@@ -187,7 +187,7 @@ struct SimpleDateNavigation: View {
             }) {
                 Image(systemName: "chevron.left")
                     .font(.title2)
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
                     .frame(width: 44, height: 44)
             }
             
@@ -245,7 +245,7 @@ struct SimpleDateNavigation: View {
             }) {
                 Image(systemName: "chevron.right")
                     .font(.title2)
-                    .foregroundColor(canGoToNextDay ? .blue : .gray.opacity(0.3))
+                    .foregroundColor(canGoToNextDay ? Color.safeColor("PrimaryActionColor") : Color.safeColor("BorderLight").opacity(0.3))
                     .frame(width: 44, height: 44)
             }
             .disabled(!canGoToNextDay)

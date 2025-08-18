@@ -164,11 +164,11 @@ struct FloatingBubbleView: View {
     
     var bubbleColor: Color {
         if emotionScore > 30 {
-            return .green
+            return Color.safeColor("SuccessColor")
         } else if emotionScore < -30 {
-            return .red
+            return Color.safeColor("ErrorColor")
         } else {
-            return .gray
+            return Color.safeColor("BorderLight")
         }
     }
     
@@ -263,11 +263,11 @@ struct BurstBubbleView: View {
     
     var bubbleColor: Color {
         if emotionScore > 5 {
-            return .green
+            return Color.safeColor("SuccessColor")
         } else if emotionScore < -5 {
-            return .red
+            return Color.safeColor("ErrorColor")
         } else {
-            return .gray
+            return Color.safeColor("BorderLight")
         }
     }
     

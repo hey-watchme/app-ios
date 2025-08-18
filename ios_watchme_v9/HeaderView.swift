@@ -43,7 +43,7 @@ struct HeaderView: View {
                 } else {
                     Image(systemName: "person.crop.circle.fill")
                         .font(.title2)
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
                 }
             }
         }
@@ -72,7 +72,7 @@ struct HeaderView: View {
                 Text("デバイス連携: なし")
             }
             .font(.subheadline)
-            .foregroundColor(.orange)
+            .foregroundColor(Color.safeColor("WarningColor"))
         } else if let subject = subject {
             // 観測対象が設定されている場合
             HStack(spacing: 8) {
@@ -88,7 +88,7 @@ struct HeaderView: View {
                 } else {
                     Text("観測対象")
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(Color.safeColor("BorderLight"))
                 }
             }
         } else if let deviceId = deviceManager.selectedDeviceID {
@@ -96,7 +96,7 @@ struct HeaderView: View {
             HStack(spacing: 8) {
                 Image(systemName: "iphone")
                     .font(.title3)
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
                 
                 // デバイスIDの最初の8文字を表示
                 let shortDeviceId = String(deviceId.prefix(8))
@@ -112,7 +112,7 @@ struct HeaderView: View {
                 Text("デバイス設定")
             }
             .font(.subheadline)
-            .foregroundColor(.blue)
+            .foregroundColor(Color.safeColor("PrimaryActionColor"))
         }
     }
 }

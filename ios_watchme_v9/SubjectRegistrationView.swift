@@ -158,18 +158,18 @@ struct SubjectRegistrationView: View {
                 case .failure(_), .empty:
                     Image(systemName: "person.crop.circle.fill")
                         .font(.system(size: 60))
-                        .foregroundColor(.gray)
+                        .foregroundColor(Color.safeColor("BorderLight"))
                 @unknown default:
                     Image(systemName: "person.crop.circle.fill")
                         .font(.system(size: 60))
-                        .foregroundColor(.gray)
+                        .foregroundColor(Color.safeColor("BorderLight"))
                 }
             }
         } else {
             // 新規登録時またはデフォルト
             Image(systemName: "person.crop.circle.fill")
                 .font(.system(size: 60))
-                .foregroundColor(.gray)
+                .foregroundColor(Color.safeColor("BorderLight"))
         }
     }
     
@@ -178,7 +178,7 @@ struct SubjectRegistrationView: View {
         VStack(spacing: 12) {
             Image(systemName: "person.badge.plus")
                 .font(.system(size: 50))
-                .foregroundColor(.orange)
+                .foregroundColor(Color.safeColor("WarningColor"))
             
             Text(isEditing ? "観測対象のプロフィールを編集" : "観測対象のプロフィールを登録")
                 .font(.title2)
@@ -209,7 +209,7 @@ struct SubjectRegistrationView: View {
                         .clipShape(Circle())
                         .overlay(
                             Circle()
-                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                .stroke(Color.safeColor("BorderLight").opacity(0.3), lineWidth: 1)
                         )
                 }
                 
@@ -222,10 +222,10 @@ struct SubjectRegistrationView: View {
                             Text("写真を選択")
                         }
                         .font(.subheadline)
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
-                        .background(Color.blue.opacity(0.1))
+                        .background(Color.safeColor("PrimaryActionColor").opacity(0.1))
                         .cornerRadius(8)
                     }
                     
@@ -236,7 +236,7 @@ struct SubjectRegistrationView: View {
                             selectedImageData = nil
                         }
                         .font(.caption)
-                        .foregroundColor(.red)
+                        .foregroundColor(Color.safeColor("ErrorColor"))
                     }
                 }
                 
@@ -278,7 +278,7 @@ struct SubjectRegistrationView: View {
                             .font(.subheadline)
                             .fontWeight(.medium)
                         Text("*")
-                            .foregroundColor(.red)
+                            .foregroundColor(Color.safeColor("ErrorColor"))
                         Spacer()
                     }
                     

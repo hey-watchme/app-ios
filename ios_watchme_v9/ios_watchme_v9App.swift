@@ -121,7 +121,7 @@ struct MainAppView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue)
+                        .background(Color.safeColor("PrimaryActionColor"))
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }

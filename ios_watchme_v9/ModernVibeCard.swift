@@ -46,7 +46,7 @@ struct ModernVibeCard: View {
             
             // 軽い境界線
             RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.gray.opacity(0.1), lineWidth: 1)
+                .stroke(Color.safeColor("BorderLight").opacity(0.1), lineWidth: 1)
             
             // バーストバブル（イベント時のみ表示）
             if showBurstBubbles {
@@ -101,7 +101,7 @@ struct ModernVibeCard: View {
             // シンプルな気分タイトル（大きく表示）
             Text("気分")
                 .font(.system(size: 40, weight: .bold))
-                .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
+                .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
             
             Spacer()
             
@@ -113,19 +113,19 @@ struct ModernVibeCard: View {
                 HStack(spacing: 4) {
                     Text("心理グラフ")
                         .font(.caption)
-                        .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                        .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                     Image(systemName: "chevron.right")
                         .font(.caption2)
-                        .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                        .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                 }
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(Color.gray.opacity(0.1))
+                        .fill(Color.safeColor("BorderLight").opacity(0.1))
                         .overlay(
                             Capsule()
-                                .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                                .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)
                         )
                 )
             }
@@ -147,13 +147,13 @@ struct ModernVibeCard: View {
                 .textCase(.uppercase)
                 .tracking(1.0)
             
-            // Average Scoreとスコア（1行で簡潔に）
+            // 平均スコア（1行で簡潔に）
             HStack(spacing: 4) {
-                Text("Average Score:")
+                Text("平均スコア:")
                     .font(.caption2)
-                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                 
-                Text(String(format: "%.1f", vibeReport.averageScore))
+                Text(String(format: "%.1f pt", vibeReport.averageScore))
                     .font(.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(scoreColor.opacity(0.8))
@@ -167,7 +167,7 @@ struct ModernVibeCard: View {
             timeDistributionItem(
                 label: "Positive",
                 hours: vibeReport.positiveHours,
-                color: Color.green,
+                color: Color.safeColor("SuccessColor"),
                 icon: "arrow.up.circle.fill",
                 showSparkle: vibeReport.positiveHours > 8
             )
@@ -175,7 +175,7 @@ struct ModernVibeCard: View {
             timeDistributionItem(
                 label: "Neutral",
                 hours: vibeReport.neutralHours,
-                color: Color.gray,
+                color: Color.safeColor("BorderLight"),
                 icon: "minus.circle.fill",
                 showSparkle: false
             )
@@ -183,7 +183,7 @@ struct ModernVibeCard: View {
             timeDistributionItem(
                 label: "Negative",
                 hours: vibeReport.negativeHours,
-                color: Color.red,
+                color: Color.safeColor("ErrorColor"),
                 icon: "arrow.down.circle.fill",
                 showSparkle: vibeReport.negativeHours > 8
             )
@@ -221,11 +221,11 @@ struct ModernVibeCard: View {
                 
                 Text(String(format: "%.1fh", hours))
                     .font(.headline)
-                    .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
+                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
                 
                 Text(label)
                     .font(.caption2)
-                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
             }
         }
         .frame(maxWidth: .infinity)

@@ -44,7 +44,7 @@ struct LoginView: View {
                         ZStack(alignment: .leading) {
                             if email.isEmpty {
                                 Text("example@example.com")
-                                    .foregroundColor(.gray.opacity(0.6))
+                                    .foregroundColor(Color.safeColor("BorderLight").opacity(0.6))
                                     .padding(.leading, 8)
                                     .allowsHitTesting(false)
                             }
@@ -55,7 +55,7 @@ struct LoginView: View {
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
                                 .foregroundColor(.primary)
-                                .accentColor(.blue)
+                                .accentColor(Color.safeColor("PrimaryActionColor"))
                                 .font(.body)  // フォントサイズを少し大きく
                                 .padding(.vertical, 4)  // 縦方向の余白を追加
                         }
@@ -75,7 +75,7 @@ struct LoginView: View {
                             }) {
                                 Image(systemName: showPassword ? "eye.slash" : "eye")
                                     .font(.caption)
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
                             }
                         }
                         
@@ -100,7 +100,7 @@ struct LoginView: View {
                         VStack(spacing: 8) {
                             Text(errorMessage)
                                 .font(.caption)
-                                .foregroundColor(.red)
+                                .foregroundColor(Color.safeColor("ErrorColor"))
                                 .multilineTextAlignment(.center)
                             
                             // メール確認エラーの場合の説明
@@ -108,7 +108,7 @@ struct LoginView: View {
                                 VStack(spacing: 8) {
                                     Text("📧 メール確認が必要です")
                                         .font(.caption)
-                                        .foregroundColor(.orange)
+                                        .foregroundColor(Color.safeColor("WarningColor"))
                                         .fontWeight(.medium)
                                     
                                     Text("Gmailの+1は、Supabaseでは別のメールアドレスとして認識されます。\n通常のメールアドレス（matsumotokaya@gmail.com）でサインアップしてください。")
@@ -121,10 +121,10 @@ struct LoginView: View {
                                     }) {
                                         Text("📬 確認メールを再送")
                                             .font(.caption)
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
-                                            .background(Color.blue.opacity(0.1))
+                                            .background(Color.safeColor("PrimaryActionColor").opacity(0.1))
                                             .cornerRadius(6)
                                     }
                                     .disabled(email.isEmpty || authManager.isLoading)
@@ -150,7 +150,7 @@ struct LoginView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.blue)
+                        .background(Color.safeColor("PrimaryActionColor"))
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
@@ -166,7 +166,7 @@ struct LoginView: View {
                 }) {
                     Text("新規アカウント作成はこちら")
                         .font(.footnote)
-                        .foregroundColor(.blue)
+                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
                 }
                 .padding(.top, 20)
                 

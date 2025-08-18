@@ -17,7 +17,7 @@ struct ObservationTargetCard<Content: View>: View {
         ZStack {
             // 背景 (紫)
             RoundedRectangle(cornerRadius: 24)
-                .fill(Color(red: 0.384, green: 0, blue: 1)) // #6200ff
+                .fill(Color.safeColor("AppAccentColor")) // #6200ff
                 .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
             
             VStack(spacing: 24) {
@@ -73,6 +73,6 @@ struct ObservationTargetCard_Previews: PreviewProvider {
                 .foregroundStyle(.white)
         }
         .padding()
-        .background(Color(red: 0.937, green: 0.937, blue: 0.937))
+        .background(Color.safeColor("BehaviorBackgroundPrimary"))
     }
 }

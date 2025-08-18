@@ -37,7 +37,7 @@ struct UserInfoView: View {
                     }) {
                         Label("アバターを編集", systemImage: "pencil.circle.fill")
                             .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(.blue)
+                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
                     }
                     .disabled(isUploadingAvatar)
                     
@@ -50,7 +50,7 @@ struct UserInfoView: View {
                     if let error = avatarUploadError {
                         Text(error)
                             .font(.caption)
-                            .foregroundColor(.red)
+                            .foregroundColor(Color.safeColor("ErrorColor"))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
                     }
@@ -74,7 +74,7 @@ struct UserInfoView: View {
                                 // ニュースレター設定切り替え
                                 HStack {
                                     Image(systemName: "envelope.badge")
-                                        .foregroundColor(.blue)
+                                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
                                         .frame(width: 20)
                                     
                                     Text("ニュースレター配信")
@@ -112,7 +112,7 @@ struct UserInfoView: View {
                             
                             InfoRowTwoLine(label: "ユーザーID", value: user.id, icon: "person.text.rectangle.fill")
                         } else {
-                            InfoRow(label: "状態", value: "ログインしていません", icon: "exclamationmark.triangle.fill", valueColor: .red)
+                            InfoRow(label: "状態", value: "ログインしていません", icon: "exclamationmark.triangle.fill", valueColor: Color.safeColor("ErrorColor"))
                         }
                     }
                     
@@ -135,7 +135,7 @@ struct UserInfoView: View {
                         }
                         .frame(maxWidth: .infinity)
                         .padding()
-                        .background(Color.red)
+                        .background(Color.safeColor("ErrorColor"))
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
@@ -200,9 +200,9 @@ private func getNewsletterStatus(_ newsletter: Bool?) -> String {
 
 private func getNewsletterStatusColor(_ newsletter: Bool?) -> Color {
     if let newsletter = newsletter {
-        return newsletter ? .green : .secondary
+        return newsletter ? Color.safeColor("SuccessColor") : .secondary
     } else {
-        return .orange
+        return Color.safeColor("WarningColor")
     }
 }
 

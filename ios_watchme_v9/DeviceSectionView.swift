@@ -61,7 +61,7 @@ struct DeviceSectionView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(
-                        device.device_id == selectedDeviceID ? Color.blue.opacity(0.1) : Color.clear
+                        device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor").opacity(0.1) : Color.clear
                     )
                 } else {
                     // 静的な表示（UserInfoView用）
@@ -92,7 +92,7 @@ struct DeviceSectionView: View {
             // デバイスアイコン
             Image(systemName: getDeviceIcon(for: device))
                 .font(.system(size: isCompact ? 24 : 28))
-                .foregroundColor(device.device_id == selectedDeviceID ? .blue : .gray)
+                .foregroundColor(device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor") : Color.safeColor("BorderLight"))
                 .frame(width: isCompact ? 35 : 40)
             
             VStack(alignment: .leading, spacing: 4) {
@@ -108,7 +108,7 @@ struct DeviceSectionView: View {
                     Text("タイムゾーン: \(device.timezone ?? "未設定")")
                         .font(.caption)
                 }
-                .foregroundColor(device.device_id == selectedDeviceID ? .blue.opacity(0.8) : .secondary)
+                .foregroundColor(device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor").opacity(0.8) : .secondary)
                 
                 // 測定対象（簡易表示）
                 if let subject = subjectsByDevice[device.device_id] {
@@ -118,7 +118,7 @@ struct DeviceSectionView: View {
                         Text(subject.name ?? "名前未設定")
                             .font(.caption)
                     }
-                    .foregroundColor(device.device_id == selectedDeviceID ? .blue : .secondary)
+                    .foregroundColor(device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor") : .secondary)
                 } else {
                     HStack(spacing: 4) {
                         Image(systemName: "person.fill.questionmark")
@@ -126,7 +126,7 @@ struct DeviceSectionView: View {
                         Text("測定対象未設定")
                             .font(.caption)
                     }
-                    .foregroundColor(.orange)
+                    .foregroundColor(Color.safeColor("WarningColor"))
                 }
                 
                 // ロール情報（showSelectionUIがtrueの場合のみ表示）
@@ -137,17 +137,17 @@ struct DeviceSectionView: View {
                         Text(role == "owner" ? "オーナー" : "閲覧者")
                             .font(.caption2)
                     }
-                    .foregroundColor(device.device_id == selectedDeviceID ? .blue.opacity(0.7) : .secondary.opacity(0.7))
+                    .foregroundColor(device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor").opacity(0.7) : .secondary.opacity(0.7))
                 }
                 
                 // 選択中の表示（UserInfoView用）
                 if !showSelectionUI && device.device_id == selectedDeviceID {
                     HStack {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(.green)
+                            .foregroundColor(Color.safeColor("SuccessColor"))
                         Text("現在選択中")
                             .font(.caption)
-                            .foregroundColor(.green)
+                            .foregroundColor(Color.safeColor("SuccessColor"))
                     }
                 }
             }
@@ -158,7 +158,7 @@ struct DeviceSectionView: View {
             if showSelectionUI && device.device_id == selectedDeviceID {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.blue)
+                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
             }
         }
     }
@@ -169,7 +169,7 @@ struct DeviceSectionView: View {
             HStack {
                 Image(systemName: "person.fill")
                     .font(.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(Color.safeColor("WarningColor"))
                 Text("観測対象")
                     .font(.caption)
                     .fontWeight(.medium)
@@ -203,10 +203,10 @@ struct DeviceSectionView: View {
                                     Text("編集")
                                 }
                                 .font(.caption)
-                                .foregroundColor(.blue)
+                                .foregroundColor(Color.safeColor("PrimaryActionColor"))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.blue.opacity(0.1))
+                                .background(Color.safeColor("PrimaryActionColor").opacity(0.1))
                                 .cornerRadius(4)
                             }
                         }
@@ -229,10 +229,10 @@ struct DeviceSectionView: View {
                                     Text("観測対象を追加")
                                 }
                                 .font(.caption)
-                                .foregroundColor(.orange)
+                                .foregroundColor(Color.safeColor("WarningColor"))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(Color.orange.opacity(0.1))
+                                .background(Color.safeColor("WarningColor").opacity(0.1))
                                 .cornerRadius(4)
                             }
                         }

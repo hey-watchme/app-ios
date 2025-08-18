@@ -89,7 +89,7 @@ struct InteractiveTimelineView: View {
             // 時刻表示（見出しなし）
             Text(currentTimeString)
                 .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
+                .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
             
             Spacer()
             
@@ -203,7 +203,7 @@ struct InteractiveTimelineView: View {
                         let y = geometry.size.height * (1 - normalizedScore)
                         
                         Circle()
-                            .fill(slot <= currentTimeIndex ? Color.orange : Color.orange.opacity(0.3))
+                            .fill(slot <= currentTimeIndex ? Color.safeColor("VibeChangeIndicatorColor") : Color.safeColor("VibeChangeIndicatorColor").opacity(0.3))
                             .frame(width: slot == currentTimeIndex ? 30 : 10, 
                                    height: slot == currentTimeIndex ? 30 : 10)
                             .position(x: x, y: y)
@@ -230,7 +230,7 @@ struct InteractiveTimelineView: View {
             ForEach([0, 6, 12, 18, 23], id: \.self) { hour in
                 Text("\(hour):00")
                     .font(.caption2)
-                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                     .frame(maxWidth: .infinity, alignment: hour == 0 ? .leading : (hour == 23 ? .trailing : .center))
             }
         }
@@ -250,7 +250,7 @@ struct InteractiveTimelineView: View {
             }
             .stroke(
                 LinearGradient(
-                    colors: [Color.blue.opacity(0.6), Color.blue],
+                    colors: [Color.safeColor("TimelineIndicator").opacity(0.6), Color.safeColor("TimelineIndicator")],
                     startPoint: .top,
                     endPoint: .bottom
                 ),
@@ -270,17 +270,13 @@ struct InteractiveTimelineView: View {
                 Circle()
                     .fill(
                         RadialGradient(
-                            colors: [Color.blue.opacity(0.8), Color.blue],
+                            colors: [Color.safeColor("TimelineIndicator").opacity(0.8), Color.safeColor("TimelineIndicator")],
                             center: .center,
                             startRadius: 0,
                             endRadius: 8
                         )
                     )
                     .frame(width: 16, height: 16)
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white, lineWidth: isDragging ? 2 : 1)
-                    )
             }
             .scaleEffect(indicatorScale)
             .position(x: x, y: getCurrentYPosition(in: geometry))
@@ -302,11 +298,11 @@ struct InteractiveTimelineView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(event.time)
                 .font(.caption2)
-                .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
+                .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
             
             Text(event.event)
                 .font(.caption)
-                .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
+                .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
                 .lineLimit(2)
             
             HStack {
@@ -316,7 +312,7 @@ struct InteractiveTimelineView: View {
                     .font(.caption)
                     .fontWeight(.bold)
             }
-            .foregroundStyle(event.score > 0 ? .green : .red)
+            .foregroundStyle(event.score > 0 ? Color.safeColor("SuccessColor") : Color.safeColor("ErrorColor"))
         }
         .padding(12)
         .background(
@@ -324,7 +320,7 @@ struct InteractiveTimelineView: View {
                 .fill(Color.white.opacity(0.95))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(.orange.opacity(0.5), lineWidth: 1)
+                        .stroke(Color.safeColor("VibeChangeIndicatorColor").opacity(0.5), lineWidth: 1)
                 )
         )
         .shadow(color: .black.opacity(0.2), radius: 5)
@@ -579,9 +575,9 @@ struct InteractiveTimelineView: View {
         }
         
         if score > 30 {
-            return .green
+            return Color.safeColor("SuccessColor")
         } else if score < -30 {
-            return .red
+            return Color.safeColor("ErrorColor")
         } else {
             return .gray
         }
