@@ -44,4 +44,10 @@ class HapticManager: ObservableObject {
         generator.prepare()
         generator.impactOccurred()
     }
+    
+    // MARK: - Light Impact (for drag interactions)
+    
+    func playLightImpact() {
+        lightImpact.impactOccurred()
+    }
 }

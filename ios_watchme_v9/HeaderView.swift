@@ -13,7 +13,7 @@ struct HeaderView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @Binding var showLogoutConfirmation: Bool
     @Binding var showRecordingSheet: Bool
-    @State private var hasLoadedSubject = false
+    @State private var subject: Subject? = nil  // ローカル状態として管理
     
     var body: some View {
         HStack {
@@ -52,22 +52,13 @@ struct HeaderView: View {
         .background(Color(.systemBackground).shadow(radius: 1))
         .task(id: deviceManager.selectedDeviceID) {
             // デバイスが選択されたら、Subject情報を取得
-            guard !hasLoadedSubject,
-                  let deviceId = deviceManager.selectedDeviceID else { return }
-            
-            // Subject情報のみを取得（日付は任意）
-            _ = await dataManager.fetchAllReports(
-                deviceId: deviceId,
-                date: Date(),
-                timezone: deviceManager.getTimezone(for: deviceId)
-            )
-            hasLoadedSubject = true
-        }
-        .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
-            // デバイスが変更されたら再取得フラグをリセット
-            if oldValue != newValue {
-                hasLoadedSubject = false
+            guard let deviceId = deviceManager.selectedDeviceID else { 
+                subject = nil
+                return 
             }
+            
+            // Subject情報のみを取得（日付非依存）
+            self.subject = await dataManager.fetchSubjectOnly(deviceId: deviceId)
         }
     }
     
@@ -82,7 +73,7 @@ struct HeaderView: View {
             }
             .font(.subheadline)
             .foregroundColor(.orange)
-        } else if let subject = dataManager.subject {
+        } else if let subject = subject {
             // 観測対象が設定されている場合
             HStack(spacing: 8) {
                 // アバター表示（AvatarViewコンポーネントを使用）

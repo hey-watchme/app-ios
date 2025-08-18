@@ -33,14 +33,15 @@ struct SimpleDashboardView: View {
                 } else {
                     // 心理グラフカード
                     vibeGraphCard
+                        .padding(.horizontal, 20)
                     
                     // 行動グラフカード
                     behaviorGraphCard
-                        .padding(.horizontal)
+                        .padding(.horizontal, 20)
                     
                     // 感情グラフカード
                     emotionGraphCard
-                        .padding(.horizontal)
+                        .padding(.horizontal, 20)
                     
                     // 観測対象カード
                     Group {
@@ -50,7 +51,7 @@ struct SimpleDashboardView: View {
                             noObservationTargetCard()
                         }
                     }
-                    .padding(.horizontal)
+                    .padding(.horizontal, 20)
                     
                     Spacer(minLength: 100)
                 }
@@ -123,7 +124,6 @@ struct SimpleDashboardView: View {
                     vibeReport: vibeReport,
                     onNavigateToDetail: { }
                 )
-                .padding(.horizontal)
                 .onTapGesture {
                     showVibeSheet = true
                 }
@@ -139,7 +139,6 @@ struct SimpleDashboardView: View {
                         isCompact: true
                     )
                 }
-                .padding(.horizontal)
                 .onTapGesture {
                     showVibeSheet = true
                 }

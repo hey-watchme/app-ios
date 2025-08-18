@@ -8,6 +8,7 @@
 
 import SwiftUI
 import PhotosUI
+import Mantis
 
 struct AvatarPickerView: View {
     @ObservedObject var viewModel: AvatarUploadViewModel
@@ -22,9 +23,8 @@ struct AvatarPickerView: View {
     @State private var showingCamera = false
     @State private var cameraImage: UIImage? = nil
     
-    // トリミング
-    @State private var imageToEdit: UIImage? = nil
-    @State private var showingCropper = false
+    // トリミング（Mantis用）
+    @State private var imageToEdit: ImageWrapper? = nil
     
     // UI状態
     @State private var isProcessing = false
@@ -100,20 +100,24 @@ struct AvatarPickerView: View {
             CameraView(selectedImage: $cameraImage)
                 .ignoresSafeArea()
         }
-        .sheet(isPresented: $showingCropper) {
-            if let imageToEdit = imageToEdit {
-                ImageCropperView(image: imageToEdit) { croppedImage in
+        .fullScreenCover(item: $imageToEdit) { wrapper in
+            MantisCropper(
+                image: wrapper.image,
+                onComplete: { croppedImage in
                     Task {
                         await uploadImage(croppedImage)
                     }
-                    showingCropper = false
+                    imageToEdit = nil
+                },
+                onCancel: {
+                    imageToEdit = nil
                 }
-            }
+            )
+            .ignoresSafeArea()
         }
         .onChange(of: cameraImage) { newImage in
             if let newImage = newImage {
-                imageToEdit = newImage
-                showingCropper = true
+                imageToEdit = ImageWrapper(image: newImage)
                 cameraImage = nil
             }
         }
@@ -227,9 +231,8 @@ struct AvatarPickerView: View {
             if let data = try await item.loadTransferable(type: Data.self),
                let uiImage = UIImage(data: data) {
                 await MainActor.run {
-                    self.imageToEdit = uiImage
+                    self.imageToEdit = ImageWrapper(image: uiImage)
                     self.selectedImage = uiImage
-                    self.showingCropper = true
                     self.isProcessing = false
                 }
             }
@@ -284,111 +287,5 @@ struct CameraView: UIViewControllerRepresentable {
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.dismiss()
         }
-    }
-}
-
-// MARK: - Image Cropper View
-struct ImageCropperView: View {
-    let image: UIImage
-    let onComplete: (UIImage) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @State private var scale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-    
-    var body: some View {
-        NavigationView {
-            ZStack {
-                Color.black.ignoresSafeArea()
-                
-                VStack {
-                    Spacer()
-                    
-                    // トリミングエリア
-                    ZStack {
-                        // 画像
-                        Image(uiImage: image)
-                            .resizable()
-                            .scaledToFit()
-                            .scaleEffect(scale)
-                            .offset(offset)
-                            .gesture(
-                                DragGesture()
-                                    .onChanged { value in
-                                        offset = CGSize(
-                                            width: lastOffset.width + value.translation.width,
-                                            height: lastOffset.height + value.translation.height
-                                        )
-                                    }
-                                    .onEnded { _ in
-                                        lastOffset = offset
-                                    }
-                            )
-                            .gesture(
-                                MagnificationGesture()
-                                    .onChanged { value in
-                                        scale = max(1.0, value)
-                                    }
-                            )
-                        
-                        // マスク（正方形の穴）
-                        Rectangle()
-                            .fill(Color.black.opacity(0.5))
-                            .mask(
-                                Rectangle()
-                                    .fill(Color.black)
-                                    .overlay(
-                                        Circle()
-                                            .frame(width: 250, height: 250)
-                                            .blendMode(.destinationOut)
-                                    )
-                                    .compositingGroup()
-                            )
-                            .allowsHitTesting(false)
-                        
-                        // ガイドライン
-                        Circle()
-                            .stroke(Color.white, lineWidth: 2)
-                            .frame(width: 250, height: 250)
-                            .allowsHitTesting(false)
-                    }
-                    
-                    Spacer()
-                }
-            }
-            .navigationTitle("画像をトリミング")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
-                        dismiss()
-                    }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") {
-                        let croppedImage = cropImage()
-                        onComplete(croppedImage)
-                        dismiss()
-                    }
-                }
-            }
-        }
-    }
-    
-    private func cropImage() -> UIImage {
-        // 簡易的なトリミング実装
-        // 実際の本番環境では、より精密なトリミング処理が必要
-        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 250, height: 250))
-        let croppedImage = renderer.image { context in
-            // 中央の250x250の領域を切り出す
-            let drawRect = CGRect(
-                x: -offset.width * (image.size.width / 250) / scale,
-                y: -offset.height * (image.size.height / 250) / scale,
-                width: image.size.width / scale,
-                height: image.size.height / scale
-            )
-            image.draw(in: drawRect)
-        }
-        return croppedImage
     }
 }

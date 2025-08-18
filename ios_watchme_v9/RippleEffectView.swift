@@ -297,7 +297,7 @@ struct BurstBubbleView: View {
                                 delay: bubble.delay,
                                 duration: bubble.duration,
                                 angle: bubble.angle,
-                                distance: geometry.size.width * 0.5
+                                distance: geometry.size.width * 2
                             )
                         )
                 }
@@ -311,9 +311,9 @@ struct BurstBubbleView: View {
     
     private func generateBurstBubbles() {
         // カード中心から放射状に広がる花火のようなパーティクル生成
-        bubbles = (0..<30).map { index in
+        bubbles = (0..<50).map { index in
             // 360度を均等に分割し、ランダム性を加える
-            let baseAngle = (Double(index) / 30.0) * Double.pi * 2
+            let baseAngle = (Double(index) / 50.0) * Double.pi * 2
             let angleVariation = Double.random(in: -0.2...0.2)  // 角度に少しランダム性を加える
             let finalAngle = baseAngle + angleVariation
             
@@ -323,7 +323,7 @@ struct BurstBubbleView: View {
                 yPosition: 0.5,  // カード中心からスタート
                 delay: Double.random(in: 0...0.2),  // 少しの遅延で自然な広がり
                 duration: Double.random(in: 1.5...2.5),  // アニメーション時間
-                opacity: 0.4,  // 明確に表示するため透明度0.4に固定
+                opacity: 0.5,  // 透明度0.5に変更
                 angle: finalAngle  // 放射状の角度
             )
         }
@@ -342,7 +342,7 @@ struct BurstAnimationModifier: ViewModifier {
     func body(content: Content) -> some View {
         content
             .scaleEffect(isAnimating ? 0.1 : 1.0)  // 小さくなって消える
-            .opacity(isAnimating ? 0 : 0.4)  // 透明度0.4から始まり消える
+            .opacity(isAnimating ? 0 : 0.5)  // 透明度0.5から始まり消える
             .offset(
                 x: isAnimating ? cos(angle) * distance : 0,  // 角度に応じたx方向へ移動
                 y: isAnimating ? sin(angle) * distance : 0   // 角度に応じたy方向へ移動

@@ -20,6 +20,8 @@ struct InteractiveTimelineView: View {
     @State private var showParticles: Bool = false  // パーティクルは常にOFF
     @State private var triggerBurst: Bool = false
     @State private var dragEndTime: Date? = nil
+    @State private var indicatorScale: CGFloat = 1.0  // インジケーターのスケール
+    @State private var dragStartIndex: Int = 0  // ドラッグ開始時のインデックス
     private let hapticManager = HapticManager.shared
     
     // アニメーション設定
@@ -53,21 +55,16 @@ struct InteractiveTimelineView: View {
                         eventPopup(event: event, in: geometry)
                     }
                 }
-                .gesture(
-                    DragGesture()
-                        .onChanged { value in
-                            handleDrag(value: value, width: geometry.size.width)
-                        }
-                        .onEnded { _ in
-                            handleDragEnd()
-                        }
-                )
+                .onTapGesture { location in
+                    // タップでインジケーターを即座に移動
+                    handleTap(location: location, width: geometry.size.width)
+                }
             }
-            .frame(height: 220) // 時間軸ラベル分の高さを追加
+            .frame(height: 200) // グラフの高さを固定
             
             // 現在の時刻と感情スコア表示（グラフの下に移動）
             currentStatusView
-                .padding(.top, 8)
+                .padding(.top, 12)
         }
         .onAppear {
             // 自動ループ再生を開始
@@ -85,67 +82,33 @@ struct InteractiveTimelineView: View {
     
     // MARK: - Current Status View
     private var currentStatusView: some View {
-        HStack(spacing: 40) {
-            // 時刻表示
-            HStack(spacing: 12) {
-                Text("TIME")
-                    .font(.caption2)
-                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
-                    .tracking(1.2)
-                
-                Text(currentTimeString)
-                    .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
-            }
+        // シンプルに時刻とスコアのみの1行表示（中央寄せ、幅いっぱい使用）
+        HStack {
+            Spacer()
             
-            // 現在のスコア
-            HStack(spacing: 12) {
-                Text("SCORE")
-                    .font(.caption2)
-                    .foregroundStyle(Color(red: 0.4, green: 0.4, blue: 0.4)) // #666666
-                    .tracking(1.2)
-                
-                HStack(spacing: 6) {
-                    Text(currentScoreString)
-                        .font(.system(size: 24, weight: .semibold, design: .rounded))
-                        .foregroundStyle(currentScoreColor)
-                    
-                    // トレンドインジケーター
-                    Image(systemName: trendIcon)
-                        .font(.callout)
-                        .foregroundStyle(currentScoreColor)
-                }
-            }
+            // 時刻表示（見出しなし）
+            Text(currentTimeString)
+                .font(.system(size: 24, weight: .semibold, design: .monospaced))
+                .foregroundStyle(Color(red: 0.1, green: 0.1, blue: 0.1)) // #1a1a1a
             
             Spacer()
             
-            // 現在のイベント（あれば）
-            if let currentEvent = getCurrentEvent() {
-                HStack(spacing: 8) {
-                    Text("EVENT")
-                        .font(.caption2)
-                        .foregroundStyle(.orange.opacity(0.6))
-                        .tracking(1.2)
-                    
-                    Text(currentEvent.event)
-                        .font(.caption)
-                        .foregroundStyle(.orange)
-                        .lineLimit(1)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 3)
-                        .background(
-                            Capsule()
-                                .fill(.orange.opacity(0.15))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(.orange.opacity(0.3), lineWidth: 0.5)
-                                )
-                        )
-                }
-                .transition(.scale.combined(with: .opacity))
+            // 現在のスコア（pt付き、見出しなし）
+            HStack(spacing: 6) {
+                Text("\(currentScoreString)pt")
+                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .foregroundStyle(currentScoreColor)
+                
+                // トレンドインジケーター
+                Image(systemName: trendIcon)
+                    .font(.callout)
+                    .foregroundStyle(currentScoreColor)
             }
+            
+            Spacer()
         }
-        .padding(.horizontal, 20)
+        .frame(maxWidth: .infinity) // 左右いっぱいまで使用
+        .padding(.horizontal, 16) // 最小限のパディング
         .animation(.spring(response: 0.3), value: currentTimeIndex)
     }
     
@@ -241,10 +204,9 @@ struct InteractiveTimelineView: View {
                         
                         Circle()
                             .fill(slot <= currentTimeIndex ? Color.orange : Color.orange.opacity(0.3))
-                            .frame(width: slot == currentTimeIndex ? 16 : 10, 
-                                   height: slot == currentTimeIndex ? 16 : 10)
+                            .frame(width: slot == currentTimeIndex ? 30 : 10, 
+                                   height: slot == currentTimeIndex ? 30 : 10)
                             .position(x: x, y: y)
-                            .scaleEffect(slot == currentTimeIndex ? 1.5 : 1.0)
                             .animation(.spring(response: 0.3), value: currentTimeIndex)
                             .onTapGesture {
                                 withAnimation(.spring()) {
@@ -281,7 +243,7 @@ struct InteractiveTimelineView: View {
         let x = geometry.size.width * CGFloat(currentTimeIndex) / CGFloat(max(1, vibeScores.count - 1))
         
         return ZStack {
-            // 垂直線
+            // 垂直線（見える部分）
             Path { path in
                 path.move(to: CGPoint(x: x, y: 0))
                 path.addLine(to: CGPoint(x: x, y: geometry.size.height))
@@ -296,19 +258,42 @@ struct InteractiveTimelineView: View {
             )
             .animation(.spring(response: 0.3), value: currentTimeIndex)
             
-            // インジケーターヘッド
-            Circle()
-                .fill(
-                    RadialGradient(
-                        colors: [Color.blue.opacity(0.8), Color.blue],
-                        center: .center,
-                        startRadius: 0,
-                        endRadius: 8
+            // ドラッグ可能なインジケーターハンドル
+            ZStack {
+                // タッチ領域（透明で大きめ 120x120）
+                Rectangle()
+                    .fill(Color.clear)
+                    .frame(width: 120, height: 120)
+                    .contentShape(Rectangle())  // タッチ領域を明示的に指定
+                
+                // 見える部分（青い丸）
+                Circle()
+                    .fill(
+                        RadialGradient(
+                            colors: [Color.blue.opacity(0.8), Color.blue],
+                            center: .center,
+                            startRadius: 0,
+                            endRadius: 8
+                        )
                     )
-                )
-                .frame(width: 16, height: 16)
-                .position(x: x, y: getCurrentYPosition(in: geometry))
-                .animation(.spring(response: 0.3), value: currentTimeIndex)
+                    .frame(width: 16, height: 16)
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white, lineWidth: isDragging ? 2 : 1)
+                    )
+            }
+            .scaleEffect(indicatorScale)
+            .position(x: x, y: getCurrentYPosition(in: geometry))
+            .animation(.spring(response: 0.3), value: currentTimeIndex)
+            .highPriorityGesture(  // 優先度を高く設定
+                DragGesture(minimumDistance: 5)  // 最小距離を短く
+                    .onChanged { value in
+                        handleIndicatorDrag(value: value, width: geometry.size.width)
+                    }
+                    .onEnded { _ in
+                        handleIndicatorDragEnd()
+                    }
+            )
         }
     }
     
@@ -367,25 +352,59 @@ struct InteractiveTimelineView: View {
         return geometry.size.height * (1 - normalizedScore)
     }
     
-    private func handleDrag(value: DragGesture.Value, width: CGFloat) {
+    // タップハンドラー（インジケーターを移動）
+    private func handleTap(location: CGPoint, width: CGFloat) {
+        // タップ位置にインジケーターを移動
+        stopPlayback()
+        
+        let progress = min(max(0, location.x / width), 1)
+        let newIndex = Int(progress * CGFloat(vibeScores.count - 1))
+        
+        withAnimation(.spring(response: 0.3)) {
+            currentTimeIndex = newIndex
+            checkForEventDuringDrag()
+        }
+        
+        // 軽い振動フィードバック
+        hapticManager.playLightImpact()
+    }
+    
+    // インジケーターのドラッグハンドラー
+    private func handleIndicatorDrag(value: DragGesture.Value, width: CGFloat) {
         // ドラッグ中は自動再生を停止
         if !isDragging {
             isDragging = true
             stopPlayback()
+            // ドラッグ開始時の位置を記録
+            dragStartIndex = currentTimeIndex
+            // ドラッグ開始時にインジケーターを少し大きくする
+            withAnimation(.spring(response: 0.2)) {
+                indicatorScale = 1.3
+            }
+            // 振動フィードバック
+            hapticManager.playLightImpact()
         }
         
-        let progress = min(max(0, value.location.x / width), 1)
+        // ドラッグ開始位置からの相対移動で計算
+        let startX = width * CGFloat(dragStartIndex) / CGFloat(max(1, vibeScores.count - 1))
+        let newX = startX + value.translation.width
+        let progress = min(max(0, newX / width), 1)
         let newIndex = Int(progress * CGFloat(vibeScores.count - 1))
         
-        // インデックスが変わった場合のみイベントチェック
+        // インデックスが変わった場合のみ更新
         if newIndex != currentTimeIndex {
             currentTimeIndex = newIndex
-            checkForEventDuringDrag()  // ドラッグ中のイベント検出
+            checkForEventDuringDrag()
         }
     }
     
-    private func handleDragEnd() {
+    // インジケーターのドラッグ終了ハンドラー
+    private func handleIndicatorDragEnd() {
         isDragging = false
+        // インジケーターを元のサイズに戻す
+        withAnimation(.spring(response: 0.3)) {
+            indicatorScale = 1.0
+        }
         // ドラッグ終了後は手動操作モードのまま（自動再生しない）
     }
     

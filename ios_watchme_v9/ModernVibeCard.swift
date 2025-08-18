@@ -44,14 +44,6 @@ struct ModernVibeCard: View {
                 .fill(lightBackground)
                 .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
             
-            // 波アニメーション（Phase 4: その他の演出）
-            WaveAnimationView(
-                color: scoreColor.opacity(0.1),
-                amplitude: 10,
-                frequency: 2
-            )
-            .blendMode(.multiply)
-            
             // 軽い境界線
             RoundedRectangle(cornerRadius: 24)
                 .stroke(Color.gray.opacity(0.1), lineWidth: 1)
@@ -88,7 +80,6 @@ struct ModernVibeCard: View {
             }
             .padding(20)
         }
-        .frame(height: 650)
         .scaleEffect(cardScale)
         .onAppear {
             withAnimation(.easeOut(duration: 0.6)) {

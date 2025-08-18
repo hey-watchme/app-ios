@@ -335,11 +335,12 @@ class SupabaseDataManager: ObservableObject {
         let dashboardData = await fetchAllReportsData(deviceId: deviceId, date: date)
         
         // @Publishedプロパティも更新（互換性のため）
+        // 注意: subjectは各Viewがローカルで管理するため、ここでは更新しない
         await MainActor.run {
             self.dailyReport = dashboardData.vibeReport
             self.dailyBehaviorReport = dashboardData.behaviorReport
             self.dailyEmotionReport = dashboardData.emotionReport
-            self.subject = dashboardData.subject  // ✅ Subject情報も正しく設定
+            // self.subject = dashboardData.subject  // ❌ 削除: 各Viewがローカルで管理
             self.isLoading = false
         }
         
@@ -463,6 +464,16 @@ class SupabaseDataManager: ObservableObject {
     }
     
     // MARK: - Subject Management Methods
+    
+    /// デバイスIDのみでSubject情報を取得する専用メソッド（日付非依存）
+    /// HeaderViewなど、Subject情報のみが必要な場合に使用
+    /// - Parameter deviceId: デバイスID
+    /// - Returns: Subject情報（存在しない場合はnil）
+    func fetchSubjectOnly(deviceId: String) async -> Subject? {
+        // RPC経由で取得（日付は今日を使用するが、Subjectは日付に依存しない）
+        let result = await fetchAllReportsData(deviceId: deviceId, date: Date())
+        return result.subject
+    }
     
     /// デバイスに関連付けられた観測対象を取得
     /// 観測対象（Subject）情報を取得

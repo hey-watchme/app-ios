@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		9189611A2E181B1C00222C7F /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 918961192E181B1C00222C7F /* Supabase */; };
 		91DFF89C2E37C1FA00ABAB40 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 91DFF89B2E37C1FA00ABAB40 /* Launch Screen.storyboard */; };
+		91F6CD982E52BA2300C1B696 /* Mantis in Frameworks */ = {isa = PBXBuildFile; productRef = 91F6CD972E52BA2300C1B696 /* Mantis */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -71,6 +72,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				91F6CD982E52BA2300C1B696 /* Mantis in Frameworks */,
 				9189611A2E181B1C00222C7F /* Supabase in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -142,6 +144,7 @@
 			name = ios_watchme_v9;
 			packageProductDependencies = (
 				918961192E181B1C00222C7F /* Supabase */,
+				91F6CD972E52BA2300C1B696 /* Mantis */,
 			);
 			productName = ios_watchme_v9;
 			productReference = 917532592DF9BB8E001BD7DB /* ios_watchme_v9.app */;
@@ -227,6 +230,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				918961172E18170900222C7F /* XCRemoteSwiftPackageReference "supabase-swift" */,
+				91F6CD962E52B98200C1B696 /* XCRemoteSwiftPackageReference "Mantis" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9175325A2DF9BB8E001BD7DB /* Products */;
@@ -436,6 +440,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ios_watchme_v9/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -467,6 +472,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = ios_watchme_v9/Info.plist;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.healthcare-fitness";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -608,6 +614,14 @@
 				minimumVersion = 2.5.1;
 			};
 		};
+		91F6CD962E52B98200C1B696 /* XCRemoteSwiftPackageReference "Mantis" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/guoyingtao/Mantis.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.0.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -615,6 +629,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 918961172E18170900222C7F /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
+		};
+		91F6CD972E52BA2300C1B696 /* Mantis */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 91F6CD962E52B98200C1B696 /* XCRemoteSwiftPackageReference "Mantis" */;
+			productName = Mantis;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
