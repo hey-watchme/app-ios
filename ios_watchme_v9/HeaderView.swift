@@ -15,6 +15,10 @@ struct HeaderView: View {
     @Binding var showRecordingSheet: Bool
     @State private var subject: Subject? = nil  // ローカル状態として管理
     
+    // 通知関連のプレースホルダー
+    @State private var showNotificationSheet = false
+    @State private var hasUnreadNotifications = true  // TODO: 実際の未読通知数はバックエンドから取得
+    
     var body: some View {
         HStack {
             // 観測対象または選択中デバイス表示（デバイス設定画面へのリンク）
@@ -29,21 +33,22 @@ struct HeaderView: View {
             
             Spacer()
             
-            // ユーザー情報/通知 (仮)
-            NavigationLink(destination: 
-                UserInfoView(
-                    authManager: authManager,
-                    showLogoutConfirmation: $showLogoutConfirmation
-                )
-            ) {
-                // アバター表示（ユーザーアバターがあれば表示、なければデフォルトアイコン）
-                if let userId = authManager.currentUser?.id {
-                    AvatarView(userId: userId, size: 32)
-                        .environmentObject(dataManager)
-                } else {
-                    Image(systemName: "person.crop.circle.fill")
+            // 通知アイコン（プレースホルダー）
+            Button(action: {
+                showNotificationSheet = true
+            }) {
+                ZStack(alignment: .topTrailing) {
+                    Image(systemName: "bell")
                         .font(.title2)
                         .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                    
+                    // 未読通知がある場合の赤い丸（バッジ）
+                    if hasUnreadNotifications {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 10, height: 10)
+                            .offset(x: 8, y: -4)
+                    }
                 }
             }
         }
@@ -60,6 +65,10 @@ struct HeaderView: View {
             // Subject情報のみを取得（日付非依存）
             self.subject = await dataManager.fetchSubjectOnly(deviceId: deviceId)
         }
+        .sheet(isPresented: $showNotificationSheet) {
+            // 通知画面のプレースホルダー
+            NotificationPlaceholderView()
+        }
     }
     
     // 現在の観測対象またはデバイス情報を表示するView
@@ -67,17 +76,26 @@ struct HeaderView: View {
     private var currentTargetView: some View {
         if deviceManager.userDevices.isEmpty {
             // デバイス未連携の場合
-            HStack {
-                Image(systemName: "iphone.slash")
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.safeColor("WarningColor").opacity(0.1))
+                        .frame(width: 32, height: 32)
+                    
+                    Image(systemName: "iphone.slash")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.safeColor("WarningColor"))
+                }
+                
                 Text("デバイス連携: なし")
+                    .font(.subheadline)
+                    .foregroundColor(Color.safeColor("WarningColor"))
             }
-            .font(.subheadline)
-            .foregroundColor(Color.safeColor("WarningColor"))
         } else if let subject = subject {
             // 観測対象が設定されている場合
             HStack(spacing: 8) {
                 // アバター表示（AvatarViewコンポーネントを使用）
-                AvatarView(type: .subject, id: subject.subjectId, size: 24)
+                AvatarView(type: .subject, id: subject.subjectId, size: 32)
                     .environmentObject(dataManager)
                 
                 // 観測対象名（「さん」付き）
@@ -94,9 +112,15 @@ struct HeaderView: View {
         } else if let deviceId = deviceManager.selectedDeviceID {
             // 観測対象が未設定の場合、デバイス情報を表示
             HStack(spacing: 8) {
-                Image(systemName: "iphone")
-                    .font(.title3)
-                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                ZStack {
+                    Circle()
+                        .fill(Color.safeColor("PrimaryActionColor").opacity(0.1))
+                        .frame(width: 32, height: 32)
+                    
+                    Image(systemName: "iphone")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                }
                 
                 // デバイスIDの最初の8文字を表示
                 let shortDeviceId = String(deviceId.prefix(8))
@@ -107,12 +131,21 @@ struct HeaderView: View {
             }
         } else {
             // フォールバック
-            HStack {
-                Image(systemName: "gear")
+            HStack(spacing: 8) {
+                ZStack {
+                    Circle()
+                        .fill(Color.safeColor("PrimaryActionColor").opacity(0.1))
+                        .frame(width: 32, height: 32)
+                    
+                    Image(systemName: "gear")
+                        .font(.system(size: 18))
+                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                }
+                
                 Text("デバイス設定")
+                    .font(.subheadline)
+                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
             }
-            .font(.subheadline)
-            .foregroundColor(Color.safeColor("PrimaryActionColor"))
         }
     }
 }

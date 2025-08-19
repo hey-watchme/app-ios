@@ -128,7 +128,13 @@ struct DeviceSettingsView: View {
     // MARK: - Device List
     @ViewBuilder
     private func DeviceList() -> some View {
-        VStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: 16) {
+            // 連携中のデバイス タイトル
+            Text("連携中のデバイス")
+                .font(.headline)
+                .foregroundColor(.primary)
+                .padding(.horizontal)
+            
             // 新しく登録されたデバイスが上に来るよう逆順でソート
             ForEach(Array(deviceManager.userDevices.reversed().enumerated()), id: \.element.device_id) { index, device in
                 DeviceCard(
@@ -161,45 +167,75 @@ struct DeviceSettingsView: View {
     // MARK: - Device Add Card
     @ViewBuilder
     private func DeviceAddCard() -> some View {
-        UnifiedCard(title: "新しいデバイス") {
-            VStack(spacing: 16) {
-                HStack {
-                    Image(systemName: "qrcode.viewfinder")
-                        .font(.title2)
-                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                    
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("QRコードでデバイスを追加")
-                            .font(.body)
-                            .fontWeight(.medium)
-                            .foregroundColor(.primary)
-                        
-                        Text("他のデバイスから共有されたQRコードをスキャンしてください")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                    
-                    Spacer()
-                }
-                
-                Button(action: {
-                    showQRScanner = true
-                }) {
+        VStack(alignment: .leading, spacing: 16) {
+            // デバイスを追加する タイトル
+            Text("デバイスを追加する")
+                .font(.headline)
+                .foregroundColor(.primary)
+                .padding(.horizontal)
+            
+            UnifiedCard(title: "新しいデバイス") {
+                VStack(spacing: 16) {
                     HStack {
-                        Image(systemName: "camera.fill")
-                        Text("QRコードをスキャン")
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.title2)
+                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                        
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("QRコードでデバイスを追加")
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.primary)
+                            
+                            Text("他のデバイスから共有されたQRコードをスキャンしてください")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        
+                        Spacer()
                     }
-                    .font(.body)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.safeColor("PrimaryActionColor"))
-                    .cornerRadius(12)
+                    
+                    Button(action: {
+                        showQRScanner = true
+                    }) {
+                        HStack {
+                            Image(systemName: "camera.fill")
+                            Text("QRコードをスキャン")
+                        }
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.safeColor("PrimaryActionColor"))
+                        .cornerRadius(12)
+                    }
+                    
+                    // デバイスを購読するボタン
+                    Button(action: {
+                        // Webサイトを開く
+                        if let url = URL(string: "https://hey-watch.me/") {
+                            UIApplication.shared.open(url)
+                        }
+                    }) {
+                        HStack {
+                            Image(systemName: "cart.fill")
+                            Text("デバイスを購読する")
+                        }
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.safeColor("PrimaryActionColor"), lineWidth: 1)
+                        )
+                    }
                 }
             }
+            .padding(.horizontal)
         }
-        .padding(.horizontal)
     }
     
     // MARK: - Helper Methods

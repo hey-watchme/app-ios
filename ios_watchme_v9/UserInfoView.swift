@@ -11,13 +11,11 @@ import PhotosUI
 // MARK: - ユーザー情報ビュー
 struct UserInfoView: View {
     let authManager: SupabaseAuthManager
-    @Binding var showLogoutConfirmation: Bool
-    @State private var showAvatarPicker = false
-    @State private var isUploadingAvatar = false
-    @State private var avatarUploadError: String? = nil
+    @State private var showAccountSettings = false  // アカウント設定画面
+    @State private var showingAvatarPicker = false  // アバター選択画面
     @Environment(\.dismiss) private var dismiss
     
-    // ViewModelを初期化
+    // Avatar ViewModel
     @StateObject private var avatarViewModel = AvatarUploadViewModel(
         avatarType: .user,
         entityId: "",  // 実際のIDはonAppearで設定
@@ -25,39 +23,114 @@ struct UserInfoView: View {
     )
     
     var body: some View {
-        ScrollView(.vertical, showsIndicators: true) {
-            VStack(spacing: 24) {
-                // ユーザーアバター編集可能なセクション
-                VStack(spacing: 12) {
-                    AvatarView(userId: authManager.currentUser?.id)
-                        .padding(.top, 20)
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 0) {
+                // ヘッダー部分（バナーとプロフィール情報）
+                ZStack(alignment: .topLeading) {
+                    // 背景のコンテナ
+                    VStack(spacing: 0) {
+                        // バナー画像とアカウント設定ボタン
+                        ZStack(alignment: .topTrailing) {
+                            Image("DefaultBanner")
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(height: 180)
+                                .clipped()
+                            
+                            // アカウント設定ボタンをキービジュアル内の右上に配置
+                            Button(action: {
+                                showAccountSettings = true
+                            }) {
+                                Text("アカウント設定")
+                                    .font(.system(size: 14))
+                                    .fontWeight(.medium)
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(Color.white.opacity(0.95))
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .cornerRadius(20)
+                                    .foregroundColor(.primary)
+                            }
+                            .padding(.top, 50)  // ステータスバーを考慮
+                            .padding(.trailing, 20)
+                        }
+                        
+                        // プロフィール情報エリア（白い背景）
+                        VStack(alignment: .leading, spacing: 0) {
+                            HStack(alignment: .top) {
+                                // 左側：アバターのスペース + 名前とID
+                                VStack(alignment: .leading, spacing: 4) {
+                                    // アバター分のスペース
+                                    Spacer()
+                                        .frame(height: 60)
+                                    
+                                    // 名前
+                                    if let profile = authManager.currentUser?.profile,
+                                       let name = profile.name, !name.isEmpty {
+                                        Text(name)
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.primary)
+                                    } else {
+                                        Text("Guest")
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.primary)
+                                    }
+                                    
+                                    // ID（フルで表示）
+                                    if let userId = authManager.currentUser?.id {
+                                        Text("ID: \(userId)")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .padding(.top, 4)
+                                    }
+                                }
+                                .padding(.leading, 20)
+                                
+                                Spacer()
+                            }
+                            .padding(.bottom, 20)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(Color(.systemBackground))
+                    }
                     
+                    // アバターを最前面に配置（タップで編集可能）
                     Button(action: {
-                        showAvatarPicker = true
+                        showingAvatarPicker = true
                     }) {
-                        Label("アバターを編集", systemImage: "pencil.circle.fill")
-                            .font(.system(size: 14, weight: .medium))
-                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                        ZStack(alignment: .bottomTrailing) {
+                            AvatarView(userId: authManager.currentUser?.id, size: 100)
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color(.systemBackground), lineWidth: 4)
+                                )
+                            
+                            // カメラアイコンを追加
+                            Circle()
+                                .fill(Color.blue)
+                                .frame(width: 32, height: 32)
+                                .overlay(
+                                    Image(systemName: "camera.fill")
+                                        .font(.system(size: 16))
+                                        .foregroundColor(.white)
+                                )
+                                .overlay(
+                                    Circle()
+                                        .stroke(Color(.systemBackground), lineWidth: 2)
+                                )
+                        }
                     }
-                    .disabled(isUploadingAvatar)
-                    
-                    if isUploadingAvatar {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
-                            .scaleEffect(0.8)
-                    }
-                    
-                    if let error = avatarUploadError {
-                        Text(error)
-                            .font(.caption)
-                            .foregroundColor(Color.safeColor("ErrorColor"))
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal)
-                    }
+                    .padding(.leading, 20)
+                    .padding(.top, 130)  // バナーの下端付近に配置（180 - 50 = 130）
                 }
                 
                 // ユーザー情報セクション
-                VStack(spacing: 16) {
+                VStack(spacing: 20) {
                     // ユーザーアカウント情報
                     InfoSection(title: "ユーザーアカウント情報") {
                         if let user = authManager.currentUser {
@@ -117,50 +190,31 @@ struct UserInfoView: View {
                     }
                     
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
                 
                 Spacer()
                 
-                // ログアウトボタン
-                if authManager.isAuthenticated {
-                    Button(action: {
-                        dismiss()
-                        // シートが完全に閉じてからダイアログを表示
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            showLogoutConfirmation = true
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "rectangle.portrait.and.arrow.right.fill")
-                            Text("ログアウト")
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.safeColor("ErrorColor"))
-                        .foregroundColor(.white)
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal)
-                    .padding(.bottom, 20)
-                }
             }
-            .padding(.horizontal)
         }
-        .navigationTitle("マイページ")
-        .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color(.systemBackground), for: .navigationBar)
-        .toolbarBackground(.visible, for: .navigationBar)
-        .sheet(isPresented: $showAvatarPicker) {
-            NavigationView {
+        .edgesIgnoringSafeArea(.top)  // バナーを画面上部まで広げる
+        .navigationBarHidden(true)  // ナビゲーションバーを完全に非表示
+        .sheet(isPresented: $showAccountSettings) {
+            AccountSettingsView()
+                .environmentObject(authManager)
+        }
+        .sheet(isPresented: $showingAvatarPicker) {
+            NavigationStack {
                 AvatarPickerView(
                     viewModel: avatarViewModel,
-                    currentAvatarURL: getAvatarURL()
+                    currentAvatarURL: authManager.currentUser?.id != nil ? AWSManager.shared.getAvatarURL(type: "users", id: authManager.currentUser!.id) : nil
                 )
                 .navigationTitle("アバターを選択")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("キャンセル") {
-                            showAvatarPicker = false
+                            showingAvatarPicker = false
                             avatarViewModel.reset()
                         }
                     }
@@ -169,21 +223,13 @@ struct UserInfoView: View {
         }
         .onAppear {
             // ViewModelの初期化
-            if avatarViewModel.entityId?.isEmpty ?? true {
-                avatarViewModel.entityId = authManager.currentUser?.id
+            if let userId = authManager.currentUser?.id {
+                avatarViewModel.entityId = userId
                 avatarViewModel.authToken = authManager.getAccessToken()
             }
         }
     }
     
-    // MARK: - Avatar Helper Methods
-    
-    private func getAvatarURL() -> URL? {
-        guard let userId = authManager.currentUser?.id else { return nil }
-        return AWSManager.shared.getAvatarURL(type: "users", id: userId)
-    }
-    
-    // uploadAvatar関数は削除（ViewModelが処理を担当）
 }
 
 

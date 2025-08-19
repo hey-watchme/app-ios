@@ -56,6 +56,15 @@ struct MainAppView: View {
     @State private var showLogin = false
     @State private var hasInitialized = false
     
+    // フッターナビゲーション用の選択状態
+    @State private var selectedTab: FooterTab = .home
+    
+    // フッタータブの定義
+    enum FooterTab {
+        case home
+        case myPage
+    }
+    
     var body: some View {
         Group {
             if authManager.isCheckingAuthStatus {
@@ -83,21 +92,39 @@ struct MainAppView: View {
                     Spacer()
                 }
             } else if authManager.isAuthenticated {
-                // ログイン済み：メイン機能画面
-                ContentView()
-                    .environmentObject(authManager)
-                    .environmentObject(deviceManager)
-                    .environmentObject(dataManager)
-                    .onAppear {
-                        print("📱 MainAppView: 認証済み状態 - ContentView表示")
-                        // ユーザーに紐付く全デバイスを取得
-                        if let userId = authManager.currentUser?.id {
-                            print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
-                            Task {
-                                await deviceManager.fetchUserDevices(for: userId)
+                // ログイン済み：メイン機能画面（単一のNavigationStackでラップ）
+                NavigationStack {
+                    VStack(spacing: 0) {
+                        // コンテンツエリア（フッターの選択に応じて切り替え）
+                        ZStack {
+                            switch selectedTab {
+                            case .home:
+                                ContentView()
+                                    .environmentObject(authManager)
+                                    .environmentObject(deviceManager)
+                                    .environmentObject(dataManager)
+                            case .myPage:
+                                UserInfoView(authManager: authManager)
+                                .environmentObject(deviceManager)
+                                .environmentObject(dataManager)
                             }
                         }
+                        
+                        // カスタムフッターナビゲーション
+                        CustomFooterNavigation(selectedTab: $selectedTab)
                     }
+                    .edgesIgnoringSafeArea(.bottom)
+                }
+                .onAppear {
+                    print("📱 MainAppView: 認証済み状態 - メイン画面表示")
+                    // ユーザーに紐付く全デバイスを取得
+                    if let userId = authManager.currentUser?.id {
+                        print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
+                        Task {
+                            await deviceManager.fetchUserDevices(for: userId)
+                        }
+                    }
+                }
             } else {
                 // 未ログイン：ログイン画面表示ボタン
                 VStack(spacing: 0) {
@@ -166,5 +193,48 @@ struct MainAppView: View {
     }
     
     // checkAndRegisterDevice関数は削除されました（自動登録を行わないため）
+}
+
+// カスタムフッターナビゲーション
+struct CustomFooterNavigation: View {
+    @Binding var selectedTab: MainAppView.FooterTab
+    
+    var body: some View {
+        HStack(spacing: 0) {
+            // ホームタブ
+            Button(action: {
+                selectedTab = .home
+            }) {
+                VStack(spacing: 4) {
+                    Image(systemName: selectedTab == .home ? "house.fill" : "house")
+                        .font(.system(size: 24))
+                    Text("ホーム")
+                        .font(.caption)
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == .home ? Color.primary : Color.secondary)
+            }
+            
+            // マイページタブ
+            Button(action: {
+                selectedTab = .myPage
+            }) {
+                VStack(spacing: 4) {
+                    Image(systemName: selectedTab == .myPage ? "person.circle.fill" : "person.circle")
+                        .font(.system(size: 24))
+                    Text("マイページ")
+                        .font(.caption)
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == .myPage ? Color.primary : Color.secondary)
+            }
+        }
+        .padding(.top, 8)
+        .padding(.bottom, 20) // セーフエリアの考慮
+        .background(
+            Color(.systemBackground)
+                .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: -1)
+        )
+    }
 }
 

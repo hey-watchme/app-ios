@@ -13,9 +13,17 @@ import Supabase
 // デバイス登録管理クラス
 class DeviceManager: ObservableObject {
     @Published var isDeviceRegistered: Bool = false
-    @Published var localDeviceIdentifier: String? = nil  // この物理デバイス自身のID
+    @Published var localDeviceIdentifier: String? = nil {  // この物理デバイス自身のID
+        didSet {
+            print("✅ DeviceManager: localDeviceIdentifier changed to \(localDeviceIdentifier ?? "nil")")
+        }
+    }
     @Published var userDevices: [Device] = []  // ユーザーの全デバイス
-    @Published var selectedDeviceID: String? = nil  // 選択中のデバイスID
+    @Published var selectedDeviceID: String? = nil {  // 選択中のデバイスID
+        didSet {
+            print("✅ DeviceManager: selectedDeviceID changed to \(selectedDeviceID ?? "nil")")
+        }
+    }
     @Published var registrationError: String? = nil
     @Published var isLoading: Bool = false
     
@@ -257,6 +265,8 @@ class DeviceManager: ObservableObject {
     
     // MARK: - ユーザーのデバイスを取得
     func fetchUserDevices(for userId: String) async {
+        print("🔄 DeviceManager: fetchUserDevices called for user \(userId)")
+        
         // ローディング状態を設定
         await MainActor.run {
             self.isLoading = true
@@ -287,16 +297,19 @@ class DeviceManager: ObservableObject {
             }
             
             if userDevices.isEmpty {
-                print("⚠️ No devices found for user: \(userId)")
+                print("⚠️ DeviceManager: No user devices found. Attempting localIdentifier.")
                 await MainActor.run {
                     self.userDevices = []
                     self.isLoading = false  // ローディング状態を解除
                     // ユーザーに紐付くデバイスがない場合、このデバイス自身のIDを使用
                     if let localId = self.localDeviceIdentifier {
                         self.selectedDeviceID = localId
-                        print("⚠️ Using local device: \(localId)")
+                        print("✅ DeviceManager: Found user device: \(localId)")
+                    } else {
+                        print("❌ DeviceManager: No localDeviceIdentifier available!")
                     }
                 }
+                print("➡️ DeviceManager: fetchUserDevices completed. Final selectedDeviceID: \(self.selectedDeviceID ?? "nil")")
                 return
             }
             
@@ -344,7 +357,13 @@ class DeviceManager: ObservableObject {
                 } else if let firstDevice = devices.first {
                     self.selectedDeviceID = firstDevice.device_id
                     print("🔍 Selected first device: \(firstDevice.device_id)")
+                } else {
+                    // デバイスが見つからない場合
+                    print("⚠️ DeviceManager: No devices found after fetching. Using localIdentifier.")
+                    self.selectedDeviceID = self.localDeviceIdentifier
                 }
+                
+                print("➡️ DeviceManager: fetchUserDevices completed. Final selectedDeviceID: \(self.selectedDeviceID ?? "nil")")
             }
             
         } catch {

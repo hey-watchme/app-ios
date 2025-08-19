@@ -49,26 +49,24 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
-            NavigationStack {
-                VStack(spacing: 0) {
-                    // ヘッダー（既存のHeaderViewを使用）
-                    HeaderView(
-                        showLogoutConfirmation: $showLogoutConfirmation,
-                        showRecordingSheet: $showRecordingSheet
-                    )
-                    
-                    // シンプルな日付ナビゲーション（スワイプと連動）
-                    SimpleDateNavigation(selectedDate: $selectedDate)
-                    
-                    // TabViewでラップしてスワイプ対応
-                    TabView(selection: $selectedDate) {
-                        ForEach(dateRange, id: \.self) { date in
-                            SimpleDashboardView(selectedDate: date)
-                                .tag(date) // 日付を各ページに紐付け
-                        }
+            VStack(spacing: 0) {
+                // ヘッダー（既存のHeaderViewを使用）
+                HeaderView(
+                    showLogoutConfirmation: $showLogoutConfirmation,
+                    showRecordingSheet: $showRecordingSheet
+                )
+                
+                // シンプルな日付ナビゲーション（スワイプと連動）
+                SimpleDateNavigation(selectedDate: $selectedDate)
+                
+                // TabViewでラップしてスワイプ対応
+                TabView(selection: $selectedDate) {
+                    ForEach(dateRange, id: \.self) { date in
+                        SimpleDashboardView(selectedDate: date)
+                            .tag(date) // 日付を各ページに紐付け
                     }
-                    .tabViewStyle(.page(indexDisplayMode: .never)) // 横スワイプのスタイル、ドットは非表示
                 }
+                .tabViewStyle(.page(indexDisplayMode: .never)) // 横スワイプのスタイル、ドットは非表示
             }
             
             // Floating Action Button (FAB)

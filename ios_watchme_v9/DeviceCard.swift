@@ -32,49 +32,72 @@ struct DeviceCard: View {
                     )
                 
                 VStack(spacing: 16) {
-                    // ヘッダー部分（選択インジケーター）
+                    // トグルボタンと選択状態
                     HStack {
+                        Toggle("", isOn: .constant(isSelected))
+                            .labelsHidden()
+                            .toggleStyle(SwitchToggleStyle(tint: Color.green))
+                            .disabled(true) // ボタン全体でクリックするので、トグル自体は無効化
+                            .colorMultiply(isSelected ? Color.white : Color(hex: "1a1a1a")) // 非選択時は濃いグレー
+                        
+                        Text(isSelected ? "選択中のデバイス" : "このデバイスを選択する")
+                            .font(.body)
+                            .fontWeight(isSelected ? .semibold : .regular)
+                            .foregroundColor(isSelected ? .white : .primary)
+                        
                         Spacer()
-                        if isSelected {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.white)
-                                    .frame(width: 24, height: 24)
-                                
-                                Image(systemName: "checkmark")
-                                    .font(.caption)
-                                    .fontWeight(.bold)
-                                    .foregroundColor(Color.safeColor("AppAccentColor"))
-                            }
+                    }
+                    
+                    // デバイスID情報
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("デバイスID")
+                            .font(.caption)
+                            .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                        
+                        Text(device.device_id)
+                            .font(.system(.footnote, design: .monospaced))
+                            .fontWeight(.medium)
+                            .foregroundColor(isSelected ? .white : .primary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    
+                    // デバイス詳細情報
+                    VStack(alignment: .leading, spacing: 8) {
+                        // デバイスタイプ
+                        DetailInfoRow(
+                            icon: "gear",
+                            label: "デバイスタイプ",
+                            value: getDeviceTypeDisplayName(),
+                            iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("BorderLight"),
+                            isSelected: isSelected
+                        )
+                        
+                        // タイムゾーン
+                        DetailInfoRow(
+                            icon: "globe",
+                            label: "タイムゾーン",
+                            value: device.timezone ?? "未設定",
+                            iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("PrimaryActionColor"),
+                            isSelected: isSelected
+                        )
+                        
+                        // ロール情報
+                        if let role = device.role {
+                            DetailInfoRow(
+                                icon: role == "owner" ? "crown.fill" : "eye.fill",
+                                label: "権限",
+                                value: role == "owner" ? "オーナー" : "閲覧者",
+                                iconColor: isSelected ? .white.opacity(0.9) : (role == "owner" ? Color.safeColor("WarningColor") : Color.safeColor("PrimaryActionColor")),
+                                isSelected: isSelected
+                            )
                         }
                     }
                     
-                    // デバイス情報
-                    HStack(spacing: 12) {
-                        // デバイスアイコン
-                        ZStack {
-                            Circle()
-                                .fill(isSelected ? Color.white.opacity(0.2) : Color.safeColor("BorderLight").opacity(0.1))
-                                .frame(width: 50, height: 50)
-                            
-                            Image(systemName: getDeviceIcon())
-                                .font(.title2)
-                                .foregroundColor(isSelected ? .white : .secondary)
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("デバイス")
-                                .font(.caption)
-                                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                            
-                            Text(device.device_id.prefix(8) + "...")
-                                .font(.system(.body, design: .monospaced))
-                                .fontWeight(.medium)
-                                .foregroundColor(isSelected ? .white : .primary)
-                        }
-                        
-                        Spacer()
-                    }
+                    // 区切り線
+                    Divider()
+                        .background(isSelected ? Color.white.opacity(0.3) : Color.gray.opacity(0.3))
                     
                     // 観測対象情報
                     HStack(spacing: 12) {
@@ -110,49 +133,6 @@ struct DeviceCard: View {
                         }
                         
                         Spacer()
-                    }
-                    
-                    // デバイス詳細情報
-                    VStack(alignment: .leading, spacing: 8) {
-                        // デバイスタイプ
-                        DetailInfoRow(
-                            icon: "gear",
-                            label: "デバイスタイプ",
-                            value: getDeviceTypeDisplayName(),
-                            iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("BorderLight"),
-                            isSelected: isSelected
-                        )
-                        
-                        // タイムゾーン
-                        DetailInfoRow(
-                            icon: "globe",
-                            label: "タイムゾーン",
-                            value: device.timezone ?? "未設定",
-                            iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("PrimaryActionColor"),
-                            isSelected: isSelected
-                        )
-                        
-                        // ロール情報
-                        if let role = device.role {
-                            DetailInfoRow(
-                                icon: role == "owner" ? "crown.fill" : "eye.fill",
-                                label: "権限",
-                                value: role == "owner" ? "オーナー" : "閲覧者",
-                                iconColor: isSelected ? .white.opacity(0.9) : (role == "owner" ? Color.safeColor("WarningColor") : Color.safeColor("PrimaryActionColor")),
-                                isSelected: isSelected
-                            )
-                        }
-                        
-                        // 登録日時
-                        if let createdAt = device.created_at {
-                            DetailInfoRow(
-                                icon: "calendar.badge.plus",
-                                label: "登録日",
-                                value: formatCreatedDate(createdAt),
-                                iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("SuccessColor"),
-                                isSelected: isSelected
-                            )
-                        }
                     }
                     
                     // 観測対象アクション
@@ -319,6 +299,34 @@ struct InfoRowCompact: View {
             
             Spacer()
         }
+    }
+}
+
+// MARK: - Color Extension for Hex
+extension Color {
+    init(hex: String) {
+        let hex = hex.trimmingCharacters(in: CharacterSet.alphanumerics.inverted)
+        var int: UInt64 = 0
+        Scanner(string: hex).scanHexInt64(&int)
+        let a, r, g, b: UInt64
+        switch hex.count {
+        case 3: // RGB (12-bit)
+            (a, r, g, b) = (255, (int >> 8) * 17, (int >> 4 & 0xF) * 17, (int & 0xF) * 17)
+        case 6: // RGB (24-bit)
+            (a, r, g, b) = (255, int >> 16, int >> 8 & 0xFF, int & 0xFF)
+        case 8: // ARGB (32-bit)
+            (a, r, g, b) = (int >> 24, int >> 16 & 0xFF, int >> 8 & 0xFF, int & 0xFF)
+        default:
+            (a, r, g, b) = (255, 0, 0, 0)
+        }
+        
+        self.init(
+            .sRGB,
+            red: Double(r) / 255,
+            green: Double(g) / 255,
+            blue: Double(b) / 255,
+            opacity: Double(a) / 255
+        )
     }
 }
 

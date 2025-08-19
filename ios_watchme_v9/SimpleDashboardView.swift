@@ -7,6 +7,12 @@
 
 import SwiftUI
 
+// データ取得のトリガーを管理する構造体
+struct LoadDataTrigger: Equatable {
+    let date: Date
+    let deviceId: String?
+}
+
 struct SimpleDashboardView: View {
     let selectedDate: Date
     @EnvironmentObject var deviceManager: DeviceManager
@@ -62,7 +68,9 @@ struct SimpleDashboardView: View {
             Color.safeColor("BehaviorBackgroundPrimary")
                 .ignoresSafeArea()
         )
-        .task(id: selectedDate) {  // 👈 これが重要！日付が変わると自動実行
+        .task(id: LoadDataTrigger(date: selectedDate, deviceId: deviceManager.selectedDeviceID)) {
+            // 日付またはデバイスIDが変更されたときに実行
+            print("📌 SimpleDashboardView: .task triggered - date: \(selectedDate), deviceId: \(deviceManager.selectedDeviceID ?? "nil")")
             await loadAllData()
         }
         .sheet(isPresented: $showVibeSheet) {
@@ -424,19 +432,42 @@ struct SimpleDashboardView: View {
     }
     
     private func loadAllData() async {
+        print("🔄 SimpleDashboardView: loadAllData() called.")
+        print("   - selectedDeviceID: \(deviceManager.selectedDeviceID ?? "nil")")
+        print("   - localDeviceIdentifier: \(deviceManager.localDeviceIdentifier ?? "nil")")
+        
         guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
-            print("⚠️ SimpleDashboardView: No device ID available")
+            print("❌ SimpleDashboardView: loadAllData() - deviceId is nil. Clearing data.")
+            print("   - selectedDeviceID was: \(deviceManager.selectedDeviceID ?? "nil")")
+            print("   - localDeviceIdentifier was: \(deviceManager.localDeviceIdentifier ?? "nil")")
+            // データをクリア
+            await MainActor.run {
+                self.vibeReport = nil
+                self.behaviorReport = nil
+                self.emotionReport = nil
+                self.subject = nil
+            }
             return
         }
         
+        print("✅ SimpleDashboardView: loadAllData() - deviceId is \(deviceId). Proceeding to fetch data.")
+        
         // デバッグログ
-        print("🔍 SimpleDashboardView loading data for date: \(selectedDate)")
-        print("🔍 Device ID: \(deviceId)")
-        print("🔍 Timezone: \(deviceManager.getTimezone(for: deviceId))")
+        print("🔍 SimpleDashboardView loading data")
+        print("   📱 Device ID: \(deviceId)")
+        print("   📅 Selected Date: \(selectedDate)")
+        print("   🌍 Timezone: \(deviceManager.getTimezone(for: deviceId))")
         
         // ローディング開始
-        isLoading = true
-        defer { isLoading = false }
+        await MainActor.run {
+            isLoading = true
+        }
+        
+        defer {
+            Task { @MainActor in
+                isLoading = false
+            }
+        }
         
         // データ取得
         let timezone = deviceManager.getTimezone(for: deviceId)
@@ -447,15 +478,22 @@ struct SimpleDashboardView: View {
         )
         
         // 取得したデータを設定
-        self.vibeReport = result.vibeReport
-        self.behaviorReport = result.behaviorReport
-        self.emotionReport = result.emotionReport
-        self.subject = result.subject
+        await MainActor.run {
+            self.vibeReport = result.vibeReport
+            self.behaviorReport = result.behaviorReport
+            self.emotionReport = result.emotionReport
+            self.subject = result.subject
+        }
         
         // デバッグログ - 取得結果
-        print("🔍 Data loaded - Vibe: \(result.vibeReport != nil), Behavior: \(result.behaviorReport != nil), Emotion: \(result.emotionReport != nil)")
+        print("✅ SimpleDashboardView data loaded:")
+        print("   - Vibe: \(result.vibeReport != nil ? "✓" : "✗")")
+        print("   - Behavior: \(result.behaviorReport != nil ? "✓" : "✗")")
+        print("   - Emotion: \(result.emotionReport != nil ? "✓" : "✗")")
+        print("   - Subject: \(result.subject != nil ? "✓" : "✗")")
+        
         if let vibe = result.vibeReport {
-            print("🔍 Vibe date: \(vibe.date), average: \(vibe.averageScore)")
+            print("   📊 Vibe date: \(vibe.date), average: \(vibe.averageScore)")
         }
     }
 }

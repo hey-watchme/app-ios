@@ -373,6 +373,8 @@ class SupabaseDataManager: ObservableObject {
         print("🚀 [RPC] Fetching all dashboard data via RPC function")
         print("   Device: \(deviceId)")
         print("   Date: \(dateString)")
+        print("   DateFormatter locale: \(dateFormatter.locale?.identifier ?? "nil")")
+        print("   DateFormatter timezone: \(dateFormatter.timeZone?.identifier ?? "nil")")
         
         do {
             // RPC関数のパラメータを準備
@@ -381,15 +383,20 @@ class SupabaseDataManager: ObservableObject {
                 "p_date": dateString
             ]
             
+            print("📤 [RPC] Calling RPC with params: \(params)")
+            
             // 📡 Supabase RPC関数を呼び出し（1回のAPIコールですべてのデータを取得）
             let response: [RPCDashboardResponse] = try await supabase
                 .rpc("get_dashboard_data", params: params)
                 .execute()
                 .value
             
+            print("📥 [RPC] Response received, count: \(response.count)")
+            
             // 最初の結果を取得（RPCは配列で返すが、通常1件のみ）
             guard let rpcData = response.first else {
                 print("⚠️ [RPC] No data returned from RPC function")
+                print("   Response was empty array")
                 return DashboardData(
                     vibeReport: nil,
                     behaviorReport: nil,
@@ -399,6 +406,10 @@ class SupabaseDataManager: ObservableObject {
             }
             
             print("✅ [RPC] Successfully fetched all dashboard data")
+            print("   Has vibe_report: \(rpcData.vibe_report != nil)")
+            print("   Has behavior_report: \(rpcData.behavior_report != nil)")
+            print("   Has emotion_report: \(rpcData.emotion_report != nil)")
+            print("   Has subject_info: \(rpcData.subject_info != nil)")
             print("   - Vibe Report: \(rpcData.vibe_report != nil ? "✓" : "✗")")
             print("   - Behavior Report: \(rpcData.behavior_report != nil ? "✓" : "✗")")
             print("   - Emotion Report: \(rpcData.emotion_report != nil ? "✓" : "✗")")
@@ -414,7 +425,19 @@ class SupabaseDataManager: ObservableObject {
             
         } catch {
             print("❌ [RPC] Failed to fetch dashboard data: \(error)")
+            print("   Error type: \(type(of: error))")
             print("   Error details: \(error.localizedDescription)")
+            
+            // 認証エラーの可能性をチェック
+            let errorString = "\(error)"
+            if errorString.lowercased().contains("auth") || 
+               errorString.lowercased().contains("token") ||
+               errorString.lowercased().contains("unauthorized") ||
+               errorString.lowercased().contains("forbidden") {
+                print("   🔐 ⚠️ This appears to be an authentication error!")
+                print("   💡 The user may need to re-authenticate")
+                print("   📝 Check if refresh token is valid")
+            }
             
             // エラー時は空のデータを返す
             return DashboardData(
