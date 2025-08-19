@@ -13,6 +13,7 @@ struct RecordingView: View {
     @ObservedObject var networkManager: NetworkManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var authManager: SupabaseAuthManager
+    @Environment(\.dismiss) private var dismiss
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var selectedRecording: RecordingModel?
@@ -20,51 +21,24 @@ struct RecordingView: View {
     @State private var uploadingCurrentIndex = 0
     @State private var showDeviceLinkAlert = false
     @State private var isLinkingDevice = false
+    @State private var currentTimeSlot = SlotTimeUtility.getCurrentSlot()
+    @State private var timer: Timer?
     
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
-                // WatchMe Pro プロモーションセクション
-                VStack(spacing: 16) {
-                    VStack(spacing: 12) {
-                        Image(systemName: "applewatch.radiowaves.left.and.right")
-                            .font(.system(size: 50))
-                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                        
-                        Text("ウェアラブルデバイス「WatchMe」を使って簡単に24時間ノータッチでこころの分析が可能です。WatchMe Pro プランに切り替えて、始めてみましょう。")
-                            .font(.subheadline)
-                            .multilineTextAlignment(.center)
-                            .foregroundColor(.primary)
-                            .padding(.horizontal)
-                    }
+                // 音声分析説明セクション
+                VStack(spacing: 12) {
+                    Image(systemName: "waveform.circle.fill")
+                        .font(.system(size: 50))
+                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
                     
-                    // サブスクリプションボタン
-                    Button(action: {
-                        if let url = URL(string: "https://hey-watch.me/") {
-                            UIApplication.shared.open(url)
-                        }
-                    }) {
-                        VStack(spacing: 4) {
-                            Text("WatchMe Pro プラン")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                            Text("月額980円")
-                                .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 14)
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.safeColor("PrimaryActionColor"), Color.safeColor("PrimaryActionColor").opacity(0.8)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .cornerRadius(12)
-                    }
-                    .padding(.horizontal)
+                    Text("あなたの音（音声META情報）から、発達特性、認知傾向、メンタルヘルスを可視化します。")
+                        .font(.subheadline)
+                        .multilineTextAlignment(.center)
+                        .foregroundColor(.primary)
+                        .padding(.horizontal)
                 }
                 .padding()
                 .background(Color(.systemGray6))
@@ -72,54 +46,65 @@ struct RecordingView: View {
                 
                 Divider()
                     .padding(.vertical, 8)
-                
-                // 統計情報（アップロード済み・アップロード待ち）
-                HStack(spacing: 20) {
-                // アップロード済み
-                VStack(spacing: 8) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title)
-                        .foregroundColor(Color.safeColor("StatusNormal"))
-                    
-                    Text("アップロード済み")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+            
+            // 録音時間の説明
+            VStack(spacing: 8) {
+                HStack(spacing: 4) {
+                    Image(systemName: "info.circle")
+                        .font(.caption)
                         .foregroundColor(.secondary)
-                    
-                    let uploadedCount = audioRecorder.recordings.filter { $0.isUploaded }.count
-                    Text("\(uploadedCount)")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.safeColor("StatusNormal"))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-                .background(Color.safeColor("StatusNormal").opacity(0.1))
-                .cornerRadius(16)
-                
-                // アップロード待ち
-                VStack(spacing: 8) {
-                    Image(systemName: "arrow.up.circle.fill")
-                        .font(.title)
-                        .foregroundColor(Color.safeColor("WarningColor"))
-                    
-                    Text("アップロード待ち")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                    Text("ただいま録音されたデータは \(currentTimeSlot) の時間のデータポイントとしてグラフに表示されます")
+                        .font(.caption)
                         .foregroundColor(.secondary)
-                    
-                    let pendingCount = audioRecorder.recordings.filter { !$0.isUploaded }.count
-                    Text("\(pendingCount)")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.safeColor("WarningColor"))
+                        .multilineTextAlignment(.center)
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 20)
-                .background(Color.safeColor("WarningColor").opacity(0.1))
-                .cornerRadius(16)
+                .padding(.horizontal)
             }
-            .padding(.horizontal)
+            .padding(.vertical, 8)
+            
+            // 録音開始/停止ボタン
+            if audioRecorder.isRecording {
+                // 録音停止ボタン
+                Button(action: {
+                    audioRecorder.stopRecording()
+                }) {
+                    HStack {
+                        Image(systemName: "stop.circle.fill")
+                            .font(.title2)
+                        Text("録音を停止")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.red)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal)
+            } else {
+                // 録音開始ボタン
+                Button(action: {
+                    // デバイスが連携されているか確認
+                    if deviceManager.localDeviceIdentifier == nil {
+                        showDeviceLinkAlert = true
+                    } else {
+                        audioRecorder.startRecording()
+                    }
+                }) {
+                    HStack {
+                        Image(systemName: "mic.circle.fill")
+                            .font(.title2)
+                        Text("録音を開始")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.safeColor("RecordingActive"))
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+                .padding(.horizontal)
+            }
             
             // アップロード進捗表示
             if networkManager.connectionStatus == .uploading {
@@ -178,35 +163,12 @@ struct RecordingView: View {
                 .cornerRadius(12)
             }
             
-            // 録音一覧
+            // 録音一覧（アップロード失敗またはアップロード待ちのファイルのみ）
             if !audioRecorder.recordings.isEmpty {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text("録音ファイル")
-                            .font(.headline)
-                        
-                        Spacer()
-                        
-                        // 一括アップロードボタン
-                        if audioRecorder.recordings.filter({ !$0.isUploaded && $0.canUpload }).count > 0 {
-                            Button(action: {
-                                manualBatchUpload()
-                            }) {
-                                HStack {
-                                    Image(systemName: "icloud.and.arrow.up")
-                                    Text("すべてアップロード")
-                                }
-                                .font(.caption)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.safeColor("UploadActive"))
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                            }
-                            .disabled(networkManager.connectionStatus == .uploading)
-                        }
-                    }
-                    .padding(.horizontal)
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("録音ファイル（未送信）")
+                        .font(.headline)
+                        .padding(.horizontal)
                     
                     VStack(spacing: 8) {
                         // 古いファイルクリーンアップボタン
@@ -244,11 +206,33 @@ struct RecordingView: View {
                             }
                             .padding(.horizontal)
                         }
+                        .frame(maxHeight: 300)
+                        
+                        // 一括アップロードボタン（最下部に大きく表示）
+                        if audioRecorder.recordings.filter({ !$0.isUploaded && $0.canUpload }).count > 0 {
+                            Button(action: {
+                                manualBatchUpload()
+                            }) {
+                                HStack {
+                                    Image(systemName: "icloud.and.arrow.up")
+                                        .font(.title3)
+                                    Text("すべてアップロード")
+                                        .font(.headline)
+                                        .fontWeight(.semibold)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.safeColor("UploadActive"))
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                            }
+                            .padding(.horizontal)
+                            .disabled(networkManager.connectionStatus == .uploading)
+                        }
                     }
-                    .frame(maxHeight: 300)
                 }
             } else {
-                Text("録音ファイルがありません")
+                Text("未送信の録音ファイルはありません")
                     .font(.subheadline)
                     .foregroundColor(.secondary)
                     .padding()
@@ -261,7 +245,7 @@ struct RecordingView: View {
         .toolbar {
             ToolbarItem(placement: .cancellationAction) {
                 Button("閉じる") {
-                    // シートを閉じる処理はContentView側で管理
+                    dismiss()
                 }
             }
         }
@@ -304,7 +288,17 @@ struct RecordingView: View {
                 }
             }
         )
+        .onAppear {
+            // タイマーを開始して時間スロットを更新
+            timer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
+                currentTimeSlot = SlotTimeUtility.getCurrentSlot()
+            }
+        }
         .onDisappear {
+            // タイマーを停止
+            timer?.invalidate()
+            timer = nil
+            
             // ビューが非表示になったら録音を停止
             if audioRecorder.isRecording {
                 audioRecorder.stopRecording()
@@ -443,11 +437,42 @@ struct RecordingRowView: View {
     let onDelete: (RecordingModel) -> Void
     @EnvironmentObject var deviceManager: DeviceManager
     
+    // ファイル名から日付と時間スロットを抽出
+    private var recordingDateTime: String {
+        // ファイル名形式: "2025-08-19/22-00.wav"
+        let components = recording.fileName.split(separator: "/")
+        guard components.count == 2 else { return recording.fileName }
+        
+        let dateString = String(components[0])
+        let timeComponent = String(components[1]).replacingOccurrences(of: ".wav", with: "")
+        
+        // 日付をパース
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        dateFormatter.timeZone = deviceManager.selectedDeviceTimezone
+        
+        guard let date = dateFormatter.date(from: dateString) else {
+            return recording.fileName
+        }
+        
+        // 日本語形式で日付を表示
+        let displayFormatter = DateFormatter()
+        displayFormatter.dateFormat = "yyyy年M月d日"
+        displayFormatter.locale = Locale(identifier: "ja_JP")
+        displayFormatter.timeZone = deviceManager.selectedDeviceTimezone
+        
+        // 時間スロットを整形 (22-00 -> 22:00)
+        let timeFormatted = timeComponent.replacingOccurrences(of: "-", with: ":")
+        
+        return "\(displayFormatter.string(from: date)) \(timeFormatted)"
+    }
+    
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
-                    Text(recording.fileName)
+                    // わかりやすい日時表示
+                    Text(recordingDateTime)
                         .font(.subheadline)
                         .fontWeight(.medium)
                     
@@ -458,44 +483,27 @@ struct RecordingRowView: View {
                         .foregroundColor(.secondary)
                 }
                 
-                Text(DateFormatter.display(for: deviceManager).string(from: recording.date))
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                
-                HStack {
-                    // アップロード状態
-                    Text("アップロード: \(recording.isUploaded ? "✅" : "❌")")
-                        .font(.caption)
-                        .foregroundColor(recording.isUploaded ? .green : .red)
-                        .onChange(of: recording.isUploaded) { oldValue, newValue in
-                            print("🔍 [RecordingRowView] isUploaded変更検知: \(recording.fileName) - \(oldValue) → \(newValue)")
-                        }
-                    
-                    if !recording.isUploaded {
-                        // 試行回数表示
-                        if recording.uploadAttempts > 0 {
-                            Text("試行: \(recording.uploadAttempts)/3")
-                                .font(.caption)
-                                .foregroundColor(Color.safeColor("WarningColor"))
-                        }
+                // アップロード失敗時のみエラー情報を表示
+                if recording.uploadAttempts > 0 && !recording.isUploaded {
+                    HStack {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundColor(Color.safeColor("WarningColor"))
                         
-                        // アップロード可能チェック
-                        if !recording.canUpload {
-                            Text("アップロード不可")
-                                .font(.caption)
-                                .foregroundColor(Color.safeColor("RecordingActive"))
-                        }
+                        Text("アップロード失敗 (試行: \(recording.uploadAttempts)/3)")
+                            .font(.caption)
+                            .foregroundColor(Color.safeColor("WarningColor"))
+                        
+                        Spacer()
                     }
                     
-                    Spacer()
-                }
-                
-                // エラー情報表示
-                if let error = recording.lastUploadError {
-                    Text("エラー: \(error)")
-                        .font(.caption)
-                        .foregroundColor(Color.safeColor("RecordingActive"))
-                        .lineLimit(2)
+                    // 詳細なエラー情報
+                    if let error = recording.lastUploadError {
+                        Text(error)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
                 }
             }
             
