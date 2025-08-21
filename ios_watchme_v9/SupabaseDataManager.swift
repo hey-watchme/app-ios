@@ -53,6 +53,9 @@ class SupabaseDataManager: ObservableObject {
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
     
+    // 認証マネージャーへの参照（オプショナル）
+    private weak var authManager: SupabaseAuthManager?
+    
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
         let formatter = DateFormatter()
@@ -62,8 +65,14 @@ class SupabaseDataManager: ObservableObject {
     }()
     
     // MARK: - Initialization
-    init() {
+    init(authManager: SupabaseAuthManager? = nil) {
+        self.authManager = authManager
         print("📊 SupabaseDataManager initialized")
+    }
+    
+    // 認証マネージャーを設定（後から注入する場合）
+    func setAuthManager(_ authManager: SupabaseAuthManager) {
+        self.authManager = authManager
     }
     
     // MARK: - Public Methods
@@ -433,10 +442,25 @@ class SupabaseDataManager: ObservableObject {
             if errorString.lowercased().contains("auth") || 
                errorString.lowercased().contains("token") ||
                errorString.lowercased().contains("unauthorized") ||
-               errorString.lowercased().contains("forbidden") {
+               errorString.lowercased().contains("forbidden") ||
+               errorString.lowercased().contains("jwt") {
                 print("   🔐 ⚠️ This appears to be an authentication error!")
-                print("   💡 The user may need to re-authenticate")
-                print("   📝 Check if refresh token is valid")
+                print("   💡 Attempting automatic token refresh...")
+                
+                // 認証マネージャーが設定されている場合、自動リカバリーを試行
+                if let authManager = authManager {
+                    let recovered = await authManager.handleAuthenticationError()
+                    
+                    if recovered {
+                        print("   🔄 Token refreshed successfully, retrying RPC call...")
+                        // トークンリフレッシュ成功後、元のリクエストを再試行
+                        return await fetchAllReportsData(deviceId: deviceId, date: date)
+                    } else {
+                        print("   ❌ Token refresh failed - user needs to re-login")
+                    }
+                } else {
+                    print("   ⚠️ No auth manager available for automatic recovery")
+                }
             }
             
             // エラー時は空のデータを返す
@@ -488,14 +512,60 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Subject Management Methods
     
+    /// デバイスIDのみでSubject情報を取得する専用メソッド（軽量版）
+    /// HeaderViewなど、Subject情報のみが必要な場合に使用
+    /// - Parameter deviceId: デバイスID
+    /// - Returns: Subject情報（存在しない場合はnil）
+    func fetchSubjectInfo(deviceId: String) async -> Subject? {
+        print("👤 [RPC] Fetching subject info only for device: \(deviceId)")
+        
+        do {
+            // RPC関数のパラメータを準備
+            let params = ["p_device_id": deviceId]
+            
+            print("📤 [RPC] Calling get_subject_info with device_id: \(deviceId)")
+            
+            // 軽量なRPC関数を呼び出し（Subject情報のみ）
+            struct SubjectResponse: Codable {
+                let subject_info: Subject?
+            }
+            
+            let response: [SubjectResponse] = try await supabase
+                .rpc("get_subject_info", params: params)
+                .execute()
+                .value
+            
+            print("📥 [RPC] Subject info response received")
+            
+            // 最初の結果を取得
+            guard let rpcData = response.first else {
+                print("⚠️ [RPC] No subject info returned")
+                return nil
+            }
+            
+            if let subject = rpcData.subject_info {
+                print("✅ [RPC] Subject found: \(subject.name ?? "Unknown")")
+                return subject
+            } else {
+                print("ℹ️ [RPC] No subject assigned to this device")
+                return nil
+            }
+            
+        } catch {
+            print("❌ [RPC] Failed to fetch subject info: \(error)")
+            return nil
+        }
+    }
+    
     /// デバイスIDのみでSubject情報を取得する専用メソッド（日付非依存）
     /// HeaderViewなど、Subject情報のみが必要な場合に使用
     /// - Parameter deviceId: デバイスID
     /// - Returns: Subject情報（存在しない場合はnil）
+    /// @deprecated: Use fetchSubjectInfo instead (lightweight RPC version)
+    @available(*, deprecated, message: "Use fetchSubjectInfo instead - it's much more efficient")
     func fetchSubjectOnly(deviceId: String) async -> Subject? {
-        // RPC経由で取得（日付は今日を使用するが、Subjectは日付に依存しない）
-        let result = await fetchAllReportsData(deviceId: deviceId, date: Date())
-        return result.subject
+        // 新しい軽量メソッドを呼び出す
+        return await fetchSubjectInfo(deviceId: deviceId)
     }
     
     /// デバイスに関連付けられた観測対象を取得

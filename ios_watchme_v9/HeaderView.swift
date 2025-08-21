@@ -62,8 +62,8 @@ struct HeaderView: View {
                 return 
             }
             
-            // Subject情報のみを取得（日付非依存）
-            self.subject = await dataManager.fetchSubjectOnly(deviceId: deviceId)
+            // Subject情報のみを取得（軽量なRPC関数を使用）
+            self.subject = await dataManager.fetchSubjectInfo(deviceId: deviceId)
         }
         .sheet(isPresented: $showNotificationSheet) {
             // 通知画面のプレースホルダー

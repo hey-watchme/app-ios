@@ -69,9 +69,31 @@ struct SimpleDashboardView: View {
                 .ignoresSafeArea()
         )
         .task(id: LoadDataTrigger(date: selectedDate, deviceId: deviceManager.selectedDeviceID)) {
+            // DeviceManagerがready状態の時のみデータ取得を実行
+            guard deviceManager.state == .ready else {
+                print("⚠️ SimpleDashboardView: DeviceManager is not ready (state: \(deviceManager.state)), skipping data load")
+                return
+            }
+            
             // 日付またはデバイスIDが変更されたときに実行
             print("📌 SimpleDashboardView: .task triggered - date: \(selectedDate), deviceId: \(deviceManager.selectedDeviceID ?? "nil")")
             await loadAllData()
+        }
+        .onChange(of: deviceManager.state) { oldState, newState in
+            // DeviceManagerがidleやloadingからreadyに変わったときにデータを取得
+            if oldState != .ready && newState == .ready {
+                print("🎯 SimpleDashboardView: DeviceManager became ready, loading data")
+                Task {
+                    await loadAllData()
+                }
+            }
+        }
+        .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
+            // デバイスが切り替わったときにデータをクリア
+            if oldDeviceId != nil && newDeviceId != nil && oldDeviceId != newDeviceId {
+                print("🔄 SimpleDashboardView: Device changed from \(oldDeviceId!) to \(newDeviceId!), clearing data")
+                clearAllData()
+            }
         }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
@@ -429,6 +451,14 @@ struct SimpleDashboardView: View {
         case "anticipation": return "期待"
         default: return key
         }
+    }
+    
+    private func clearAllData() {
+        print("🧹 SimpleDashboardView: Clearing all data")
+        vibeReport = nil
+        behaviorReport = nil
+        emotionReport = nil
+        subject = nil
     }
     
     private func loadAllData() async {

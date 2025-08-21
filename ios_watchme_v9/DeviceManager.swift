@@ -12,6 +12,27 @@ import Supabase
 
 // デバイス登録管理クラス
 class DeviceManager: ObservableObject {
+    // MARK: - State Management
+    enum State: Equatable {
+        case idle           // 初期状態
+        case loading        // デバイスリストを取得中
+        case ready          // 準備完了（データ取得可能）
+        case noDevices      // ユーザーに紐づくデバイスが存在しない
+        case error(String)  // エラーが発生
+        
+        static func == (lhs: State, rhs: State) -> Bool {
+            switch (lhs, rhs) {
+            case (.idle, .idle), (.loading, .loading), (.ready, .ready), (.noDevices, .noDevices):
+                return true
+            case (.error(let l), .error(let r)):
+                return l == r
+            default:
+                return false
+            }
+        }
+    }
+    
+    @Published var state: State = .idle
     @Published var isDeviceRegistered: Bool = false
     @Published var localDeviceIdentifier: String? = nil {  // この物理デバイス自身のID
         didSet {
@@ -22,6 +43,10 @@ class DeviceManager: ObservableObject {
     @Published var selectedDeviceID: String? = nil {  // 選択中のデバイスID
         didSet {
             print("✅ DeviceManager: selectedDeviceID changed to \(selectedDeviceID ?? "nil")")
+            // デバイスが選択されたら、準備完了状態に遷移
+            if selectedDeviceID != nil && !userDevices.isEmpty {
+                state = .ready
+            }
         }
     }
     @Published var registrationError: String? = nil
@@ -263,13 +288,147 @@ class DeviceManager: ObservableObject {
         print("🔄 デバイス登録状態リセット完了")
     }
     
-    // MARK: - ユーザーのデバイスを取得
+    // MARK: - 統合初期化処理（State管理版）
+    @MainActor
+    func initializeDeviceState(for userId: String) async {
+        // 既に処理中、または準備完了なら何もしない
+        switch state {
+        case .idle, .error:
+            // 処理を続行
+            break
+        case .loading, .ready, .noDevices:
+            print("⚠️ DeviceManager: Already in state \(state), skipping initialization")
+            return
+        }
+        
+        print("🚀 DeviceManager: Starting device initialization for user \(userId)")
+        self.state = .loading
+        
+        do {
+            // デバイスリストを取得
+            let devices = try await fetchUserDevicesInternal(for: userId)
+            
+            if devices.isEmpty {
+                print("📱 DeviceManager: No devices found for user")
+                self.userDevices = []
+                self.state = .noDevices
+                
+                // ローカルデバイスIDがあればそれを選択
+                if let localId = self.localDeviceIdentifier {
+                    self.selectedDeviceID = localId
+                    print("📱 Using local device as fallback: \(localId)")
+                    // ローカルデバイスのみの場合も ready とする
+                    self.state = .ready
+                }
+            } else {
+                self.userDevices = devices
+                print("✅ DeviceManager: Found \(devices.count) devices")
+                
+                // selectedDeviceIDを決定
+                determineSelectedDevice(from: devices)
+                
+                // 準備完了状態に遷移
+                self.state = .ready
+                print("🎯 DeviceManager: State is now READY with selectedDeviceID: \(selectedDeviceID ?? "nil")")
+            }
+        } catch {
+            print("❌ DeviceManager: Failed to initialize - \(error)")
+            self.state = .error(error.localizedDescription)
+        }
+    }
+    
+    // デバイス選択ロジック
+    private func determineSelectedDevice(from devices: [Device]) {
+        // 1. 保存された選択デバイスがある場合はそれを優先
+        if let savedDeviceId = UserDefaults.standard.string(forKey: selectedDeviceIDKey),
+           devices.contains(where: { $0.device_id == savedDeviceId }) {
+            self.selectedDeviceID = savedDeviceId
+            print("🔍 Restored previously selected device: \(savedDeviceId)")
+            return
+        }
+        
+        // 2. ownerロールのデバイスを優先
+        let ownerDevices = devices.filter { $0.role == "owner" }
+        if let firstOwnerDevice = ownerDevices.first {
+            self.selectedDeviceID = firstOwnerDevice.device_id
+            print("🔍 Auto-selected owner device: \(firstOwnerDevice.device_id)")
+            return
+        }
+        
+        // 3. viewerロールのデバイス
+        let viewerDevices = devices.filter { $0.role == "viewer" }
+        if let firstViewerDevice = viewerDevices.first {
+            self.selectedDeviceID = firstViewerDevice.device_id
+            print("🔍 Auto-selected viewer device: \(firstViewerDevice.device_id)")
+            return
+        }
+        
+        // 4. 最後の手段：リストの最初のデバイス
+        if let firstDevice = devices.first {
+            self.selectedDeviceID = firstDevice.device_id
+            print("🔍 Auto-selected first device: \(firstDevice.device_id)")
+        }
+    }
+    
+    // 内部用のデバイス取得関数（エラーをthrowする）
+    private func fetchUserDevicesInternal(for userId: String) async throws -> [Device] {
+        print("📡 Fetching user devices for userId: \(userId)")
+        
+        // デバッグ: 現在の認証状態を確認
+        if let currentUser = try? await supabase.auth.session.user {
+            print("✅ 認証済みユーザー: \(currentUser.id)")
+        } else {
+            print("❌ 認証されていません - supabase.auth.session.userがnil")
+            throw DeviceManagerError.notAuthenticated
+        }
+        
+        // Step 1: user_devicesテーブルからデータを取得
+        let userDevices: [UserDevice] = try await supabase
+            .from("user_devices")
+            .select("*")
+            .eq("user_id", value: userId)
+            .execute()
+            .value
+        
+        print("📊 Found \(userDevices.count) user-device relationships")
+        
+        if userDevices.isEmpty {
+            return []
+        }
+        
+        // Step 2: device_idのリストを作成してdevicesテーブルから詳細を取得
+        let deviceIds = userDevices.map { $0.device_id }
+        
+        // Step 3: devicesテーブルから詳細情報を取得
+        var devices: [Device] = try await supabase
+            .from("devices")
+            .select("*")
+            .in("device_id", values: deviceIds)
+            .execute()
+            .value
+        
+        print("📊 Fetched \(devices.count) device details")
+        
+        // Step 4: roleの情報をデバイスに付与
+        for i in devices.indices {
+            if let userDevice = userDevices.first(where: { $0.device_id == devices[i].device_id }) {
+                devices[i].role = userDevice.role
+            }
+        }
+        
+        return devices
+    }
+    
+    // MARK: - ユーザーのデバイスを取得（旧バージョン - 互換性のため残す）
     func fetchUserDevices(for userId: String) async {
         print("🔄 DeviceManager: fetchUserDevices called for user \(userId)")
         
-        // ローディング状態を設定
+        // 新しい初期化処理を呼び出す
+        await initializeDeviceState(for: userId)
+        
+        // 旧コードとの互換性のため、isLoadingを更新
         await MainActor.run {
-            self.isLoading = true
+            self.isLoading = false
         }
         
         // Supabaseクライアントを使用してuser_devicesを取得
@@ -379,11 +538,26 @@ class DeviceManager: ObservableObject {
     // MARK: - デバイス選択
     func selectDevice(_ deviceId: String) {
         if userDevices.contains(where: { $0.device_id == deviceId }) {
+            // 一旦loadingに戻してから選択を更新
+            self.state = .loading
             selectedDeviceID = deviceId
             // 選択したデバイスIDを永続化
             UserDefaults.standard.set(deviceId, forKey: selectedDeviceIDKey)
             print("📱 Selected device saved: \(deviceId)")
+            
+            // 少し遅延を入れてからready状態に遷移（UIの更新を確実にするため）
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+                self.state = .ready
+                print("🎯 DeviceManager: State transitioned to READY after device selection")
+            }
         }
+    }
+    
+    // MARK: - デバイス切り替え時の状態リセット
+    func resetToIdleState() {
+        print("🔄 DeviceManager: Resetting to idle state")
+        self.state = .idle
     }
     
     // MARK: - 選択中デバイスの復元
@@ -565,6 +739,21 @@ enum DeviceRegistrationError: Error {
             return "Supabaseライブラリが利用できません"
         case .registrationFailed:
             return "デバイス登録処理に失敗しました"
+        }
+    }
+}
+
+// DeviceManagerのエラー
+enum DeviceManagerError: Error, LocalizedError {
+    case notAuthenticated
+    case fetchFailed(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .notAuthenticated:
+            return "認証が必要です"
+        case .fetchFailed(let message):
+            return "デバイス取得エラー: \(message)"
         }
     }
 }

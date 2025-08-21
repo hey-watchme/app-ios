@@ -15,12 +15,16 @@ class AudioRecorder: NSObject, ObservableObject {
     @Published var recordingTime: TimeInterval = 0
     @Published var currentSlot: String = ""
     @Published var totalRecordingSessions: Int = 0
+    @Published var audioLevels: [CGFloat] = Array(repeating: 0.0, count: 20) // 音声レベル配列（波形表示用）
+    @Published var currentAudioLevel: Float = 0.0 // 現在の音声レベル
     
     private var audioRecorder: AVAudioRecorder?
     private var recordingTimer: Timer?
     private var slotSwitchTimer: Timer?  // 正確な30分境界でのタイマー
     private var recordingStartTime: Date?
     private var currentSlotStartTime: Date?
+    private var meterTimer: Timer? // メータリング用タイマー
+    private var meterUpdateCount = 0  // デバッグ用カウンター
     
     // DeviceManagerの参照（タイムゾーン取得用）
     var deviceManager: DeviceManager?
@@ -115,10 +119,12 @@ class AudioRecorder: NSObject, ObservableObject {
         let audioSession = AVAudioSession.sharedInstance()
         
         do {
-            try audioSession.setCategory(.playAndRecord, mode: .default)
+            // 録音のみのカテゴリーに変更し、測定モードを使用
+            try audioSession.setCategory(.record, mode: .measurement)
             try audioSession.setActive(true)
+            print("✅ オーディオセッション設定成功: record/measurement")
         } catch {
-            print("オーディオセッション設定エラー: \(error)")
+            print("❌ オーディオセッション設定エラー: \(error)")
         }
     }
     
@@ -224,13 +230,21 @@ class AudioRecorder: NSObject, ObservableObject {
             // 新しいレコーダーを作成
             audioRecorder = try AVAudioRecorder(url: audioURL, settings: settings)
             audioRecorder?.delegate = self
+            
+            // メータリングを有効化（prepareToRecordの前に設定）
             audioRecorder?.isMeteringEnabled = true
+            
+            // 録音の準備
+            let prepared = audioRecorder?.prepareToRecord() ?? false
+            print("📊 メータリング有効化: \(audioRecorder?.isMeteringEnabled ?? false)")
+            print("📊 録音準備: \(prepared)")
             
             let success = audioRecorder?.record() ?? false
             
             if success {
                 print("✅ スロット録音開始成功: \(fileName)")
                 totalRecordingSessions += 1
+                startMeteringTimer() // メータリングタイマー開始
                 return true
             } else {
                 print("❌ スロット録音開始失敗: record()がfalseを返却")
@@ -370,13 +384,19 @@ class AudioRecorder: NSObject, ObservableObject {
         // タイマーを停止
         recordingTimer?.invalidate()
         slotSwitchTimer?.invalidate()
+        meterTimer?.invalidate()
         recordingTimer = nil
         slotSwitchTimer = nil
+        meterTimer = nil
         
         // 基本状態をリセット
         isRecording = false
         recordingTime = 0
         recordingStartTime = nil
+        
+        // 音声レベルをリセット
+        audioLevels = Array(repeating: 0.0, count: 20)
+        currentAudioLevel = 0.0
         
         print("🧹 部分クリーンアップ完了")
     }
@@ -440,7 +460,8 @@ class AudioRecorder: NSObject, ObservableObject {
                         do {
                             let resourceValues = try url.resourceValues(forKeys: [.creationDateKey, .fileSizeKey])
                             let creationDate = resourceValues.creationDate ?? Date()
-                            let fileSize = Int64(resourceValues.fileSize ?? 0)
+                            // fileSizeは使用しないのでコメントアウト
+                            // let fileSize = Int64(resourceValues.fileSize ?? 0)
                             
                             // RecordingModelを作成（アップロード状態は自動復元）
                             let recording = RecordingModel(fileName: fullFileName, date: creationDate)
@@ -718,6 +739,67 @@ extension AudioRecorder: AVAudioRecorderDelegate {
         
         // クリーンアップは呼び出し元で決定する（責務の分離）
         print("📁 録音保存処理完了 - 後処理は呼び出し元で決定")
+    }
+    
+    // メータリングタイマーを開始
+    private func startMeteringTimer() {
+        meterTimer?.invalidate()
+        print("🎚️ メータリングタイマー開始")
+        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            self?.updateAudioMeters()
+        }
+        
+        // タイマーが正しく設定されたか確認
+        if meterTimer != nil {
+            print("✅ メータリングタイマー設定成功")
+        } else {
+            print("❌ メータリングタイマー設定失敗")
+        }
+    }
+    
+    // 音声レベルを更新
+    private func updateAudioMeters() {
+        guard let recorder = audioRecorder, recorder.isRecording else { 
+            return 
+        }
+        
+        recorder.updateMeters()
+        
+        // 平均パワーとピークパワーを取得（デシベル値）
+        let averagePower = recorder.averagePower(forChannel: 0)
+        let peakPower = recorder.peakPower(forChannel: 0)
+        
+        // デバッグログ（1秒に1回程度）
+        meterUpdateCount += 1
+        if meterUpdateCount % 20 == 0 {  // 0.05秒 × 20 = 1秒ごと
+            print("📊 音声レベル: average=\(averagePower)dB, peak=\(peakPower)dB")
+        }
+        
+        // デシベル値を0-1の範囲に正規化（改善版）
+        // -50dB（静音）〜-10dB（通常の話し声）の範囲で正規化
+        let minDb: Float = -50.0
+        let maxDb: Float = -10.0
+        
+        // より敏感な正規化
+        let normalizedValue = (averagePower - minDb) / (maxDb - minDb)
+        let clampedValue = max(0.0, min(1.0, normalizedValue))
+        
+        if meterUpdateCount % 20 == 0 {
+            print("📊 正規化値: \(clampedValue)")
+        }
+        
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            
+            // 現在の音声レベルを更新
+            self.currentAudioLevel = Float(clampedValue)
+            
+            // 波形配列を更新（新しい値を追加し、古い値を削除）
+            self.audioLevels.append(CGFloat(clampedValue))
+            if self.audioLevels.count > 20 {
+                self.audioLevels.removeFirst()
+            }
+        }
     }
     
     // スロット切り替え完了処理

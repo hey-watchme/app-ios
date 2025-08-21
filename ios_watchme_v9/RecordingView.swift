@@ -144,19 +144,33 @@ struct RecordingView: View {
             // 録音状態の表示エリア
             if audioRecorder.isRecording {
                 // 録音中の表示
-                VStack(spacing: 8) {
-                    Text("🔴 録音中...")
-                        .font(.headline)
-                        .foregroundColor(Color.safeColor("RecordingActive"))
+                VStack(spacing: 16) {
+                    // 波形表示
+                    HStack(spacing: 3) {
+                        ForEach(0..<audioRecorder.audioLevels.count, id: \.self) { index in
+                            RoundedRectangle(cornerRadius: 2)
+                                .fill(Color.safeColor("RecordingActive"))
+                                .frame(width: 4, height: max(4, audioRecorder.audioLevels[index] * 60))
+                                .animation(.easeInOut(duration: 0.05), value: audioRecorder.audioLevels[index])
+                        }
+                    }
+                    .frame(height: 60)
+                    .padding(.horizontal)
                     
-                    Text(audioRecorder.formatTime(audioRecorder.recordingTime))
-                        .font(.title2)
-                        .fontWeight(.bold)
-                        .foregroundColor(Color.safeColor("RecordingActive"))
-                    
-                    Text(audioRecorder.getCurrentSlotInfo())
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    VStack(spacing: 8) {
+                        Text("録音中")
+                            .font(.headline)
+                            .foregroundColor(Color.safeColor("RecordingActive"))
+                        
+                        Text(audioRecorder.formatTime(audioRecorder.recordingTime))
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color.safeColor("RecordingActive"))
+                        
+                        Text(audioRecorder.getCurrentSlotInfo())
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 .padding()
                 .background(Color.safeColor("RecordingActive").opacity(0.1))

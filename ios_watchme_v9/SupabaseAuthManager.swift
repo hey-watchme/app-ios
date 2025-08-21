@@ -8,6 +8,9 @@
 import SwiftUI
 import Foundation
 import Supabase
+#if os(iOS)
+import UIKit
+#endif
 
 // Supabaseクライアントをグローバルに定義
 let supabase = SupabaseClient(
@@ -30,15 +33,49 @@ class SupabaseAuthManager: ObservableObject {
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
     
+    // トークンリフレッシュタイマー
+    private var refreshTimer: Timer?
+    private let tokenRefreshInterval: TimeInterval = 45 * 60 // 45分（1時間のトークンに対して15分前にリフレッシュ）
+    
     init(deviceManager: DeviceManager) {
         self.deviceManager = deviceManager
         // 保存された認証状態を確認
         checkAuthStatus()
+        // アプリがフォアグラウンドに戻った時の処理を設定
+        setupNotificationObservers()
     }
     
     // MARK: - アクセストークン取得
     func getAccessToken() -> String? {
+        // トークンの有効期限をチェックして、必要ならリフレッシュ
+        Task { @MainActor in
+            await ensureValidToken()
+        }
         return currentUser?.accessToken
+    }
+    
+    // MARK: - 通知オブザーバーの設定
+    private func setupNotificationObservers() {
+        #if os(iOS)
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(appWillEnterForeground),
+            name: UIApplication.willEnterForegroundNotification,
+            object: nil
+        )
+        #endif
+    }
+    
+    @objc private func appWillEnterForeground() {
+        print("📱 アプリがフォアグラウンドに復帰")
+        Task { @MainActor in
+            await refreshTokenIfNeeded()
+        }
+    }
+    
+    deinit {
+        refreshTimer?.invalidate()
+        NotificationCenter.default.removeObserver(self)
     }
     
     // MARK: - 認証状態確認
@@ -49,35 +86,56 @@ class SupabaseAuthManager: ObservableObject {
                 do {
                     // リフレッシュトークンがある場合のみセッションを復元
                     if let refreshToken = savedUser.refreshToken {
-                        // アクセストークンとリフレッシュトークンを使ってセッションを設定
-                        _ = try await supabase.auth.setSession(
-                            accessToken: savedUser.accessToken,
-                            refreshToken: refreshToken
-                        )
+                        // まずリフレッシュトークンでトークンを更新してみる
+                        let success = await refreshTokenWithRetry(refreshToken: refreshToken)
+                        
+                        if !success {
+                            // リフレッシュ失敗時は保存されたトークンで復元を試みる
+                            _ = try await supabase.auth.setSession(
+                                accessToken: savedUser.accessToken,
+                                refreshToken: refreshToken
+                            )
+                            
+                            self.currentUser = savedUser
+                            self.isAuthenticated = true
+                        }
+                        // refreshTokenWithRetryが成功した場合は、その中で既にcurrentUserとisAuthenticatedが設定済み
                     } else {
                         // リフレッシュトークンがない場合は再ログインが必要
                         throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "リフレッシュトークンがありません"])
                     }
                     
-                    self.currentUser = savedUser
-                    self.isAuthenticated = true
-                    print("✅ 保存された認証状態を復元: \(savedUser.email)")
-                    print("🔄 認証状態復元: isAuthenticated = true")
-                    print("🔑 セッショントークンも復元しました")
+                    if self.isAuthenticated {
+                        print("✅ 保存された認証状態を復元: \(savedUser.email)")
+                        print("🔄 認証状態復元: isAuthenticated = true")
+                        print("🔑 セッショントークンも復元しました")
+                        
+                        // トークンリフレッシュタイマーを開始
+                        startTokenRefreshTimer()
+                        
+                        // プロファイルを取得
+                        fetchUserProfile(userId: currentUser?.id ?? savedUser.id)
+                        
+                        // デバイス情報を取得（登録はせず、既存のデバイス一覧のみ取得）
+                        await deviceManager.fetchUserDevices(for: currentUser?.id ?? savedUser.id)
+                    }
                     
                     self.isCheckingAuthStatus = false  // 認証確認完了
                     
-                    // プロファイルを取得
-                    fetchUserProfile(userId: savedUser.id)
-                    
-                    // デバイス情報を取得（登録はせず、既存のデバイス一覧のみ取得）
-                    await deviceManager.fetchUserDevices(for: savedUser.id)
-                    
                 } catch {
                     print("❌ セッション復元エラー: \(error)")
-                    print("⚠️ 再ログインが必要です")
-                    // セッション復元に失敗した場合はクリア
-                    clearLocalAuthData()
+                    print("🔄 リフレッシュトークンでの再試行を開始...")
+                    
+                    // エラー時はリフレッシュトークンで再試行
+                    if let refreshToken = savedUser.refreshToken {
+                        let success = await refreshTokenWithRetry(refreshToken: refreshToken)
+                        if !success {
+                            print("⚠️ 再ログインが必要です")
+                            clearLocalAuthData()
+                        }
+                    } else {
+                        clearLocalAuthData()
+                    }
                     self.isCheckingAuthStatus = false  // 認証確認完了
                 }
             }
@@ -118,6 +176,9 @@ class SupabaseAuthManager: ObservableObject {
                 self.saveUserToDefaults(user)
                 
                 print("🔄 認証状態を更新: isAuthenticated = true")
+                
+                // トークンリフレッシュタイマーを開始
+                self.startTokenRefreshTimer()
                 
                 // ユーザープロファイルを取得
                 self.fetchUserProfile(userId: user.id)
@@ -216,6 +277,10 @@ class SupabaseAuthManager: ObservableObject {
     func signOut() async {
         print("🚪 ログアウト開始")
         
+        // トークンリフレッシュタイマーを停止
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+        
         // 即座にローカル状態をクリア（UIの即時更新のため）
         self.clearLocalAuthData()
         
@@ -236,6 +301,10 @@ class SupabaseAuthManager: ObservableObject {
         currentUser = nil
         isAuthenticated = false
         authError = nil
+        
+        // トークンリフレッシュタイマーを停止
+        refreshTimer?.invalidate()
+        refreshTimer = nil
         
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
@@ -383,6 +452,113 @@ class SupabaseAuthManager: ObservableObject {
                 }
             }
         }
+    }
+    
+    // MARK: - トークンリフレッシュ機能
+    
+    // トークンリフレッシュタイマーの開始
+    private func startTokenRefreshTimer() {
+        refreshTimer?.invalidate()
+        refreshTimer = Timer.scheduledTimer(withTimeInterval: tokenRefreshInterval, repeats: true) { _ in
+            Task { @MainActor in
+                print("⏰ 定期トークンリフレッシュを実行")
+                await self.refreshTokenIfNeeded()
+            }
+        }
+    }
+    
+    // トークンの有効性を確保
+    func ensureValidToken() async {
+        guard isAuthenticated else { return }
+        
+        // トークンが有効期限に近づいているかチェック
+        // Supabase SDKの機能を活用してセッションを確認
+        do {
+            _ = try await supabase.auth.session
+            print("✅ 現在のトークンは有効です")
+        } catch {
+            print("⚠️ トークンの有効性チェック失敗: \(error)")
+            await refreshTokenIfNeeded()
+        }
+    }
+    
+    // 必要に応じてトークンをリフレッシュ
+    private func refreshTokenIfNeeded() async {
+        guard let refreshToken = currentUser?.refreshToken else {
+            print("❌ リフレッシュトークンがありません")
+            return
+        }
+        
+        await refreshTokenWithRetry(refreshToken: refreshToken)
+    }
+    
+    // リトライ機能付きトークンリフレッシュ
+    @discardableResult
+    private func refreshTokenWithRetry(refreshToken: String, maxRetries: Int = 3) async -> Bool {
+        for attempt in 1...maxRetries {
+            print("🔄 トークンリフレッシュ試行 \(attempt)/\(maxRetries)")
+            
+            do {
+                // Supabase SDKのリフレッシュ機能を使用
+                let session = try await supabase.auth.refreshSession()
+                
+                // 新しいトークンで情報を更新
+                if let email = session.user.email {
+                    let updatedUser = SupabaseUser(
+                        id: session.user.id.uuidString,
+                        email: email,
+                        accessToken: session.accessToken,
+                        refreshToken: session.refreshToken,
+                        profile: currentUser?.profile
+                    )
+                    
+                    self.currentUser = updatedUser
+                    self.isAuthenticated = true
+                    self.saveUserToDefaults(updatedUser)
+                    
+                    print("✅ トークンリフレッシュ成功")
+                    print("📅 新しいアクセストークンを取得")
+                    
+                    return true
+                }
+            } catch {
+                print("❌ トークンリフレッシュエラー (試行 \(attempt)): \(error)")
+                
+                // 最後の試行でなければ、指数バックオフで待機
+                if attempt < maxRetries {
+                    let delay = Double(attempt) * 2.0
+                    print("⏳ \(delay)秒後に再試行...")
+                    try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                }
+            }
+        }
+        
+        print("❌ トークンリフレッシュが\(maxRetries)回失敗しました")
+        return false
+    }
+    
+    // 401エラー時の自動リカバリー
+    func handleAuthenticationError() async -> Bool {
+        print("🚨 認証エラーを検出 - 自動リカバリーを開始")
+        
+        guard let refreshToken = currentUser?.refreshToken else {
+            print("❌ リフレッシュトークンがないため再ログインが必要です")
+            clearLocalAuthData()
+            return false
+        }
+        
+        // トークンリフレッシュを試行
+        let success = await refreshTokenWithRetry(refreshToken: refreshToken)
+        
+        if !success {
+            print("❌ 自動リカバリー失敗 - 再ログインが必要です")
+            clearLocalAuthData()
+            authError = "セッションの有効期限が切れました。再度ログインしてください。"
+        } else {
+            print("✅ 自動リカバリー成功 - 処理を継続できます")
+        }
+        
+        return success
     }
 }
 

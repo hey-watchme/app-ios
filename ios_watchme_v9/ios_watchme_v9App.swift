@@ -12,15 +12,16 @@ import AVFoundation
 struct ios_watchme_v9App: App {
     @StateObject private var deviceManager = DeviceManager()
     @StateObject private var authManager: SupabaseAuthManager
-    @StateObject private var dataManager = SupabaseDataManager()
+    @StateObject private var dataManager: SupabaseDataManager
     
     init() {
         let deviceManager = DeviceManager()
         let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+        let dataManager = SupabaseDataManager(authManager: authManager)
         
         _deviceManager = StateObject(wrappedValue: deviceManager)
         _authManager = StateObject(wrappedValue: authManager)
-        _dataManager = StateObject(wrappedValue: SupabaseDataManager())
+        _dataManager = StateObject(wrappedValue: dataManager)
     }
     
     var body: some Scene {
