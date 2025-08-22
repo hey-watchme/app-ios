@@ -17,6 +17,7 @@ class AudioRecorder: NSObject, ObservableObject {
     @Published var totalRecordingSessions: Int = 0
     @Published var audioLevels: [CGFloat] = Array(repeating: 0.0, count: 20) // 音声レベル配列（波形表示用）
     @Published var currentAudioLevel: Float = 0.0 // 現在の音声レベル
+    @Published var recordingError: String? = nil // 録音エラーメッセージ
     
     private var audioRecorder: AVAudioRecorder?
     private var recordingTimer: Timer?
@@ -65,7 +66,7 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     // アップロード完了ファイル削除の通知を受信
-    @objc private func handleUploadedFileDeleted(_ notification: Notification) {
+    @objc private func handleUploadedFileDeleted(_ notification: Foundation.Notification) {
         guard let deletedRecording = notification.object as? RecordingModel else { return }
         
         print("📢 アップロード完了ファイル削除通知を受信: \(deletedRecording.fileName)")
@@ -80,7 +81,7 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     // アップロード状態変更の通知を受信
-    @objc private func handleRecordingUploadStatusChanged(_ notification: Notification) {
+    @objc private func handleRecordingUploadStatusChanged(_ notification: Foundation.Notification) {
         guard let changedRecording = notification.object as? RecordingModel else { return }
         
         print("📢 [AudioRecorder] アップロード状態変更通知を受信: \(changedRecording.fileName)")
@@ -131,12 +132,12 @@ class AudioRecorder: NSObject, ObservableObject {
     // 現在の30分スロット時刻を取得（HH-mm形式）
     // デバイスのタイムゾーンを考慮
     private func getCurrentSlot() -> String {
-        return SlotTimeUtility.getCurrentSlot()
+        return SlotTimeUtility.getCurrentSlot(timezone: getDeviceTimezone())
     }
     
     // 特定の時刻のスロットを取得
     private func getSlotForDate(_ date: Date) -> String {
-        return SlotTimeUtility.getSlotName(from: date)
+        return SlotTimeUtility.getSlotName(from: date, timezone: getDeviceTimezone())
     }
     
     // デバイスのタイムゾーンを取得
@@ -147,12 +148,12 @@ class AudioRecorder: NSObject, ObservableObject {
     
     // 次のスロット切り替えまでの正確な秒数を計算
     private func getSecondsUntilNextSlot() -> TimeInterval {
-        return SlotTimeUtility.getSecondsUntilNextSlot()
+        return SlotTimeUtility.getSecondsUntilNextSlot(timezone: getDeviceTimezone())
     }
     
     // 次のスロット開始時刻を取得
     private func getNextSlotStartTime() -> Date {
-        return SlotTimeUtility.getNextSlotStartTime()
+        return SlotTimeUtility.getNextSlotStartTime(timezone: getDeviceTimezone())
     }
     
     // 録音開始
@@ -161,6 +162,9 @@ class AudioRecorder: NSObject, ObservableObject {
             print("⚠️ 既に録音中です")
             return
         }
+        
+        // エラー状態をクリア
+        recordingError = nil
         
         recordingStartTime = Date()
         currentSlot = getCurrentSlot()
@@ -260,7 +264,7 @@ class AudioRecorder: NSObject, ObservableObject {
     
     // 既存録音の処理（自動上書き）
     private func handleExistingRecording(fileName: String) {
-        let dateString = SlotTimeUtility.getDateString(from: Date())
+        let dateString = SlotTimeUtility.getDateString(from: Date(), timezone: getDeviceTimezone())
         let fullFileName = "\(dateString)/\(fileName)"
         
         if let existingIndex = recordings.firstIndex(where: { $0.fileName == fullFileName }) {
@@ -318,8 +322,8 @@ class AudioRecorder: NSObject, ObservableObject {
         
         // 次のスロットの開始時刻を取得
         let nextSlotTime = getNextSlotStartTime()
-        // その時刻を使って、新しいスロット名を計算する
-        let newSlot = SlotTimeUtility.getSlotName(from: nextSlotTime)
+        // その時刻を使って、新しいスロット名を計算する（デバイスタイムゾーン考慮）
+        let newSlot = SlotTimeUtility.getSlotName(from: nextSlotTime, timezone: getDeviceTimezone())
         
         print("🔄 スロット切り替え実行: \(oldSlot) → \(newSlot)")
         print("📅 切り替え時刻: \(Date())")
@@ -465,6 +469,17 @@ class AudioRecorder: NSObject, ObservableObject {
                             
                             // RecordingModelを作成（アップロード状態は自動復元）
                             let recording = RecordingModel(fileName: fullFileName, date: creationDate)
+                            
+                            // ファイルパス不整合チェック - RecordingModelが実際のファイルを参照できているかチェック
+                            if !recording.fileExists() || recording.fileSize == 0 {
+                                print("⚠️ ファイルパス不整合検出: RecordingModelパス[\(fullFileName)]が実際のファイル[\(url.path)]を参照できていません")
+                                print("   - RecordingModel.fileExists(): \(recording.fileExists())")
+                                print("   - RecordingModel.fileSize: \(recording.fileSize)")
+                                print("   - 実際のファイルサイズ: \((try? url.resourceValues(forKeys: [.fileSizeKey]))?.fileSize ?? 0)")
+                                // この問題ファイルはスキップ（後で修正機能を追加予定）
+                                continue
+                            }
+                            
                             newRecordings.append(recording)
                             
                             print("📄 ファイル読み込み: \(fullFileName) (サイズ: \(recording.fileSizeFormatted), アップロード: \(recording.isUploaded))")
@@ -693,7 +708,7 @@ extension AudioRecorder: AVAudioRecorderDelegate {
         
         let recordingURL = recorder.url
         let fileName = recordingURL.lastPathComponent
-        let dateString = SlotTimeUtility.getDateString(from: currentSlotStartTime)
+        let dateString = SlotTimeUtility.getDateString(from: currentSlotStartTime, timezone: getDeviceTimezone())
         let fullFileName = "\(dateString)/\(fileName)"
         
         print("💾 録音完了処理: \(fullFileName)")
@@ -728,7 +743,21 @@ extension AudioRecorder: AVAudioRecorderDelegate {
                         print("📊 総録音ファイル数: \(self.recordings.count)")
                     }
                 } else {
-                    print("❌ ファイルサイズが0bytes")
+                    print("❌ ファイルサイズが0bytes - 録音に失敗しました")
+                    
+                    // 0KBファイルを削除
+                    do {
+                        try FileManager.default.removeItem(at: recordingURL)
+                        print("🗑️ 0KBファイルを削除しました")
+                    } catch {
+                        print("⚠️ 0KBファイル削除エラー: \(error)")
+                    }
+                    
+                    // メインスレッドでエラーメッセージを設定
+                    DispatchQueue.main.async {
+                        self.recordingError = "録音に失敗しました。もう一度お試しください。"
+                        print("📢 録音エラー設定: \(self.recordingError!)")
+                    }
                 }
             } catch {
                 print("❌ ファイル属性取得エラー: \(error)")
@@ -841,6 +870,12 @@ extension AudioRecorder: AVAudioRecorderDelegate {
     // 録音失敗時の処理
     private func handleRecordingFailure() {
         print("❌ 録音失敗 - クリーンアップします")
+        
+        // メインスレッドでエラーメッセージを設定
+        DispatchQueue.main.async {
+            self.recordingError = "録音に失敗しました。マイクの権限とストレージ容量を確認してください。"
+            print("📢 録音失敗エラー設定: \(self.recordingError!)")
+        }
         
         // 失敗時は完全クリーンアップを実行
         cleanup()

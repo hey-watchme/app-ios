@@ -8,8 +8,12 @@
 	<string>com.matsumotokaya.ios-watchme-v9</string>
 	<key>CFBundleName</key>
 	<string>ios_watchme_v9</string>
+	<key>NSCameraUsageDescription</key>
+	<string>QRコードをスキャンしてデバイスを追加するため、およびアバター写真を撮影するためにカメラを使用します</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>このアプリは音声を録音してサーバーにアップロードするためにマイクへのアクセスが必要です。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>アバター画像を選択するためにフォトライブラリへのアクセスが必要です</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>
@@ -19,24 +23,17 @@
 	</dict>
 	<key>UILaunchStoryboardName</key>
 	<string>Launch Screen</string>
-	<key>NSCameraUsageDescription</key>
-	<string>QRコードをスキャンしてデバイスを追加するため、およびアバター写真を撮影するためにカメラを使用します</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>アバター画像を選択するためにフォトライブラリへのアクセスが必要です</string>
 	<key>UIRequiresFullScreen</key>
 	<false/>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortrait</string>
 	</array>
 </dict>
 </plist>

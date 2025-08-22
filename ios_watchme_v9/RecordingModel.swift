@@ -188,7 +188,7 @@ extension RecordingModel {
     
     // アップロード可能かチェック
     var canUpload: Bool {
-        return !isUploaded && fileExists() && uploadAttempts < 3
+        return !isUploaded && fileExists() && uploadAttempts < 3 && fileSize > 0
     }
     
     // 強制アップロード可能かチェック（既にアップロード済みでも可能）
@@ -201,6 +201,11 @@ extension RecordingModel {
         let formatter = ByteCountFormatter()
         formatter.countStyle = .file
         return formatter.string(fromByteCount: fileSize)
+    }
+    
+    // 録音失敗ファイル（0KB）かどうかをチェック
+    var isRecordingFailed: Bool {
+        return fileExists() && fileSize == 0
     }
 }
 

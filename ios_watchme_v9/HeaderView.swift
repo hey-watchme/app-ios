@@ -15,9 +15,9 @@ struct HeaderView: View {
     @Binding var showRecordingSheet: Bool
     @State private var subject: Subject? = nil  // ローカル状態として管理
     
-    // 通知関連のプレースホルダー
+    // 通知関連
     @State private var showNotificationSheet = false
-    @State private var hasUnreadNotifications = true  // TODO: 実際の未読通知数はバックエンドから取得
+    @State private var unreadNotificationCount = 0
     
     var body: some View {
         HStack {
@@ -42,12 +42,18 @@ struct HeaderView: View {
                         .font(.title2)
                         .foregroundColor(Color.safeColor("PrimaryActionColor"))
                     
-                    // 未読通知がある場合の赤い丸（バッジ）
-                    if hasUnreadNotifications {
-                        Circle()
-                            .fill(Color.red)
-                            .frame(width: 10, height: 10)
-                            .offset(x: 8, y: -4)
+                    // 未読通知がある場合の赤い丸（バッジ）と数
+                    if unreadNotificationCount > 0 {
+                        ZStack {
+                            Circle()
+                                .fill(Color.red)
+                                .frame(width: 18, height: 18)
+                            
+                            Text("\(min(unreadNotificationCount, 99))")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                        .offset(x: 8, y: -4)
                     }
                 }
             }
@@ -66,8 +72,26 @@ struct HeaderView: View {
             self.subject = await dataManager.fetchSubjectInfo(deviceId: deviceId)
         }
         .sheet(isPresented: $showNotificationSheet) {
-            // 通知画面のプレースホルダー
-            NotificationPlaceholderView()
+            // 通知画面
+            NotificationView()
+                .environmentObject(authManager)
+                .environmentObject(dataManager)
+                .onDisappear {
+                    // 通知画面を閉じたら未読数を更新
+                    Task {
+                        await updateUnreadCount()
+                    }
+                }
+        }
+        .task {
+            // 初回読み込み時に未読数を取得
+            await updateUnreadCount()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            // アプリがフォアグラウンドに戻ったら未読数を更新
+            Task {
+                await updateUnreadCount()
+            }
         }
     }
     
@@ -147,5 +171,11 @@ struct HeaderView: View {
                     .foregroundColor(Color.safeColor("PrimaryActionColor"))
             }
         }
+    }
+    
+    // 未読通知数を更新
+    private func updateUnreadCount() async {
+        guard let userId = authManager.currentUser?.id else { return }
+        unreadNotificationCount = await dataManager.fetchUnreadNotificationCount(userId: userId)
     }
 }

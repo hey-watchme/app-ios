@@ -41,7 +41,7 @@ struct NotificationPlaceholderView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         ForEach(demoNotifications) { notification in
-                            NotificationRow(notification: notification)
+                            PlaceholderNotificationRow(notification: notification)
                             Divider()
                         }
                     }
@@ -86,8 +86,8 @@ struct DemoNotification: Identifiable {
     var isRead: Bool
 }
 
-// 通知行のView
-struct NotificationRow: View {
+// 通知行のView（プレースホルダー用）
+struct PlaceholderNotificationRow: View {
     let notification: DemoNotification
     
     var body: some View {

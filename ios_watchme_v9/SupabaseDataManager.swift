@@ -727,6 +727,226 @@ class SupabaseDataManager: ObservableObject {
         
         print("✅ Subject updated successfully: \(subjectId)")
     }
+    
+    // MARK: - Notification Methods
+    
+    /// 通知を取得（イベント通知、パーソナル通知、グローバル通知を統合）
+    func fetchNotifications(userId: String) async -> [Notification] {
+        print("🔔 Fetching notifications for user: \(userId)")
+        
+        var allNotifications: [Notification] = []
+        
+        do {
+            // 1. イベント通知とパーソナル通知を取得（user_idが一致するもの）
+            let personalNotifications: [Notification] = try await supabase
+                .from("notifications")
+                .select()
+                .eq("user_id", value: userId)
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            allNotifications.append(contentsOf: personalNotifications)
+            print("✅ Found \(personalNotifications.count) personal/event notifications")
+            
+            // 2. グローバル通知を取得（すべての通知を取得してからフィルタリング）
+            let allDbNotifications: [Notification] = try await supabase
+                .from("notifications")
+                .select()
+                .eq("type", value: "global")
+                .order("created_at", ascending: false)
+                .execute()
+                .value
+            
+            // user_idがnilのものだけをフィルタリング
+            let globalNotifications = allDbNotifications.filter { $0.userId == nil }
+            
+            // 3. グローバル通知の既読状態を確認
+            if !globalNotifications.isEmpty {
+                // notification_readsテーブルから既読情報を取得
+                struct NotificationReadStatus: Codable {
+                    let notification_id: UUID
+                    let read_at: Date?
+                }
+                
+                // ユーザーの全既読レコードを取得
+                let readStatuses: [NotificationReadStatus] = try await supabase
+                    .from("notification_reads")
+                    .select("notification_id, read_at")
+                    .eq("user_id", value: userId)
+                    .execute()
+                    .value
+                
+                // 既読状態をマージ
+                var updatedGlobalNotifications = globalNotifications
+                for (index, notification) in updatedGlobalNotifications.enumerated() {
+                    if readStatuses.contains(where: { $0.notification_id == notification.id }) {
+                        updatedGlobalNotifications[index].isRead = true
+                    }
+                }
+                
+                allNotifications.append(contentsOf: updatedGlobalNotifications)
+                print("✅ Found \(globalNotifications.count) global notifications")
+            }
+            
+            // 作成日時でソート（新しい順）
+            allNotifications.sort { $0.createdAt > $1.createdAt }
+            
+            print("✅ Total notifications: \(allNotifications.count)")
+            return allNotifications
+            
+        } catch {
+            print("❌ Failed to fetch notifications: \(error)")
+            await MainActor.run { [weak self] in
+                self?.errorMessage = "通知の取得エラー: \(error.localizedDescription)"
+            }
+            return []
+        }
+    }
+    
+    /// 通知を既読にする
+    func markNotificationAsRead(notificationId: UUID, userId: String, isGlobal: Bool) async throws {
+        print("✅ Marking notification as read: \(notificationId)")
+        
+        if isGlobal {
+            // グローバル通知の場合は notification_reads テーブルに記録
+            struct NotificationReadInsert: Codable {
+                let user_id: String
+                let notification_id: UUID
+            }
+            
+            let readRecord = NotificationReadInsert(
+                user_id: userId,
+                notification_id: notificationId
+            )
+            
+            // 既存のレコードがある場合は無視（ON CONFLICT DO NOTHING相当）
+            do {
+                try await supabase
+                    .from("notification_reads")
+                    .upsert(readRecord, onConflict: "user_id,notification_id")
+                    .execute()
+                print("✅ Global notification marked as read")
+            } catch {
+                // 既に既読の場合はエラーを無視
+                print("⚠️ Notification might already be marked as read: \(error)")
+            }
+        } else {
+            // パーソナル/イベント通知の場合は notifications テーブルの is_read を更新
+            struct NotificationUpdate: Codable {
+                let is_read: Bool
+            }
+            
+            let update = NotificationUpdate(is_read: true)
+            
+            try await supabase
+                .from("notifications")
+                .update(update)
+                .eq("id", value: notificationId.uuidString)
+                .execute()
+            
+            print("✅ Personal/Event notification marked as read")
+        }
+    }
+    
+    /// すべての通知を既読にする
+    func markAllNotificationsAsRead(userId: String) async throws {
+        print("✅ Marking all notifications as read for user: \(userId)")
+        
+        // 1. パーソナル/イベント通知を既読にする
+        struct NotificationUpdate: Codable {
+            let is_read: Bool
+        }
+        
+        let update = NotificationUpdate(is_read: true)
+        
+        try await supabase
+            .from("notifications")
+            .update(update)
+            .eq("user_id", value: userId)
+            .eq("is_read", value: false)
+            .execute()
+        
+        // 2. グローバル通知の未読分を既読にする
+        // まず未読のグローバル通知を取得（すべて取得してからフィルタリング）
+        let allGlobalNotifications: [Notification] = try await supabase
+            .from("notifications")
+            .select()
+            .eq("type", value: "global")
+            .execute()
+            .value
+        
+        // user_idがnilのものだけをフィルタリング
+        let unreadGlobalNotifications = allGlobalNotifications.filter { $0.userId == nil }
+        
+        // notification_readsに一括挿入
+        if !unreadGlobalNotifications.isEmpty {
+            struct NotificationReadInsert: Codable {
+                let user_id: String
+                let notification_id: UUID
+            }
+            
+            let readRecords = unreadGlobalNotifications.map { notification in
+                NotificationReadInsert(user_id: userId, notification_id: notification.id)
+            }
+            
+            // 既存のレコードは無視して挿入
+            for record in readRecords {
+                do {
+                    try await supabase
+                        .from("notification_reads")
+                        .upsert(record, onConflict: "user_id,notification_id")
+                        .execute()
+                } catch {
+                    // 既に既読の場合は続行
+                    continue
+                }
+            }
+        }
+        
+        print("✅ All notifications marked as read")
+    }
+    
+    /// 未読通知数を取得
+    func fetchUnreadNotificationCount(userId: String) async -> Int {
+        do {
+            // パーソナル/イベント通知の未読数
+            let personalUnreadCount: Int = try await supabase
+                .from("notifications")
+                .select("id", head: false, count: .exact)
+                .eq("user_id", value: userId)
+                .eq("is_read", value: false)
+                .execute()
+                .count ?? 0
+            
+            // グローバル通知の総数を取得（すべて取得してからフィルタリング）
+            let allGlobalNotifications: [Notification] = try await supabase
+                .from("notifications")
+                .select("id")
+                .eq("type", value: "global")
+                .execute()
+                .value
+            
+            // user_idがnilのものだけをカウント
+            let globalNotifications = allGlobalNotifications.filter { $0.userId == nil }
+            
+            // 既読のグローバル通知をカウント
+            let readGlobalCount: Int = try await supabase
+                .from("notification_reads")
+                .select("notification_id", head: false, count: .exact)
+                .eq("user_id", value: userId)
+                .execute()
+                .count ?? 0
+            
+            let globalUnreadCount = max(0, globalNotifications.count - readGlobalCount)
+            
+            return personalUnreadCount + globalUnreadCount
+            
+        } catch {
+            print("❌ Failed to fetch unread count: \(error)")
+            return 0
+        }
+    }
 }
 
 // MARK: - Custom Error Types

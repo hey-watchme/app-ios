@@ -22,6 +22,7 @@ struct RecordingView: View {
     @State private var showDeviceLinkAlert = false
     @State private var isLinkingDevice = false
     @State private var currentTimeSlot = SlotTimeUtility.getCurrentSlot()
+    @State private var deviceCurrentTime = ""
     @State private var timer: Timer?
     
     var body: some View {
@@ -47,20 +48,79 @@ struct RecordingView: View {
                 Divider()
                     .padding(.vertical, 8)
             
-            // 録音時間の説明
-            VStack(spacing: 8) {
-                HStack(spacing: 4) {
-                    Image(systemName: "info.circle")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                    Text("ただいま録音されたデータは \(currentTimeSlot) の時間のデータポイントとしてグラフに表示されます")
-                        .font(.caption)
+            // デバイスタイムゾーン情報と録音時間の詳細説明
+            VStack(spacing: 12) {
+                // デバイスタイムゾーン情報
+                VStack(spacing: 8) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "globe")
+                            .font(.caption)
+                            .foregroundColor(.blue)
+                        Text("デバイスタイムゾーン: \(deviceManager.selectedDeviceTimezone.identifier)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.blue)
+                    }
+                    
+                    // 現在のデバイス時刻
+                    VStack(spacing: 4) {
+                        Text("現在時刻（デバイス基準）")
+                            .font(.caption2)
+                            .foregroundColor(.secondary)
+                        Text(deviceCurrentTime)
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.primary)
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.blue.opacity(0.1))
+                .cornerRadius(8)
+                
+                // 録音データポイント説明
+                VStack(spacing: 4) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "waveform.path")
+                            .font(.caption)
+                            .foregroundColor(.green)
+                        Text("録音データポイント: \(currentTimeSlot)")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.green)
+                    }
+                    Text("このタイムスロットのデータとしてグラフに表示されます")
+                        .font(.caption2)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                 }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+                .background(Color.green.opacity(0.1))
+                .cornerRadius(8)
+            }
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            
+            // 録音エラー表示
+            if let errorMessage = audioRecorder.recordingError {
+                HStack {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(Color.safeColor("ErrorColor"))
+                    Text(errorMessage)
+                        .font(.subheadline)
+                        .foregroundColor(Color.safeColor("ErrorColor"))
+                    Spacer()
+                    Button("閉じる") {
+                        audioRecorder.recordingError = nil
+                    }
+                    .font(.caption)
+                }
+                .padding()
+                .background(Color.safeColor("ErrorColor").opacity(0.1))
+                .cornerRadius(8)
                 .padding(.horizontal)
             }
-            .padding(.vertical, 8)
             
             // 録音開始/停止ボタン
             if audioRecorder.isRecording {
@@ -223,7 +283,7 @@ struct RecordingView: View {
                         .frame(maxHeight: 300)
                         
                         // 一括アップロードボタン（最下部に大きく表示）
-                        if audioRecorder.recordings.filter({ !$0.isUploaded && $0.canUpload }).count > 0 {
+                        if audioRecorder.recordings.filter({ !$0.isRecordingFailed && !$0.isUploaded && $0.canUpload }).count > 0 {
                             Button(action: {
                                 manualBatchUpload()
                             }) {
@@ -303,9 +363,15 @@ struct RecordingView: View {
             }
         )
         .onAppear {
-            // タイマーを開始して時間スロットを更新
-            timer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { _ in
-                currentTimeSlot = SlotTimeUtility.getCurrentSlot()
+            // AudioRecorderにDeviceManagerの参照を設定
+            audioRecorder.deviceManager = deviceManager
+            
+            // 初期値を設定
+            updateTimeInfo()
+            
+            // タイマーを開始して時間スロットとデバイス時刻を更新
+            timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+                updateTimeInfo()
             }
         }
         .onDisappear {
@@ -318,6 +384,19 @@ struct RecordingView: View {
                 audioRecorder.stopRecording()
             }
         }
+    }
+    
+    // 時刻とスロット情報を更新
+    private func updateTimeInfo() {
+        // デバイスのタイムゾーンを考慮した現在時刻を取得
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年M月d日 HH:mm:ss"
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.timeZone = deviceManager.selectedDeviceTimezone
+        
+        deviceCurrentTime = formatter.string(from: Date())
+        // デバイスのタイムゾーンを使用してスロットを計算
+        currentTimeSlot = SlotTimeUtility.getCurrentSlot(timezone: deviceManager.selectedDeviceTimezone)
     }
     
     // デバイス連携後に録音を開始する
@@ -380,8 +459,8 @@ struct RecordingView: View {
     
     // シンプルな一括アップロード（NetworkManagerを直接使用）- 逐次実行版
     private func manualBatchUpload() {
-        // アップロード対象のリストを取得
-        let recordingsToUpload = audioRecorder.recordings.filter { $0.canUpload }
+        // アップロード対象のリストを取得（録音失敗ファイルを除外）
+        let recordingsToUpload = audioRecorder.recordings.filter { !$0.isRecordingFailed && $0.canUpload }
         
         guard !recordingsToUpload.isEmpty else {
             alertMessage = "アップロード対象のファイルがありません。"
@@ -492,13 +571,36 @@ struct RecordingRowView: View {
                     
                     Spacer()
                     
-                    Text(recording.fileSizeFormatted)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    // 録音失敗ファイルの場合は「録音失敗」を表示
+                    if recording.isRecordingFailed {
+                        Text("録音失敗")
+                            .font(.caption)
+                            .fontWeight(.bold)
+                            .foregroundColor(Color.safeColor("ErrorColor"))
+                    } else {
+                        Text(recording.fileSizeFormatted)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
                 
-                // アップロード失敗時のみエラー情報を表示
-                if recording.uploadAttempts > 0 && !recording.isUploaded {
+                // 録音失敗ファイルの場合の説明
+                if recording.isRecordingFailed {
+                    HStack {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(Color.safeColor("ErrorColor"))
+                        
+                        Text("音声データの録音に失敗しました。ファイルは自動的に削除されます。")
+                            .font(.caption)
+                            .foregroundColor(Color.safeColor("ErrorColor"))
+                        
+                        Spacer()
+                    }
+                }
+                
+                // アップロード失敗時のみエラー情報を表示（録音失敗ファイル以外）
+                if !recording.isRecordingFailed && recording.uploadAttempts > 0 && !recording.isUploaded {
                     HStack {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption)

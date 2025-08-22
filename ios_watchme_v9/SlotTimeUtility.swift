@@ -11,8 +11,9 @@ import Foundation
 class SlotTimeUtility {
     
     // MARK: - 日付から30分スロット名を生成（HH-MM形式）
-    static func getSlotName(from date: Date) -> String {
-        let calendar = Calendar.current
+    static func getSlotName(from date: Date, timezone: TimeZone? = nil) -> String {
+        var calendar = Calendar.current
+        calendar.timeZone = timezone ?? TimeZone.current
         let components = calendar.dateComponents([.hour, .minute], from: date)
         
         let hour = components.hour ?? 0
@@ -24,9 +25,14 @@ class SlotTimeUtility {
         return String(format: "%02d-%02d", hour, adjustedMinute)
     }
     
-    // MARK: - 現在時刻のスロット名を取得
+    // MARK: - 現在時刻のスロット名を取得（タイムゾーン考慮版）
+    static func getCurrentSlot(timezone: TimeZone? = nil) -> String {
+        return getSlotName(from: Date(), timezone: timezone)
+    }
+    
+    // MARK: - 現在時刻のスロット名を取得（互換性のため残す）
     static func getCurrentSlot() -> String {
-        return getSlotName(from: Date())
+        return getCurrentSlot(timezone: nil)
     }
     
     // MARK: - 日付文字列を取得（YYYY-MM-DD形式）
@@ -43,7 +49,7 @@ class SlotTimeUtility {
     // MARK: - 完全なファイルパスを生成（device_id/YYYY-MM-DD/raw/HH-MM.wav）
     static func generateFilePath(deviceID: String, date: Date, timezone: TimeZone? = nil) -> String {
         let dateString = getDateString(from: date, timezone: timezone)
-        let slotName = getSlotName(from: date)
+        let slotName = getSlotName(from: date, timezone: timezone)
         return "\(deviceID)/\(dateString)/raw/\(slotName).wav"
     }
     
@@ -52,10 +58,11 @@ class SlotTimeUtility {
         return fileName.replacingOccurrences(of: ".wav", with: "")
     }
     
-    // MARK: - 次のスロット切り替えまでの秒数を計算
-    static func getSecondsUntilNextSlot() -> TimeInterval {
+    // MARK: - 次のスロット切り替えまでの秒数を計算（タイムゾーン考慮版）
+    static func getSecondsUntilNextSlot(timezone: TimeZone? = nil) -> TimeInterval {
         let now = Date()
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.timeZone = timezone ?? TimeZone.current
         let components = calendar.dateComponents([.hour, .minute, .second, .nanosecond], from: now)
         
         let minute = components.minute ?? 0
@@ -69,10 +76,16 @@ class SlotTimeUtility {
         return TimeInterval(secondsUntilNextSlot)
     }
     
-    // MARK: - 次のスロット開始時刻を取得
-    static func getNextSlotStartTime() -> Date {
+    // MARK: - 次のスロット切り替えまでの秒数を計算（互換性のため残す）
+    static func getSecondsUntilNextSlot() -> TimeInterval {
+        return getSecondsUntilNextSlot(timezone: nil)
+    }
+    
+    // MARK: - 次のスロット開始時刻を取得（タイムゾーン考慮版）
+    static func getNextSlotStartTime(timezone: TimeZone? = nil) -> Date {
         let now = Date()
-        let calendar = Calendar.current
+        var calendar = Calendar.current
+        calendar.timeZone = timezone ?? TimeZone.current
         let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: now)
         
         let minute = components.minute ?? 0
@@ -92,6 +105,11 @@ class SlotTimeUtility {
         }
         
         return calendar.date(from: nextSlotComponents) ?? now
+    }
+    
+    // MARK: - 次のスロット開始時刻を取得（互換性のため残す）
+    static func getNextSlotStartTime() -> Date {
+        return getNextSlotStartTime(timezone: nil)
     }
     
     // MARK: - スロット時刻のデバッグ情報を出力

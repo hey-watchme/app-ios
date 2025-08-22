@@ -58,6 +58,31 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
   - バケット: `watchme-avatars`（ap-southeast-2リージョン）
   - パブリックアクセス設定済み（画像の表示用）
 
+### 通知機能（v9.22.0〜）
+- **3種類の通知タイプ**:
+  - **グローバル通知**: 全ユーザー向け（user_id = NULL, type = 'global'）
+    - システムメンテナンス、新機能リリース、重要なお知らせなど
+    - 既読管理は`notification_reads`テーブルで個別管理
+  - **パーソナル通知**: 特定ユーザー向け（user_id = 対象ユーザー, type = 'personal'）
+    - ユーザー固有の通知、アカウント関連の通知など
+    - 既読管理は`notifications.is_read`フィールドで管理
+  - **イベント通知**: イベント駆動型（user_id = 対象ユーザー, type = 'event'）
+    - 分析完了、レポート生成、デバイス接続などのシステムイベント
+    - 既読管理は`notifications.is_read`フィールドで管理
+- **統一された通知画面**:
+  - 3種類の通知を1つの画面で表示
+  - 時系列順（新しい順）で統合表示
+  - 通知タイプごとに異なるアイコンと色で視覚的に区別
+- **既読管理**:
+  - 個別既読: タップで既読化
+  - 一括既読: 「すべて既読」ボタンで全通知を既読化
+  - グローバル通知は`notification_reads`テーブルで既読状態を記録
+- **未読バッジ表示**:
+  - ヘッダーの通知アイコンに未読数を表示（最大99）
+  - アプリ起動時とフォアグラウンド復帰時に自動更新
+- **リアルタイム更新対応**:
+  - Supabase Realtimeとの連携準備済み（将来実装予定）
+
 ## 重要：ユーザーIDとデバイスIDの関係
 
 このアプリケーションでは、ユーザーとデバイスが以下の構造で管理されています：
@@ -129,6 +154,28 @@ CREATE TABLE vibe_whisper_summary (
     processed_at TIMESTAMP WITH TIME ZONE,
     processing_log JSONB,
     PRIMARY KEY (device_id, date)
+);
+
+-- notificationsテーブル（v9.22.0で追加）
+CREATE TABLE notifications (
+    id UUID NOT NULL DEFAULT gen_random_uuid(),
+    user_id UUID NULL REFERENCES auth.users(id),  -- NULLの場合はグローバル通知
+    type TEXT NOT NULL,  -- 'global', 'personal', 'event'
+    title TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN NULL DEFAULT false,  -- パーソナル/イベント通知の既読フラグ
+    created_at TIMESTAMP WITH TIME ZONE NULL DEFAULT NOW(),
+    triggered_by TEXT NULL,  -- イベントのトリガー元
+    metadata JSONB NULL,  -- 追加情報
+    CONSTRAINT notifications_pkey PRIMARY KEY (id)
+);
+
+-- notification_readsテーブル（グローバル通知の既読管理）（v9.22.0で追加）
+CREATE TABLE notification_reads (
+    user_id UUID NOT NULL REFERENCES auth.users(id),
+    notification_id UUID NOT NULL REFERENCES notifications(id),
+    read_at TIMESTAMP WITHOUT TIME ZONE NULL DEFAULT NOW(),
+    CONSTRAINT notification_reads_pkey PRIMARY KEY (user_id, notification_id)
 );
 ```
 
@@ -1173,6 +1220,18 @@ git push origin feature/機能名
 ```
 
 ## 更新履歴
+
+### v9.22.0 (2025-08-23)
+- **通知機能の実装**: 3種類の通知（グローバル、パーソナル、イベント）を統合管理
+  - グローバル通知: 全ユーザー向けのシステム通知
+  - パーソナル通知: 特定ユーザー向けの個別通知
+  - イベント通知: システムイベント駆動型の通知
+- **既読管理システム**: 通知タイプごとに最適化された既読管理
+  - グローバル通知はnotification_readsテーブルで管理
+  - パーソナル/イベント通知はis_readフィールドで管理
+- **未読バッジ機能**: ヘッダーに未読数を表示（最大99）
+- **統一された通知UI**: 全通知を1画面で時系列表示
+- **プルリフレッシュ対応**: 下にスワイプで通知を再取得
 
 ### v9.21.0 (2025-08-18)
 - **アバタートリミング機能の改善**: Mantisライブラリ導入による高機能化
