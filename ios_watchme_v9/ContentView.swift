@@ -74,18 +74,19 @@ struct ContentView: View {
                     
                 case .ready:
                     // 準備完了！ここで初めてダッシュボード本体を表示
-                    // シンプルな日付ナビゲーション（スワイプと連動）
-                    SimpleDateNavigation(selectedDate: $selectedDate)
-                    
-                    // TabViewでラップしてスワイプ対応
-                    TabView(selection: $selectedDate) {
-                        ForEach(dateRange, id: \.self) { date in
-                            SimpleDashboardView(selectedDate: date)
+                    ZStack(alignment: .top) {
+                        // TabViewでラップしてスワイプ対応
+                        TabView(selection: $selectedDate) {
+                            ForEach(dateRange, id: \.self) { date in
+                                SimpleDashboardView(
+                                    selectedDate: $selectedDate
+                                )
                                 .tag(date) // 日付を各ページに紐付け
+                            }
                         }
+                        .id(deviceManager.selectedDeviceID) // デバイスが変わったらTabViewを再構築
+                        .tabViewStyle(.page(indexDisplayMode: .never)) // 横スワイプのスタイル、ドットは非表示
                     }
-                    .id(deviceManager.selectedDeviceID) // デバイスが変わったらTabViewを再構築
-                    .tabViewStyle(.page(indexDisplayMode: .never)) // 横スワイプのスタイル、ドットは非表示
                     .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
                         // デバイスが切り替わったら日付を今日（配列の最後）にリセット
                         if oldValue != newValue && newValue != nil {
@@ -243,105 +244,3 @@ struct ContentView: View {
         }
     }
 }
-
-// シンプルな日付ナビゲーション
-struct SimpleDateNavigation: View {
-    @Binding var selectedDate: Date
-    @EnvironmentObject var deviceManager: DeviceManager
-    @State private var showDatePicker = false
-    
-    private var dateFormatter: DateFormatter {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年MM月dd日"
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.timeZone = deviceManager.selectedDeviceTimezone
-        return formatter
-    }
-    
-    private var calendar: Calendar {
-        deviceManager.deviceCalendar
-    }
-    
-    private var canGoToNextDay: Bool {
-        !calendar.isDateInToday(selectedDate)
-    }
-    
-    var body: some View {
-        HStack {
-            // 前日ボタン
-            Button(action: {
-                withAnimation {
-                    selectedDate = calendar.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
-                }
-            }) {
-                Image(systemName: "chevron.left")
-                    .font(.title2)
-                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                    .frame(width: 44, height: 44)
-            }
-            
-            Spacer()
-            
-            // 日付表示とピッカー
-            Button(action: {
-                showDatePicker = true
-            }) {
-                VStack(spacing: 4) {
-                    Text(dateFormatter.string(from: selectedDate))
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
-                    
-                    if calendar.isDateInToday(selectedDate) {
-                        Text("今日")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .sheet(isPresented: $showDatePicker) {
-                NavigationView {
-                    DatePicker("日付を選択", selection: $selectedDate, displayedComponents: .date)
-                        .datePickerStyle(.graphical)
-                        .padding()
-                        .navigationTitle("日付を選択")
-                        .navigationBarTitleDisplayMode(.inline)
-                        .onChange(of: selectedDate) { oldValue, newValue in
-                            // 日付が選択されたら自動的にシートを閉じる
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                showDatePicker = false
-                            }
-                        }
-                        .toolbar {
-                            ToolbarItem(placement: .cancellationAction) {
-                                Button("キャンセル") {
-                                    showDatePicker = false
-                                }
-                            }
-                        }
-                }
-            }
-            
-            Spacer()
-            
-            // 翌日ボタン
-            Button(action: {
-                withAnimation {
-                    if canGoToNextDay {
-                        selectedDate = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-                    }
-                }
-            }) {
-                Image(systemName: "chevron.right")
-                    .font(.title2)
-                    .foregroundColor(canGoToNextDay ? Color.safeColor("PrimaryActionColor") : Color.safeColor("BorderLight").opacity(0.3))
-                    .frame(width: 44, height: 44)
-            }
-            .disabled(!canGoToNextDay)
-        }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(Color(.systemBackground).shadow(radius: 1))
-    }
-}
-

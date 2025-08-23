@@ -119,6 +119,11 @@ extension DailyVibeReport {
     
     // 絵文字バージョン（顔文字以外）
     func emotionEmoji(for score: Double) -> String {
+        Self.getEmotionEmoji(for: score)
+    }
+    
+    // 静的メソッドとして共通利用可能
+    static func getEmotionEmoji(for score: Double) -> String {
         switch score {
         case 50...100:
             return "👏"

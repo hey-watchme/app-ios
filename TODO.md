@@ -17,6 +17,12 @@
     - [ ] 認証の修正後、ダッシュボードのデータが常に正しく表示され、デバイス切り替え時にも安定して動作することを確認する。
 
 ### UI/UXとコード品質の改善
+- [ ] **スティッキーヘッダーの表示バグ修正**
+    - [ ] `SimpleDashboardView`でスクロール時にスティッキーヘッダーが表示されない問題を修正
+    - [ ] 現状：`LargeDateSection`が画面外にスクロールしても`StickyDateHeader`が表示されない
+    - [ ] `ScrollOffsetPreferenceKey`の値が正しく伝播していない可能性がある
+    - [ ] デバッグログは出力されているが、実際のビューの表示/非表示が動作していない
+    - [ ] 備考：実装が複雑なため、時間をかけて調査が必要
 - [ ] **セーフエリアハンドリングの最新化**
     - [ ] `edgesIgnoringSafeArea(.bottom)`を`ignoresSafeArea(.container, edges: .bottom)`または`safeAreaPadding(.bottom)`のようなモダンなAPIに置き換える。
 - [ ] **カラー管理の一元化**

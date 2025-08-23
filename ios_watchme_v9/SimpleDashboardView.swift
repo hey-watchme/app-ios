@@ -14,9 +14,12 @@ struct LoadDataTrigger: Equatable {
 }
 
 struct SimpleDashboardView: View {
-    let selectedDate: Date
+    @Binding var selectedDate: Date
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
+    
+    // スティッキーヘッダーの表示状態を内部で管理
+    @State private var showStickyHeader = false
     
     // 各データを個別に管理（シンプルに）
     @State private var vibeReport: DailyVibeReport?
@@ -31,43 +34,84 @@ struct SimpleDashboardView: View {
     @State private var showEmotionSheet = false
     
     var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                if isLoading {
-                    ProgressView("読み込み中...")
-                        .frame(maxWidth: .infinity, minHeight: 200)
-                } else {
-                    // 心理グラフカード
-                    vibeGraphCard
-                        .padding(.horizontal, 20)
+        ZStack(alignment: .top) {
+            ScrollView {
+                VStack(spacing: 0) {
+                    // 大きい日付セクション（スクロール可能）
+                    LargeDateSection(selectedDate: $selectedDate)
+                        .environmentObject(deviceManager)
+                        .environmentObject(dataManager)
+                        .background(
+                            GeometryReader { geometry in
+                                Color.clear
+                                    .preference(
+                                        key: ScrollOffsetPreferenceKey.self,
+                                        value: geometry.frame(in: .named("scroll")).minY
+                                    )
+                            }
+                        )
                     
-                    // 行動グラフカード
-                    behaviorGraphCard
-                        .padding(.horizontal, 20)
-                    
-                    // 感情グラフカード
-                    emotionGraphCard
-                        .padding(.horizontal, 20)
-                    
-                    // 観測対象カード
-                    Group {
-                        if let subject = subject {
-                            observationTargetCard(subject)
+                    // ダッシュボードコンテンツ
+                    VStack(spacing: 20) {
+                        if isLoading {
+                            ProgressView("読み込み中...")
+                                .frame(maxWidth: .infinity, minHeight: 200)
                         } else {
-                            noObservationTargetCard()
+                            // 心理グラフカード
+                            vibeGraphCard
+                                .padding(.horizontal, 20)
+                            
+                            // 行動グラフカード
+                            behaviorGraphCard
+                                .padding(.horizontal, 20)
+                            
+                            // 感情グラフカード
+                            emotionGraphCard
+                                .padding(.horizontal, 20)
+                            
+                            // 観測対象カード
+                            Group {
+                                if let subject = subject {
+                                    observationTargetCard(subject)
+                                } else {
+                                    noObservationTargetCard()
+                                }
+                            }
+                            .padding(.horizontal, 20)
+                            
+                            Spacer(minLength: 100)
                         }
                     }
-                    .padding(.horizontal, 20)
-                    
-                    Spacer(minLength: 100)
+                    .padding(.top, 20)
                 }
             }
-            .padding(.top, 20)
+            .coordinateSpace(name: "scroll")
+            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                // LargeDateSectionが画面外に出そうになったら固定ヘッダーを表示
+                // LargeDateSectionの高さが約200ptなので、-150ptを闾値とする
+                print("📍 SimpleDashboardView: Scroll offset detected: \(value)")
+                let shouldShowStickyHeader = value < -150
+                print("📍 SimpleDashboardView: shouldShowStickyHeader = \(shouldShowStickyHeader), current showStickyHeader = \(showStickyHeader)")
+                if shouldShowStickyHeader != showStickyHeader {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showStickyHeader = shouldShowStickyHeader
+                        print("📍 SimpleDashboardView: Updated showStickyHeader to \(showStickyHeader)")
+                    }
+                }
+            }
+            .background(
+                Color.safeColor("BehaviorBackgroundPrimary")
+                    .ignoresSafeArea()
+            )
+            
+            // 固定日付ヘッダー（条件付き表示）
+            if showStickyHeader {
+                StickyDateHeader(selectedDate: $selectedDate)
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
+                    .transition(.move(edge: .top).combined(with: .opacity))
+            }
         }
-        .background(
-            Color.safeColor("BehaviorBackgroundPrimary")
-                .ignoresSafeArea()
-        )
         .task(id: LoadDataTrigger(date: selectedDate, deviceId: deviceManager.selectedDeviceID)) {
             // DeviceManagerがready状態の時のみデータ取得を実行
             guard deviceManager.state == .ready else {
@@ -525,5 +569,13 @@ struct SimpleDashboardView: View {
         if let vibe = result.vibeReport {
             print("   📊 Vibe date: \(vibe.date), average: \(vibe.averageScore)")
         }
+    }
+}
+
+// スクロールオフセット用のPreferenceKey
+struct ScrollOffsetPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
     }
 }

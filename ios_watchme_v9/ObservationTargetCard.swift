@@ -18,7 +18,6 @@ struct ObservationTargetCard<Content: View>: View {
             // 背景 (紫)
             RoundedRectangle(cornerRadius: 24)
                 .fill(Color.safeColor("AppAccentColor")) // #6200ff
-                .shadow(color: .black.opacity(0.15), radius: 10, x: 0, y: 5)
             
             VStack(spacing: 24) {
                 // ヘッダー部分
