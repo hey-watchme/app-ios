@@ -19,6 +19,12 @@ struct SubjectEditingContext: Identifiable {
     }
 }
 
+// デバイス編集コンテキスト
+struct DeviceEditingContext: Identifiable {
+    let id = UUID()
+    let device: Device
+}
+
 struct DeviceSettingsView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
@@ -33,6 +39,7 @@ struct DeviceSettingsView: View {
     
     // sheet(item:)パターン用の状態管理
     @State private var editingContext: SubjectEditingContext? = nil
+    @State private var deviceEditingContext: DeviceEditingContext? = nil
     
     var body: some View {
         ScrollView {
@@ -100,6 +107,26 @@ struct DeviceSettingsView: View {
                 Text("device_id: \(deviceId.prefix(8))... が閲覧可能になりました！")
             }
         }
+        // デバイス編集画面のシート
+        .sheet(item: $deviceEditingContext, onDismiss: {
+            // シートが閉じられた後にデバイス一覧を再読み込み
+            Task {
+                if let userId = authManager.currentUser?.id {
+                    await deviceManager.fetchUserDevices(for: userId)
+                    await loadSubjectsForAllDevices()
+                }
+            }
+        }) { context in
+            DeviceEditView(
+                device: context.device,
+                isPresented: Binding(
+                    get: { deviceEditingContext != nil },
+                    set: { if !$0 { deviceEditingContext = nil } }
+                )
+            )
+            .environmentObject(deviceManager)
+            .environmentObject(dataManager)
+        }
     }
     
     // MARK: - Empty State
@@ -131,7 +158,7 @@ struct DeviceSettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             // 連携中のデバイス タイトル
             Text("連携中のデバイス")
-                .font(.headline)
+                .font(.system(size: 40, weight: .bold))
                 .foregroundColor(.primary)
                 .padding(.horizontal)
             
@@ -157,6 +184,10 @@ struct DeviceSettingsView: View {
                             deviceID: device.device_id,
                             editingSubject: nil
                         )
+                    },
+                    onEditDevice: {
+                        // デバイス編集画面を表示
+                        deviceEditingContext = DeviceEditingContext(device: device)
                     }
                 )
                 .padding(.horizontal)
@@ -168,9 +199,9 @@ struct DeviceSettingsView: View {
     @ViewBuilder
     private func DeviceAddCard() -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            // デバイスを追加する タイトル
-            Text("デバイスを追加する")
-                .font(.headline)
+            // 新しいデバイス タイトル
+            Text("新しいデバイス")
+                .font(.system(size: 40, weight: .bold))
                 .foregroundColor(.primary)
                 .padding(.horizontal)
             

@@ -15,6 +15,7 @@ struct DeviceCard: View {
     let onSelect: () -> Void
     let onEditSubject: ((Subject) -> Void)?
     let onAddSubject: (() -> Void)?
+    let onEditDevice: (() -> Void)?
     
     var body: some View {
         Button(action: onSelect) {
@@ -66,33 +67,40 @@ struct DeviceCard: View {
                     // デバイス詳細情報
                     VStack(alignment: .leading, spacing: 8) {
                         // デバイスタイプ
-                        DetailInfoRow(
-                            icon: "gear",
+                        DetailInfoRowNoIcon(
                             label: "デバイスタイプ",
                             value: getDeviceTypeDisplayName(),
-                            iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("BorderLight"),
                             isSelected: isSelected
                         )
                         
-                        // タイムゾーン
-                        DetailInfoRow(
-                            icon: "globe",
-                            label: "タイムゾーン",
+                        // デバイスタイムゾーン
+                        DetailInfoRowNoIcon(
+                            label: "デバイスタイムゾーン",
                             value: device.timezone ?? "未設定",
-                            iconColor: isSelected ? .white.opacity(0.9) : Color.safeColor("PrimaryActionColor"),
                             isSelected: isSelected
                         )
-                        
-                        // ロール情報
-                        if let role = device.role {
-                            DetailInfoRow(
-                                icon: role == "owner" ? "crown.fill" : "eye.fill",
-                                label: "権限",
-                                value: role == "owner" ? "オーナー" : "閲覧者",
-                                iconColor: isSelected ? .white.opacity(0.9) : (role == "owner" ? Color.safeColor("WarningColor") : Color.safeColor("PrimaryActionColor")),
-                                isSelected: isSelected
-                            )
+                    }
+                    
+                    // デバイス情報編集ボタン
+                    if let onEditDevice = onEditDevice {
+                        HStack {
+                            Spacer()
+                            Button(action: onEditDevice) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "info.circle")
+                                    Text("デバイス詳細")
+                                }
+                                .font(.caption)
+                                .foregroundColor(isSelected ? .white.opacity(0.9) : Color.safeColor("PrimaryActionColor"))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background(
+                                    Capsule()
+                                        .stroke(isSelected ? Color.white.opacity(0.3) : Color.safeColor("PrimaryActionColor").opacity(0.3), lineWidth: 1)
+                                )
+                            }
                         }
+                        .padding(.top, 4)
                     }
                     
                     // 区切り線
@@ -264,6 +272,33 @@ struct DetailInfoRow: View {
     }
 }
 
+// MARK: - Detail Info Row Without Icon
+struct DetailInfoRowNoIcon: View {
+    let label: String
+    let value: String
+    let isSelected: Bool
+    
+    init(label: String, value: String, isSelected: Bool = false) {
+        self.label = label
+        self.value = value
+        self.isSelected = isSelected
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(isSelected ? .white.opacity(0.7) : .secondary)
+            
+            Text(value)
+                .font(.caption)
+                .fontWeight(.medium)
+                .foregroundColor(isSelected ? .white : .primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 // MARK: - Info Row Compact (Legacy)
 struct InfoRowCompact: View {
     let icon: String
@@ -363,7 +398,8 @@ struct DeviceCard_Previews: PreviewProvider {
                 subject: sampleSubject,
                 onSelect: { },
                 onEditSubject: { _ in },
-                onAddSubject: { }
+                onAddSubject: { },
+                onEditDevice: { }
             )
             
             // 選択されていないデバイス
@@ -373,7 +409,8 @@ struct DeviceCard_Previews: PreviewProvider {
                 subject: nil,
                 onSelect: { },
                 onEditSubject: { _ in },
-                onAddSubject: { }
+                onAddSubject: { },
+                onEditDevice: { }
             )
         }
         .padding()

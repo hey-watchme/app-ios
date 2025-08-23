@@ -682,6 +682,87 @@ class DeviceManager: ObservableObject {
         }
     }
     
+    // MARK: - デバイス連携解除
+    func unlinkDevice(_ deviceId: String) async throws {
+        print("🔓 Unlinking device: \(deviceId)")
+        
+        // 現在のユーザーIDを取得
+        guard let userId = try? await supabase.auth.session.user.id else {
+            throw DeviceUnlinkError.userNotAuthenticated
+        }
+        
+        print("📍 Attempting to delete from user_devices table")
+        print("   User ID: \(userId)")
+        print("   Device ID: \(deviceId)")
+        
+        // user_devicesテーブルから該当レコードを削除
+        do {
+            // まず削除前にレコードが存在するか確認
+            let existingRecords: [UserDevice] = try await supabase
+                .from("user_devices")
+                .select("*")
+                .eq("user_id", value: userId)
+                .eq("device_id", value: deviceId)
+                .execute()
+                .value
+            
+            print("🔍 Found \(existingRecords.count) records to delete")
+            
+            if existingRecords.isEmpty {
+                print("⚠️ No records found to delete")
+                throw DeviceUnlinkError.unlinkFailed("削除対象のデバイス連携が見つかりません")
+            }
+            
+            // 削除実行
+            let deleteResponse = try await supabase
+                .from("user_devices")
+                .delete()
+                .eq("user_id", value: userId)
+                .eq("device_id", value: deviceId)
+                .execute()
+            
+            print("🔧 Delete response status: \(deleteResponse.status ?? -1)")
+            
+            // 削除後に確認
+            let verifyRecords: [UserDevice] = try await supabase
+                .from("user_devices")
+                .select("*")
+                .eq("user_id", value: userId)
+                .eq("device_id", value: deviceId)
+                .execute()
+                .value
+            
+            if !verifyRecords.isEmpty {
+                print("❌ Delete failed - record still exists!")
+                throw DeviceUnlinkError.unlinkFailed("デバイス連携の削除に失敗しました")
+            }
+            
+            print("✅ Successfully unlinked device: \(deviceId)")
+            
+            // ローカルのデバイスリストから削除
+            await MainActor.run {
+                userDevices.removeAll { $0.device_id == deviceId }
+                
+                // 選択中のデバイスが削除された場合、選択をクリア
+                if selectedDeviceID == deviceId {
+                    selectedDeviceID = nil
+                    UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
+                    
+                    // 別のデバイスがある場合は最初のデバイスを選択
+                    if let firstDevice = userDevices.first {
+                        selectDevice(firstDevice.device_id)
+                    }
+                }
+            }
+            
+            print("✅ Device list updated after unlinking")
+            
+        } catch {
+            print("❌ Failed to unlink device: \(error)")
+            throw DeviceUnlinkError.unlinkFailed(error.localizedDescription)
+        }
+    }
+    
 }
 
 // MARK: - データモデル
@@ -775,6 +856,21 @@ enum DeviceAddError: Error, LocalizedError {
             return "このデバイスは既に追加されています"
         case .unauthorized:
             return "デバイスの追加権限がありません"
+        }
+    }
+}
+
+// デバイス連携解除のエラー
+enum DeviceUnlinkError: Error, LocalizedError {
+    case userNotAuthenticated
+    case unlinkFailed(String)
+    
+    var errorDescription: String? {
+        switch self {
+        case .userNotAuthenticated:
+            return "ユーザー認証が必要です"
+        case .unlinkFailed(let message):
+            return "デバイス連携の解除に失敗しました: \(message)"
         }
     }
 }
