@@ -910,8 +910,9 @@ class SupabaseDataManager: ObservableObject {
     /// 未読通知数を取得
     func fetchUnreadNotificationCount(userId: String) async -> Int {
         do {
-            // パーソナル/イベント通知の未読数
-            let personalUnreadCount: Int = try await supabase
+            // パーソナル/イベント通知の未読数（user_id = userId AND is_read = false）
+            // type='personal'とtype='event'の両方を含める
+            let personalEventUnreadCount: Int = try await supabase
                 .from("notifications")
                 .select("id", head: false, count: .exact)
                 .eq("user_id", value: userId)
@@ -919,18 +920,20 @@ class SupabaseDataManager: ObservableObject {
                 .execute()
                 .count ?? 0
             
-            // グローバル通知の総数を取得（すべて取得してからフィルタリング）
-            let allGlobalNotifications: [Notification] = try await supabase
+            print("🔔 Personal/Event unread count: \(personalEventUnreadCount)")
+            
+            // グローバル通知の総数を取得（user_id IS NULL AND type = 'global'）
+            let totalGlobalCount: Int = try await supabase
                 .from("notifications")
-                .select("id")
+                .select("id", head: false, count: .exact)
+                .is("user_id", value: nil)
                 .eq("type", value: "global")
                 .execute()
-                .value
+                .count ?? 0
             
-            // user_idがnilのものだけをカウント
-            let globalNotifications = allGlobalNotifications.filter { $0.userId == nil }
+            print("🔔 Total global notifications: \(totalGlobalCount)")
             
-            // 既読のグローバル通知をカウント
+            // このユーザーが既読したグローバル通知の数
             let readGlobalCount: Int = try await supabase
                 .from("notification_reads")
                 .select("notification_id", head: false, count: .exact)
@@ -938,9 +941,16 @@ class SupabaseDataManager: ObservableObject {
                 .execute()
                 .count ?? 0
             
-            let globalUnreadCount = max(0, globalNotifications.count - readGlobalCount)
+            print("🔔 Read global count: \(readGlobalCount)")
             
-            return personalUnreadCount + globalUnreadCount
+            // グローバル通知の未読数 = 総グローバル通知数 - 既読数
+            let globalUnreadCount = max(0, totalGlobalCount - readGlobalCount)
+            print("🔔 Global unread count: \(globalUnreadCount)")
+            
+            let totalUnreadCount = personalEventUnreadCount + globalUnreadCount
+            print("🔔 Total unread count: \(totalUnreadCount)")
+            
+            return totalUnreadCount
             
         } catch {
             print("❌ Failed to fetch unread count: \(error)")

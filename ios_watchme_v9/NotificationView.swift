@@ -107,9 +107,6 @@ struct NotificationView: View {
                     }
                 }
             }
-            .refreshable {
-                await loadNotifications()
-            }
         }
         .task {
             await loadNotifications()
