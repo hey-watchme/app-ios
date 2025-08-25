@@ -530,7 +530,9 @@ struct SimpleDashboardView: View {
         print("🔍 SimpleDashboardView loading data")
         print("   📱 Device ID: \(deviceId)")
         print("   📅 Selected Date: \(selectedDate)")
-        print("   🌍 Timezone: \(deviceManager.getTimezone(for: deviceId))")
+        print("   🌍 Device Timezone: \(deviceManager.getTimezone(for: deviceId).identifier)")
+        print("   🕐 Current iPhone Time: \(Date())")
+        print("   📱 iPhone Timezone: \(TimeZone.current.identifier)")
         
         // ローディング開始
         await MainActor.run {

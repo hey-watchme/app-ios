@@ -384,14 +384,14 @@ class SupabaseDataManager: ObservableObject {
     /// - Parameters:
     ///   - deviceId: デバイスID
     ///   - date: 取得したい日付
-    ///   - timezone: タイムゾーン（現在は未使用、将来の拡張用）
+    ///   - timezone: デバイス固有のタイムゾーン
     /// - Returns: DashboardData（すべてのレポートを含む）
     func fetchAllReports(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
         isLoading = true
         errorMessage = nil
         
-        // 🎯 RPC関数を使用して全データを一括取得
-        let dashboardData = await fetchAllReportsData(deviceId: deviceId, date: date)
+        // 🎯 RPC関数を使用して全データを一括取得（タイムゾーンを渡す）
+        let dashboardData = await fetchAllReportsData(deviceId: deviceId, date: date, timezone: timezone)
         
         // @Publishedプロパティも更新（互換性のため）
         // 注意: subjectは各Viewがローカルで管理するため、ここでは更新しない
@@ -426,14 +426,21 @@ class SupabaseDataManager: ObservableObject {
     /// - Parameters:
     ///   - deviceId: デバイスID（UUID形式）
     ///   - date: 取得したい日付
+    ///   - timezone: デバイス固有のタイムゾーン（指定しない場合は現在のタイムゾーン）
     /// - Returns: DashboardData（すべてのレポートを含む）
-    func fetchAllReportsData(deviceId: String, date: Date) async -> DashboardData {
-        let dateString = dateFormatter.string(from: date)
+    func fetchAllReportsData(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
+        // デバイス固有のタイムゾーンを適用
+        let targetTimezone = timezone ?? TimeZone.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = targetTimezone  // ⭐️ デバイス固有のタイムゾーンを使用
+        
+        let dateString = formatter.string(from: date)
         print("🚀 [RPC] Fetching all dashboard data via RPC function")
         print("   Device: \(deviceId)")
         print("   Date: \(dateString)")
-        print("   DateFormatter locale: \(dateFormatter.locale?.identifier ?? "nil")")
-        print("   DateFormatter timezone: \(dateFormatter.timeZone?.identifier ?? "nil")")
+        print("   Timezone: \(targetTimezone.identifier)")
+        print("   Current Time in Device TZ: \(formatter.string(from: Date()))")
         
         do {
             // RPC関数のパラメータを準備
@@ -443,6 +450,9 @@ class SupabaseDataManager: ObservableObject {
             ]
             
             print("📤 [RPC] Calling RPC with params: \(params)")
+            print("   🕐 Local iPhone Time: \(Date())")
+            print("   🌍 Target Device Timezone: \(targetTimezone.identifier)")
+            print("   📅 Requesting data for date: \(dateString)")
             
             // 📡 Supabase RPC関数を呼び出し（1回のAPIコールですべてのデータを取得）
             let response: [RPCDashboardResponse] = try await supabase
@@ -503,8 +513,8 @@ class SupabaseDataManager: ObservableObject {
                     
                     if recovered {
                         print("   🔄 Token refreshed successfully, retrying RPC call...")
-                        // トークンリフレッシュ成功後、元のリクエストを再試行
-                        return await fetchAllReportsData(deviceId: deviceId, date: date)
+                        // トークンリフレッシュ成功後、元のリクエストを再試行（タイムゾーンも渡す）
+                        return await fetchAllReportsData(deviceId: deviceId, date: date, timezone: timezone)
                     } else {
                         print("   ❌ Token refresh failed - user needs to re-login")
                     }
