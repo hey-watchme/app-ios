@@ -120,10 +120,17 @@ class AudioRecorder: NSObject, ObservableObject {
         let audioSession = AVAudioSession.sharedInstance()
         
         do {
-            // 録音のみのカテゴリーに変更し、測定モードを使用
-            try audioSession.setCategory(.record, mode: .measurement)
+            // 録音のみのカテゴリーに変更し、音声記録モードを使用
+            try audioSession.setCategory(.record, mode: .spokenAudio, options: [])
+            
+            // 優先入力ゲインを設定（マイク感度向上）
+            if audioSession.isInputGainSettable {
+                try audioSession.setInputGain(1.0)  // 最大ゲイン
+                print("✅ マイクゲイン設定: 1.0")
+            }
+            
             try audioSession.setActive(true)
-            print("✅ オーディオセッション設定成功: record/measurement")
+            print("✅ オーディオセッション設定成功: record/spokenAudio with max gain")
         } catch {
             print("❌ オーディオセッション設定エラー: \(error)")
         }
@@ -215,7 +222,7 @@ class AudioRecorder: NSObject, ObservableObject {
         print("   - 保存パス: \(audioURL.path)")
         print("   - スロット開始時刻: \(currentSlotStartTime!)")
         
-        // 録音設定（16kHz設定）
+        // 録音設定（16kHz高品質設定）
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16000.0,  // 16kHzに変更
@@ -223,7 +230,7 @@ class AudioRecorder: NSObject, ObservableObject {
             AVLinearPCMBitDepthKey: 16,
             AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsBigEndianKey: false,
-            AVEncoderAudioQualityKey: AVAudioQuality.medium.rawValue  // 16kHzに適した品質
+            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue  // 音量向上のため高品質に変更
         ]
         
         do {
