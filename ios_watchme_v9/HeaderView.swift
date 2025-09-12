@@ -40,7 +40,7 @@ struct HeaderView: View {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "bell")
                         .font(.title2)
-                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))  // 黒に変更
                     
                     // 未読通知がある場合の赤い丸（バッジ）と数
                     if unreadNotificationCount > 0 {

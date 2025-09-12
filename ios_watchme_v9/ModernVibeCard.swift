@@ -12,6 +12,7 @@ struct ModernVibeCard: View {
     let vibeReport: DailyVibeReport
     let dashboardSummary: DashboardSummary?  // 新規追加
     var onNavigateToDetail: (() -> Void)? = nil
+    var showTitle: Bool = true  // タイトル表示制御用
     @State private var isAnimating = false
     @State private var cardScale: CGFloat = 1.0
     @State private var showBurstBubbles = false
@@ -55,12 +56,26 @@ struct ModernVibeCard: View {
                     .transition(.opacity)
             }
             
-            VStack(spacing: 24) {
-                // ヘッダー部分
-                headerView
-                
-                // メインスコア表示
-                mainScoreView
+            VStack(spacing: 16) {  // 他の要素との間隔は16に戻す
+                // ヘッダー部分（タイトルのみ）
+                if showTitle {
+                    VStack(spacing: 8) {  // タイトルと絵文字の間だけ8pxに
+                        HStack {
+                            // シンプルな気分タイトル（大きく表示）
+                            Text("気分")
+                                .font(.system(size: 40, weight: .bold))
+                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
+                            
+                            Spacer()
+                        }
+                        
+                        // メインスコア表示
+                        mainScoreView
+                    }
+                } else {
+                    // メインスコア表示
+                    mainScoreView
+                }
                 
                 // インタラクティブタイムライン（Phase 2）
                 // dashboard_summaryのvibeScoresを優先、なければvibeReportから取得（フォールバック）
@@ -82,16 +97,48 @@ struct ModernVibeCard: View {
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(cumulativeEvaluation.enumerated()), id: \.offset) { index, comment in
                             Text(comment)
-                                .font(.system(size: 18))
+                                .font(.system(size: 18, weight: .bold))  // 太字に変更
                                 .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
                                 .fixedSize(horizontal: false, vertical: true)
                                 .multilineTextAlignment(.leading)
+                                .lineSpacing(18 * 0.6)  // フォントサイズ18ptの60%で行間を設定（line-height: 160%相当）
                         }
                     }
-                    .padding(.vertical, 24)
+                    .padding(.top, 24)  // グラフとの間に24px余白
+                    .padding(.bottom, 16)  // 下部は少し余白を減らす
+                }
+                
+                // ナビゲーションリンク（右下に配置）
+                HStack {
+                    Spacer()
+                    
+                    Button(action: {
+                        // 心理グラフ詳細への遷移
+                        onNavigateToDetail?()
+                    }) {
+                        HStack(spacing: 4) {
+                            Text("心理グラフ")
+                                .font(.caption)
+                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
+                            Image(systemName: "chevron.right")
+                                .font(.caption2)
+                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.safeColor("BorderLight").opacity(0.1))
+                                .overlay(
+                                    Capsule()
+                                        .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)
+                                )
+                        )
+                    }
+                    .allowsHitTesting(false) // タップイベントを透過させる
                 }
             }
-            .padding(20)
+            .padding(16)  // 内側の余白を16pxに変更（UnifiedCardと統一）
         }
         .scaleEffect(cardScale)
         .onAppear {
@@ -108,44 +155,6 @@ struct ModernVibeCard: View {
         }
     }
     
-    // MARK: - Header View
-    private var headerView: some View {
-        HStack {
-            // シンプルな気分タイトル（大きく表示）
-            Text("気分")
-                .font(.system(size: 40, weight: .bold))
-                .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
-            
-            Spacer()
-            
-            // 心理グラフへのリンクボタン
-            Button(action: {
-                // 心理グラフ詳細への遷移
-                onNavigateToDetail?()
-            }) {
-                HStack(spacing: 4) {
-                    Text("心理グラフ")
-                        .font(.caption)
-                        .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
-                    Image(systemName: "chevron.right")
-                        .font(.caption2)
-                        .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
-                }
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(Color.safeColor("BorderLight").opacity(0.1))
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)
-                        )
-                )
-            }
-            .allowsHitTesting(false) // タップイベントを透過させる
-        }
-    }
-    
     // MARK: - Main Score View
     private var mainScoreView: some View {
         VStack(spacing: 8) {
@@ -153,25 +162,25 @@ struct ModernVibeCard: View {
             Text(emotionEmoji)
                 .font(.system(size: 108))
             
-            // ステータステキスト（小さく表示）
+            // ステータステキスト（黒・太字・20px）
             Text(emotionLabel)
-                .font(.caption)
-                .foregroundStyle(scoreColor)
+                .font(.system(size: 20, weight: .bold))
+                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))  // 黒
                 .textCase(.uppercase)
                 .tracking(1.0)
             
-            // 平均スコア（1行で簡潔に）
+            // 気分スコア（1行で簡潔に）
             HStack(spacing: 4) {
-                Text("平均スコア:")
+                Text("気分")
                     .font(.caption2)
                     .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                 
                 // dashboard_summaryのaverage_vibeのみを使用（フォールバックなし）
                 Group {
                     if let avgVibe = dashboardSummary?.averageVibe {
-                        Text(String(format: "%.1f pt", Double(avgVibe)))
+                        Text(String(format: "%.0f pt", Double(avgVibe)))  // 小数点なしに変更
                     } else {
-                        Text("--")
+                        Text("-- pt")
                     }
                 }
                 .font(.caption)

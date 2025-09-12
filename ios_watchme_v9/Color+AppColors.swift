@@ -87,11 +87,11 @@ extension Color {
             
         // Behavior Graph Colors
         case "BehaviorTextPrimary":
-            return Color(red: 0.2, green: 0.2, blue: 0.2)
+            return Color(red: 0.102, green: 0.102, blue: 0.102)  // #1a1a1a（26/255）
         case "BehaviorTextSecondary":
-            return Color(red: 0.4, green: 0.4, blue: 0.4)
+            return Color(red: 0.4, green: 0.4, blue: 0.4)  // #666666相当
         case "BehaviorTextTertiary":
-            return Color(red: 0.6, green: 0.6, blue: 0.6)
+            return Color(red: 0.4, green: 0.4, blue: 0.4)  // #666666相当
         case "BehaviorBackgroundPrimary":
             return Color(red: 0.98, green: 0.98, blue: 0.98)  // #fafafa
         case "BehaviorBackgroundSecondary":

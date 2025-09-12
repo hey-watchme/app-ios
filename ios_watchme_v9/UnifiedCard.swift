@@ -32,9 +32,16 @@ struct UnifiedCard<Content: View>: View {
                         .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
                     
                     Spacer()
-                    
-                    // ナビゲーションリンク（オプション）
-                    if let navigationLabel = navigationLabel, let onNavigate = onNavigate {
+                }
+                
+                // コンテンツ部分
+                content()
+                
+                // ナビゲーションリンク（右下に配置）
+                if let navigationLabel = navigationLabel, let onNavigate = onNavigate {
+                    HStack {
+                        Spacer()
+                        
                         Button(action: onNavigate) {
                             HStack(spacing: 4) {
                                 Text(navigationLabel)
@@ -58,11 +65,8 @@ struct UnifiedCard<Content: View>: View {
                         .allowsHitTesting(false) // タップイベントを透過させる
                     }
                 }
-                
-                // コンテンツ部分
-                content()
             }
-            .padding(20)
+            .padding(16)  // 内側の余白を16pxに変更
         }
     }
 }

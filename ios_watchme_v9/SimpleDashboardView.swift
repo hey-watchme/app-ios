@@ -101,7 +101,7 @@ struct SimpleDashboardView: View {
                 }
             }
             .background(
-                Color.safeColor("BehaviorBackgroundPrimary")
+                Color.white
                     .ignoresSafeArea()
             )
             
@@ -198,7 +198,8 @@ struct SimpleDashboardView: View {
                 ModernVibeCard(
                     vibeReport: vibeReport,
                     dashboardSummary: dashboardSummary,  // 新規追加
-                    onNavigateToDetail: { }
+                    onNavigateToDetail: { },
+                    showTitle: false  // タイトルを非表示
                 )
                 .onTapGesture {
                     showVibeSheet = true

@@ -117,16 +117,9 @@ struct InteractiveTimelineView: View {
     // MARK: - Graph View
     private func graphView(in geometry: GeometryProxy) -> some View {
         ZStack {
-            // 背景グラデーション
-            LinearGradient(
-                colors: [
-                    Color.cyan.opacity(0.05),
-                    Color.purple.opacity(0.05)
-                ],
-                startPoint: .leading,
-                endPoint: .trailing
-            )
-            .cornerRadius(16)
+            // 背景（システムグレー6）
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemGray6))
             
             // ゼロライン
             Path { path in
@@ -163,12 +156,12 @@ struct InteractiveTimelineView: View {
                 }
             }
             .stroke(
-                LinearGradient(
-                    colors: [.cyan, .blue, .purple],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                ),
-                lineWidth: 3
+                Color.safeColor("BehaviorTextPrimary"),  // #1a1a1aの黒
+                style: StrokeStyle(
+                    lineWidth: 2,        // 3pt → 2ptに細く
+                    lineCap: .round,    // 線の端を丸く
+                    lineJoin: .round    // 線の接合部を丸く
+                )
             )
             .animation(.linear(duration: 0.1), value: currentTimeIndex)
             
@@ -204,10 +197,10 @@ struct InteractiveTimelineView: View {
                         let normalizedScore = (change.score + 100) / 200
                         let y = geometry.size.height * (1 - normalizedScore)
                         
-                        Circle()
+                        Star()
                             .fill(slot <= currentTimeIndex ? Color.safeColor("VibeChangeIndicatorColor") : Color.safeColor("VibeChangeIndicatorColor").opacity(0.3))
-                            .frame(width: slot == currentTimeIndex ? 30 : 10, 
-                                   height: slot == currentTimeIndex ? 30 : 10)
+                            .frame(width: slot == currentTimeIndex ? 30 : 12, 
+                                   height: slot == currentTimeIndex ? 30 : 12)
                             .position(x: x, y: y)
                             .animation(.spring(response: 0.3), value: currentTimeIndex)
                             .onTapGesture {
@@ -251,12 +244,8 @@ struct InteractiveTimelineView: View {
                 path.addLine(to: CGPoint(x: x, y: geometry.size.height))
             }
             .stroke(
-                LinearGradient(
-                    colors: [Color.safeColor("TimelineIndicator").opacity(0.6), Color.safeColor("TimelineIndicator")],
-                    startPoint: .top,
-                    endPoint: .bottom
-                ),
-                lineWidth: 2
+                Color.gray.opacity(0.5),  // グレーに変更
+                lineWidth: 1  // 1ptの細さ
             )
             .animation(.spring(response: 0.3), value: currentTimeIndex)
             
@@ -599,5 +588,33 @@ struct InteractiveTimelineView: View {
         } else {
             return "equal.circle"
         }
+    }
+}
+
+// MARK: - Star Shape
+struct Star: Shape {
+    func path(in rect: CGRect) -> Path {
+        let center = CGPoint(x: rect.midX, y: rect.midY)
+        let outerRadius = min(rect.width, rect.height) / 2
+        let innerRadius = outerRadius * 0.4
+        let numberOfPoints = 5
+        
+        var path = Path()
+        
+        for i in 0..<numberOfPoints * 2 {
+            let radius = i % 2 == 0 ? outerRadius : innerRadius
+            let angle = Double(i) * .pi / Double(numberOfPoints) - .pi / 2
+            let x = center.x + CGFloat(cos(angle)) * radius
+            let y = center.y + CGFloat(sin(angle)) * radius
+            
+            if i == 0 {
+                path.move(to: CGPoint(x: x, y: y))
+            } else {
+                path.addLine(to: CGPoint(x: x, y: y))
+            }
+        }
+        
+        path.closeSubpath()
+        return path
     }
 }

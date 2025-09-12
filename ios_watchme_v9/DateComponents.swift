@@ -60,6 +60,14 @@ extension DateFormatter {
         return formatter
     }
     
+    static func shortDayOfWeekFormatter(timezone: TimeZone) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "E"  // 短縮形式（月、火、水...）
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.timeZone = timezone
+        return formatter
+    }
+    
     static func compactDateFormatter(timezone: TimeZone) -> DateFormatter {
         let formatter = DateFormatter()
         formatter.dateFormat = "M/d"
@@ -104,110 +112,178 @@ struct LargeDateSection: View {
         return formatter.string(from: date)
     }
     
+    private func getMonthDayWithWeekdayString(from date: Date) -> String {
+        let monthDayFormatter = DateFormatter()
+        monthDayFormatter.dateFormat = "M月d日"
+        monthDayFormatter.locale = Locale(identifier: "ja_JP")
+        monthDayFormatter.timeZone = timezone
+        
+        let weekdayFormatter = DateFormatter.shortDayOfWeekFormatter(timezone: timezone)
+        
+        return "\(monthDayFormatter.string(from: date))(\(weekdayFormatter.string(from: date)))"
+    }
+    
     var body: some View {
         VStack(spacing: 16) {
             // 大きな日付表示
             VStack(spacing: 8) {
                 if calendar.isDateInToday(selectedDate) {
                     // 今日の特別表示
-                    Text("今日")
-                        .font(.system(size: 40, weight: .bold))
-                        .foregroundColor(.white)
-                    
-                    // 実際の日付と曜日を小さく表示
-                    Text("\(DateFormatter.largeDateFormatter(timezone: timezone).string(from: selectedDate))\(DateFormatter.dayOfWeekFormatter(timezone: timezone).string(from: selectedDate))")
-                        .font(.system(size: 16, weight: .medium))
-                        .foregroundColor(.white.opacity(0.8))
+                    VStack(spacing: 0) {
+                        // 実際の日付と曜日、カレンダーアイコンを表示
+                        HStack(spacing: 8) {
+                            Text("\(DateFormatter.largeDateFormatter(timezone: timezone).string(from: selectedDate)) (\(DateFormatter.shortDayOfWeekFormatter(timezone: timezone).string(from: selectedDate)))")
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                            
+                            Button(action: {
+                                showDatePicker = true
+                            }) {
+                                Image(systemName: "calendar")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                            }
+                        }
+                        .padding(.bottom, 32)  // 「今日」との間の余白を32pxに
+                        
+                        // 「今日」と前日・翌日ボタンを配置
+                        ZStack {
+                            // 中央に「今日」
+                            Text("今日")
+                                .font(.system(size: 40, weight: .bold))
+                                .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                            
+                            // 両端に前日・翌日ボタン
+                            HStack {
+                                // 前日ボタン（左端）
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        selectedDate = calendar.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "chevron.left")
+                                            .font(.system(size: 14, weight: .semibold))
+                                        Text("前日")
+                                            .font(.system(size: 14, weight: .medium))
+                                    }
+                                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(Color.safeColor("BehaviorBackgroundSecondary").opacity(0.3))
+                                    )
+                                }
+                                .padding(.leading, 20)  // 左端から20px
+                                
+                                Spacer()
+                                
+                                // 翌日ボタン（右端、無効化）
+                                HStack(spacing: 4) {
+                                    Text("翌日")
+                                        .font(.system(size: 14, weight: .medium))
+                                    Image(systemName: "chevron.right")
+                                        .font(.system(size: 14, weight: .semibold))
+                                }
+                                .foregroundColor(Color.safeColor("BorderLight"))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 8)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 20)
+                                        .fill(Color.safeColor("BehaviorBackgroundSecondary").opacity(0.1))
+                                )
+                                .padding(.trailing, 20)  // 右端から20px
+                            }
+                        }
+                    }
                 } else {
-                    // 今日以外の表示を年・月日・曜日で分けて表示
-                    VStack(spacing: 4) {
-                        // 年を小さく表示
-                        Text(getYearString(from: selectedDate))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
+                    // 今日以外の表示を年・月日（曜日）で表示
+                    VStack(spacing: 0) {
+                        // 年とカレンダーアイコンを表示（14pt）
+                        HStack(spacing: 8) {
+                            Text(getYearString(from: selectedDate))
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                            
+                            Button(action: {
+                                showDatePicker = true
+                            }) {
+                                Image(systemName: "calendar")
+                                    .font(.system(size: 14))
+                                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                            }
+                        }
+                        .padding(.bottom, 32)  // 西暦と月日の間に32px余白
                         
-                        // 月日を大きく表示
-                        Text(getMonthDayString(from: selectedDate))
-                            .font(.system(size: 40, weight: .bold))
-                            .foregroundColor(.white)
-                        
-                        // 曜日を小さく表示
-                        Text(DateFormatter.dayOfWeekFormatter(timezone: timezone).string(from: selectedDate))
-                            .font(.system(size: 16, weight: .medium))
-                            .foregroundColor(.white.opacity(0.8))
+                        // 月日と曜日、前日・翌日ボタンを配置
+                        ZStack {
+                            // 中央に月日と曜日を表示（28pxに変更）
+                            Text(getMonthDayWithWeekdayString(from: selectedDate))
+                                .font(.system(size: 28, weight: .bold))  // 28pxに変更
+                                .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                            
+                            // 両端に前日・翌日ボタン
+                            HStack {
+                                // 前日ボタン（左端）
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        selectedDate = calendar.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "chevron.left")
+                                            .font(.system(size: 14, weight: .semibold))
+                                        Text("前日")
+                                            .font(.system(size: 14, weight: .medium))
+                                    }
+                                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(Color.safeColor("BehaviorBackgroundSecondary").opacity(0.3))
+                                    )
+                                }
+                                .padding(.leading, 20)  // 左端から20px
+                                
+                                Spacer()
+                                
+                                // 翌日ボタン（右端）
+                                Button(action: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        if canGoToNextDay {
+                                            selectedDate = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
+                                        }
+                                    }
+                                }) {
+                                    HStack(spacing: 4) {
+                                        Text("翌日")
+                                            .font(.system(size: 14, weight: .medium))
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 14, weight: .semibold))
+                                    }
+                                    .foregroundColor(canGoToNextDay ? Color.safeColor("BehaviorTextPrimary") : Color.safeColor("BorderLight"))
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 20)
+                                            .fill(canGoToNextDay ? Color.safeColor("BehaviorBackgroundSecondary").opacity(0.3) : Color.safeColor("BehaviorBackgroundSecondary").opacity(0.1))
+                                    )
+                                }
+                                .disabled(!canGoToNextDay)
+                                .padding(.trailing, 20)  // 右端から20px
+                            }
+                        }
                     }
                 }
             }
             .multilineTextAlignment(.center)
-            
-            // 日付変更ボタン
-            HStack(spacing: 40) {
-                // 前日ボタン
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        selectedDate = calendar.date(byAdding: .day, value: -1, to: selectedDate) ?? selectedDate
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                        Text("前日")
-                            .font(.system(size: 14, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(Color.white.opacity(0.2))
-                    )
-                }
-                
-                // カレンダーボタン
-                Button(action: {
-                    showDatePicker = true
-                }) {
-                    Image(systemName: "calendar")
-                        .font(.system(size: 24))
-                        .foregroundColor(.white)
-                        .frame(width: 44, height: 44)
-                        .background(
-                            Circle()
-                                .fill(Color.white.opacity(0.2))
-                        )
-                }
-                
-                // 翌日ボタン
-                Button(action: {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        if canGoToNextDay {
-                            selectedDate = calendar.date(byAdding: .day, value: 1, to: selectedDate) ?? selectedDate
-                        }
-                    }
-                }) {
-                    HStack(spacing: 4) {
-                        Text("翌日")
-                            .font(.system(size: 14, weight: .medium))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 16, weight: .semibold))
-                    }
-                    .foregroundColor(canGoToNextDay ? .white : Color.white.opacity(0.4))
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(Color.white.opacity(canGoToNextDay ? 0.2 : 0.1))
-                    )
-                }
-                .disabled(!canGoToNextDay)
-            }
-            
-            // 将来的にハイライトや吹き出しを表示するスペース
-            // TODO: ハイライト表示を追加
         }
-        .padding(.vertical, 32)
+        .padding(.top, 32)
+        .padding(.bottom, 16)  // 下の余白を16pxに変更
         .frame(maxWidth: .infinity)
-        .background(Color.safeColor("AppAccentColor"))
+        .background(Color.white)
         .sheet(isPresented: $showDatePicker) {
             CustomCalendarView(selectedDate: $selectedDate, isPresented: $showDatePicker)
                 .environmentObject(deviceManager)
