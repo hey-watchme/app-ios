@@ -26,6 +26,7 @@ struct SimpleDashboardView: View {
     @State private var behaviorReport: BehaviorReport?
     @State private var emotionReport: EmotionReport?
     @State private var subject: Subject?
+    @State private var dashboardSummary: DashboardSummary?  // 新規追加
     @State private var isLoading = false
     
     // モーダル表示管理
@@ -141,7 +142,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
-                HomeView(vibeReport: vibeReport, subject: subject)
+                HomeView(vibeReport: vibeReport, subject: subject, dashboardSummary: dashboardSummary)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
@@ -196,6 +197,7 @@ struct SimpleDashboardView: View {
             if let vibeReport = vibeReport {
                 ModernVibeCard(
                     vibeReport: vibeReport,
+                    dashboardSummary: dashboardSummary,  // 新規追加
                     onNavigateToDetail: { }
                 )
                 .onTapGesture {
@@ -559,6 +561,7 @@ struct SimpleDashboardView: View {
             self.behaviorReport = result.behaviorReport
             self.emotionReport = result.emotionReport
             self.subject = result.subject
+            self.dashboardSummary = result.dashboardSummary  // 新規追加
         }
         
         // デバッグログ - 取得結果

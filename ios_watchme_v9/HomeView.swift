@@ -16,6 +16,7 @@ struct HomeView: View {
     // オプショナルでデータを受け取る
     var vibeReport: DailyVibeReport?
     var subject: Subject?
+    var dashboardSummary: DashboardSummary?  // 新規追加
     
     var body: some View {
         ScrollView {
@@ -132,7 +133,8 @@ struct HomeView: View {
                         }
                         
                         // 時間帯別グラフカード
-                        if let vibeScores = report.vibeScores {
+                        // dashboard_summaryのvibeScoresを優先、なければreportから取得（フォールバック）
+                        if let vibeScores = dashboardSummary?.vibeScores ?? report.vibeScores {
                             UnifiedCard(title: "時間帯別推移") {
                                 VibeLineChartView(vibeScores: vibeScores, vibeChanges: report.vibeChanges, showTitle: false, compactMode: false)
                                     .frame(height: 260)

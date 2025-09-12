@@ -31,40 +31,43 @@ struct InteractiveTimelineView: View {
     var body: some View {
         VStack(spacing: 16) {
             // メイングラフエリア（ジェスチャー対応）
-            GeometryReader { geometry in
-                ZStack {
-                    // グラフ背景とライン
-                    graphView(in: geometry)
-                    
-                    // パーティクルエフェクト層（Phase 3）
-                    if showParticles,
-                       currentTimeIndex < vibeScores.count,
-                       let score = vibeScores[currentTimeIndex] {
-                        ParticleEffectView(
-                            emotionScore: score,
-                            isActive: true  // 常にアクティブ（自動再生中）
-                        )
-                        .allowsHitTesting(false)
+            ZStack(alignment: .topTrailing) {
+                GeometryReader { geometry in
+                    ZStack {
+                        // グラフ背景とライン
+                        graphView(in: geometry)
+                        
+                        // パーティクルエフェクト層（Phase 3）
+                        if showParticles,
+                           currentTimeIndex < vibeScores.count,
+                           let score = vibeScores[currentTimeIndex] {
+                            ParticleEffectView(
+                                emotionScore: score,
+                                isActive: true  // 常にアクティブ（自動再生中）
+                            )
+                            .allowsHitTesting(false)
+                        }
+                        
+                        // タイムインジケーター（垂直線）
+                        timeIndicator(in: geometry)
+                        
+                        // イベントポップアップ
+                        if showEventDetail, let event = selectedEvent {
+                            eventPopup(event: event, in: geometry)
+                        }
                     }
-                    
-                    // タイムインジケーター（垂直線）
-                    timeIndicator(in: geometry)
-                    
-                    // イベントポップアップ
-                    if showEventDetail, let event = selectedEvent {
-                        eventPopup(event: event, in: geometry)
+                    .onTapGesture { location in
+                        // タップでインジケーターを即座に移動
+                        handleTap(location: location, width: geometry.size.width)
                     }
                 }
-                .onTapGesture { location in
-                    // タップでインジケーターを即座に移動
-                    handleTap(location: location, width: geometry.size.width)
-                }
+                .frame(height: 200) // グラフの高さを固定
+                
+                // 現在の時刻と感情スコア表示（右上に配置）
+                currentStatusView
+                    .padding(.trailing, 8)
+                    .padding(.top, 8)
             }
-            .frame(height: 200) // グラフの高さを固定
-            
-            // 現在の時刻と感情スコア表示（グラフの下に移動）
-            currentStatusView
-                .padding(.top, 12)
         }
         .onAppear {
             // 自動ループ再生を開始
@@ -82,33 +85,32 @@ struct InteractiveTimelineView: View {
     
     // MARK: - Current Status View
     private var currentStatusView: some View {
-        // シンプルに時刻とスコアのみの1行表示（中央寄せ、幅いっぱい使用）
-        HStack {
-            Spacer()
-            
-            // 時刻表示（見出しなし）
+        // コンパクトな表示（右上用）
+        VStack(alignment: .trailing, spacing: 4) {
+            // 時刻表示
             Text(currentTimeString)
-                .font(.system(size: 24, weight: .semibold, design: .monospaced))
-                .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
+                .font(.system(size: 14, weight: .medium, design: .monospaced))
+                .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
             
-            Spacer()
-            
-            // 現在のスコア（pt付き、見出しなし）
-            HStack(spacing: 6) {
+            // 現在のスコア
+            HStack(spacing: 4) {
                 Text("\(currentScoreString)pt")
-                    .font(.system(size: 24, weight: .semibold, design: .rounded))
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
                     .foregroundStyle(currentScoreColor)
                 
                 // トレンドインジケーター
                 Image(systemName: trendIcon)
-                    .font(.callout)
+                    .font(.system(size: 10))
                     .foregroundStyle(currentScoreColor)
             }
-            
-            Spacer()
         }
-        .frame(maxWidth: .infinity) // 左右いっぱいまで使用
-        .padding(.horizontal, 16) // 最小限のパディング
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color.white.opacity(0.9))
+                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+        )
         .animation(.spring(response: 0.3), value: currentTimeIndex)
     }
     

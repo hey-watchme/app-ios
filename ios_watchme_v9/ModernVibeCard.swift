@@ -10,6 +10,7 @@ import Charts
 
 struct ModernVibeCard: View {
     let vibeReport: DailyVibeReport
+    let dashboardSummary: DashboardSummary?  // 新規追加
     var onNavigateToDetail: (() -> Void)? = nil
     @State private var isAnimating = false
     @State private var cardScale: CGFloat = 1.0
@@ -62,10 +63,11 @@ struct ModernVibeCard: View {
                 mainScoreView
                 
                 // インタラクティブタイムライン（Phase 2）
-                if let vibeScores = vibeReport.vibeScores {
+                // dashboard_summaryのvibeScoresを優先、なければvibeReportから取得（フォールバック）
+                if let vibeScores = dashboardSummary?.vibeScores ?? vibeReport.vibeScores {
                     InteractiveTimelineView(
                         vibeScores: vibeScores,
-                        vibeChanges: vibeReport.vibeChanges,
+                        vibeChanges: vibeReport.vibeChanges,  // vibeChangesは引き続きvibeReportから
                         onEventBurst: { score in
                             // バーストエフェクトをトリガー
                             triggerBurst(score: score)
@@ -74,8 +76,20 @@ struct ModernVibeCard: View {
                     // ID管理は親のNewHomeViewに委ねる（ID削除）
                 }
                 
-                // 時間分布バー
-                timeDistributionView
+                // Cumulative Evaluation（analysis_resultから取得）
+                if let cumulativeEvaluation = dashboardSummary?.analysisResult?.cumulativeEvaluation,
+                   !cumulativeEvaluation.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(Array(cumulativeEvaluation.enumerated()), id: \.offset) { index, comment in
+                            Text(comment)
+                                .font(.system(size: 18))
+                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                                .fixedSize(horizontal: false, vertical: true)
+                                .multilineTextAlignment(.leading)
+                        }
+                    }
+                    .padding(.vertical, 24)
+                }
             }
             .padding(20)
         }
@@ -135,9 +149,9 @@ struct ModernVibeCard: View {
     // MARK: - Main Score View
     private var mainScoreView: some View {
         VStack(spacing: 8) {
-            // 絵文字（大きく表示）
+            // 絵文字（1.5倍に拡大）
             Text(emotionEmoji)
-                .font(.system(size: 72))
+                .font(.system(size: 108))
             
             // ステータステキスト（小さく表示）
             Text(emotionLabel)
@@ -152,111 +166,25 @@ struct ModernVibeCard: View {
                     .font(.caption2)
                     .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                 
-                Text(String(format: "%.1f pt", vibeReport.averageScore))
-                    .font(.caption)
-                    .fontWeight(.semibold)
-                    .foregroundStyle(scoreColor.opacity(0.8))
+                // dashboard_summaryのaverage_vibeのみを使用（フォールバックなし）
+                Group {
+                    if let avgVibe = dashboardSummary?.averageVibe {
+                        Text(String(format: "%.1f pt", Double(avgVibe)))
+                    } else {
+                        Text("--")
+                    }
+                }
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(scoreColor.opacity(0.8))
             }
         }
+        .padding(.bottom, 24)  // 下に24pxの余白を追加
     }
     
-    // MARK: - Time Distribution View
-    private var timeDistributionView: some View {
-        HStack(spacing: 12) {
-            timeDistributionItem(
-                label: "Positive",
-                hours: vibeReport.positiveHours,
-                color: Color.safeColor("SuccessColor"),
-                icon: "arrow.up.circle.fill",
-                showSparkle: vibeReport.positiveHours > 8
-            )
-            
-            timeDistributionItem(
-                label: "Neutral",
-                hours: vibeReport.neutralHours,
-                color: Color.safeColor("BorderLight"),
-                icon: "minus.circle.fill",
-                showSparkle: false
-            )
-            
-            timeDistributionItem(
-                label: "Negative",
-                hours: vibeReport.negativeHours,
-                color: Color.safeColor("ErrorColor"),
-                icon: "arrow.down.circle.fill",
-                showSparkle: vibeReport.negativeHours > 8
-            )
-        }
-    }
-    
-    private func timeDistributionItem(label: String, hours: Double, color: Color, icon: String, showSparkle: Bool) -> some View {
-        ZStack {
-            // スパークルエフェクト（条件付き）
-            if showSparkle {
-                ForEach(0..<3, id: \.self) { index in
-                    Image(systemName: "sparkle")
-                        .font(.caption)
-                        .foregroundStyle(color)
-                        .offset(
-                            x: CGFloat.random(in: -30...30),
-                            y: CGFloat.random(in: -20...20)
-                        )
-                        .opacity(0)
-                        .animation(
-                            Animation.easeInOut(duration: 2)
-                                .repeatForever()
-                                .delay(Double(index) * 0.3),
-                            value: isAnimating
-                        )
-                        .scaleEffect(isAnimating ? 1.2 : 0.5)
-                }
-            }
-            
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundStyle(color)
-                    .symbolEffect(.pulse, isActive: showSparkle)
-                
-                Text(String(format: "%.1fh", hours))
-                    .font(.headline)
-                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
-                
-                Text(label)
-                    .font(.caption2)
-                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
-        .background(
-            ZStack {
-                // グラデーション背景
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                color.opacity(0.3),
-                                color.opacity(0.1)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                
-                // ボーダーのグロー効果
-                if showSparkle {
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(color, lineWidth: 1)
-                        .blur(radius: 3)
-                        .opacity(0.5)
-                }
-                
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(color.opacity(0.3), lineWidth: 1)
-            }
-        )
-    }
+    // MARK: - Time Distribution View（削除済み）
+    // 時間分布パネルは心理グラフ詳細ページで表示されるため、
+    // ダッシュボードのModernVibeCardからは削除しました
     
     // MARK: - Burst Trigger
     private func triggerBurst(score: Double) {
@@ -274,10 +202,19 @@ struct ModernVibeCard: View {
     }
     
     // MARK: - Computed Properties
+    // dashboard_summaryのaverage_vibeのみを使用（フォールバックなし）
+    private var actualAverageScore: Double? {
+        if let avgVibe = dashboardSummary?.averageVibe {
+            return Double(avgVibe)
+        }
+        return nil
+    }
+    
     private var scoreColor: Color {
-        if vibeReport.averageScore > 30 {
+        guard let score = actualAverageScore else { return .gray }
+        if score > 30 {
             return .green
-        } else if vibeReport.averageScore < -30 {
+        } else if score < -30 {
             return .red
         } else {
             return .gray
@@ -285,15 +222,16 @@ struct ModernVibeCard: View {
     }
     
     private var emotionEmoji: String {
-        if vibeReport.averageScore > 50 {
+        guard let score = actualAverageScore else { return "❓" }
+        if score > 50 {
             return "👏"
-        } else if vibeReport.averageScore > 30 {
+        } else if score > 30 {
             return "✌️"
-        } else if vibeReport.averageScore > 0 {
+        } else if score > 0 {
             return "👍"
-        } else if vibeReport.averageScore > -30 {
+        } else if score > -30 {
             return "👌"
-        } else if vibeReport.averageScore > -50 {
+        } else if score > -50 {
             return "💪"
         } else {
             return "💔"
@@ -301,15 +239,16 @@ struct ModernVibeCard: View {
     }
     
     private var emotionLabel: String {
-        if vibeReport.averageScore > 50 {
+        guard let score = actualAverageScore else { return "No data" }
+        if score > 50 {
             return "Excellent"
-        } else if vibeReport.averageScore > 30 {
+        } else if score > 30 {
             return "Positive"
-        } else if vibeReport.averageScore > 0 {
+        } else if score > 0 {
             return "Good"
-        } else if vibeReport.averageScore > -30 {
+        } else if score > -30 {
             return "Neutral"
-        } else if vibeReport.averageScore > -50 {
+        } else if score > -50 {
             return "Challenging"
         } else {
             return "Difficult"

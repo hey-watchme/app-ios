@@ -15,6 +15,7 @@ struct DashboardData {
     let behaviorReport: BehaviorReport?
     let emotionReport: EmotionReport?
     let subject: Subject?
+    let dashboardSummary: DashboardSummary?  // 新規追加
 }
 
 // MARK: - RPC Response Structure
@@ -26,12 +27,14 @@ struct RPCDashboardResponse: Codable {
     let behavior_report: BehaviorReport?
     let emotion_report: EmotionReport?
     let subject_info: Subject?
+    let dashboard_summary: DashboardSummary?  // 新規追加
     
     private enum CodingKeys: String, CodingKey {
         case vibe_report
         case behavior_report
         case emotion_report
         case subject_info
+        case dashboard_summary  // 新規追加
     }
 }
 
@@ -470,7 +473,8 @@ class SupabaseDataManager: ObservableObject {
                     vibeReport: nil,
                     behaviorReport: nil,
                     emotionReport: nil,
-                    subject: nil
+                    subject: nil,
+                    dashboardSummary: nil
                 )
             }
             
@@ -479,17 +483,23 @@ class SupabaseDataManager: ObservableObject {
             print("   Has behavior_report: \(rpcData.behavior_report != nil)")
             print("   Has emotion_report: \(rpcData.emotion_report != nil)")
             print("   Has subject_info: \(rpcData.subject_info != nil)")
+            print("   Has dashboard_summary: \(rpcData.dashboard_summary != nil)")
             print("   - Vibe Report: \(rpcData.vibe_report != nil ? "✓" : "✗")")
             print("   - Behavior Report: \(rpcData.behavior_report != nil ? "✓" : "✗")")
             print("   - Emotion Report: \(rpcData.emotion_report != nil ? "✓" : "✗")")
             print("   - Subject Info: \(rpcData.subject_info != nil ? "✓" : "✗")")
+            print("   - Dashboard Summary: \(rpcData.dashboard_summary != nil ? "✓" : "✗")")  
+            if let dashboardSummary = rpcData.dashboard_summary {
+                print("   - Average Vibe from Dashboard Summary: \(dashboardSummary.averageVibe ?? 0)")
+            }
             
             // RPCレスポンスをDashboardDataに変換
             return DashboardData(
                 vibeReport: rpcData.vibe_report,
                 behaviorReport: rpcData.behavior_report,
                 emotionReport: rpcData.emotion_report,
-                subject: rpcData.subject_info  // ✅ Subject情報も正しく取得
+                subject: rpcData.subject_info,  // ✅ Subject情報も正しく取得
+                dashboardSummary: rpcData.dashboard_summary  // ✅ Dashboard Summary情報も取得
             )
             
         } catch {
@@ -528,7 +538,8 @@ class SupabaseDataManager: ObservableObject {
                 vibeReport: nil,
                 behaviorReport: nil,
                 emotionReport: nil,
-                subject: nil
+                subject: nil,
+                dashboardSummary: nil
             )
         }
     }
