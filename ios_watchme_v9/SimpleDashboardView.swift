@@ -678,9 +678,8 @@ struct SimpleDashboardView: View {
     @ViewBuilder
     private func commentRow(_ comment: SubjectComment) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Image(systemName: "person.circle.fill")
-                .font(.system(size: 32))
-                .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
+            // アバター表示（AvatarViewはユーザーIDから自動的にURLを構築）
+            AvatarView(userId: comment.userId, size: 32)
             
             VStack(alignment: .leading, spacing: 4) {
                 HStack {

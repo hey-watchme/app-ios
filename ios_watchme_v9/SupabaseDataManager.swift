@@ -1074,9 +1074,10 @@ class SupabaseDataManager: ObservableObject {
         print("💬 Fetching comments for subject: \(subjectId)")
         
         do {
+            // シンプルなクエリでコメントを取得（JOINを使わない）
             let comments: [SubjectComment] = try await supabase
                 .from("subject_comments")
-                .select("*, user:auth.users(email)")
+                .select("*")
                 .eq("subject_id", value: subjectId)
                 .order("created_at", ascending: false)
                 .limit(50)
@@ -1084,6 +1085,9 @@ class SupabaseDataManager: ObservableObject {
                 .value
             
             print("✅ Fetched \(comments.count) comments")
+            
+            // ユーザー情報を別途取得して結合（必要に応じて）
+            // 注: RPC経由でユーザー情報は取得されるため、ここでは基本情報のみ取得
             return comments
         } catch {
             print("❌ Failed to fetch comments: \(error)")

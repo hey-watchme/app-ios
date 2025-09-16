@@ -13,7 +13,8 @@ struct SubjectComment: Codable, Identifiable {
     let userId: String
     let commentText: String
     let createdAt: String
-    let userEmail: String?
+    let userName: String?
+    let userAvatarUrl: String?
     
     enum CodingKeys: String, CodingKey {
         case id = "comment_id"
@@ -21,7 +22,8 @@ struct SubjectComment: Codable, Identifiable {
         case userId = "user_id"
         case commentText = "comment_text"
         case createdAt = "created_at"
-        case userEmail = "user_email"
+        case userName = "user_name"
+        case userAvatarUrl = "user_avatar_url"
     }
     
     // 日付のフォーマット表示用
@@ -41,10 +43,9 @@ struct SubjectComment: Codable, Identifiable {
     
     // コメント投稿者の表示名
     var displayName: String {
-        if let email = userEmail {
-            // @より前の部分を表示名として使用
-            return email.components(separatedBy: "@").first ?? "不明"
+        if let name = userName, !name.isEmpty {
+            return name
         }
-        return "不明"
+        return "名無し"
     }
 }

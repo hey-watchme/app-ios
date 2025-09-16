@@ -15,6 +15,7 @@
 --   emotion_report: emotion_opensmile_summaryテーブルのデータ
 --   subject_info: subjectsテーブルのデータ（devicesテーブル経由）
 --   dashboard_summary: dashboard_summaryテーブルのデータ
+--   subject_comments: subject_commentsテーブルのデータ（コメント機能）
 -- ========================================
 
 DROP FUNCTION IF EXISTS get_dashboard_data(TEXT, TEXT);
@@ -28,7 +29,8 @@ RETURNS TABLE (
     behavior_report JSONB,
     emotion_report JSONB,
     subject_info JSONB,
-    dashboard_summary JSONB
+    dashboard_summary JSONB,
+    subject_comments JSONB
 )
 LANGUAGE plpgsql
 AS $$
@@ -74,7 +76,43 @@ BEGIN
          FROM dashboard_summary ds
          WHERE ds.device_id = p_device_id::uuid 
          AND ds.date = p_date::date
-         LIMIT 1) AS dashboard_summary;
+         LIMIT 1) AS dashboard_summary,
+         
+        -- subject_comments: コメントデータを取得
+        -- 観測対象に紐づくコメントを取得し、ユーザー情報も含める
+        (SELECT jsonb_agg(
+            jsonb_build_object(
+                'comment_id', comment_id,
+                'subject_id', subject_id,
+                'user_id', user_id,
+                'comment_text', comment_text,
+                'created_at', created_at,
+                'user_name', user_name,
+                'user_avatar_url', user_avatar_url
+            ) ORDER BY created_at DESC
+         )
+         FROM (
+             SELECT 
+                 sc.comment_id,
+                 sc.subject_id,
+                 sc.user_id,
+                 sc.comment_text,
+                 sc.created_at,
+                 u.name as user_name,
+                 u.avatar_url as user_avatar_url
+             FROM subject_comments sc
+             LEFT JOIN public.users u ON sc.user_id = u.user_id
+             WHERE sc.subject_id = (
+                 SELECT s.subject_id 
+                 FROM subjects s
+                 INNER JOIN devices d ON s.subject_id = d.subject_id
+                 WHERE d.device_id = p_device_id::uuid
+                 LIMIT 1
+             )
+             ORDER BY sc.created_at DESC
+             LIMIT 50
+         ) AS comments_with_users
+        ) AS subject_comments;
 END;
 $$;
 
