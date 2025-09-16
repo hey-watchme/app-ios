@@ -17,6 +17,7 @@ struct SimpleDashboardView: View {
     @Binding var selectedDate: Date
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
+    @EnvironmentObject var authManager: SupabaseAuthManager
     
     // スティッキーヘッダーの表示状態を内部で管理
     @State private var showStickyHeader = false
@@ -27,7 +28,12 @@ struct SimpleDashboardView: View {
     @State private var emotionReport: EmotionReport?
     @State private var subject: Subject?
     @State private var dashboardSummary: DashboardSummary?  // 新規追加
+    @State private var subjectComments: [SubjectComment] = []  // コメント機能追加
     @State private var isLoading = false
+    
+    // コメント入力用
+    @State private var newCommentText = ""
+    @State private var isAddingComment = false
     
     // モーダル表示管理
     @State private var showVibeSheet = false
@@ -79,6 +85,13 @@ struct SimpleDashboardView: View {
                                 }
                             }
                             .padding(.horizontal, 20)
+                            
+                            // コメントセクション
+                            if let subject = subject {
+                                commentSection(subject: subject)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 20)
+                            }
                             
                             Spacer(minLength: 100)
                         }
@@ -506,6 +519,8 @@ struct SimpleDashboardView: View {
         behaviorReport = nil
         emotionReport = nil
         subject = nil
+        dashboardSummary = nil
+        subjectComments = []  // コメントもクリア
     }
     
     private func loadAllData() async {
@@ -563,6 +578,7 @@ struct SimpleDashboardView: View {
             self.emotionReport = result.emotionReport
             self.subject = result.subject
             self.dashboardSummary = result.dashboardSummary  // 新規追加
+            self.subjectComments = result.subjectComments ?? []  // コメントデータも設定
         }
         
         // デバッグログ - 取得結果
@@ -574,6 +590,182 @@ struct SimpleDashboardView: View {
         
         if let vibe = result.vibeReport {
             print("   📊 Vibe date: \(vibe.date), average: \(vibe.averageScore)")
+        }
+    }
+    
+    // MARK: - コメントセクション
+    
+    @ViewBuilder
+    private func commentSection(subject: Subject) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // セクションヘッダー
+            HStack {
+                Text("コメント")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                
+                Spacer()
+                
+                Text("\(subjectComments.count)件")
+                    .font(.caption)
+                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
+            }
+            
+            // コメント入力欄
+            VStack(spacing: 12) {
+                HStack(alignment: .top) {
+                    Image(systemName: "person.circle.fill")
+                        .font(.system(size: 32))
+                        .foregroundStyle(Color.safeColor("AppAccentColor"))
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("コメントを追加...", text: $newCommentText, axis: .vertical)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 15))
+                            .lineLimit(3...6)
+                            .padding(12)
+                            .background(Color.safeColor("CardBackground"))
+                            .cornerRadius(12)
+                        
+                        if !newCommentText.isEmpty {
+                            HStack {
+                                Spacer()
+                                
+                                Button("キャンセル") {
+                                    newCommentText = ""
+                                }
+                                .font(.caption)
+                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
+                                
+                                Button("投稿") {
+                                    Task {
+                                        await addComment(subjectId: subject.subjectId)
+                                    }
+                                }
+                                .font(.caption.bold())
+                                .foregroundStyle(.white)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 6)
+                                .background(Color.safeColor("AppAccentColor"))
+                                .cornerRadius(12)
+                                .disabled(isAddingComment)
+                            }
+                        }
+                    }
+                }
+                .padding()
+                .background(Color.safeColor("BehaviorBackgroundPrimary").opacity(0.3))
+                .cornerRadius(16)
+            }
+            
+            // コメントリスト
+            VStack(spacing: 12) {
+                ForEach(subjectComments) { comment in
+                    commentRow(comment)
+                }
+            }
+            
+            if subjectComments.isEmpty {
+                Text("まだコメントがありません")
+                    .font(.caption)
+                    .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 20)
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private func commentRow(_ comment: SubjectComment) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            Image(systemName: "person.circle.fill")
+                .font(.system(size: 32))
+                .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
+            
+            VStack(alignment: .leading, spacing: 4) {
+                HStack {
+                    Text(comment.displayName)
+                        .font(.caption.bold())
+                        .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                    
+                    Text("・")
+                        .font(.caption)
+                        .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
+                    
+                    Text(comment.formattedDate)
+                        .font(.caption)
+                        .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
+                    
+                    Spacer()
+                    
+                    // 自分のコメントの場合のみ削除ボタン表示
+                    if let currentUserId = authManager.currentUser?.id,
+                       comment.userId == currentUserId {
+                        Button {
+                            Task {
+                                await deleteComment(commentId: comment.id)
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.caption)
+                                .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
+                        }
+                    }
+                }
+                
+                Text(comment.commentText)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(12)
+        .background(Color.safeColor("CardBackground"))
+        .cornerRadius(12)
+    }
+    
+    // コメント追加
+    private func addComment(subjectId: String) async {
+        guard !newCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+              let userId = authManager.currentUser?.id else {
+            return
+        }
+        
+        isAddingComment = true
+        defer { isAddingComment = false }
+        
+        do {
+            try await dataManager.addComment(
+                subjectId: subjectId,
+                userId: userId,
+                commentText: newCommentText.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
+            
+            // コメント追加成功後
+            newCommentText = ""
+            
+            // コメントリストを再取得
+            let comments = await dataManager.fetchComments(subjectId: subjectId)
+            await MainActor.run {
+                self.subjectComments = comments
+            }
+        } catch {
+            print("❌ Failed to add comment: \(error)")
+        }
+    }
+    
+    // コメント削除
+    private func deleteComment(commentId: String) async {
+        do {
+            try await dataManager.deleteComment(commentId: commentId)
+            
+            // 削除成功後、コメントリストから削除
+            await MainActor.run {
+                self.subjectComments.removeAll { $0.id == commentId }
+            }
+        } catch {
+            print("❌ Failed to delete comment: \(error)")
         }
     }
 }

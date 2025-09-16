@@ -16,6 +16,7 @@ struct DashboardData {
     let emotionReport: EmotionReport?
     let subject: Subject?
     let dashboardSummary: DashboardSummary?  // 新規追加
+    let subjectComments: [SubjectComment]?  // コメント機能追加
 }
 
 // MARK: - RPC Response Structure
@@ -28,6 +29,7 @@ struct RPCDashboardResponse: Codable {
     let emotion_report: EmotionReport?
     let subject_info: Subject?
     let dashboard_summary: DashboardSummary?  // 新規追加
+    let subject_comments: [SubjectComment]?  // コメント機能追加
     
     private enum CodingKeys: String, CodingKey {
         case vibe_report
@@ -35,6 +37,7 @@ struct RPCDashboardResponse: Codable {
         case emotion_report
         case subject_info
         case dashboard_summary  // 新規追加
+        case subject_comments  // コメント機能追加
     }
 }
 
@@ -474,7 +477,8 @@ class SupabaseDataManager: ObservableObject {
                     behaviorReport: nil,
                     emotionReport: nil,
                     subject: nil,
-                    dashboardSummary: nil
+                    dashboardSummary: nil,
+                    subjectComments: nil
                 )
             }
             
@@ -489,6 +493,7 @@ class SupabaseDataManager: ObservableObject {
             print("   - Emotion Report: \(rpcData.emotion_report != nil ? "✓" : "✗")")
             print("   - Subject Info: \(rpcData.subject_info != nil ? "✓" : "✗")")
             print("   - Dashboard Summary: \(rpcData.dashboard_summary != nil ? "✓" : "✗")")  
+            print("   - Subject Comments: \(rpcData.subject_comments?.count ?? 0) comments")  
             if let dashboardSummary = rpcData.dashboard_summary {
                 print("   - Average Vibe from Dashboard Summary: \(dashboardSummary.averageVibe ?? 0)")
             }
@@ -499,7 +504,8 @@ class SupabaseDataManager: ObservableObject {
                 behaviorReport: rpcData.behavior_report,
                 emotionReport: rpcData.emotion_report,
                 subject: rpcData.subject_info,  // ✅ Subject情報も正しく取得
-                dashboardSummary: rpcData.dashboard_summary  // ✅ Dashboard Summary情報も取得
+                dashboardSummary: rpcData.dashboard_summary,  // ✅ Dashboard Summary情報も取得
+                subjectComments: rpcData.subject_comments  // ✅ コメント情報も取得
             )
             
         } catch {
@@ -539,7 +545,8 @@ class SupabaseDataManager: ObservableObject {
                 behaviorReport: nil,
                 emotionReport: nil,
                 subject: nil,
-                dashboardSummary: nil
+                dashboardSummary: nil,
+                subjectComments: nil
             )
         }
     }
@@ -1026,6 +1033,61 @@ class SupabaseDataManager: ObservableObject {
         } catch {
             print("❌ Failed to fetch unread count: \(error)")
             return 0
+        }
+    }
+    
+    // MARK: - Comment Methods
+    
+    /// コメントを追加
+    func addComment(subjectId: String, userId: String, commentText: String) async throws {
+        print("💬 Adding comment for subject: \(subjectId)")
+        
+        let comment = [
+            "subject_id": subjectId,
+            "user_id": userId,
+            "comment_text": commentText
+        ]
+        
+        try await supabase
+            .from("subject_comments")
+            .insert(comment)
+            .execute()
+        
+        print("✅ Comment added successfully")
+    }
+    
+    /// コメントを削除
+    func deleteComment(commentId: String) async throws {
+        print("🗑️ Deleting comment: \(commentId)")
+        
+        try await supabase
+            .from("subject_comments")
+            .delete()
+            .eq("comment_id", value: commentId)
+            .execute()
+        
+        print("✅ Comment deleted successfully")
+    }
+    
+    /// コメントを再取得（リフレッシュ用）
+    func fetchComments(subjectId: String) async -> [SubjectComment] {
+        print("💬 Fetching comments for subject: \(subjectId)")
+        
+        do {
+            let comments: [SubjectComment] = try await supabase
+                .from("subject_comments")
+                .select("*, user:auth.users(email)")
+                .eq("subject_id", value: subjectId)
+                .order("created_at", ascending: false)
+                .limit(50)
+                .execute()
+                .value
+            
+            print("✅ Fetched \(comments.count) comments")
+            return comments
+        } catch {
+            print("❌ Failed to fetch comments: \(error)")
+            return []
         }
     }
 }

@@ -3,6 +3,62 @@
 WatchMeプラットフォームのiOSアプリケーション（バージョン9）。
 音声録音とAI分析による心理・感情・行動の総合的なモニタリングを提供します。
 
+## 🚧 開発中の機能（未完成）
+
+### コメント機能（2025-09-16 実装中）
+**⚠️ 注意: この機能は未完成です。バックエンドのRPC関数にコメントフィールドが含まれていません。**
+
+#### 現在の実装状況
+
+**✅ 完了済み:**
+1. **データベース設計**
+   - `subject_comments`テーブル作成済み（`create_subject_comments_table.sql`）
+   - RLSポリシー設定済み
+
+2. **フロントエンド実装**
+   - `SubjectComment.swift` - コメントモデル
+   - `SupabaseDataManager.swift` - CRUD メソッド追加済み
+     - `addComment()` - コメント追加
+     - `deleteComment()` - コメント削除
+     - `fetchComments()` - コメント取得
+   - `SimpleDashboardView.swift` - UIコンポーネント実装済み
+     - コメント一覧表示
+     - コメント入力フォーム
+     - 削除機能（自分のコメントのみ）
+
+**❌ 未完成:**
+1. **RPC関数の更新**
+   - `get_dashboard_data`関数に`subject_comments`フィールドを追加する必要がある
+   - 現在はNULLを返すため、コメントは表示されない
+
+#### 完成に必要な作業
+
+1. `/sql/rpc_functions/get_dashboard_data.sql`を更新：
+```sql
+-- subject_commentsフィールドを追加（現在は未実装）
+(SELECT jsonb_agg(
+    jsonb_build_object(
+        'comment_id', sc.comment_id,
+        'subject_id', sc.subject_id,
+        'user_id', sc.user_id,
+        'comment_text', sc.comment_text,
+        'created_at', sc.created_at,
+        'user_email', u.email
+    ) ORDER BY sc.created_at DESC
+) FROM subject_comments sc
+LEFT JOIN auth.users u ON sc.user_id = u.id
+WHERE sc.subject_id = (
+    SELECT s.subject_id FROM subjects s
+    JOIN devices d ON s.subject_id = d.subject_id
+    WHERE d.device_id = p_device_id::uuid
+    LIMIT 1
+)
+LIMIT 50
+) AS subject_comments
+```
+
+2. RPC関数の戻り値に`subject_comments JSONB`を追加
+
 ## 🌟 主な機能
 
 ### 録音・データ収集
