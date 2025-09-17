@@ -28,7 +28,7 @@ struct DeviceEditingContext: Identifiable {
 struct DeviceSettingsView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @State private var subjectsByDevice: [String: Subject] = [:]
     @State private var isLoadingSubjects = true  // 明示的なローディング状態
     @State private var showQRScanner = false
@@ -93,7 +93,7 @@ struct DeviceSettingsView: View {
             )
             .environmentObject(dataManager)
             .environmentObject(deviceManager)
-            .environmentObject(authManager)
+            .environmentObject(userAccountManager)
         }
         .alert("デバイス追加エラー", isPresented: $showAddDeviceAlert, presenting: addDeviceError) { _ in
             Button("OK", role: .cancel) { }
@@ -111,7 +111,7 @@ struct DeviceSettingsView: View {
         .sheet(item: $deviceEditingContext, onDismiss: {
             // シートが閉じられた後にデバイス一覧を再読み込み
             Task {
-                if let userId = authManager.currentUser?.id {
+                if let userId = userAccountManager.currentUser?.id {
                     await deviceManager.fetchUserDevices(for: userId)
                     await loadSubjectsForAllDevices()
                 }
@@ -307,7 +307,7 @@ struct DeviceSettingsView: View {
         
         // デバイスを追加
         do {
-            if let userId = authManager.currentUser?.id {
+            if let userId = userAccountManager.currentUser?.id {
                 try await deviceManager.addDeviceByQRCode(code, for: userId)
                 // 成功時のフィードバック
                 addedDeviceId = code
@@ -332,7 +332,7 @@ struct DeviceSettingsView_Previews: PreviewProvider {
             DeviceSettingsView()
                 .environmentObject(DeviceManager())
                 .environmentObject(SupabaseDataManager())
-                .environmentObject(SupabaseAuthManager(deviceManager: DeviceManager()))
+                .environmentObject(UserAccountManager(deviceManager: DeviceManager()))
         }
     }
 }

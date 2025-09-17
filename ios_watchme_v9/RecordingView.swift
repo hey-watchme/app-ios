@@ -12,7 +12,7 @@ struct RecordingView: View {
     @ObservedObject var audioRecorder: AudioRecorder
     @ObservedObject var networkManager: NetworkManager
     @EnvironmentObject var deviceManager: DeviceManager
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @Environment(\.dismiss) private var dismiss
     @State private var showAlert = false
     @State private var alertMessage = ""
@@ -401,7 +401,7 @@ struct RecordingView: View {
     
     // デバイス連携後に録音を開始する
     private func linkDeviceAndStartRecording() {
-        guard let userId = authManager.currentUser?.id else {
+        guard let userId = userAccountManager.currentUser?.id else {
             alertMessage = "ユーザー情報が取得できません"
             showAlert = true
             return
@@ -440,7 +440,7 @@ struct RecordingView: View {
                 
                 // ユーザーのデバイス一覧を再取得
                 Task {
-                    if let userId = authManager.currentUser?.id {
+                    if let userId = userAccountManager.currentUser?.id {
                         await deviceManager.fetchUserDevices(for: userId)
                     }
                     
@@ -668,11 +668,11 @@ extension DateFormatter {
 
 #Preview {
     let deviceManager = DeviceManager()
-    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
     return RecordingView(
         audioRecorder: AudioRecorder(),
         networkManager: NetworkManager(
-            authManager: authManager,
+            userAccountManager: userAccountManager,
             deviceManager: deviceManager
         )
     )

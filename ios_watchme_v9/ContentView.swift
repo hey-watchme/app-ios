@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct ContentView: View {
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     
@@ -137,7 +137,7 @@ struct ContentView: View {
                         Button(action: {
                             // 再度初期化処理を呼び出す
                             Task {
-                                if let userId = authManager.currentUser?.id {
+                                if let userId = userAccountManager.currentUser?.id {
                                     await deviceManager.initializeDeviceState(for: userId)
                                 }
                             }
@@ -199,7 +199,7 @@ struct ContentView: View {
             Button("キャンセル", role: .cancel) { }
             Button("ログアウト", role: .destructive) {
                 Task {
-                    await authManager.signOut()
+                    await userAccountManager.signOut()
                 }
             }
         } message: {
@@ -210,7 +210,7 @@ struct ContentView: View {
             
             // デバイス初期化処理を呼び出す
             Task {
-                if let userId = authManager.currentUser?.id {
+                if let userId = userAccountManager.currentUser?.id {
                     await deviceManager.initializeDeviceState(for: userId)
                 }
             }
@@ -237,9 +237,9 @@ struct ContentView: View {
     
     private func initializeNetworkManager() {
         audioRecorder.deviceManager = deviceManager
-        networkManager = NetworkManager(authManager: authManager, deviceManager: deviceManager)
+        networkManager = NetworkManager(userAccountManager: userAccountManager, deviceManager: deviceManager)
         
-        if let authUser = authManager.currentUser {
+        if let authUser = userAccountManager.currentUser {
             networkManager?.updateToAuthenticatedUserID(authUser.id)
         }
     }

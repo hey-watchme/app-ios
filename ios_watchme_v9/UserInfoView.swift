@@ -10,7 +10,7 @@ import PhotosUI
 
 // MARK: - ユーザー情報ビュー
 struct UserInfoView: View {
-    let authManager: SupabaseAuthManager
+    let userAccountManager: UserAccountManager
     @State private var showAccountSettings = false  // アカウント設定画面
     @State private var showingAvatarPicker = false  // アバター選択画面
     @Environment(\.dismiss) private var dismiss
@@ -68,7 +68,7 @@ struct UserInfoView: View {
                                         .frame(height: 60)
                                     
                                     // 名前
-                                    if let profile = authManager.currentUser?.profile,
+                                    if let profile = userAccountManager.currentUser?.profile,
                                        let name = profile.name, !name.isEmpty {
                                         Text(name)
                                             .font(.title2)
@@ -82,7 +82,7 @@ struct UserInfoView: View {
                                     }
                                     
                                     // ID（フルで表示）
-                                    if let userId = authManager.currentUser?.id {
+                                    if let userId = userAccountManager.currentUser?.id {
                                         Text("ID: \(userId)")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -104,7 +104,7 @@ struct UserInfoView: View {
                         showingAvatarPicker = true
                     }) {
                         ZStack(alignment: .bottomTrailing) {
-                            AvatarView(userId: authManager.currentUser?.id, size: 100)
+                            AvatarView(userId: userAccountManager.currentUser?.id, size: 100)
                                 .overlay(
                                     Circle()
                                         .stroke(Color(.systemBackground), lineWidth: 4)
@@ -133,7 +133,7 @@ struct UserInfoView: View {
                 VStack(spacing: 20) {
                     // ユーザーアカウント情報
                     InfoSection(title: "ユーザーアカウント情報") {
-                        if let user = authManager.currentUser {
+                        if let user = userAccountManager.currentUser {
                             // 名前（profile.nameから取得）
                             if let profile = user.profile, let name = profile.name {
                                 InfoRowTwoLine(label: "名前", value: name, icon: "person.fill")
@@ -160,7 +160,7 @@ struct UserInfoView: View {
                                         Toggle("", isOn: Binding(
                                             get: { newsletter },
                                             set: { newValue in
-                                                authManager.updateUserProfile(newsletterSubscription: newValue)
+                                                userAccountManager.updateUserProfile(newsletterSubscription: newValue)
                                             }
                                         ))
                                         .labelsHidden()
@@ -169,7 +169,7 @@ struct UserInfoView: View {
                                         Toggle("", isOn: Binding(
                                             get: { false },
                                             set: { newValue in
-                                                authManager.updateUserProfile(newsletterSubscription: newValue)
+                                                userAccountManager.updateUserProfile(newsletterSubscription: newValue)
                                             }
                                         ))
                                         .labelsHidden()
@@ -201,13 +201,13 @@ struct UserInfoView: View {
         .navigationBarHidden(true)  // ナビゲーションバーを完全に非表示
         .sheet(isPresented: $showAccountSettings) {
             AccountSettingsView()
-                .environmentObject(authManager)
+                .environmentObject(userAccountManager)
         }
         .sheet(isPresented: $showingAvatarPicker) {
             NavigationStack {
                 AvatarPickerView(
                     viewModel: avatarViewModel,
-                    currentAvatarURL: authManager.currentUser?.id != nil ? AWSManager.shared.getAvatarURL(type: "users", id: authManager.currentUser!.id) : nil
+                    currentAvatarURL: userAccountManager.currentUser?.id != nil ? AWSManager.shared.getAvatarURL(type: "users", id: userAccountManager.currentUser!.id) : nil
                 )
                 .navigationTitle("アバターを選択")
                 .navigationBarTitleDisplayMode(.inline)
@@ -223,9 +223,9 @@ struct UserInfoView: View {
         }
         .onAppear {
             // ViewModelの初期化
-            if let userId = authManager.currentUser?.id {
+            if let userId = userAccountManager.currentUser?.id {
                 avatarViewModel.entityId = userId
-                avatarViewModel.authToken = authManager.getAccessToken()
+                avatarViewModel.authToken = userAccountManager.getAccessToken()
             }
         }
     }

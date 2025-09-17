@@ -9,7 +9,7 @@ import SwiftUI
 
 struct ReportTestView: View {
     @StateObject private var dataManager = SupabaseDataManager()
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     
     @State private var selectedDate = Date()
@@ -283,7 +283,7 @@ struct ReportTestView: View {
             print("   - userDevices count: \(deviceManager.userDevices.count)")
             
             // もしデバイスが取得されていない場合は再取得
-            if deviceManager.userDevices.isEmpty, let userId = authManager.currentUser?.id {
+            if deviceManager.userDevices.isEmpty, let userId = userAccountManager.currentUser?.id {
                 print("🔄 デバイスが未取得のため再取得を実行")
                 Task {
                     await deviceManager.fetchUserDevices(for: userId)
@@ -295,7 +295,7 @@ struct ReportTestView: View {
     // MARK: - Private Methods
     
     private func fetchDailyReport() {
-        guard authManager.isAuthenticated else {
+        guard userAccountManager.isAuthenticated else {
             dataManager.errorMessage = "ログインしていません"
             return
         }
@@ -313,7 +313,7 @@ struct ReportTestView: View {
     }
     
     private func fetchSelectedDateReport() {
-        guard authManager.isAuthenticated else {
+        guard userAccountManager.isAuthenticated else {
             dataManager.errorMessage = "ログインしていません"
             return
         }
@@ -357,10 +357,10 @@ private let itemFormatter: DateFormatter = {
 struct ReportTestView_Previews: PreviewProvider {
     static var previews: some View {
         let deviceManager = DeviceManager()
-        let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+        let userAccountManager = UserAccountManager(deviceManager: deviceManager)
         return NavigationView {
             ReportTestView()
-                .environmentObject(authManager)
+                .environmentObject(userAccountManager)
                 .environmentObject(deviceManager)
         }
     }

@@ -24,7 +24,7 @@ struct ObservationTargetCard<Content: View>: View {
                 HStack {
                     // タイトル（白文字）
                     Text(title)
-                        .font(.system(size: 40, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(.white)
                     
                     Spacer()

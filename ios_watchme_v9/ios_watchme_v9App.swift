@@ -11,23 +11,23 @@ import AVFoundation
 @main
 struct ios_watchme_v9App: App {
     @StateObject private var deviceManager = DeviceManager()
-    @StateObject private var authManager: SupabaseAuthManager
+    @StateObject private var userAccountManager: UserAccountManager
     @StateObject private var dataManager: SupabaseDataManager
     
     init() {
         let deviceManager = DeviceManager()
-        let authManager = SupabaseAuthManager(deviceManager: deviceManager)
-        let dataManager = SupabaseDataManager(authManager: authManager)
+        let userAccountManager = UserAccountManager(deviceManager: deviceManager)
+        let dataManager = SupabaseDataManager(userAccountManager: userAccountManager)
         
         _deviceManager = StateObject(wrappedValue: deviceManager)
-        _authManager = StateObject(wrappedValue: authManager)
+        _userAccountManager = StateObject(wrappedValue: userAccountManager)
         _dataManager = StateObject(wrappedValue: dataManager)
     }
     
     var body: some Scene {
         WindowGroup {
             MainAppView()
-                .environmentObject(authManager)
+                .environmentObject(userAccountManager)
                 .environmentObject(deviceManager)
                 .environmentObject(dataManager)
                 .onAppear {
@@ -51,7 +51,7 @@ struct ios_watchme_v9App: App {
 
 // メインアプリビュー
 struct MainAppView: View {
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showLogin = false
@@ -68,7 +68,7 @@ struct MainAppView: View {
     
     var body: some View {
         Group {
-            if authManager.isCheckingAuthStatus {
+            if userAccountManager.isCheckingAuthStatus {
                 // 認証状態確認中：ローディング画面
                 VStack {
                     Spacer()
@@ -92,7 +92,7 @@ struct MainAppView: View {
                     
                     Spacer()
                 }
-            } else if authManager.isAuthenticated {
+            } else if userAccountManager.isAuthenticated {
                 // ログイン済み：メイン機能画面（単一のNavigationStackでラップ）
                 NavigationStack {
                     VStack(spacing: 0) {
@@ -101,11 +101,11 @@ struct MainAppView: View {
                             switch selectedTab {
                             case .home:
                                 ContentView()
-                                    .environmentObject(authManager)
+                                    .environmentObject(userAccountManager)
                                     .environmentObject(deviceManager)
                                     .environmentObject(dataManager)
                             case .myPage:
-                                UserInfoView(authManager: authManager)
+                                UserInfoView(userAccountManager: userAccountManager)
                                 .environmentObject(deviceManager)
                                 .environmentObject(dataManager)
                             }
@@ -119,7 +119,7 @@ struct MainAppView: View {
                 .onAppear {
                     print("📱 MainAppView: 認証済み状態 - メイン画面表示")
                     // ユーザーに紐付く全デバイスを取得
-                    if let userId = authManager.currentUser?.id {
+                    if let userId = userAccountManager.currentUser?.id {
                         print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
                         Task {
                             await deviceManager.fetchUserDevices(for: userId)
@@ -164,7 +164,7 @@ struct MainAppView: View {
         .sheet(isPresented: $showLogin) {
             LoginView()
         }
-        .onChange(of: authManager.isAuthenticated) { oldValue, newValue in
+        .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
             print("🔄 MainAppView: 認証状態変化 \(oldValue) → \(newValue)")
             if newValue && showLogin {
                 // ログイン成功時にシートを閉じる

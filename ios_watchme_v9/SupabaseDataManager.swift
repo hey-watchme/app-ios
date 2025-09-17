@@ -60,7 +60,7 @@ class SupabaseDataManager: ObservableObject {
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
     
     // 認証マネージャーへの参照（オプショナル）
-    private weak var authManager: SupabaseAuthManager?
+    private weak var userAccountManager: UserAccountManager?
     
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
@@ -71,14 +71,14 @@ class SupabaseDataManager: ObservableObject {
     }()
     
     // MARK: - Initialization
-    init(authManager: SupabaseAuthManager? = nil) {
-        self.authManager = authManager
+    init(userAccountManager: UserAccountManager? = nil) {
+        self.userAccountManager = userAccountManager
         print("📊 SupabaseDataManager initialized")
     }
     
     // 認証マネージャーを設定（後から注入する場合）
-    func setAuthManager(_ authManager: SupabaseAuthManager) {
-        self.authManager = authManager
+    func setAuthManager(_ userAccountManager: UserAccountManager) {
+        self.userAccountManager = userAccountManager
     }
     
     // MARK: - Public Methods
@@ -524,8 +524,8 @@ class SupabaseDataManager: ObservableObject {
                 print("   💡 Attempting automatic token refresh...")
                 
                 // 認証マネージャーが設定されている場合、自動リカバリーを試行
-                if let authManager = authManager {
-                    let recovered = await authManager.handleAuthenticationError()
+                if let userAccountManager = userAccountManager {
+                    let recovered = await userAccountManager.handleAuthenticationError()
                     
                     if recovered {
                         print("   🔄 Token refreshed successfully, retrying RPC call...")
@@ -1039,13 +1039,19 @@ class SupabaseDataManager: ObservableObject {
     // MARK: - Comment Methods
     
     /// コメントを追加
-    func addComment(subjectId: String, userId: String, commentText: String) async throws {
-        print("💬 Adding comment for subject: \(subjectId)")
+    func addComment(subjectId: String, userId: String, commentText: String, date: Date) async throws {
+        print("💬 Adding comment for subject: \(subjectId) on date: \(date)")
+        
+        // 日付をYYYY-MM-DD形式に変換
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateString = dateFormatter.string(from: date)
         
         let comment = [
             "subject_id": subjectId,
             "user_id": userId,
-            "comment_text": commentText
+            "comment_text": commentText,
+            "date": dateString  // 日付を追加
         ]
         
         try await supabase
@@ -1053,7 +1059,7 @@ class SupabaseDataManager: ObservableObject {
             .insert(comment)
             .execute()
         
-        print("✅ Comment added successfully")
+        print("✅ Comment added successfully for date: \(dateString)")
     }
     
     /// コメントを削除
@@ -1070,24 +1076,67 @@ class SupabaseDataManager: ObservableObject {
     }
     
     /// コメントを再取得（リフレッシュ用）
-    func fetchComments(subjectId: String) async -> [SubjectComment] {
-        print("💬 Fetching comments for subject: \(subjectId)")
+    func fetchComments(subjectId: String, date: Date) async -> [SubjectComment] {
+        print("💬 Fetching comments for subject: \(subjectId) on date: \(date)")
+        
+        // 日付をYYYY-MM-DD形式に変換
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+        let dateString = dateFormatter.string(from: date)
         
         do {
-            // シンプルなクエリでコメントを取得（JOINを使わない）
+            // まずコメントを取得
             let comments: [SubjectComment] = try await supabase
                 .from("subject_comments")
                 .select("*")
                 .eq("subject_id", value: subjectId)
+                .eq("date", value: dateString)  // 日付でフィルタリング
                 .order("created_at", ascending: false)
                 .limit(50)
                 .execute()
                 .value
             
-            print("✅ Fetched \(comments.count) comments")
+            // ユーザーIDのリストを作成
+            let userIds = Array(Set(comments.map { $0.userId }))
             
-            // ユーザー情報を別途取得して結合（必要に応じて）
-            // 注: RPC経由でユーザー情報は取得されるため、ここでは基本情報のみ取得
+            if !userIds.isEmpty {
+                // ユーザー情報を一括取得
+                struct UserInfo: Codable {
+                    let user_id: String
+                    let name: String?
+                    let avatar_url: String?
+                }
+                
+                let users: [UserInfo] = try await supabase
+                    .from("users")
+                    .select("user_id, name, avatar_url")
+                    .in("user_id", values: userIds)
+                    .execute()
+                    .value
+                
+                // ユーザー情報を辞書化
+                let userDict = Dictionary(uniqueKeysWithValues: users.map { ($0.user_id, $0) })
+                
+                // コメントにユーザー情報を結合
+                let enrichedComments = comments.map { comment in
+                    let userInfo = userDict[comment.userId]
+                    return SubjectComment(
+                        id: comment.id,
+                        subjectId: comment.subjectId,
+                        userId: comment.userId,
+                        commentText: comment.commentText,
+                        createdAt: comment.createdAt,
+                        date: comment.date,
+                        userName: userInfo?.name,
+                        userAvatarUrl: userInfo?.avatar_url
+                    )
+                }
+                
+                print("✅ Fetched \(enrichedComments.count) comments with user info for date: \(dateString)")
+                return enrichedComments
+            }
+            
+            print("✅ Fetched \(comments.count) comments for date: \(dateString)")
             return comments
         } catch {
             print("❌ Failed to fetch comments: \(error)")

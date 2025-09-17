@@ -28,7 +28,7 @@ struct UnifiedCard<Content: View>: View {
                 HStack {
                     // タイトル（アイコンなし）
                     Text(title)
-                        .font(.system(size: 40, weight: .bold))
+                        .font(.system(size: 24, weight: .bold))
                         .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
                     
                     Spacer()

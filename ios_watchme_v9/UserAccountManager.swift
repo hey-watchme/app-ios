@@ -1,5 +1,5 @@
 //
-//  SupabaseAuthManager.swift
+//  UserAccountManager.swift
 //  ios_watchme_v9
 //
 //  Created by Kaya Matsumoto on 2025/07/04.
@@ -18,8 +18,8 @@ let supabase = SupabaseClient(
     supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
 )
 
-// Supabase認証管理クラス
-class SupabaseAuthManager: ObservableObject {
+// ユーザーアカウント管理クラス（認証とプロファイル）
+class UserAccountManager: ObservableObject {
     @Published var isAuthenticated: Bool = false
     @Published var currentUser: SupabaseUser? = nil
     @Published var authError: String? = nil

@@ -10,7 +10,7 @@ import SwiftUI
 struct DeviceSelectionView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @Binding var isPresented: Bool
     @Binding var subjectsByDevice: [String: Subject]
     @State private var showQRScanner = false
@@ -131,7 +131,7 @@ struct DeviceSelectionView: View {
         
         // デバイスを追加
         do {
-            if let userId = authManager.currentUser?.id {
+            if let userId = userAccountManager.currentUser?.id {
                 try await deviceManager.addDeviceByQRCode(code, for: userId)
                 // 成功時のフィードバック
                 addedDeviceId = code
@@ -153,6 +153,6 @@ struct DeviceSelectionView_Previews: PreviewProvider {
         DeviceSelectionView(isPresented: .constant(true), subjectsByDevice: .constant([:]))
             .environmentObject(DeviceManager())
             .environmentObject(SupabaseDataManager())
-            .environmentObject(SupabaseAuthManager(deviceManager: DeviceManager()))
+            .environmentObject(UserAccountManager(deviceManager: DeviceManager()))
     }
 }

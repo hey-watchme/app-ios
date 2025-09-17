@@ -15,7 +15,7 @@
 --   emotion_report: emotion_opensmile_summaryテーブルのデータ
 --   subject_info: subjectsテーブルのデータ（devicesテーブル経由）
 --   dashboard_summary: dashboard_summaryテーブルのデータ
---   subject_comments: subject_commentsテーブルのデータ（コメント機能）
+--   subject_comments: subject_commentsテーブルのデータ（対象日付のコメントのみ）
 -- ========================================
 
 DROP FUNCTION IF EXISTS get_dashboard_data(TEXT, TEXT);
@@ -80,6 +80,7 @@ BEGIN
          
         -- subject_comments: コメントデータを取得
         -- 観測対象に紐づくコメントを取得し、ユーザー情報も含める
+        -- 重要: 日付でフィルタリングして、選択された日付のコメントのみ取得
         (SELECT jsonb_agg(
             jsonb_build_object(
                 'comment_id', comment_id,
@@ -87,6 +88,7 @@ BEGIN
                 'user_id', user_id,
                 'comment_text', comment_text,
                 'created_at', created_at,
+                'date', date,
                 'user_name', user_name,
                 'user_avatar_url', user_avatar_url
             ) ORDER BY created_at DESC
@@ -98,6 +100,7 @@ BEGIN
                  sc.user_id,
                  sc.comment_text,
                  sc.created_at,
+                 sc.date,
                  u.name as user_name,
                  u.avatar_url as user_avatar_url
              FROM subject_comments sc
@@ -109,6 +112,7 @@ BEGIN
                  WHERE d.device_id = p_device_id::uuid
                  LIMIT 1
              )
+             AND sc.date = p_date::date  -- 日付でフィルタリング（重要）
              ORDER BY sc.created_at DESC
              LIMIT 50
          ) AS comments_with_users

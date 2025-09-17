@@ -16,15 +16,15 @@ class NetworkManager: ObservableObject {
     @Published var uploadProgress: Double = 0.0
     @Published var currentUploadingFile: String? = nil
     
-    private var authManager: SupabaseAuthManager?
+    private var userAccountManager: UserAccountManager?
     private var deviceManager: DeviceManager?
     
-    init(authManager: SupabaseAuthManager? = nil, deviceManager: DeviceManager? = nil) {
-        self.authManager = authManager
+    init(userAccountManager: UserAccountManager? = nil, deviceManager: DeviceManager? = nil) {
+        self.userAccountManager = userAccountManager
         self.deviceManager = deviceManager
         
         // 認証済みユーザーIDを優先、フォールバックとして従来のユーザーID
-        if let authenticatedUser = authManager?.currentUser {
+        if let authenticatedUser = userAccountManager?.currentUser {
             self.currentUserID = authenticatedUser.id
             print("🔐 認証済みユーザーIDを使用: \(authenticatedUser.id)")
         } else {
@@ -101,7 +101,7 @@ class NetworkManager: ObservableObject {
         print("   - ユーザーID: \(currentUserID)")
         print("   - サーバーURL: \(serverURL)")
         print("   - デバイス登録状態: \(deviceManager?.isDeviceRegistered ?? false)")
-        print("   - 認証状態: \(authManager?.isAuthenticated ?? false)")
+        print("   - 認証状態: \(userAccountManager?.isAuthenticated ?? false)")
         
         // 接続ステータスを更新
         DispatchQueue.main.async {

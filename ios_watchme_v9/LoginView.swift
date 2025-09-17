@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct LoginView: View {
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var showPassword: Bool = false
@@ -96,7 +96,7 @@ struct LoginView: View {
                     }
                     
                     // エラーメッセージ
-                    if let errorMessage = authManager.authError {
+                    if let errorMessage = userAccountManager.authError {
                         VStack(spacing: 8) {
                             Text(errorMessage)
                                 .font(.caption)
@@ -117,7 +117,7 @@ struct LoginView: View {
                                         .multilineTextAlignment(.center)
                                     
                                     Button(action: {
-                                        authManager.resendConfirmationEmail(email: email)
+                                        userAccountManager.resendConfirmationEmail(email: email)
                                     }) {
                                         Text("📬 確認メールを再送")
                                             .font(.caption)
@@ -127,7 +127,7 @@ struct LoginView: View {
                                             .background(Color.safeColor("PrimaryActionColor").opacity(0.1))
                                             .cornerRadius(6)
                                     }
-                                    .disabled(email.isEmpty || authManager.isLoading)
+                                    .disabled(email.isEmpty || userAccountManager.isLoading)
                                 }
                                 .padding(.top, 4)
                             }
@@ -136,10 +136,10 @@ struct LoginView: View {
                     
                     // ログインボタン
                     Button(action: {
-                        authManager.signIn(email: email, password: password)
+                        userAccountManager.signIn(email: email, password: password)
                     }) {
                         HStack {
-                            if authManager.isLoading {
+                            if userAccountManager.isLoading {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
@@ -154,7 +154,7 @@ struct LoginView: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
-                    .disabled(email.isEmpty || password.isEmpty || authManager.isLoading)
+                    .disabled(email.isEmpty || password.isEmpty || userAccountManager.isLoading)
                 }
                 .padding(.horizontal, 40)
                 
@@ -174,7 +174,7 @@ struct LoginView: View {
             }
             .navigationBarHidden(true)
         }
-        .onChange(of: authManager.isAuthenticated) { oldValue, newValue in
+        .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
             if newValue {
                 print("🔄 ログイン成功 - LoginViewからdismiss実行")
                 dismiss()
@@ -186,7 +186,7 @@ struct LoginView: View {
 
 #Preview {
     let deviceManager = DeviceManager()
-    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
     return LoginView()
-        .environmentObject(authManager)
+        .environmentObject(userAccountManager)
 }

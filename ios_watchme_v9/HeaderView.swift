@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct HeaderView: View {
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @Binding var showLogoutConfirmation: Bool
@@ -24,7 +24,7 @@ struct HeaderView: View {
             // 観測対象または選択中デバイス表示（デバイス設定画面へのリンク）
             NavigationLink(destination: 
                 DeviceSettingsView()
-                    .environmentObject(authManager)
+                    .environmentObject(userAccountManager)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
             ) {
@@ -74,7 +74,7 @@ struct HeaderView: View {
         .sheet(isPresented: $showNotificationSheet) {
             // 通知画面
             NotificationView()
-                .environmentObject(authManager)
+                .environmentObject(userAccountManager)
                 .environmentObject(dataManager)
                 .onDisappear {
                     // 通知画面を閉じたら未読数を更新
@@ -175,7 +175,7 @@ struct HeaderView: View {
     
     // 未読通知数を更新
     private func updateUnreadCount() async {
-        guard let userId = authManager.currentUser?.id else { return }
+        guard let userId = userAccountManager.currentUser?.id else { return }
         unreadNotificationCount = await dataManager.fetchUnreadNotificationCount(userId: userId)
     }
 }

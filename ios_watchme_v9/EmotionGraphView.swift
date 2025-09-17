@@ -9,7 +9,7 @@ import SwiftUI
 import Charts
 
 struct EmotionGraphView: View {
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     

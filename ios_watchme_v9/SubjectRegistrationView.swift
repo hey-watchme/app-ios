@@ -11,7 +11,7 @@ import PhotosUI
 struct SubjectRegistrationView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var deviceManager: DeviceManager
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @Environment(\.dismiss) private var dismiss  // iOS 15+の推奨パターン
     
     let deviceID: String
@@ -96,7 +96,7 @@ struct SubjectRegistrationView: View {
                 loadEditingData()
                 // ViewModelの初期化
                 avatarViewModel.entityId = editingSubject?.subjectId ?? ""
-                avatarViewModel.authToken = authManager.getAccessToken()
+                avatarViewModel.authToken = userAccountManager.getAccessToken()
             }
             .alert(isEditing ? "更新完了" : "登録完了", isPresented: $showingSuccessAlert) {
                 Button("OK") {
@@ -393,7 +393,7 @@ struct SubjectRegistrationView: View {
             }
             
             // 現在のユーザーIDを取得
-            guard let currentUser = authManager.currentUser else {
+            guard let currentUser = userAccountManager.currentUser else {
                 await MainActor.run {
                     isLoading = false
                     errorMessage = "ユーザー認証が必要です"
@@ -419,7 +419,7 @@ struct SubjectRegistrationView: View {
                 
                 do {
                     // Supabase認証トークンを取得
-                    let authToken = authManager.getAccessToken()
+                    let authToken = userAccountManager.getAccessToken()
                     
                     // ✅ Avatar Uploader APIを使用してS3にアップロード
                     let avatarUrl = try await AWSManager.shared.uploadAvatar(
@@ -514,7 +514,7 @@ struct SubjectRegistrationView: View {
                 
                 do {
                     // Supabase認証トークンを取得
-                    let authToken = authManager.getAccessToken()
+                    let authToken = userAccountManager.getAccessToken()
                     
                     // ✅ Avatar Uploader APIを使用してS3にアップロード
                     let avatarUrl = try await AWSManager.shared.uploadAvatar(
@@ -568,7 +568,7 @@ struct SubjectRegistrationView: View {
 
 #Preview {
     let deviceManager = DeviceManager()
-    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
     
     return SubjectRegistrationView(
         deviceID: "sample-device-id",
@@ -577,5 +577,5 @@ struct SubjectRegistrationView: View {
     )
     .environmentObject(SupabaseDataManager())
     .environmentObject(deviceManager)
-    .environmentObject(authManager)
+    .environmentObject(userAccountManager)
 }

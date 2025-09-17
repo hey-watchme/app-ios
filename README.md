@@ -180,7 +180,18 @@ CREATE TABLE subjects (
     gender TEXT,
     avatar_url TEXT,
     notes TEXT,
-    created_by_user_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+    created_by_user_id UUID REFERENCES public.users(user_id) ON DELETE SET NULL,  -- public.usersを参照
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- subject_commentsテーブル（観測対象へのコメント）
+CREATE TABLE subject_comments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    subject_id UUID NOT NULL REFERENCES subjects(subject_id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES public.users(user_id) ON DELETE CASCADE,  -- public.usersを参照
+    comment_text TEXT NOT NULL,
+    date DATE NOT NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -204,7 +215,7 @@ CREATE TABLE vibe_whisper_summary (
 -- notificationsテーブル（v9.22.0で追加）
 CREATE TABLE notifications (
     id UUID NOT NULL DEFAULT gen_random_uuid(),
-    user_id UUID NULL REFERENCES auth.users(id),  -- NULLの場合はグローバル通知
+    user_id UUID NULL REFERENCES public.users(user_id) ON DELETE CASCADE,  -- NULLの場合はグローバル通知、public.usersを参照
     type TEXT NOT NULL,  -- 'global', 'personal', 'event'
     title TEXT NOT NULL,
     message TEXT NOT NULL,
@@ -217,12 +228,49 @@ CREATE TABLE notifications (
 
 -- notification_readsテーブル（グローバル通知の既読管理）（v9.22.0で追加）
 CREATE TABLE notification_reads (
-    user_id UUID NOT NULL REFERENCES auth.users(id),
-    notification_id UUID NOT NULL REFERENCES notifications(id),
+    user_id UUID NOT NULL REFERENCES public.users(user_id) ON DELETE CASCADE,  -- public.usersを参照
+    notification_id UUID NOT NULL REFERENCES notifications(id) ON DELETE CASCADE,
     read_at TIMESTAMP WITHOUT TIME ZONE NULL DEFAULT NOW(),
     CONSTRAINT notification_reads_pkey PRIMARY KEY (user_id, notification_id)
 );
 ```
+
+## 🚨 重要：認証とユーザー管理の設計原則
+
+### ❌ 絶対に行ってはいけないこと
+
+1. **auth.usersへの直接参照を作らない**
+   - auth.usersはSupabaseの内部テーブル（直接アクセス不可）
+   - すべての外部キー制約は`public.users(user_id)`を参照すること
+   - `public.users.user_id`は`auth.users.id`のコピーとして機能
+
+2. **新しいテーブル作成時の必須ルール**
+   ```sql
+   -- ❌ 間違い：auth.usersを直接参照
+   CREATE TABLE new_table (
+       user_id UUID REFERENCES auth.users(id)  -- 絶対NG！
+   );
+   
+   -- ✅ 正しい：public.usersを参照
+   CREATE TABLE new_table (
+       user_id UUID REFERENCES public.users(user_id) ON DELETE CASCADE
+   );
+   ```
+
+3. **iOS側のコード規則**
+   ```swift
+   // ❌ 間違い：auth.users.idを使用
+   let userId = userAccountManager.currentUser?.id
+   
+   // ✅ 正しい：public.usersのuser_idを使用
+   let userId = userAccountManager.currentUser?.profile?.userId
+   ```
+
+### なぜこの設計が必要か
+
+1. **auth.usersはアクセス不可**：Supabaseの認証システムが管理、直接クエリ不可
+2. **public.usersが仲介役**：アプリケーションが管理できるユーザー情報
+3. **整合性の保証**：public.usersがauth.usersと連動（CASCADE DELETE）
 
 #### RLS（Row Level Security）の重要性
 

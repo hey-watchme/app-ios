@@ -9,7 +9,7 @@ import SwiftUI
 
 struct NotificationView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     
     @State private var notifications: [Notification] = []
@@ -118,7 +118,7 @@ struct NotificationView: View {
         isLoading = true
         errorMessage = nil
         
-        guard let userId = authManager.currentUser?.id else {
+        guard let userId = userAccountManager.currentUser?.id else {
             errorMessage = "ユーザー情報が取得できません"
             isLoading = false
             return
@@ -130,7 +130,7 @@ struct NotificationView: View {
     
     // 通知を既読にする
     private func markAsRead(_ notification: Notification) async {
-        guard let userId = authManager.currentUser?.id else { return }
+        guard let userId = userAccountManager.currentUser?.id else { return }
         
         // UIを即座に更新
         if let index = notifications.firstIndex(where: { $0.id == notification.id }) {
@@ -152,7 +152,7 @@ struct NotificationView: View {
     
     // すべての通知を既読にする
     private func markAllAsRead() async {
-        guard let userId = authManager.currentUser?.id else { return }
+        guard let userId = userAccountManager.currentUser?.id else { return }
         
         // UIを即座に更新
         for index in notifications.indices {

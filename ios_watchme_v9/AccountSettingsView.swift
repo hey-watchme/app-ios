@@ -9,7 +9,7 @@ import SwiftUI
 
 struct AccountSettingsView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @State private var showLogoutConfirmation = false
     @State private var isLoggingOut = false
     @State private var showAboutApp = false
@@ -128,7 +128,7 @@ struct AccountSettingsView: View {
         isLoggingOut = true
         
         // Supabaseからサインアウト
-        await authManager.signOut()
+        await userAccountManager.signOut()
         
         // 少し待機（UX向上のため）
         do {
@@ -144,8 +144,8 @@ struct AccountSettingsView: View {
 
 #Preview {
     let deviceManager = DeviceManager()
-    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
     
     return AccountSettingsView()
-        .environmentObject(authManager)
+        .environmentObject(userAccountManager)
 }

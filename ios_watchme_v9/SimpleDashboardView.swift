@@ -17,7 +17,7 @@ struct SimpleDashboardView: View {
     @Binding var selectedDate: Date
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     
     // スティッキーヘッダーの表示状態を内部で管理
     @State private var showStickyHeader = false
@@ -76,7 +76,14 @@ struct SimpleDashboardView: View {
                             emotionGraphCard
                                 .padding(.horizontal, 20)
                             
-                            // 観測対象カード
+                            // コメントセクション
+                            if let subject = subject {
+                                commentSection(subject: subject)
+                                    .padding(.horizontal, 20)
+                                    .padding(.top, 20)
+                            }
+                            
+                            // 観測対象カード（最下部に移動）
                             Group {
                                 if let subject = subject {
                                     observationTargetCard(subject)
@@ -85,13 +92,7 @@ struct SimpleDashboardView: View {
                                 }
                             }
                             .padding(.horizontal, 20)
-                            
-                            // コメントセクション
-                            if let subject = subject {
-                                commentSection(subject: subject)
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 20)
-                            }
+                            .padding(.top, 20)
                             
                             Spacer(minLength: 100)
                         }
@@ -367,6 +368,15 @@ struct SimpleDashboardView: View {
                     }
                     
                     Spacer()
+                }
+                
+                // プロフィール（notes）を表示
+                if let notes = subject.notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.85))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 8)
                 }
             }
             .padding(.vertical, 4)
@@ -696,26 +706,31 @@ struct SimpleDashboardView: View {
                         .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
                     
                     Spacer()
-                    
-                    // 自分のコメントの場合のみ削除ボタン表示
-                    if let currentUserId = authManager.currentUser?.id,
-                       comment.userId == currentUserId {
-                        Button {
-                            Task {
-                                await deleteComment(commentId: comment.id)
-                            }
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.caption)
-                                .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
-                        }
-                    }
                 }
                 
                 Text(comment.commentText)
                     .font(.system(size: 15))
                     .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
                     .fixedSize(horizontal: false, vertical: true)
+                
+                // 自分のコメントの場合のみ削除ボタン表示（右下に配置）
+                if let currentUserId = userAccountManager.currentUser?.profile?.userId,
+                   comment.userId == currentUserId {
+                    HStack {
+                        Spacer()
+                        Button {
+                            Task {
+                                await deleteComment(commentId: comment.id)
+                            }
+                        } label: {
+                            Image(systemName: "trash")
+                                .font(.system(size: 10))
+                                .foregroundStyle(Color.safeColor("BehaviorTextTertiary").opacity(0.5))
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                    .padding(.top, 4)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -727,7 +742,7 @@ struct SimpleDashboardView: View {
     // コメント追加
     private func addComment(subjectId: String) async {
         guard !newCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let userId = authManager.currentUser?.id else {
+              let userId = userAccountManager.currentUser?.profile?.userId else {
             return
         }
         
@@ -738,14 +753,15 @@ struct SimpleDashboardView: View {
             try await dataManager.addComment(
                 subjectId: subjectId,
                 userId: userId,
-                commentText: newCommentText.trimmingCharacters(in: .whitespacesAndNewlines)
+                commentText: newCommentText.trimmingCharacters(in: .whitespacesAndNewlines),
+                date: selectedDate  // 選択中の日付を追加
             )
             
             // コメント追加成功後
             newCommentText = ""
             
-            // コメントリストを再取得
-            let comments = await dataManager.fetchComments(subjectId: subjectId)
+            // コメントリストを再取得（同じ日付のコメントのみ）
+            let comments = await dataManager.fetchComments(subjectId: subjectId, date: selectedDate)
             await MainActor.run {
                 self.subjectComments = comments
             }

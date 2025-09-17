@@ -10,7 +10,7 @@ import Charts
 
 struct HomeView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
-    @EnvironmentObject var authManager: SupabaseAuthManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     
     // オプショナルでデータを受け取る
@@ -210,10 +210,10 @@ struct EmotionTimeBar: View {
 
 #Preview {
     let deviceManager = DeviceManager()
-    let authManager = SupabaseAuthManager(deviceManager: deviceManager)
+    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
     return NavigationView {
         HomeView()
-        .environmentObject(authManager)
+        .environmentObject(userAccountManager)
         .environmentObject(SupabaseDataManager())
         .environmentObject(deviceManager)
     }

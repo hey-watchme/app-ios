@@ -13,6 +13,7 @@ struct SubjectComment: Codable, Identifiable {
     let userId: String
     let commentText: String
     let createdAt: String
+    let date: String?  // 日付フィールドを追加
     let userName: String?
     let userAvatarUrl: String?
     
@@ -22,6 +23,7 @@ struct SubjectComment: Codable, Identifiable {
         case userId = "user_id"
         case commentText = "comment_text"
         case createdAt = "created_at"
+        case date = "date"
         case userName = "user_name"
         case userAvatarUrl = "user_avatar_url"
     }
@@ -46,6 +48,6 @@ struct SubjectComment: Codable, Identifiable {
         if let name = userName, !name.isEmpty {
             return name
         }
-        return "名無し"
+        return "Unknown"
     }
 }
