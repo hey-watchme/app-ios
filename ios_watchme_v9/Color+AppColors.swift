@@ -22,7 +22,7 @@ extension Color {
     static let zeroLineColor = Color("ZeroLineColor")  // ゼロ基準線の色
     
     // Behavior Graph Colors (partially auto-generated)
-    static let behaviorBackgroundSecondary = Color("BehaviorBackgroundSecondary")  // 副次的背景色
+    // behaviorBackgroundSecondary is now auto-generated from Assets.xcassets
     static let behaviorGoldMedal = Color("BehaviorGoldMedal")  // 金メダルの色
     static let behaviorSilverMedal = Color("BehaviorSilverMedal")  // 銀メダルの色
     static let behaviorBronzeMedal = Color("BehaviorBronzeMedal")  // 銅メダルの色

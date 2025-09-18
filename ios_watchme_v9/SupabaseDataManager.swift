@@ -767,6 +767,45 @@ class SupabaseDataManager: ObservableObject {
         print("✅ Device subject_id updated successfully")
     }
     
+    // MARK: - Dashboard Time Blocks Methods
+    
+    /// dashboardテーブルから指定日の時間ブロックごとの詳細データを取得
+    /// - Parameters:
+    ///   - deviceId: デバイスID
+    ///   - date: 対象日付
+    /// - Returns: 時間ブロックごとのデータ配列（時間順でソート済み）
+    func fetchDashboardTimeBlocks(deviceId: String, date: Date) async -> [DashboardTimeBlock] {
+        print("📊 Fetching dashboard time blocks for device: \(deviceId)")
+        
+        // 日付フォーマッタの設定
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = TimeZone.current
+        let dateString = formatter.string(from: date)
+        
+        print("   Date: \(dateString)")
+        
+        do {
+            // dashboardテーブルから指定デバイス・日付のデータを取得
+            let timeBlocks: [DashboardTimeBlock] = try await supabase
+                .from("dashboard")
+                .select()
+                .eq("device_id", value: deviceId)
+                .eq("date", value: dateString)
+                .order("time_block", ascending: true)
+                .execute()
+                .value
+            
+            print("✅ Successfully fetched \(timeBlocks.count) time blocks")
+            return timeBlocks
+            
+        } catch {
+            print("❌ Failed to fetch dashboard time blocks: \(error)")
+            print("   Error details: \(error.localizedDescription)")
+            return []
+        }
+    }
+    
     /// 観測対象を更新
     func updateSubject(
         subjectId: String,

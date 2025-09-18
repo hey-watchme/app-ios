@@ -146,10 +146,11 @@ struct MainAppView: View {
                         HStack {
                             Image(systemName: "person.circle.fill")
                             Text("ログイン / サインアップ")
+                                .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.safeColor("PrimaryActionColor"))
+                        .frame(height: 44)
+                        .background(Color.safeColor("AppAccentColor"))
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }

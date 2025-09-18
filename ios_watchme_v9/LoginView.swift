@@ -29,7 +29,7 @@ struct LoginView: View {
                         .font(.title2)
                         .foregroundColor(.secondary)
                 }
-                .padding(.top, 40)
+                .padding(.top, 80)
                 
                 Spacer()
                 
@@ -49,15 +49,22 @@ struct LoginView: View {
                                     .allowsHitTesting(false)
                             }
                             TextField("", text: $email)
-                                .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .keyboardType(.emailAddress)
-                                .textContentType(.emailAddress)  // これにより自動補完が有効になります
+                                .textContentType(.emailAddress)
                                 .autocapitalization(.none)
                                 .autocorrectionDisabled()
                                 .foregroundColor(.primary)
-                                .accentColor(Color.safeColor("PrimaryActionColor"))
-                                .font(.body)  // フォントサイズを少し大きく
-                                .padding(.vertical, 4)  // 縦方向の余白を追加
+                                .font(.body)
+                                .padding()
+                                .frame(height: 44)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
+                                        .background(
+                                            RoundedRectangle(cornerRadius: 10)
+                                                .fill(Color(.systemBackground))
+                                        )
+                                )
                         }
                     }
                     
@@ -82,15 +89,31 @@ struct LoginView: View {
                         HStack {
                             if showPassword {
                                 TextField("パスワードを入力", text: $password)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
                                     .font(.body)
-                                    .padding(.vertical, 4)
+                                    .padding()
+                                    .frame(height: 44)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .fill(Color(.systemBackground))
+                                            )
+                                    )
                             } else {
                                 SecureField("パスワードを入力", text: $password)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
                                     .textContentType(.password)
                                     .font(.body)
-                                    .padding(.vertical, 4)
+                                    .padding()
+                                    .frame(height: 44)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 10)
+                                                    .fill(Color(.systemBackground))
+                                            )
+                                    )
                             }
                         }
                     }
@@ -121,10 +144,10 @@ struct LoginView: View {
                                     }) {
                                         Text("📬 確認メールを再送")
                                             .font(.caption)
-                                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                            .foregroundColor(Color.safeColor("AppAccentColor"))
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
-                                            .background(Color.safeColor("PrimaryActionColor").opacity(0.1))
+                                            .background(Color.safeColor("AppAccentColor").opacity(0.1))
                                             .cornerRadius(6)
                                     }
                                     .disabled(email.isEmpty || userAccountManager.isLoading)
@@ -149,8 +172,8 @@ struct LoginView: View {
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(Color.safeColor("PrimaryActionColor"))
+                        .frame(height: 44)
+                        .background(Color.safeColor("AppAccentColor"))
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
@@ -166,7 +189,7 @@ struct LoginView: View {
                 }) {
                     Text("新規アカウント作成はこちら")
                         .font(.footnote)
-                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                        .foregroundColor(Color.safeColor("AppAccentColor"))
                 }
                 .padding(.top, 20)
                 

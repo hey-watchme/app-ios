@@ -17,6 +17,10 @@ struct HomeView: View {
     var vibeReport: DailyVibeReport?
     var subject: Subject?
     var dashboardSummary: DashboardSummary?  // 新規追加
+    var selectedDate: Date  // 日付を受け取る
+    
+    @State private var timeBlocks: [DashboardTimeBlock] = []
+    @State private var isLoadingTimeBlocks = false
     
     var body: some View {
         ScrollView {
@@ -57,92 +61,35 @@ struct HomeView: View {
                     .padding(.horizontal)
                 }
                 
-                // レポート表示（引数で渡されたデータを優先）
-                if let report = vibeReport ?? dataManager.dailyReport {
+                // 時間詳細リスト表示
+                if isLoadingTimeBlocks {
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle())
+                        Text("時間詳細を取得中...")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 200)
+                    .padding()
+                } else if !timeBlocks.isEmpty {
                     VStack(spacing: 16) {
-                        // 概要カード
-                        UnifiedCard(title: "概要") {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("平均スコア")
-                                        .font(.caption)
-                                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
-                                    Text(String(format: "%.1f pt", report.averageScore))
-                                        .font(.system(size: 56, weight: .bold, design: .rounded))
-                                        .foregroundColor(report.averageScoreColor)
-                                }
-                                Spacer()
-                                Text(report.averageScoreEmoji)
-                                    .font(.system(size: 70))
-                                    .padding()
-                                    .background(
-                                        Circle()
-                                            .fill(report.averageScoreColor.opacity(0.1))
-                                    )
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // 感情の時間分布カード
-                        UnifiedCard(title: "時間分布") {
-                            VStack(spacing: 16) {
-                                EmotionTimeBar(
-                                    label: "ポジティブ",
-                                    hours: report.positiveHours,
-                                    percentage: report.positivePercentage,
-                                    color: Color.safeColor("SuccessColor")
-                                )
-                                EmotionTimeBar(
-                                    label: "ニュートラル",
-                                    hours: report.neutralHours,
-                                    percentage: report.neutralPercentage,
-                                    color: Color.safeColor("BorderLight")
-                                )
-                                EmotionTimeBar(
-                                    label: "ネガティブ",
-                                    hours: report.negativeHours,
-                                    percentage: report.negativePercentage,
-                                    color: Color.safeColor("ErrorColor")
-                                )
-                            }
-                        }
-                        .padding(.horizontal)
-                        
-                        // インサイトカード
-                        if !report.insights.isEmpty {
-                            UnifiedCard(title: "インサイト") {
-                                VStack(alignment: .leading, spacing: 12) {
-                                    ForEach(Array(report.insights.enumerated()), id: \.offset) { index, insight in
-                                        HStack(alignment: .top, spacing: 12) {
-                                            Image(systemName: "lightbulb.fill")
-                                                .foregroundColor(Color.safeColor("WarningColor"))
-                                                .font(.body)
-                                            Text(insight)
-                                                .font(.body)
-                                                .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
-                                                .fixedSize(horizontal: false, vertical: true)
-                                        }
-                                        if index < report.insights.count - 1 {
-                                            Divider()
-                                                .background(Color.safeColor("BorderLight").opacity(0.2))
-                                        }
+                        // 時間ごとの詳細リスト
+                        UnifiedCard(title: "時間ごとの詳細") {
+                            VStack(spacing: 0) {
+                                ForEach(timeBlocks, id: \.timeBlock) { block in
+                                    TimeBlockRowView(timeBlock: block)
+                                    
+                                    if block.timeBlock != timeBlocks.last?.timeBlock {
+                                        Divider()
+                                            .background(Color.safeColor("BorderLight").opacity(0.3))
                                     }
                                 }
                             }
-                            .padding(.horizontal)
                         }
-                        
-                        // 時間帯別グラフカード
-                        // dashboard_summaryのvibeScoresを優先、なければreportから取得（フォールバック）
-                        if let vibeScores = dashboardSummary?.vibeScores ?? report.vibeScores {
-                            UnifiedCard(title: "時間帯別推移") {
-                                VibeLineChartView(vibeScores: vibeScores, vibeChanges: report.vibeChanges, showTitle: false, compactMode: false)
-                                    .frame(height: 260)
-                            }
-                            .padding(.horizontal)
-                        }
+                        .padding(.horizontal)
                     }
-                } else if !dataManager.isLoading && dataManager.errorMessage == nil {
+                } else if !isLoadingTimeBlocks && !dataManager.isLoading && dataManager.errorMessage == nil {
                     // エンプティステート表示（共通コンポーネント使用）
                     GraphEmptyStateView(
                         graphType: .vibe,
@@ -156,6 +103,111 @@ struct HomeView: View {
         .background(Color.safeColor("BehaviorBackgroundPrimary"))
         .navigationTitle("心理グラフ")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: selectedDate) {
+            await loadTimeBlocks()
+        }
+    }
+    
+    // データ取得メソッド
+    private func loadTimeBlocks() async {
+        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+            print("❌ No device selected")
+            return
+        }
+        
+        isLoadingTimeBlocks = true
+        timeBlocks = await dataManager.fetchDashboardTimeBlocks(deviceId: deviceId, date: selectedDate)
+        isLoadingTimeBlocks = false
+    }
+}
+
+// MARK: - Time Block Row View
+
+struct TimeBlockRowView: View {
+    let timeBlock: DashboardTimeBlock
+    @State private var isExpanded = false
+    
+    // サマリーの最初の1行を取得
+    private var summaryFirstLine: String? {
+        guard let summary = timeBlock.summary else { return nil }
+        let lines = summary.components(separatedBy: .newlines)
+        return lines.first?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+    
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // メイン行（時間、スコア、サマリー1行目、展開アイコン）
+            Button(action: { 
+                if timeBlock.summary != nil {
+                    isExpanded.toggle()
+                }
+            }) {
+                HStack(alignment: .center, spacing: 12) {
+                    // 時間表示
+                    Text(timeBlock.displayTime)
+                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                        .frame(width: 45, alignment: .leading)
+                    
+                    // スコア表示
+                    Group {
+                        if let score = timeBlock.vibeScore {
+                            HStack(spacing: 3) {
+                                Circle()
+                                    .fill(timeBlock.scoreColor)
+                                    .frame(width: 6, height: 6)
+                                Text(String(format: "%.0f", score))
+                                    .font(.system(size: 13, weight: .medium))
+                                    .foregroundColor(timeBlock.scoreColor)
+                            }
+                            .frame(width: 45, alignment: .leading)
+                        } else {
+                            Text("-")
+                                .font(.system(size: 13))
+                                .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                                .frame(width: 45, alignment: .center)
+                        }
+                    }
+                    
+                    // サマリーの1行目
+                    if let firstLine = summaryFirstLine {
+                        Text(firstLine)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    } else {
+                        Text("")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    
+                    // 展開/折りたたみアイコン
+                    if timeBlock.summary != nil {
+                        Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 10))
+                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+                            .frame(width: 20)
+                    } else {
+                        Color.clear.frame(width: 20)
+                    }
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 12)
+            }
+            .buttonStyle(BorderlessButtonStyle())
+            
+            // 展開時の詳細表示
+            if isExpanded, let summary = timeBlock.summary {
+                Text(summary)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                    .padding(.leading, 45) // 時間の幅分インデント
+            }
+        }
     }
 }
 
@@ -211,8 +263,8 @@ struct EmotionTimeBar: View {
 #Preview {
     let deviceManager = DeviceManager()
     let userAccountManager = UserAccountManager(deviceManager: deviceManager)
-    return NavigationView {
-        HomeView()
+    NavigationView {
+        HomeView(selectedDate: Date())
         .environmentObject(userAccountManager)
         .environmentObject(SupabaseDataManager())
         .environmentObject(deviceManager)

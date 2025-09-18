@@ -34,6 +34,7 @@ struct SimpleDashboardView: View {
     // コメント入力用
     @State private var newCommentText = ""
     @State private var isAddingComment = false
+    @FocusState private var isCommentFieldFocused: Bool  // キーボード制御用
     
     // モーダル表示管理
     @State private var showVibeSheet = false
@@ -97,7 +98,7 @@ struct SimpleDashboardView: View {
                             Spacer(minLength: 100)
                         }
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 8)  // 日付セクションとの余白を8pxに変更
                 }
             }
             .coordinateSpace(name: "scroll")
@@ -118,6 +119,12 @@ struct SimpleDashboardView: View {
                 Color.white
                     .ignoresSafeArea()
             )
+            .scrollDismissesKeyboard(.interactively)  // スクロール時にキーボードを閉じる
+            .onTapGesture {
+                // ScrollView内の空白部分をタップしたらキーボードを閉じる
+                // 既存のボタンやNavigationLinkには影響しない
+                isCommentFieldFocused = false
+            }
             
             // 固定日付ヘッダー（条件付き表示）
             if showStickyHeader {
@@ -156,9 +163,10 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
-                HomeView(vibeReport: vibeReport, subject: subject, dashboardSummary: dashboardSummary)
+                HomeView(vibeReport: vibeReport, subject: subject, dashboardSummary: dashboardSummary, selectedDate: selectedDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
+                    .environmentObject(userAccountManager)
                     .navigationBarTitleDisplayMode(.large)
                     .navigationTitle("心理グラフ")
                     .toolbar {
@@ -216,6 +224,7 @@ struct SimpleDashboardView: View {
                     showTitle: false  // タイトルを非表示
                 )
                 .onTapGesture {
+                    isCommentFieldFocused = false  // キーボードを閉じる
                     showVibeSheet = true
                 }
             } else {
@@ -231,6 +240,7 @@ struct SimpleDashboardView: View {
                     )
                 }
                 .onTapGesture {
+                    isCommentFieldFocused = false  // キーボードを閉じる
                     showVibeSheet = true
                 }
             }
@@ -284,6 +294,7 @@ struct SimpleDashboardView: View {
             }
         }
         .onTapGesture {
+            isCommentFieldFocused = false  // キーボードを閉じる
             showBehaviorSheet = true
         }
     }
@@ -305,6 +316,7 @@ struct SimpleDashboardView: View {
             }
         }
         .onTapGesture {
+            isCommentFieldFocused = false  // キーボードを閉じる
             showEmotionSheet = true
         }
     }
@@ -636,6 +648,12 @@ struct SimpleDashboardView: View {
                             .padding(12)
                             .background(Color.safeColor("CardBackground"))
                             .cornerRadius(12)
+                            .focused($isCommentFieldFocused)
+                            .submitLabel(.done)
+                            .onSubmit {
+                                // リターンキー（完了）でキーボードを閉じる
+                                isCommentFieldFocused = false
+                            }
                         
                         if !newCommentText.isEmpty {
                             HStack {
@@ -651,6 +669,7 @@ struct SimpleDashboardView: View {
                                     Task {
                                         await addComment(subjectId: subject.subjectId)
                                     }
+                                    isCommentFieldFocused = false  // 投稿後キーボードを閉じる
                                 }
                                 .font(.caption.bold())
                                 .foregroundStyle(.white)
