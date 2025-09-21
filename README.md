@@ -203,21 +203,24 @@ CREATE TABLE subject_comments (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- vibe_whisper_summaryテーブル（感情分析データ）
-CREATE TABLE vibe_whisper_summary (
-    device_id TEXT NOT NULL,  -- devicesテーブルのdevice_idを参照
+-- dashboard_summaryテーブル（統合ダッシュボードデータ）
+CREATE TABLE dashboard_summary (
+    device_id UUID NOT NULL,  -- devicesテーブルのdevice_idを参照
     date DATE NOT NULL,
-    vibe_scores JSONB,
-    average_score DOUBLE PRECISION,
-    positive_hours DOUBLE PRECISION,
-    negative_hours DOUBLE PRECISION,
-    neutral_hours DOUBLE PRECISION,
-    insights JSONB,
-    vibe_changes JSONB,
-    processed_at TIMESTAMP WITH TIME ZONE,
-    processing_log JSONB,
+    average_vibe REAL,                    -- 1日の平均気分スコア
+    vibe_scores JSONB,                    -- 48個の時系列スコア配列（30分ごと、nullは0として扱う）
+    burst_events JSONB,                   -- バーストイベント配列（感情の急変点）
+    insights TEXT,                        -- 1日のサマリーインサイト
+    analysis_result JSONB,                -- 詳細な分析結果
+    processed_count INTEGER,              -- 処理済みブロック数
+    last_time_block TEXT,                 -- 最後に処理した時間ブロック
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
     PRIMARY KEY (device_id, date)
 );
+
+-- vibe_whisper_summaryテーブル（廃止済み）
+-- 気分データはすべてdashboard_summaryテーブルから取得してください
 
 -- notificationsテーブル（v9.22.0で追加）
 CREATE TABLE notifications (
@@ -665,7 +668,7 @@ CREATE TABLE audio_files (
 
 1. **統合データ取得関数 `get_dashboard_data`**
    - 単一のRPC呼び出しで全グラフデータを取得
-   - vibe_whisper_summary、behavior_summary、emotion_opensmile_summary、subjectsの4テーブルを一括取得
+   - dashboard_summary、behavior_summary、emotion_opensmile_summary、subjects、subject_commentsの5テーブルを一括取得
    - ネットワークリクエストが5回以上から1回に削減
    - **パラメータ**:
      - `p_device_id`: デバイスID（TEXT型、UUID形式）
@@ -732,10 +735,11 @@ $$;
 3. **DashboardData構造体**
    ```swift
    struct DashboardData: Decodable {
-       let vibe_report: DailyVibeReport?       // vibe_whisper_summaryテーブルのデータ
        let behavior_report: BehaviorReport?     // behavior_summaryテーブルのデータ
        let emotion_report: EmotionReport?       // emotion_opensmile_summaryテーブルのデータ
        let subject_info: Subject?               // subjectsテーブルのデータ
+       let dashboard_summary: DashboardSummary? // dashboard_summaryテーブルのデータ（気分データ含む）
+       let subject_comments: [SubjectComment]?  // subject_commentsテーブルのデータ
    }
    ```
 
@@ -1352,6 +1356,20 @@ git push origin feature/機能名
 ```
 
 ## 更新履歴
+
+### v9.26.0 (2025-09-21)
+- **データソースの完全統一**
+  - vibe_whisper_summaryテーブルの依存を完全に排除
+  - すべての気分データをdashboard_summaryテーブルから取得するように変更
+  - RPC関数get_dashboard_dataからvibe_reportフィールドを削除
+- **グラフ表示の改善**
+  - InteractiveTimelineViewでnullデータを0として扱うように統一
+  - グラフライン（黒線・グレー線）とインジケーターの動作を一致
+  - データの連続性を保ち、見た目を安定化
+- **新機能追加**
+  - dashboard_summaryテーブルにburst_eventsとinsightsフィールドを追加
+  - バーストイベント（感情の急変点）の表示を新しいデータソースから取得
+  - 1日のサマリーインサイトを独立したフィールドから取得
 
 ### v9.25.0 (2025-09-18)
 - **心理グラフの大幅リニューアル**: 
