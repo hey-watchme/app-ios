@@ -14,12 +14,17 @@ struct BehaviorGraphView: View {
     
     // オプショナルでデータを受け取る
     var behaviorReport: BehaviorReport?
+    var selectedDate: Date = Date()  // 日付を受け取る
     
-    @State private var expandedTimeBlocks: Set<String> = []
+    @State private var selectedTimeBlock: TimeBlock? = nil
+    @State private var showingDetail = false
     
     var body: some View {
         ScrollView {
                 VStack(spacing: 16) {
+                    // 日付表示
+                    DetailPageDateHeader(selectedDate: selectedDate)
+                        .padding(.top, -8)  // ScrollViewのデフォルトパディングを調整
                     if dataManager.isLoading {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
@@ -116,11 +121,11 @@ struct BehaviorGraphView: View {
                                     GridItem(.flexible())
                                 ], spacing: 10) {
                                     ForEach(report.sortedTimeBlocks, id: \.time) { block in
-                                        TimeBlockCell(
-                                            timeBlock: block,
-                                            isExpanded: expandedTimeBlocks.contains(block.time)
-                                        ) {
-                                            toggleTimeBlock(block.time)
+                                        TimeBlockCell(timeBlock: block) {
+                                            if !block.isEmpty {
+                                                selectedTimeBlock = block
+                                                showingDetail = true
+                                            }
                                         }
                                     }
                                 }
@@ -142,13 +147,13 @@ struct BehaviorGraphView: View {
         .background(Color.safeColor("BehaviorBackgroundPrimary"))
         .navigationTitle("行動グラフ")
         .navigationBarTitleDisplayMode(.inline)
-    }
-    
-    private func toggleTimeBlock(_ time: String) {
-        if expandedTimeBlocks.contains(time) {
-            expandedTimeBlocks.remove(time)
-        } else {
-            expandedTimeBlocks.insert(time)
+        .sheet(isPresented: $showingDetail) {
+            if let block = selectedTimeBlock {
+                TimeBlockDetailView(timeBlock: block) {
+                    showingDetail = false
+                }
+                .presentationDetents([.medium])
+            }
         }
     }
     
@@ -169,7 +174,6 @@ struct BehaviorGraphView: View {
 // MARK: - Time Block Cell
 struct TimeBlockCell: View {
     let timeBlock: TimeBlock
-    let isExpanded: Bool
     let onTap: () -> Void
     
     var body: some View {
@@ -208,10 +212,6 @@ struct TimeBlockCell: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
-        .sheet(isPresented: .constant(isExpanded && !timeBlock.isEmpty)) {
-            TimeBlockDetailView(timeBlock: timeBlock, onDismiss: onTap)
-                .presentationDetents([.medium])
-        }
     }
     
     private func backgroundGradient(for hour: Int) -> LinearGradient {

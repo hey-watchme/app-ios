@@ -15,13 +15,16 @@ struct EmotionGraphView: View {
     
     // オプショナルでデータを受け取る
     var emotionReport: EmotionReport?
+    var selectedDate: Date = Date()  // 日付を受け取る
     
-    @State private var selectedEmotions: Set<EmotionType> = Set(EmotionType.allCases)
-    @State private var showingLegend = true
+    @State private var selectedEmotions: Set<EmotionType> = [.joy]  // デフォルトで喜びだけを選択
     
     var body: some View {
         ScrollView {
                 VStack(spacing: 16) {
+                    // 日付表示
+                    DetailPageDateHeader(selectedDate: selectedDate)
+                        .padding(.top, -8)  // ScrollViewのデフォルトパディングを調整
                     if dataManager.isLoading {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
@@ -78,11 +81,7 @@ struct EmotionGraphView: View {
                         .padding(.horizontal)
                         
                         // 感情推移グラフカード
-                        UnifiedCard(
-                            title: "時間帯別推移",
-                            navigationLabel: showingLegend ? "凡例を非表示" : "凡例を表示",
-                            onNavigate: { showingLegend.toggle() }
-                        ) {
+                        UnifiedCard(title: "時間帯別推移") {
                             VStack(spacing: 16) {
                                 if report.activeTimePoints.count > 0 {
                                     Chart {
@@ -93,10 +92,13 @@ struct EmotionGraphView: View {
                                                         x: .value("時間", point.timeValue),
                                                         y: .value("値", getValue(for: emotionType, from: point))
                                                     )
-                                                    .foregroundStyle(emotionType.color)
+                                                    .foregroundStyle(emotionType.color)  // 各感情タイプの色を直接指定
                                                     .lineStyle(StrokeStyle(lineWidth: 2))
-                                                    .symbol(Circle().strokeBorder(lineWidth: 2))
-                                                    .symbolSize(30)
+                                                    .symbol {
+                                                        Circle()
+                                                            .strokeBorder(emotionType.color, lineWidth: 2)
+                                                            .frame(width: 6, height: 6)
+                                                    }
                                                     .interpolationMethod(.catmullRom)
                                                 }
                                             }
@@ -147,8 +149,8 @@ struct EmotionGraphView: View {
                         }
                         .padding(.horizontal)
                         
-                        // 凡例カード（表示時のみ）
-                        if showingLegend && report.activeTimePoints.count > 0 {
+                        // 凡例カード（常に表示）
+                        if report.activeTimePoints.count > 0 {
                             UnifiedCard(title: "感情の種類") {
                                 LazyVGrid(columns: [
                                     GridItem(.flexible()),
@@ -162,7 +164,7 @@ struct EmotionGraphView: View {
                                                 Circle()
                                                     .fill(emotionType.color)
                                                     .frame(width: 14, height: 14)
-                                                Text(emotionType.rawValue)
+                                                Text(emotionType.displayName)
                                                     .font(.body)
                                                     .foregroundColor(
                                                         selectedEmotions.contains(emotionType) 

@@ -9,8 +9,7 @@ import SwiftUI
 import Charts
 
 struct ModernVibeCard: View {
-    let vibeReport: DailyVibeReport
-    let dashboardSummary: DashboardSummary?  // 新規追加
+    let dashboardSummary: DashboardSummary?  // メインデータソース
     var onNavigateToDetail: (() -> Void)? = nil
     var showTitle: Bool = true  // タイトル表示制御用
     @State private var isAnimating = false
@@ -78,11 +77,12 @@ struct ModernVibeCard: View {
                 }
                 
                 // インタラクティブタイムライン（Phase 2）
-                // dashboard_summaryのvibeScoresを優先、なければvibeReportから取得（フォールバック）
-                if let vibeScores = dashboardSummary?.vibeScores ?? vibeReport.vibeScores {
+                // dashboard_summaryのvibeScoresのみを使用（フォールバックなし）
+                if let vibeScores = dashboardSummary?.vibeScores {
                     InteractiveTimelineView(
                         vibeScores: vibeScores,
-                        vibeChanges: vibeReport.vibeChanges,  // vibeChangesは引き続きvibeReportから
+                        vibeChanges: nil,  // 古いvibeChangesは使用しない
+                        burstEvents: dashboardSummary?.burstEvents,  // dashboard_summaryから取得
                         onEventBurst: { score in
                             // バーストエフェクトをトリガー
                             triggerBurst(score: score)
@@ -91,9 +91,20 @@ struct ModernVibeCard: View {
                     // ID管理は親のNewHomeViewに委ねる（ID削除）
                 }
                 
-                // Cumulative Evaluation（analysis_resultから取得）
-                if let cumulativeEvaluation = dashboardSummary?.analysisResult?.cumulativeEvaluation,
+                // 1日のサマリー（insightsから取得を優先、なければanalysis_resultから取得）
+                if let insights = dashboardSummary?.insights, !insights.isEmpty {
+                    // 新しいinsightsカラムから取得
+                    Text(insights)
+                        .font(.system(size: 18, weight: .bold))  // 太字に変更
+                        .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                        .fixedSize(horizontal: false, vertical: true)
+                        .multilineTextAlignment(.leading)
+                        .lineSpacing(18 * 0.6)  // フォントサイズ18ptの60%で行間を設定（line-height: 160%相当）
+                        .padding(.top, 24)  // グラフとの間に24px余白
+                        .padding(.bottom, 16)  // 下部は少し余白を減らす
+                } else if let cumulativeEvaluation = dashboardSummary?.analysisResult?.cumulativeEvaluation,
                    !cumulativeEvaluation.isEmpty {
+                    // フォールバック: 従来のanalysis_resultから取得
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(Array(cumulativeEvaluation.enumerated()), id: \.offset) { index, comment in
                             Text(comment)
@@ -113,11 +124,11 @@ struct ModernVibeCard: View {
                     Spacer()
                     
                     Button(action: {
-                        // 心理グラフ詳細への遷移
+                        // 気分詳細への遷移
                         onNavigateToDetail?()
                     }) {
                         HStack(spacing: 4) {
-                            Text("心理グラフ")
+                            Text("気分詳細")
                                 .font(.caption)
                                 .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                             Image(systemName: "chevron.right")
@@ -192,7 +203,7 @@ struct ModernVibeCard: View {
     }
     
     // MARK: - Time Distribution View（削除済み）
-    // 時間分布パネルは心理グラフ詳細ページで表示されるため、
+    // 時間分布パネルは気分詳細ページで表示されるため、
     // ダッシュボードのModernVibeCardからは削除しました
     
     // MARK: - Burst Trigger

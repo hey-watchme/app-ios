@@ -11,11 +11,10 @@ import SwiftUI
 // MARK: - Dashboard Data Structure
 // 統合ダッシュボードデータ構造体
 struct DashboardData {
-    let vibeReport: DailyVibeReport?
     let behaviorReport: BehaviorReport?
     let emotionReport: EmotionReport?
     let subject: Subject?
-    let dashboardSummary: DashboardSummary?  // 新規追加
+    let dashboardSummary: DashboardSummary?  // メインデータソース（気分データ含む）
     let subjectComments: [SubjectComment]?  // コメント機能追加
 }
 
@@ -24,20 +23,18 @@ struct DashboardData {
 /// ⚠️ 重要: この構造はSupabase側のRPC関数の出力と完全に一致する必要があります
 /// RPC関数の変更時は、必ずこの構造体も更新してください
 struct RPCDashboardResponse: Codable {
-    let vibe_report: DailyVibeReport?
     let behavior_report: BehaviorReport?
     let emotion_report: EmotionReport?
     let subject_info: Subject?
-    let dashboard_summary: DashboardSummary?  // 新規追加
+    let dashboard_summary: DashboardSummary?  // メインの気分データソース
     let subject_comments: [SubjectComment]?  // コメント機能追加
     
     private enum CodingKeys: String, CodingKey {
-        case vibe_report
         case behavior_report
         case emotion_report
         case subject_info
-        case dashboard_summary  // 新規追加
-        case subject_comments  // コメント機能追加
+        case dashboard_summary
+        case subject_comments
     }
 }
 
@@ -402,7 +399,7 @@ class SupabaseDataManager: ObservableObject {
         // @Publishedプロパティも更新（互換性のため）
         // 注意: subjectは各Viewがローカルで管理するため、ここでは更新しない
         await MainActor.run {
-            self.dailyReport = dashboardData.vibeReport
+            self.dailyReport = nil  // vibeReportは廃止
             self.dailyBehaviorReport = dashboardData.behaviorReport
             self.dailyEmotionReport = dashboardData.emotionReport
             // self.subject = dashboardData.subject  // ❌ 削除: 各Viewがローカルで管理
@@ -473,7 +470,6 @@ class SupabaseDataManager: ObservableObject {
                 print("⚠️ [RPC] No data returned from RPC function")
                 print("   Response was empty array")
                 return DashboardData(
-                    vibeReport: nil,
                     behaviorReport: nil,
                     emotionReport: nil,
                     subject: nil,
@@ -483,12 +479,6 @@ class SupabaseDataManager: ObservableObject {
             }
             
             print("✅ [RPC] Successfully fetched all dashboard data")
-            print("   Has vibe_report: \(rpcData.vibe_report != nil)")
-            print("   Has behavior_report: \(rpcData.behavior_report != nil)")
-            print("   Has emotion_report: \(rpcData.emotion_report != nil)")
-            print("   Has subject_info: \(rpcData.subject_info != nil)")
-            print("   Has dashboard_summary: \(rpcData.dashboard_summary != nil)")
-            print("   - Vibe Report: \(rpcData.vibe_report != nil ? "✓" : "✗")")
             print("   - Behavior Report: \(rpcData.behavior_report != nil ? "✓" : "✗")")
             print("   - Emotion Report: \(rpcData.emotion_report != nil ? "✓" : "✗")")
             print("   - Subject Info: \(rpcData.subject_info != nil ? "✓" : "✗")")
@@ -498,13 +488,18 @@ class SupabaseDataManager: ObservableObject {
                 print("   - Average Vibe from Dashboard Summary: \(dashboardSummary.averageVibe ?? 0)")
             }
             
+            // 感情データの簡潔なログ（デバッグ完了後は削除可能）
+            if let emotionReport = rpcData.emotion_report {
+                let activePoints = emotionReport.emotionGraph.filter { $0.totalEmotions > 0 }
+                print("   📊 Emotion: \(activePoints.count) active points")
+            }
+            
             // RPCレスポンスをDashboardDataに変換
             return DashboardData(
-                vibeReport: rpcData.vibe_report,
                 behaviorReport: rpcData.behavior_report,
                 emotionReport: rpcData.emotion_report,
                 subject: rpcData.subject_info,  // ✅ Subject情報も正しく取得
-                dashboardSummary: rpcData.dashboard_summary,  // ✅ Dashboard Summary情報も取得
+                dashboardSummary: rpcData.dashboard_summary,  // ✅ Dashboard Summary情報も取得（メインデータソース）
                 subjectComments: rpcData.subject_comments  // ✅ コメント情報も取得
             )
             
@@ -512,6 +507,28 @@ class SupabaseDataManager: ObservableObject {
             print("❌ [RPC] Failed to fetch dashboard data: \(error)")
             print("   Error type: \(type(of: error))")
             print("   Error details: \(error.localizedDescription)")
+            
+            // デコードエラーの詳細情報を出力
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .dataCorrupted(let context):
+                    print("   🔍 Data corrupted at: \(context.codingPath)")
+                    print("   Debug description: \(context.debugDescription)")
+                case .keyNotFound(let key, let context):
+                    print("   🔍 Key '\(key.stringValue)' not found at: \(context.codingPath)")
+                    print("   Debug description: \(context.debugDescription)")
+                case .typeMismatch(let type, let context):
+                    print("   🔍 Type mismatch. Expected: \(type)")
+                    print("   At path: \(context.codingPath)")
+                    print("   Debug description: \(context.debugDescription)")
+                case .valueNotFound(let type, let context):
+                    print("   🔍 Value not found. Expected: \(type)")
+                    print("   At path: \(context.codingPath)")
+                    print("   Debug description: \(context.debugDescription)")
+                @unknown default:
+                    print("   🔍 Unknown decoding error")
+                }
+            }
             
             // 認証エラーの可能性をチェック
             let errorString = "\(error)"
@@ -541,7 +558,6 @@ class SupabaseDataManager: ObservableObject {
             
             // エラー時は空のデータを返す
             return DashboardData(
-                vibeReport: nil,
                 behaviorReport: nil,
                 emotionReport: nil,
                 subject: nil,

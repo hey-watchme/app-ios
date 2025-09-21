@@ -105,14 +105,14 @@ struct EmotionReport: Codable {
     var emotionRanking: [(name: String, value: Int, color: Color)] {
         let totals = emotionTotals
         let emotions: [(String, Int, Color)] = [
-            ("Joy", totals.joy, Color.safeColor("EmotionJoy")),
-            ("Trust", totals.trust, Color.safeColor("SuccessColor")),
-            ("Anticipation", totals.anticipation, Color.safeColor("WarningColor")),
-            ("Surprise", totals.surprise, Color.safeColor("EmotionSurprise")),
-            ("Fear", totals.fear, Color.safeColor("AppAccentColor")),
-            ("Sadness", totals.sadness, Color.safeColor("PrimaryActionColor")),
-            ("Disgust", totals.disgust, Color.safeColor("EmotionDisgust")),
-            ("Anger", totals.anger, Color.safeColor("ErrorColor"))
+            ("喜び", totals.joy, Color.safeColor("EmotionJoy")),
+            ("信頼", totals.trust, Color.safeColor("SuccessColor")),
+            ("期待", totals.anticipation, Color.safeColor("WarningColor")),
+            ("驚き", totals.surprise, Color.safeColor("EmotionSurprise")),
+            ("恐れ", totals.fear, Color.safeColor("AppAccentColor")),
+            ("悲しみ", totals.sadness, Color.safeColor("PrimaryActionColor")),
+            ("嫌悪", totals.disgust, Color.safeColor("EmotionDisgust")),
+            ("怒り", totals.anger, Color.safeColor("ErrorColor"))
         ]
         return emotions.sorted(by: { $0.1 > $1.1 })
     }
@@ -145,6 +145,20 @@ enum EmotionType: String, CaseIterable {
     case sadness = "Sadness"
     case surprise = "Surprise"
     case anticipation = "Anticipation"
+    
+    // 日本語表示名
+    var displayName: String {
+        switch self {
+        case .joy: return "喜び"
+        case .fear: return "恐れ"
+        case .anger: return "怒り"
+        case .trust: return "信頼"
+        case .disgust: return "嫌悪"
+        case .sadness: return "悲しみ"
+        case .surprise: return "驚き"
+        case .anticipation: return "期待"
+        }
+    }
     
     var color: Color {
         switch self {

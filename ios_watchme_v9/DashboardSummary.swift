@@ -20,6 +20,8 @@ struct DashboardSummary: Codable {
     let averageVibe: Float?  // 新しい平均スコアカラム（今回使用する主要フィールド）
     let vibeScores: [Double?]?
     let analysisResult: AnalysisResult?  // cumulative_evaluationを含むJSONBフィールド
+    let insights: String?  // 新規追加：1日のサマリーインサイト
+    let burstEvents: [BurstEvent]?  // 新規追加：バーストイベント配列
     
     // CodingKeysでSnake caseとCamel caseを変換
     enum CodingKeys: String, CodingKey {
@@ -32,6 +34,8 @@ struct DashboardSummary: Codable {
         case averageVibe = "average_vibe"
         case vibeScores = "vibe_scores"
         case analysisResult = "analysis_result"
+        case insights
+        case burstEvents = "burst_events"
     }
     
     // カスタムデコーダーで、JSONB型のフィールドをスキップしつつ必要なフィールドだけ取得
@@ -47,9 +51,26 @@ struct DashboardSummary: Codable {
         averageVibe = try container.decodeIfPresent(Float.self, forKey: .averageVibe)
         vibeScores = try container.decodeIfPresent([Double?].self, forKey: .vibeScores)
         analysisResult = try container.decodeIfPresent(AnalysisResult.self, forKey: .analysisResult)
-        
-        // prompt, insightsなどの他のJSONBフィールドは
-        // 将来的に使用する際に別途処理を追加
+        insights = try container.decodeIfPresent(String.self, forKey: .insights)
+        burstEvents = try container.decodeIfPresent([BurstEvent].self, forKey: .burstEvents)
+    }
+}
+
+// MARK: - Burst Event
+// burst_events JSONBフィールドの構造
+struct BurstEvent: Codable {
+    let time: String
+    let event: String
+    let scoreChange: Int
+    let fromScore: Int
+    let toScore: Int
+    
+    enum CodingKeys: String, CodingKey {
+        case time
+        case event
+        case scoreChange = "score_change"
+        case fromScore = "from_score"
+        case toScore = "to_score"
     }
 }
 

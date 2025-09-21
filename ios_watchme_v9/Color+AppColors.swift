@@ -23,9 +23,10 @@ extension Color {
     
     // Behavior Graph Colors (partially auto-generated)
     // behaviorBackgroundSecondary is now auto-generated from Assets.xcassets
-    static let behaviorGoldMedal = Color("BehaviorGoldMedal")  // 金メダルの色
-    static let behaviorSilverMedal = Color("BehaviorSilverMedal")  // 銀メダルの色
-    static let behaviorBronzeMedal = Color("BehaviorBronzeMedal")  // 銅メダルの色
+    // メダルカラーもAssets.xcassetsで定義済み（Xcode自動生成のため、ここでは定義しない）
+    // static let behaviorGoldMedal = Color("BehaviorGoldMedal")
+    // static let behaviorSilverMedal = Color("BehaviorSilverMedal")
+    // static let behaviorBronzeMedal = Color("BehaviorBronzeMedal")
     
     // MARK: - UI Colors
     

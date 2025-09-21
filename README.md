@@ -60,12 +60,11 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
     - 月間の気分データを一覧表示
     - 各日付に気分スコアに応じた絵文字（👏✌️👍👌💪💔）を表示
     - データがない日は絵文字なしで日付のみ表示
-- **心理グラフ (Vibe Graph)**: 日々の感情スコア、ポジティブ/ネガティブの時間分布、AIインサイトを表示
-  - **インタラクティブ折れ線グラフ**: 30分間隔の感情スコアを-100〜100の範囲で表示（v9.16.0〜）
-  - **重要イベントのハイライト**: vibe_changesデータに基づく注目ポイントを強調表示
-  - **タップで詳細表示**: イベントポイントをタップすると、吹き出しでイベント内容とスコアを表示
-  - **欠損データの適切な処理**: nullデータは0にせず、データポイント自体を表示しない
-  - **連続データの線描画**: 連続するデータポイントのみを線でつなぎ、途切れた部分は線を描画しない
+- **心理グラフ (Vibe Graph)**: 時間ごとの詳細データをリスト表示（v9.25.0〜）
+  - **時間詳細リスト**: dashboardテーブルから48スロット（30分間隔）のデータを表示
+  - **コンパクトな表示**: 時間、スコア、サマリー1行目を1行に表示
+  - **展開/折りたたみ**: タップで詳細サマリーを展開表示
+  - **スコアによる色分け**: ポジティブ（緑）、ネガティブ（赤）、ニュートラル（グレー）
 - **行動グラフ (Behavior Graph)**: 1日の行動パターンをランキングと時間帯別で可視化（v9.10.0〜）
 - **感情グラフ (Emotion Graph)**: 8つの感情（Joy、Fear、Anger、Trust、Disgust、Sadness、Surprise、Anticipation）の時系列変化を折れ線グラフで表示（v9.10.0〜）
 
@@ -102,6 +101,14 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
 - **S3ストレージ**:
   - バケット: `watchme-avatars`（ap-southeast-2リージョン）
   - パブリックアクセス設定済み（画像の表示用）
+
+### UI/UX改善（v9.25.0〜）
+- **ログインフォームの標準化**: 入力欄とボタンの高さを44ptに統一（iOS Human Interface Guidelines準拠）
+- **アプリカラーの統一**: メインアクションボタンにAppAccentColor（紫色）を適用
+- **キーボード制御の最適化**: 
+  - スクロール時に自動的にキーボードを閉じる
+  - フォーム以外の部分をタップでキーボードを閉じる
+  - 画面遷移時に自動的にキーボードを閉じる
 
 ### 通知機能（v9.22.0〜）
 - **3種類の通知タイプ**:
@@ -411,7 +418,7 @@ ios_watchme_v9/
 ├── ios_watchme_v9App.swift        # アプリエントリーポイント
 ├── ContentView.swift              # メインビュー（シンプルな日付管理）
 ├── SimpleDashboardView.swift      # ダッシュボード（.task(id:)でデータ取得）
-├── HomeView.swift                 # 心理グラフ（Vibe Graph）表示
+├── HomeView.swift                 # 心理グラフ（時間詳細リスト）表示
 ├── BehaviorGraphView.swift        # 行動グラフ
 ├── EmotionGraphView.swift         # 感情グラフ
 ├── RecordingView.swift            # 録音機能とファイル管理
@@ -430,6 +437,8 @@ ios_watchme_v9/
 │   ├── EmotionReport.swift        # 感情レポートモデル
 │   └── Subject.swift              # 観測対象モデル
 ├── DailyVibeReport.swift          # Vibeレポートモデル
+├── DashboardTimeBlock.swift       # dashboardテーブルの時間ブロックモデル
+├── DashboardSummary.swift         # dashboard_summaryテーブルのモデル
 ├── RecordingModel.swift           # 録音データモデル
 ├── SlotTimeUtility.swift          # 時刻スロット管理
 ├── Assets.xcassets/               # アプリアイコンとカラーセット
@@ -438,7 +447,7 @@ ios_watchme_v9/
 
 ### 主要コンポーネント
 
-#### UI/ナビゲーション（v9.19.0で改善）
+#### UI/ナビゲーション
 1. **ドリルダウン構造**
    - **ContentView**: ダッシュボードビューで日付管理とスワイプナビゲーション
    - **TabViewスワイプ**: 左右スワイプで日付を切り替え（過去1年分）
@@ -785,43 +794,23 @@ $$;
 ⚠️ **重要**: RPC関数の更新が必要な場合は、開発者に連絡してください。
 Supabase側の更新と、iOS側の構造体更新が必要です。
 
-### 心理グラフ（Vibe Graph）の実装
+### 心理グラフの実装（v9.25.0で大幅変更）
 
-1. **HomeView（メインレポート画面）**
-   - 日付ナビゲーション（前日/次日ボタン）
-   - 平均スコアの大きな表示
-   - ポジティブ/ニュートラル/ネガティブの時間分布バー
-   - AIインサイトの表示
-   - 時間帯別感情推移グラフ（v9.16.0で折れ線グラフに変更）
+1. **HomeView（時間詳細リスト表示）**
+   - dashboardテーブルから48スロットの時間データを取得
+   - 各時間ブロックのvibe_scoreとsummaryを表示
+   - コンパクトな1行表示（時間、スコア、サマリー1行目）
+   - タップで詳細サマリーを展開/折りたたみ
 
-2. **VibeLineChartView（折れ線グラフコンポーネント）**（v9.16.0〜）
-   - SwiftUI Chartsを使用したインタラクティブな折れ線グラフ
-   - -100〜100の範囲でスコアを表示（0がベースライン）
-   - 48スロット（30分間隔）の時間軸
-   - vibe_changesイベントのハイライト表示（色付きマーカー）
-   - タップ操作によるイベント詳細の吹き出し表示
-   - 欠損データ（null）の適切な処理（データポイントを表示しない）
-   - 連続するデータポイントのみを線でつなぐ
+2. **DashboardTimeBlock（データモデル）**
+   - dashboardテーブルの時間ブロックごとのデータを管理
+   - time_block、summary、vibe_scoreなどのフィールド
+   - スコアによる色分け機能
 
 3. **SupabaseDataManager**
-   - RPC関数経由でvibe_whisper_summaryテーブルからデータ取得
-   - デバイスIDと日付を指定してデータを取得
-   - リアルタイムデータ更新
-
-4. **データモデル（DailyVibeReport）**
-   ```swift
-   struct DailyVibeReport {
-       let deviceId: String
-       let date: String
-       let vibeScores: [Double?]?    // 48要素（30分刻み）
-       let averageScore: Double
-       let positiveHours: Double
-       let negativeHours: Double
-       let neutralHours: Double
-       let insights: [String]
-       let vibeChanges: [VibeChange]?
-   }
-   ```
+   - `fetchDashboardTimeBlocks`メソッドでdashboardテーブルからデータ取得
+   - デバイスIDと日付で絞り込み
+   - 時間順でソート済みデータを返却
 
 ## API仕様
 
@@ -1363,6 +1352,17 @@ git push origin feature/機能名
 ```
 
 ## 更新履歴
+
+### v9.25.0 (2025-09-18)
+- **心理グラフの大幅リニューアル**: 
+  - 既存のグラフ表示からdashboardテーブルの時間詳細リスト表示に変更
+  - 48スロット（30分間隔）の時間ごとにsummaryとvibe_scoreを表示
+  - コンパクトな1行表示で一覧性を向上
+- **UI/UX改善**:
+  - ログインフォームの入力欄とボタンを標準高さ44ptに統一
+  - アプリのメインカラー（AppAccentColor/紫）をログイン関連ボタンに適用
+  - コメント入力時のキーボード制御を改善（スクロールや画面タップで自動的に閉じる）
+  - 時間リストのスクロール時の誤タップを防止（BorderlessButtonStyleに変更）
 
 ### v9.24.1 (2025-08-26)
 - **音声録音品質の大幅改善**: AudioRecorder.swiftの録音設定を最適化

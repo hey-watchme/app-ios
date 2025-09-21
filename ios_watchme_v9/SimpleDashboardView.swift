@@ -23,11 +23,10 @@ struct SimpleDashboardView: View {
     @State private var showStickyHeader = false
     
     // 各データを個別に管理（シンプルに）
-    @State private var vibeReport: DailyVibeReport?
     @State private var behaviorReport: BehaviorReport?
     @State private var emotionReport: EmotionReport?
     @State private var subject: Subject?
-    @State private var dashboardSummary: DashboardSummary?  // 新規追加
+    @State private var dashboardSummary: DashboardSummary?  // メインデータソース
     @State private var subjectComments: [SubjectComment] = []  // コメント機能追加
     @State private var isLoading = false
     
@@ -65,7 +64,7 @@ struct SimpleDashboardView: View {
                             ProgressView("読み込み中...")
                                 .frame(maxWidth: .infinity, minHeight: 200)
                         } else {
-                            // 心理グラフカード
+                            // 気分カード
                             vibeGraphCard
                                 .padding(.horizontal, 20)
                             
@@ -137,12 +136,10 @@ struct SimpleDashboardView: View {
         .task(id: LoadDataTrigger(date: selectedDate, deviceId: deviceManager.selectedDeviceID)) {
             // DeviceManagerがready状態の時のみデータ取得を実行
             guard deviceManager.state == .ready else {
-                print("⚠️ SimpleDashboardView: DeviceManager is not ready (state: \(deviceManager.state)), skipping data load")
                 return
             }
             
             // 日付またはデバイスIDが変更されたときに実行
-            print("📌 SimpleDashboardView: .task triggered - date: \(selectedDate), deviceId: \(deviceManager.selectedDeviceID ?? "nil")")
             await loadAllData()
         }
         .onChange(of: deviceManager.state) { oldState, newState in
@@ -163,12 +160,12 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
-                HomeView(vibeReport: vibeReport, subject: subject, dashboardSummary: dashboardSummary, selectedDate: selectedDate)
+                HomeView(subject: subject, dashboardSummary: dashboardSummary, selectedDate: selectedDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .environmentObject(userAccountManager)
                     .navigationBarTitleDisplayMode(.large)
-                    .navigationTitle("心理グラフ")
+                    .navigationTitle("気分詳細")
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button("閉じる") {
@@ -180,7 +177,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showBehaviorSheet) {
             NavigationView {
-                BehaviorGraphView(behaviorReport: behaviorReport)
+                BehaviorGraphView(behaviorReport: behaviorReport, selectedDate: selectedDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
@@ -196,7 +193,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showEmotionSheet) {
             NavigationView {
-                EmotionGraphView(emotionReport: emotionReport)
+                EmotionGraphView(emotionReport: emotionReport, selectedDate: selectedDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
@@ -216,10 +213,9 @@ struct SimpleDashboardView: View {
     
     private var vibeGraphCard: some View {
         Group {
-            if let vibeReport = vibeReport {
+            if let summary = dashboardSummary {
                 ModernVibeCard(
-                    vibeReport: vibeReport,
-                    dashboardSummary: dashboardSummary,  // 新規追加
+                    dashboardSummary: summary,
                     onNavigateToDetail: { },
                     showTitle: false  // タイトルを非表示
                 )
@@ -230,7 +226,7 @@ struct SimpleDashboardView: View {
             } else {
                 UnifiedCard(
                     title: "気分",
-                    navigationLabel: "心理グラフ",
+                    navigationLabel: "気分詳細",
                     onNavigate: { }
                 ) {
                     GraphEmptyStateView(
@@ -250,7 +246,7 @@ struct SimpleDashboardView: View {
     private var behaviorGraphCard: some View {
         UnifiedCard(
             title: "行動",
-            navigationLabel: "行動グラフ",
+            navigationLabel: "行動詳細",
             onNavigate: { }
         ) {
             if let behaviorReport = behaviorReport {
@@ -262,24 +258,18 @@ struct SimpleDashboardView: View {
                     if let topBehavior = filteredRanking.first {
                         VStack(spacing: 8) {
                             Text("🚶")
-                                .font(.system(size: 72))
+                                .font(.system(size: 108))  // 1.5倍に拡大（72 * 1.5 = 108）
                             
                             Text(topBehavior.event)
                                 .font(.caption)
-                                .foregroundStyle(Color.safeColor("PrimaryActionColor"))
+                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))  // 黒に変更
                                 .textCase(.uppercase)
                                 .tracking(1.0)
                             
-                            HStack(spacing: 4) {
-                                Text("今日のメイン:")
-                                    .font(.caption2)
-                                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
-                                
-                                Text("\(topBehavior.count)回")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(Color.safeColor("PrimaryActionColor").opacity(0.8))
-                            }
+                            Text("\(topBehavior.count)回")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))  // 黒に変更
                         }
                     }
                     
@@ -302,7 +292,7 @@ struct SimpleDashboardView: View {
     private var emotionGraphCard: some View {
         UnifiedCard(
             title: "感情",
-            navigationLabel: "感情グラフ",
+            navigationLabel: "感情詳細",
             onNavigate: { }
         ) {
             if let emotionReport = emotionReport {
@@ -421,7 +411,7 @@ struct SimpleDashboardView: View {
             
             if filteredRanking.count > 1 {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(filteredRanking.prefix(3).enumerated()), id: \.element.id) { index, behavior in
+                    ForEach(Array(filteredRanking.prefix(5).enumerated()), id: \.element.id) { index, behavior in
                         HStack(spacing: 8) {
                             Text("\(index + 1)")
                                 .font(.caption)
@@ -449,31 +439,46 @@ struct SimpleDashboardView: View {
         }
     }
     
+    // 感情データの計算用のヘルパー関数
+    private func calculateEmotionPercentages(from activeTimePoints: [EmotionTimePoint]) -> [(String, Double, String, Color)] {
+        // 各感情の合計値を計算
+        let totalJoy = activeTimePoints.map { $0.joy }.reduce(0, +)
+        let totalTrust = activeTimePoints.map { $0.trust }.reduce(0, +)
+        let totalFear = activeTimePoints.map { $0.fear }.reduce(0, +)
+        let totalSurprise = activeTimePoints.map { $0.surprise }.reduce(0, +)
+        let totalSadness = activeTimePoints.map { $0.sadness }.reduce(0, +)
+        let totalDisgust = activeTimePoints.map { $0.disgust }.reduce(0, +)
+        let totalAnger = activeTimePoints.map { $0.anger }.reduce(0, +)
+        let totalAnticipation = activeTimePoints.map { $0.anticipation }.reduce(0, +)
+        
+        // 全感情の総計
+        let grandTotal = totalJoy + totalTrust + totalFear + totalSurprise +
+                        totalSadness + totalDisgust + totalAnger + totalAnticipation
+        
+        guard grandTotal > 0 else { return [] }
+        
+        // パーセンテージを計算
+        return [
+            ("joy", Double(totalJoy) / Double(grandTotal) * 100, "😊", Color.safeColor("EmotionJoy")),
+            ("trust", Double(totalTrust) / Double(grandTotal) * 100, "🤝", Color.safeColor("EmotionTrust")),
+            ("fear", Double(totalFear) / Double(grandTotal) * 100, "😨", Color.safeColor("EmotionFear")),
+            ("surprise", Double(totalSurprise) / Double(grandTotal) * 100, "😲", Color.safeColor("EmotionSurprise")),
+            ("sadness", Double(totalSadness) / Double(grandTotal) * 100, "😢", Color.safeColor("EmotionSadness")),
+            ("disgust", Double(totalDisgust) / Double(grandTotal) * 100, "🤢", Color.safeColor("EmotionDisgust")),
+            ("anger", Double(totalAnger) / Double(grandTotal) * 100, "😠", Color.safeColor("EmotionAnger")),
+            ("anticipation", Double(totalAnticipation) / Double(grandTotal) * 100, "🎯", Color.safeColor("EmotionAnticipation"))
+        ]
+    }
+    
     private func emotionReportContent(_ report: EmotionReport) -> some View {
         VStack(spacing: 16) {
             if !report.emotionGraph.isEmpty {
-                // 全時間の感情の平均を計算
-                let avgJoy = report.emotionGraph.map { $0.joy }.reduce(0, +) / report.emotionGraph.count
-                let avgTrust = report.emotionGraph.map { $0.trust }.reduce(0, +) / report.emotionGraph.count
-                let avgFear = report.emotionGraph.map { $0.fear }.reduce(0, +) / report.emotionGraph.count
-                let avgSurprise = report.emotionGraph.map { $0.surprise }.reduce(0, +) / report.emotionGraph.count
-                let avgSadness = report.emotionGraph.map { $0.sadness }.reduce(0, +) / report.emotionGraph.count
-                let avgDisgust = report.emotionGraph.map { $0.disgust }.reduce(0, +) / report.emotionGraph.count
-                let avgAnger = report.emotionGraph.map { $0.anger }.reduce(0, +) / report.emotionGraph.count
-                let avgAnticipation = report.emotionGraph.map { $0.anticipation }.reduce(0, +) / report.emotionGraph.count
+                let activeTimePoints = report.emotionGraph.filter { $0.totalEmotions > 0 }
                 
-                let emotions = [
-                    ("joy", avgJoy, "😊", Color.safeColor("EmotionJoy")),
-                    ("trust", avgTrust, "🤝", Color.safeColor("EmotionTrust")),
-                    ("fear", avgFear, "😨", Color.safeColor("EmotionFear")),
-                    ("surprise", avgSurprise, "😲", Color.safeColor("EmotionSurprise")),
-                    ("sadness", avgSadness, "😢", Color.safeColor("EmotionSadness")),
-                    ("disgust", avgDisgust, "🤢", Color.safeColor("EmotionDisgust")),
-                    ("anger", avgAnger, "😠", Color.safeColor("EmotionAnger")),
-                    ("anticipation", avgAnticipation, "🎯", Color.safeColor("EmotionAnticipation"))
-                ]
-                
-                let topEmotions = emotions.sorted { $0.1 > $1.1 }.prefix(3)
+                if !activeTimePoints.isEmpty {
+                    let emotions = calculateEmotionPercentages(from: activeTimePoints)
+                    let nonZeroEmotions = emotions.filter { $0.1 > 0 }
+                    let topEmotions = nonZeroEmotions.sorted { $0.1 > $1.1 }.prefix(3)
                 
                 // トップ感情を絵文字で表示
                 HStack(spacing: 16) {
@@ -482,7 +487,7 @@ struct SimpleDashboardView: View {
                             Text(emotion.2)
                                 .font(.system(size: 36))
                             
-                            Text("\(emotion.1)%")
+                            Text("\(Int(emotion.1.rounded()))%")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
@@ -505,7 +510,7 @@ struct SimpleDashboardView: View {
                                         .cornerRadius(3)
                                     
                                     Rectangle()
-                                        .fill(emotion.3)
+                                        .fill(Color.safeColor("AppAccentColor"))  // 統一感のため紫色に変更
                                         .frame(width: geometry.size.width * CGFloat(emotion.1) / 100, height: 6)
                                         .cornerRadius(3)
                                 }
@@ -517,6 +522,21 @@ struct SimpleDashboardView: View {
                 .padding()
                 .background(Color.safeColor("CardBackground"))
                 .cornerRadius(8)
+                } else {
+                    // アクティブなデータポイントがない場合
+                    Text("感情データがありません")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding()
+                }
+            } else {
+                // emotionGraphが空の場合
+                Text("データなし")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding()
             }
         }
     }
@@ -537,7 +557,6 @@ struct SimpleDashboardView: View {
     
     private func clearAllData() {
         print("🧹 SimpleDashboardView: Clearing all data")
-        vibeReport = nil
         behaviorReport = nil
         emotionReport = nil
         subject = nil
@@ -556,10 +575,10 @@ struct SimpleDashboardView: View {
             print("   - localDeviceIdentifier was: \(deviceManager.localDeviceIdentifier ?? "nil")")
             // データをクリア
             await MainActor.run {
-                self.vibeReport = nil
                 self.behaviorReport = nil
                 self.emotionReport = nil
                 self.subject = nil
+                self.dashboardSummary = nil
             }
             return
         }
@@ -595,23 +614,22 @@ struct SimpleDashboardView: View {
         
         // 取得したデータを設定
         await MainActor.run {
-            self.vibeReport = result.vibeReport
             self.behaviorReport = result.behaviorReport
             self.emotionReport = result.emotionReport
             self.subject = result.subject
-            self.dashboardSummary = result.dashboardSummary  // 新規追加
+            self.dashboardSummary = result.dashboardSummary
             self.subjectComments = result.subjectComments ?? []  // コメントデータも設定
         }
         
         // デバッグログ - 取得結果
         print("✅ SimpleDashboardView data loaded:")
-        print("   - Vibe: \(result.vibeReport != nil ? "✓" : "✗")")
+        print("   - Dashboard Summary: \(result.dashboardSummary != nil ? "✓" : "✗")")
         print("   - Behavior: \(result.behaviorReport != nil ? "✓" : "✗")")
         print("   - Emotion: \(result.emotionReport != nil ? "✓" : "✗")")
         print("   - Subject: \(result.subject != nil ? "✓" : "✗")")
         
-        if let vibe = result.vibeReport {
-            print("   📊 Vibe date: \(vibe.date), average: \(vibe.averageScore)")
+        if let summary = result.dashboardSummary {
+            print("   📊 Dashboard date: \(summary.date), average: \(summary.averageVibe ?? 0)")
         }
     }
     

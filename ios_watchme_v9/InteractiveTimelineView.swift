@@ -9,7 +9,8 @@ import SwiftUI
 
 struct InteractiveTimelineView: View {
     let vibeScores: [Double?]
-    let vibeChanges: [VibeChange]?
+    let vibeChanges: [VibeChange]?  // 旧実装との互換性のため残す
+    let burstEvents: [BurstEvent]?  // 新規追加：dashboard_summaryから取得するバーストイベント
     var onEventBurst: ((Double) -> Void)? = nil  // バーストトリガー用コールバック
     
     @State private var currentTimeIndex: Int = 0
@@ -70,6 +71,29 @@ struct InteractiveTimelineView: View {
             }
         }
         .onAppear {
+            // デバッグ: データソースの確認
+            print("🔍 [DEBUG] InteractiveTimelineView データ確認:")
+            print("   - vibeScores.count: \(vibeScores.count)")
+            print("   - burstEvents?.count: \(burstEvents?.count ?? 0)")
+            
+            // 最初の10個のデータを表示
+            for i in 0..<min(10, vibeScores.count) {
+                let time = String(format: "%02d:%02d", i/2, (i%2)*30)
+                if let score = vibeScores[i] {
+                    print("   [\(i)] \(time): score=\(score)")
+                } else {
+                    print("   [\(i)] \(time): nil")
+                }
+            }
+            
+            // バーストイベントの確認
+            if let events = burstEvents {
+                print("   バーストイベント:")
+                for event in events {
+                    print("     - \(event.time): from \(event.fromScore) to \(event.toScore)")
+                }
+            }
+            
             // 自動ループ再生を開始
             resetAndStartPlayback()
         }
@@ -136,14 +160,14 @@ struct InteractiveTimelineView: View {
                 style: StrokeStyle(lineWidth: 1, dash: [5, 5])
             )
             
-            // グラフライン（現在位置まで）
+            // グラフライン（現在位置まで）- 黒い太線
             Path { path in
                 var firstPoint = true
                 
                 for index in 0...min(currentTimeIndex, vibeScores.count - 1) {
-                    guard let score = vibeScores[index] else { continue }
-                    
                     let x = geometry.size.width * CGFloat(index) / CGFloat(vibeScores.count - 1)
+                    // nilの場合は0として扱う
+                    let score = vibeScores[index] ?? 0
                     let normalizedScore = (score + 100) / 200
                     let y = geometry.size.height * (1 - normalizedScore)
                     
@@ -165,14 +189,14 @@ struct InteractiveTimelineView: View {
             )
             .animation(.linear(duration: 0.1), value: currentTimeIndex)
             
-            // 未来のグラフライン（白い実線で表示）
+            // 未来のグラフライン（グレーの細線）
             Path { path in
                 var firstPoint = true
                 
                 for index in max(0, currentTimeIndex)...(vibeScores.count - 1) {
-                    guard let score = vibeScores[index] else { continue }
-                    
                     let x = geometry.size.width * CGFloat(index) / CGFloat(vibeScores.count - 1)
+                    // nilの場合は0として扱う
+                    let score = vibeScores[index] ?? 0
                     let normalizedScore = (score + 100) / 200
                     let y = geometry.size.height * (1 - normalizedScore)
                     
@@ -189,8 +213,34 @@ struct InteractiveTimelineView: View {
                 lineWidth: 1
             )
             
-            // イベントマーカー
-            if let changes = vibeChanges {
+            // イベントマーカー（burstEventsを優先、なければvibeChangesを使用）
+            if let events = burstEvents {
+                // 新しいburst_eventsデータを使用
+                ForEach(Array(events.enumerated()), id: \.offset) { _, event in
+                    if let slot = timeSlotToIndexForBurst(event.time) {
+                        let x = geometry.size.width * CGFloat(slot) / CGFloat(vibeScores.count - 1)
+                        let normalizedScore = (Double(event.toScore) + 100) / 200
+                        let y = geometry.size.height * (1 - normalizedScore)
+                        
+                        Star()
+                            .fill(slot <= currentTimeIndex ? Color.safeColor("VibeChangeIndicatorColor") : Color.safeColor("VibeChangeIndicatorColor").opacity(0.3))
+                            .frame(width: slot == currentTimeIndex ? 30 : 12, 
+                                   height: slot == currentTimeIndex ? 30 : 12)
+                            .position(x: x, y: y)
+                            .animation(.spring(response: 0.3), value: currentTimeIndex)
+                            .onTapGesture {
+                                withAnimation(.spring()) {
+                                    // BurstEventをVibeChangeに変換して表示（互換性のため）
+                                    let vibeChange = VibeChange(time: event.time, event: event.event, score: Double(event.toScore))
+                                    selectedEvent = vibeChange
+                                    showEventDetail = true
+                                    currentTimeIndex = slot
+                                }
+                            }
+                    }
+                }
+            } else if let changes = vibeChanges {
+                // 旧実装のフォールバック
                 ForEach(Array(changes.enumerated()), id: \.offset) { _, change in
                     if let slot = timeSlotToIndex(change.time) {
                         let x = geometry.size.width * CGFloat(slot) / CGFloat(vibeScores.count - 1)
@@ -330,11 +380,12 @@ struct InteractiveTimelineView: View {
     
     // MARK: - Helper Methods
     private func getCurrentYPosition(in geometry: GeometryProxy) -> CGFloat {
-        guard currentTimeIndex < vibeScores.count,
-              let score = vibeScores[currentTimeIndex] else {
+        guard currentTimeIndex < vibeScores.count else {
             return geometry.size.height / 2
         }
         
+        // nilの場合は0として扱う（グラフラインと同じ挙動）
+        let score = vibeScores[currentTimeIndex] ?? 0
         let normalizedScore = (score + 100) / 200
         return geometry.size.height * (1 - normalizedScore)
     }
@@ -448,62 +499,121 @@ struct InteractiveTimelineView: View {
     }
     
     private func checkForEvent() {
-        guard let changes = vibeChanges else { return }
-        
-        for change in changes {
-            if let slot = timeSlotToIndex(change.time), slot == currentTimeIndex {
-                // イベントに到達したら一時的に表示
-                withAnimation(.spring()) {
-                    selectedEvent = change
-                    showEventDetail = true
-                    // バーストエフェクトをトリガー
-                    triggerBurst = true
-                    // 親ビューにバーストイベントを通知
-                    onEventBurst?(change.score)
-                }
-                
-                // イベント時の軽い振動フィードバック
-                hapticManager.playEventBurst()
-                
-                // バーストエフェクトを少し後にリセット
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    triggerBurst = false
-                }
-                
-                // 3秒後に自動的に非表示
-                DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                    withAnimation {
-                        showEventDetail = false
+        // burstEventsを優先、なければvibeChangesを使用
+        if let events = burstEvents {
+            for event in events {
+                if let slot = timeSlotToIndexForBurst(event.time), slot == currentTimeIndex {
+                    // イベントに到達したら一時的に表示
+                    withAnimation(.spring()) {
+                        // BurstEventをVibeChangeに変換
+                        let vibeChange = VibeChange(time: event.time, event: event.event, score: Double(event.toScore))
+                        selectedEvent = vibeChange
+                        showEventDetail = true
+                        // バーストエフェクトをトリガー
+                        triggerBurst = true
+                        // 親ビューにバーストイベントを通知
+                        onEventBurst?(Double(event.toScore))
                     }
+                    
+                    // イベント時の軽い振動フィードバック
+                    hapticManager.playEventBurst()
+                    
+                    // バーストエフェクトを少し後にリセット
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        triggerBurst = false
+                    }
+                    
+                    // 3秒後に自動的に非表示
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        withAnimation {
+                            showEventDetail = false
+                        }
+                    }
+                    break
                 }
-                break
+            }
+        } else if let changes = vibeChanges {
+            for change in changes {
+                if let slot = timeSlotToIndex(change.time), slot == currentTimeIndex {
+                    // イベントに到達したら一時的に表示
+                    withAnimation(.spring()) {
+                        selectedEvent = change
+                        showEventDetail = true
+                        // バーストエフェクトをトリガー
+                        triggerBurst = true
+                        // 親ビューにバーストイベントを通知
+                        onEventBurst?(change.score)
+                    }
+                    
+                    // イベント時の軽い振動フィードバック
+                    hapticManager.playEventBurst()
+                    
+                    // バーストエフェクトを少し後にリセット
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                        triggerBurst = false
+                    }
+                    
+                    // 3秒後に自動的に非表示
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                        withAnimation {
+                            showEventDetail = false
+                        }
+                    }
+                    break
+                }
             }
         }
     }
     
     private func checkForEventDuringDrag() {
-        guard let changes = vibeChanges else { return }
-        
-        for change in changes {
-            if let slot = timeSlotToIndex(change.time), slot == currentTimeIndex {
-                // ドラッグ中にイベントに触れた場合
-                withAnimation(.spring()) {
-                    selectedEvent = change
-                    showEventDetail = true
-                    // 親ビューにバーストイベントを通知
-                    onEventBurst?(change.score)
-                }
-                
-                // イベント時の軽い振動フィードバック
-                hapticManager.playEventBurst()
-                
-                // 2秒後に自動的に非表示（ドラッグ中は短めに）
-                DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                    withAnimation {
-                        showEventDetail = false
+        // burstEventsを優先、なければvibeChangesを使用
+        if let events = burstEvents {
+            for event in events {
+                if let slot = timeSlotToIndexForBurst(event.time), slot == currentTimeIndex {
+                    // ドラッグ中にイベントに触れた場合
+                    withAnimation(.spring()) {
+                        // BurstEventをVibeChangeに変換
+                        let vibeChange = VibeChange(time: event.time, event: event.event, score: Double(event.toScore))
+                        selectedEvent = vibeChange
+                        showEventDetail = true
+                        // 親ビューにバーストイベントを通知
+                        onEventBurst?(Double(event.toScore))
                     }
+                    
+                    // イベント時の軽い振動フィードバック
+                    hapticManager.playEventBurst()
+                    
+                    // 2秒後に自動的に非表示（ドラッグ中は短めに）
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation {
+                            showEventDetail = false
+                        }
+                    }
+                    break
                 }
-                break
+            }
+        } else if let changes = vibeChanges {
+            for change in changes {
+                if let slot = timeSlotToIndex(change.time), slot == currentTimeIndex {
+                    // ドラッグ中にイベントに触れた場合
+                    withAnimation(.spring()) {
+                        selectedEvent = change
+                        showEventDetail = true
+                        // 親ビューにバーストイベントを通知
+                        onEventBurst?(change.score)
+                    }
+                    
+                    // イベント時の軽い振動フィードバック
+                    hapticManager.playEventBurst()
+                    
+                    // 2秒後に自動的に非表示（ドラッグ中は短めに）
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation {
+                            showEventDetail = false
+                        }
+                    }
+                    break
+                }
             }
         }
     }
@@ -532,6 +642,16 @@ struct InteractiveTimelineView: View {
         return hour * 2 + (minute >= 30 ? 1 : 0)
     }
     
+    // BurstEvent用のタイムスロット変換（"HH:MM"形式のtimeを処理）
+    private func timeSlotToIndexForBurst(_ time: String) -> Int? {
+        let hourMin = time.split(separator: ":").map(String.init)
+        guard hourMin.count == 2,
+              let hour = Int(hourMin[0]),
+              let minute = Int(hourMin[1]) else { return nil }
+        
+        return hour * 2 + (minute >= 30 ? 1 : 0)
+    }
+    
     // 有効なデータの最後のインデックスを見つける
     private func findLastValidDataIndex() -> Int {
         // 後ろから検索して、nilでないデータを見つける
@@ -552,18 +672,21 @@ struct InteractiveTimelineView: View {
     }
     
     private var currentScoreString: String {
-        guard currentTimeIndex < vibeScores.count,
-              let score = vibeScores[currentTimeIndex] else {
+        guard currentTimeIndex < vibeScores.count else {
             return "---"
         }
+        // nilの場合は0として扱う
+        let score = vibeScores[currentTimeIndex] ?? 0
         return String(format: "%.1f", score)
     }
     
     private var currentScoreColor: Color {
-        guard currentTimeIndex < vibeScores.count,
-              let score = vibeScores[currentTimeIndex] else {
+        guard currentTimeIndex < vibeScores.count else {
             return .gray
         }
+        
+        // nilの場合は0として扱う
+        let score = vibeScores[currentTimeIndex] ?? 0
         
         if score > 30 {
             return Color.safeColor("SuccessColor")
@@ -575,11 +698,13 @@ struct InteractiveTimelineView: View {
     }
     
     private var trendIcon: String {
-        guard currentTimeIndex > 0 && currentTimeIndex < vibeScores.count,
-              let currentScore = vibeScores[currentTimeIndex],
-              let previousScore = vibeScores[currentTimeIndex - 1] else {
+        guard currentTimeIndex > 0 && currentTimeIndex < vibeScores.count else {
             return "minus.circle"
         }
+        
+        // nilの場合は0として扱う
+        let currentScore = vibeScores[currentTimeIndex] ?? 0
+        let previousScore = vibeScores[currentTimeIndex - 1] ?? 0
         
         if currentScore > previousScore + 5 {
             return "arrow.up.circle.fill"

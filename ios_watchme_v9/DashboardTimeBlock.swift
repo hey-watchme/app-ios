@@ -13,6 +13,7 @@ struct DashboardTimeBlock: Codable {
     let date: String
     let timeBlock: String  // "10-00", "10-30" など
     let summary: String?    // その時間帯の詳細説明
+    let behavior: String?   // その時間帯の行動
     let vibeScore: Double?
     let createdAt: String?
     let updatedAt: String?
@@ -22,6 +23,7 @@ struct DashboardTimeBlock: Codable {
         case date
         case timeBlock = "time_block"
         case summary
+        case behavior
         case vibeScore = "vibe_score"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
