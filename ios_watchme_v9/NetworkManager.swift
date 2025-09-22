@@ -190,8 +190,12 @@ class NetworkManager: ObservableObject {
                 isoFormatter.timeZone = TimeZone.current
                 let recordedAtString = isoFormatter.string(from: recording.date)
                 
+                // Lambda関数でiPhoneデバイスを識別するため、S3パス用にプレフィックスを追加
+                // 注意：この変更はS3パスのみで、データベースのdevice_idは変更されません
+                let deviceIdForS3 = "iphone_\(deviceInfo.deviceID)"
+                
                 let metadata: [String: Any] = [
-                    "device_id": deviceInfo.deviceID,
+                    "device_id": deviceIdForS3,  // S3パス用にプレフィックス付きdevice_id
                     "recorded_at": recordedAtString
                 ]
                 
