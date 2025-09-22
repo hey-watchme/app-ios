@@ -569,19 +569,28 @@ struct HomeView: View {
   ↓
 [S3 Storage]
   ↓
-[Whisper API]
+[Lambda Function] ← 🆕 2025-09-22: S3イベントで即座に起動
+  ↓ すべてのデバイスのオーディオファイルを自動処理
+  ↓
+[Whisper API / AST API / SUPERB API]
+  ↓ 並列処理で音声分析
   ↓ file_pathから日付とtime_blockを抽出
-  ↓ vibe_whisperテーブルに保存
+  ↓ 各APIが結果をデータベースに保存
   ↓
 [ChatGPT API]
   ↓ 感情分析とスコア生成
   ↓
-[vibe_whisper_summary]
+[vibe_whisper_summary / dashboard_summary]
   ↓ 日次集計データ（48スロット）
   ↓
 [iOS App]
   グラフ表示（デバイスのタイムゾーンで）
 ```
+
+**🆕 2025-09-22 更新: Lambda関数によるリアルタイム処理**
+- S3にオーディオファイルがアップロードされると即座にLambda関数が起動
+- iPhone、オブザーバーを含むすべてのデバイスのファイルを自動処理
+- 従来の1時間ごとのcron処理から、リアルタイム処理に改善
 
 #### 2. file_pathの重要性と構造
 
@@ -1357,7 +1366,12 @@ git push origin feature/機能名
 
 ## 更新履歴
 
-最新バージョン: **v9.27.0** (2025-09-22)
+最新バージョン: **v9.28.0** (2025-09-22)
+
+### v9.28.0 (2025-09-22)
+- **Lambda連携の改善**: iPhoneプレフィックスを削除し、純粋なdevice_idを使用
+- **リアルタイム処理対応**: すべてのデバイスの音声ファイルが即座に処理されるように改善
+- NetworkManager.swiftからiphone_プレフィックス付与処理を削除
 
 詳細な更新履歴は [`CHANGELOG.md`](./CHANGELOG.md) を参照してください。
 

@@ -247,10 +247,28 @@ struct TimeBlockDetailView: View {
     let onDismiss: () -> Void
     
     var body: some View {
-        NavigationView {
+        VStack(spacing: 0) {
+            // カスタムヘッダー
+            HStack {
+                Text("時間帯詳細")
+                    .font(.headline)
+                    .fontWeight(.semibold)
+                Spacer()
+                Button(action: onDismiss) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(Color.secondary.opacity(0.6))
+                }
+            }
+            .padding()
+            .background(Color(UIColor.systemBackground))
+            
+            Divider()
+            
+            // コンテンツ
             List {
                 Section(header: Text("\(timeBlock.displayTime) の行動")) {
-                    if let events = timeBlock.events {
+                    if let events = timeBlock.events, !events.isEmpty {
                         ForEach(events) { event in
                             HStack {
                                 Text(event.event)
@@ -262,18 +280,15 @@ struct TimeBlockDetailView: View {
                             }
                             .padding(.vertical, 4)
                         }
+                    } else {
+                        Text("この時間帯にデータがありません")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .italic()
                     }
                 }
             }
-            .navigationTitle("時間帯詳細")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("閉じる") {
-                        onDismiss()
-                    }
-                }
-            }
+            .listStyle(InsetGroupedListStyle())
         }
     }
 }
