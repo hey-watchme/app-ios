@@ -158,7 +158,7 @@ struct DeviceSettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             // 連携中のデバイス タイトル
             Text("連携中のデバイス")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 24, weight: .bold))
                 .foregroundColor(.primary)
                 .padding(.horizontal)
             
@@ -201,11 +201,11 @@ struct DeviceSettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             // 新しいデバイス タイトル
             Text("新しいデバイス")
-                .font(.system(size: 40, weight: .bold))
+                .font(.system(size: 24, weight: .bold))
                 .foregroundColor(.primary)
                 .padding(.horizontal)
             
-            UnifiedCard(title: "新しいデバイス") {
+            UnifiedCard(title: "デバイスを追加") {
                 VStack(spacing: 16) {
                     HStack {
                         Image(systemName: "qrcode.viewfinder")

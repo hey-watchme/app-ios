@@ -35,11 +35,11 @@ struct DeviceCard: View {
                 VStack(spacing: 16) {
                     // トグルボタンと選択状態
                     HStack {
+                        // カスタムトグルスタイル - 紫色背景時は専用デザイン
                         Toggle("", isOn: .constant(isSelected))
                             .labelsHidden()
-                            .toggleStyle(SwitchToggleStyle(tint: Color.green))
+                            .toggleStyle(PurpleBackgroundToggleStyle(isOnPurpleBackground: isSelected))
                             .disabled(true) // ボタン全体でクリックするので、トグル自体は無効化
-                            .colorMultiply(isSelected ? Color.white : Color(hex: "1a1a1a")) // 非選択時は濃いグレー
                         
                         Text(isSelected ? "選択中のデバイス" : "このデバイスを選択する")
                             .font(.body)
@@ -48,6 +48,10 @@ struct DeviceCard: View {
                         
                         Spacer()
                     }
+                    
+                    // 区切り線（トグルボタンの下）
+                    Divider()
+                        .background(isSelected ? Color.white.opacity(0.5) : Color.gray.opacity(0.3))
                     
                     // デバイスID情報
                     VStack(alignment: .leading, spacing: 4) {
@@ -333,6 +337,34 @@ struct InfoRowCompact: View {
                 .foregroundColor(isSelected ? .white : .primary)
             
             Spacer()
+        }
+    }
+}
+
+// MARK: - Custom Toggle Style
+struct PurpleBackgroundToggleStyle: ToggleStyle {
+    let isOnPurpleBackground: Bool
+    
+    func makeBody(configuration: Configuration) -> some View {
+        HStack {
+            ZStack {
+                // トラック（溝の部分）
+                Capsule()
+                    .fill(isOnPurpleBackground ? 
+                          Color(red: 0.3, green: 0.1, blue: 0.5).opacity(0.8) :  // 紫色の暗い色
+                          (configuration.isOn ? Color.green : Color.gray.opacity(0.3)))
+                    .frame(width: 51, height: 31)
+                
+                // サム（つまみ部分）
+                Circle()
+                    .fill(Color.white)
+                    .frame(width: 27, height: 27)
+                    .offset(x: configuration.isOn ? 11 : -11)
+                    .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
+            }
+            .animation(.easeInOut(duration: 0.2), value: configuration.isOn)
+            
+            configuration.label
         }
     }
 }

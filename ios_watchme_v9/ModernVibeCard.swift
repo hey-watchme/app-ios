@@ -16,6 +16,7 @@ struct ModernVibeCard: View {
     @State private var cardScale: CGFloat = 1.0
     @State private var showBurstBubbles = false
     @State private var burstScore: Double = 0
+    @State private var emojiRotation: Double = 0  // 絵文字の振動用
     
     // ライトテーマのカラーパレット
     private let lightBackground = Color.white // #ffffff
@@ -48,12 +49,7 @@ struct ModernVibeCard: View {
             RoundedRectangle(cornerRadius: 24)
                 .stroke(Color.safeColor("BorderLight").opacity(0.1), lineWidth: 1)
             
-            // バーストバブル（イベント時のみ表示）
-            if showBurstBubbles {
-                BurstBubbleView(emotionScore: burstScore)
-                    .opacity(0.5)
-                    .transition(.opacity)
-            }
+            // バーストバブルは削除（パーティクルエフェクトを使わない）
             
             VStack(spacing: 16) {  // 他の要素との間隔は16に戻す
                 // ヘッダー部分（タイトルのみ）
@@ -91,9 +87,8 @@ struct ModernVibeCard: View {
                     // ID管理は親のNewHomeViewに委ねる（ID削除）
                 }
                 
-                // 1日のサマリー（insightsから取得を優先、なければanalysis_resultから取得）
+                // 1日のサマリー（insightsから取得）
                 if let insights = dashboardSummary?.insights, !insights.isEmpty {
-                    // 新しいinsightsカラムから取得
                     Text(insights)
                         .font(.system(size: 18, weight: .bold))  // 太字に変更
                         .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
@@ -102,21 +97,6 @@ struct ModernVibeCard: View {
                         .lineSpacing(18 * 0.6)  // フォントサイズ18ptの60%で行間を設定（line-height: 160%相当）
                         .padding(.top, 24)  // グラフとの間に24px余白
                         .padding(.bottom, 16)  // 下部は少し余白を減らす
-                } else if let cumulativeEvaluation = dashboardSummary?.analysisResult?.cumulativeEvaluation,
-                   !cumulativeEvaluation.isEmpty {
-                    // フォールバック: 従来のanalysis_resultから取得
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(Array(cumulativeEvaluation.enumerated()), id: \.offset) { index, comment in
-                            Text(comment)
-                                .font(.system(size: 18, weight: .bold))  // 太字に変更
-                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                                .fixedSize(horizontal: false, vertical: true)
-                                .multilineTextAlignment(.leading)
-                                .lineSpacing(18 * 0.6)  // フォントサイズ18ptの60%で行間を設定（line-height: 160%相当）
-                        }
-                    }
-                    .padding(.top, 24)  // グラフとの間に24px余白
-                    .padding(.bottom, 16)  // 下部は少し余白を減らす
                 }
                 
                 // ナビゲーションリンク（右下に配置）
@@ -169,9 +149,10 @@ struct ModernVibeCard: View {
     // MARK: - Main Score View
     private var mainScoreView: some View {
         VStack(spacing: 8) {
-            // 絵文字（1.5倍に拡大）
+            // 絵文字（1.5倍に拡大）- 振動アニメーション付き
             Text(emotionEmoji)
                 .font(.system(size: 108))
+                .rotationEffect(.degrees(emojiRotation))
             
             // ステータステキスト（黒・太字・20px）
             Text(emotionLabel)
@@ -209,16 +190,45 @@ struct ModernVibeCard: View {
     // MARK: - Burst Trigger
     private func triggerBurst(score: Double) {
         burstScore = score
-        withAnimation(.spring()) {
-            showBurstBubbles = true
+        
+        // 絵文字を振動させる
+        // 左右に小刻みに揺れるアニメーション
+        withAnimation(Animation.linear(duration: 0.05)) {
+            emojiRotation = -2  // 左に2度
         }
         
-        // 2秒後に自動的に非表示
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-            withAnimation(.easeOut) {
-                showBurstBubbles = false
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+            withAnimation(Animation.linear(duration: 0.1)) {
+                emojiRotation = 2  // 右に2度
             }
         }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+            withAnimation(Animation.linear(duration: 0.1)) {
+                emojiRotation = -1.5  // 左に1.5度
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            withAnimation(Animation.linear(duration: 0.1)) {
+                emojiRotation = 1  // 右に1度
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            withAnimation(Animation.linear(duration: 0.1)) {
+                emojiRotation = -0.5  // 左に0.5度
+            }
+        }
+        
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
+            withAnimation(Animation.linear(duration: 0.1)) {
+                emojiRotation = 0  // 元の位置に戻る
+            }
+        }
+        
+        // Hapticフィードバック（バイブレーション）も追加
+        HapticManager.shared.playEventBurst()
     }
     
     // MARK: - Computed Properties

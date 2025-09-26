@@ -17,7 +17,6 @@ struct BehaviorGraphView: View {
     var selectedDate: Date = Date()  // 日付を受け取る
     
     @State private var selectedTimeBlock: TimeBlock? = nil
-    @State private var showingDetail = false
     
     var body: some View {
         ScrollView {
@@ -124,7 +123,6 @@ struct BehaviorGraphView: View {
                                         TimeBlockCell(timeBlock: block) {
                                             if !block.isEmpty {
                                                 selectedTimeBlock = block
-                                                showingDetail = true
                                             }
                                         }
                                     }
@@ -147,13 +145,11 @@ struct BehaviorGraphView: View {
         .background(Color.safeColor("BehaviorBackgroundPrimary"))
         .navigationTitle("行動グラフ")
         .navigationBarTitleDisplayMode(.inline)
-        .sheet(isPresented: $showingDetail) {
-            if let block = selectedTimeBlock {
-                TimeBlockDetailView(timeBlock: block) {
-                    showingDetail = false
-                }
-                .presentationDetents([.medium])
+        .sheet(item: $selectedTimeBlock) { block in
+            TimeBlockDetailView(timeBlock: block) {
+                selectedTimeBlock = nil
             }
+            .presentationDetents([.medium])
         }
     }
     

@@ -105,6 +105,10 @@ struct InteractiveTimelineView: View {
             print("🔄 InteractiveTimelineView: vibeScoresが変更されました")
             resetAndStartPlayback()
         }
+        // インジケーターが移動したときに、イベントから離れたら吹き出しを消す
+        .onChange(of: currentTimeIndex) { _, newIndex in
+            checkIfShouldHideEventDetail()
+        }
     }
     
     // MARK: - Current Status View
@@ -224,8 +228,7 @@ struct InteractiveTimelineView: View {
                         
                         Star()
                             .fill(slot <= currentTimeIndex ? Color.safeColor("VibeChangeIndicatorColor") : Color.safeColor("VibeChangeIndicatorColor").opacity(0.3))
-                            .frame(width: slot == currentTimeIndex ? 30 : 12, 
-                                   height: slot == currentTimeIndex ? 30 : 12)
+                            .frame(width: 12, height: 12)
                             .position(x: x, y: y)
                             .animation(.spring(response: 0.3), value: currentTimeIndex)
                             .onTapGesture {
@@ -249,8 +252,7 @@ struct InteractiveTimelineView: View {
                         
                         Star()
                             .fill(slot <= currentTimeIndex ? Color.safeColor("VibeChangeIndicatorColor") : Color.safeColor("VibeChangeIndicatorColor").opacity(0.3))
-                            .frame(width: slot == currentTimeIndex ? 30 : 12, 
-                                   height: slot == currentTimeIndex ? 30 : 12)
+                            .frame(width: 12, height: 12)
                             .position(x: x, y: y)
                             .animation(.spring(response: 0.3), value: currentTimeIndex)
                             .onTapGesture {
@@ -359,16 +361,13 @@ struct InteractiveTimelineView: View {
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.white.opacity(0.95))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.safeColor("VibeChangeIndicatorColor").opacity(0.5), lineWidth: 1)
-                )
         )
         .shadow(color: .black.opacity(0.2), radius: 5)
         .position(
             x: geometry.size.width / 2,
             y: geometry.size.height / 2
         )
+        .zIndex(999)
         .transition(.scale.combined(with: .opacity))
         .onTapGesture {
             withAnimation {
@@ -523,10 +522,12 @@ struct InteractiveTimelineView: View {
                         triggerBurst = false
                     }
                     
-                    // 3秒後に自動的に非表示
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                        withAnimation {
-                            showEventDetail = false
+                    // 自動再生時のみ3秒後に非表示
+                    if !isDragging {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            withAnimation {
+                                showEventDetail = false
+                            }
                         }
                     }
                     break
@@ -553,10 +554,12 @@ struct InteractiveTimelineView: View {
                         triggerBurst = false
                     }
                     
-                    // 3秒後に自動的に非表示
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-                        withAnimation {
-                            showEventDetail = false
+                    // 自動再生時のみ3秒後に非表示
+                    if !isDragging {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+                            withAnimation {
+                                showEventDetail = false
+                            }
                         }
                     }
                     break
@@ -583,12 +586,7 @@ struct InteractiveTimelineView: View {
                     // イベント時の軽い振動フィードバック
                     hapticManager.playEventBurst()
                     
-                    // 2秒後に自動的に非表示（ドラッグ中は短めに）
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation {
-                            showEventDetail = false
-                        }
-                    }
+                    // インジケーターがある間は表示を維持（自動で消さない）
                     break
                 }
             }
@@ -606,14 +604,45 @@ struct InteractiveTimelineView: View {
                     // イベント時の軽い振動フィードバック
                     hapticManager.playEventBurst()
                     
-                    // 2秒後に自動的に非表示（ドラッグ中は短めに）
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        withAnimation {
-                            showEventDetail = false
-                        }
-                    }
+                    // インジケーターがある間は表示を維持（自動で消さない）
                     break
                 }
+            }
+        }
+    }
+    
+    // インジケーターがイベントから離れたか確認
+    private func checkIfShouldHideEventDetail() {
+        guard showEventDetail, let event = selectedEvent else { return }
+        
+        // 現在のインジケーター位置がイベント位置と異なる場合、吹き出しを非表示
+        var eventSlot: Int? = nil
+        
+        // BurstEventの場合
+        if let events = burstEvents {
+            for e in events {
+                if e.time == event.time {
+                    eventSlot = timeSlotToIndexForBurst(e.time)
+                    break
+                }
+            }
+        }
+        
+        // VibeChangeの場合（フォールバック）
+        if eventSlot == nil, let changes = vibeChanges {
+            for c in changes {
+                if c.time == event.time {
+                    eventSlot = timeSlotToIndex(c.time)
+                    break
+                }
+            }
+        }
+        
+        // インジケーターがイベントの位置から離れたら非表示
+        if let slot = eventSlot, slot != currentTimeIndex {
+            withAnimation {
+                showEventDetail = false
+                selectedEvent = nil
             }
         }
     }

@@ -18,9 +18,13 @@ struct BehaviorEvent: Codable, Identifiable {
 }
 
 // MARK: - Time Block Model
-struct TimeBlock: Codable {
+struct TimeBlock: Codable, Identifiable {
     let time: String
     let events: [BehaviorEvent]?
+    
+    var id: String {
+        time
+    }
     
     var isEmpty: Bool {
         events == nil || events?.isEmpty == true
