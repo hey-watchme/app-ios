@@ -28,12 +28,12 @@ struct BehaviorGraphView: View {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
                     } else if let report = behaviorReport ?? dataManager.dailyBehaviorReport {
-                        // 行動ランキングカード
-                        UnifiedCard(title: "行動ランキング") {
+                        // 検出された生活音カード
+                        UnifiedCard(title: "検出された生活音") {
                             VStack(spacing: 16) {
                                 // 合計件数表示
                                 HStack {
-                                    Text("本日の総行動数")
+                                    Text("音響イベント数")
                                         .font(.caption)
                                         .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                     Spacer()
@@ -54,19 +54,8 @@ struct BehaviorGraphView: View {
                                 
                                 // ランキングリスト
                                 VStack(spacing: 12) {
-                                    ForEach(Array(report.summaryRanking.prefix(5).enumerated()), id: \.offset) { index, event in
+                                    ForEach(Array(report.summaryRanking.prefix(10).enumerated()), id: \.offset) { index, event in
                                         HStack(spacing: 16) {
-                                            // ランク表示
-                                            ZStack {
-                                                Circle()
-                                                    .fill(rankColor(for: index))
-                                                    .frame(width: 32, height: 32)
-                                                Text("\(index + 1)")
-                                                    .font(.callout)
-                                                    .fontWeight(.bold)
-                                                    .foregroundColor(.white)
-                                            }
-                                            
                                             Text(event.event)
                                                 .font(.body)
                                                 .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
@@ -84,7 +73,7 @@ struct BehaviorGraphView: View {
                                             }
                                         }
                                         
-                                        if index < min(4, report.summaryRanking.count - 1) {
+                                        if index < min(9, report.summaryRanking.count - 1) {
                                             Divider()
                                                 .background(Color.safeColor("BehaviorBackgroundSecondary"))
                                         }

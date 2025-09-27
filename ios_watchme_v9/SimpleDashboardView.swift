@@ -411,7 +411,7 @@ struct SimpleDashboardView: View {
             
             if filteredRanking.count > 1 {
                 VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(filteredRanking.prefix(5).enumerated()), id: \.element.id) { index, behavior in
+                    ForEach(Array(filteredRanking.prefix(10).enumerated()), id: \.element.id) { index, behavior in
                         HStack(spacing: 8) {
                             Text("\(index + 1)")
                                 .font(.caption)

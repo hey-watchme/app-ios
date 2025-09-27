@@ -449,25 +449,29 @@ struct InteractiveTimelineView: View {
         // 既存のタイマーがあれば停止
         stopPlayback()
         
-        // 有効なデータの最後のインデックスを見つける
-        let lastValidIndex = findLastValidDataIndex()
+        // 有効なデータのインデックスリストを作成
+        let validIndices = findValidDataIndices()
         
         // 有効なデータがない場合は再生しない
-        guard lastValidIndex >= 0 else {
+        guard !validIndices.isEmpty else {
             print("⚠️ InteractiveTimelineView: 有効なデータがないため再生をスキップ")
             return
         }
         
+        // 現在位置から次の有効インデックスを見つける
+        var currentValidIndex = validIndices.firstIndex(of: currentTimeIndex) ?? 0
+        
         playbackTimer = Timer.scheduledTimer(withTimeInterval: playbackSpeed, repeats: true) { _ in
-            withAnimation(.linear(duration: self.playbackSpeed)) {
-                // 有効なデータの範囲内でのみ移動
-                if self.currentTimeIndex < lastValidIndex {
-                    self.currentTimeIndex += 1
+            withAnimation(.spring(response: 0.3)) {
+                // 次の有効なデータポイントに移動
+                if currentValidIndex < validIndices.count - 1 {
+                    currentValidIndex += 1
+                    self.currentTimeIndex = validIndices[currentValidIndex]
                     self.checkForEvent()
                 } else {
                     // 有効なデータの最後まで到達したら停止
                     self.stopPlayback()
-                    print("✅ InteractiveTimelineView: 有効データの最後（インデックス: \(lastValidIndex)）に到達、再生停止")
+                    print("✅ InteractiveTimelineView: 有効データの最後（インデックス: \(validIndices[currentValidIndex])）に到達、再生停止")
                 }
             }
         }
@@ -476,7 +480,6 @@ struct InteractiveTimelineView: View {
     private func resetAndStartPlayback() {
         // すべての状態をリセット
         stopPlayback()
-        currentTimeIndex = 0
         isDragging = false
         showEventDetail = false
         selectedEvent = nil
@@ -484,7 +487,15 @@ struct InteractiveTimelineView: View {
         showParticles = false
         dragEndTime = nil
         
-        print("🎆 InteractiveTimelineView: 状態をリセットして再生開始")
+        // 最初の有効なデータポイントから開始
+        let validIndices = findValidDataIndices()
+        if !validIndices.isEmpty {
+            currentTimeIndex = validIndices[0]
+            print("🎆 InteractiveTimelineView: 最初の有効データ（インデックス: \(validIndices[0])）から再生開始")
+        } else {
+            currentTimeIndex = 0
+            print("⚠️ InteractiveTimelineView: 有効データなし、インデックス0で待機")
+        }
         
         // 少し遅延してから再生開始（アニメーションのため）
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -691,6 +702,17 @@ struct InteractiveTimelineView: View {
         }
         // すべてnilの場合は-1を返す
         return -1
+    }
+    
+    // 有効なデータのインデックスリストを作成
+    private func findValidDataIndices() -> [Int] {
+        var indices: [Int] = []
+        for (index, score) in vibeScores.enumerated() {
+            if score != nil {
+                indices.append(index)
+            }
+        }
+        return indices
     }
     
     // MARK: - Computed Properties

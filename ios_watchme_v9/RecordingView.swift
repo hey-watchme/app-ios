@@ -27,80 +27,73 @@ struct RecordingView: View {
     
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(spacing: 20) {
-                // 音声分析説明セクション
-                VStack(spacing: 12) {
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 50))
-                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                    
-                    Text("あなたの音（音声META情報）から、発達特性、認知傾向、メンタルヘルスを可視化します。")
-                        .font(.subheadline)
-                        .multilineTextAlignment(.center)
-                        .foregroundColor(.primary)
-                        .padding(.horizontal)
-                }
-                .padding()
-                .background(Color(.systemGray6))
-                .cornerRadius(16)
-                
-                Divider()
-                    .padding(.vertical, 8)
-            
-            // デバイスタイムゾーン情報と録音時間の詳細説明
-            VStack(spacing: 12) {
-                // デバイスタイムゾーン情報
-                VStack(spacing: 8) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "globe")
-                            .font(.caption)
-                            .foregroundColor(.blue)
-                        Text("デバイスタイムゾーン: \(deviceManager.selectedDeviceTimezone.identifier)")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.blue)
+            ZStack {
+                // メインコンテンツ
+                VStack(spacing: 0) {
+                    // 上部説明セクション（固定）
+                    VStack(spacing: 16) {
+                        // 音声分析説明
+                        VStack(spacing: 12) {
+                            Image(systemName: "waveform.circle.fill")
+                                .font(.system(size: 100)) // 2倍サイズ
+                                .foregroundColor(Color.safeColor("AppAccentColor"))
+                                .padding(.top, 50) // 上側余白50ピクセル
+                            
+                            Text("音声から、気分・行動・感情を分析します。")
+                                .font(.subheadline)
+                                .multilineTextAlignment(.center)
+                                .foregroundColor(.primary)
+                        }
+                        
+                        Divider()
+                        
+                        // デバイスタイムゾーン情報（1行）
+                        HStack {
+                            Image(systemName: "globe")
+                                .font(.caption)
+                                .foregroundColor(.blue)
+                            Text("デバイスタイムゾーン:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(deviceManager.selectedDeviceTimezone.identifier)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.blue)
+                            Spacer()
+                        }
+                        
+                        // 現在時刻（1行）
+                        HStack {
+                            Image(systemName: "clock")
+                                .font(.caption)
+                                .foregroundColor(.gray)
+                            Text("現在時刻:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(deviceCurrentTime)
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                        
+                        // 録音データポイント（1行）
+                        HStack {
+                            Image(systemName: "waveform.path")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                            Text("録音データポイント:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(currentTimeSlot)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.green)
+                            Spacer()
+                        }
                     }
-                    
-                    // 現在のデバイス時刻
-                    VStack(spacing: 4) {
-                        Text("現在時刻（デバイス基準）")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
-                        Text(deviceCurrentTime)
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.primary)
-                    }
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.blue.opacity(0.1))
-                .cornerRadius(8)
-                
-                // 録音データポイント説明
-                VStack(spacing: 4) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "waveform.path")
-                            .font(.caption)
-                            .foregroundColor(.green)
-                        Text("録音データポイント: \(currentTimeSlot)")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.green)
-                    }
-                    Text("このタイムスロットのデータとしてグラフに表示されます")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(Color.green.opacity(0.1))
-                .cornerRadius(8)
-            }
-            .padding(.horizontal)
-            .padding(.vertical, 8)
+                    .padding()
+                    .background(Color(.systemGray6))
             
             // 録音エラー表示
             if let errorMessage = audioRecorder.recordingError {
@@ -122,49 +115,10 @@ struct RecordingView: View {
                 .padding(.horizontal)
             }
             
-            // 録音開始/停止ボタン
-            if audioRecorder.isRecording {
-                // 録音停止ボタン
-                Button(action: {
-                    audioRecorder.stopRecording()
-                }) {
-                    HStack {
-                        Image(systemName: "stop.circle.fill")
-                            .font(.title2)
-                        Text("録音を停止")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.red)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal)
-            } else {
-                // 録音開始ボタン
-                Button(action: {
-                    // デバイスが連携されているか確認
-                    if deviceManager.localDeviceIdentifier == nil {
-                        showDeviceLinkAlert = true
-                    } else {
-                        audioRecorder.startRecording()
-                    }
-                }) {
-                    HStack {
-                        Image(systemName: "mic.circle.fill")
-                            .font(.title2)
-                        Text("録音を開始")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.safeColor("RecordingActive"))
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-                .padding(.horizontal)
-            }
+                    
+                    // スクロール可能なコンテンツエリア
+                    ScrollView {
+                        VStack(spacing: 16) {
             
             // アップロード進捗表示
             if networkManager.connectionStatus == .uploading {
@@ -201,118 +155,190 @@ struct RecordingView: View {
                 .cornerRadius(12)
             }
             
-            // 録音状態の表示エリア
-            if audioRecorder.isRecording {
-                // 録音中の表示
-                VStack(spacing: 16) {
-                    // 波形表示
-                    HStack(spacing: 3) {
-                        ForEach(0..<audioRecorder.audioLevels.count, id: \.self) { index in
-                            RoundedRectangle(cornerRadius: 2)
-                                .fill(Color.safeColor("RecordingActive"))
-                                .frame(width: 4, height: max(4, audioRecorder.audioLevels[index] * 60))
-                                .animation(.easeInOut(duration: 0.05), value: audioRecorder.audioLevels[index])
-                        }
-                    }
-                    .frame(height: 60)
-                    .padding(.horizontal)
-                    
-                    VStack(spacing: 8) {
-                        Text("録音中")
-                            .font(.headline)
-                            .foregroundColor(Color.safeColor("RecordingActive"))
-                        
-                        Text(audioRecorder.formatTime(audioRecorder.recordingTime))
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(Color.safeColor("RecordingActive"))
-                        
-                        Text(audioRecorder.getCurrentSlotInfo())
+            // 録音データセクション
+            VStack(alignment: .leading, spacing: 12) {
+                // タイトル
+                HStack {
+                    Text("録音データ")
+                        .font(.headline)
+                    Text("\(audioRecorder.recordings.count)件")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                    Spacer()
+                    // 古いファイルクリーンアップボタン
+                    if audioRecorder.recordings.contains(where: { $0.fileName.hasPrefix("recording_") }) {
+                        Button(action: {
+                            audioRecorder.cleanupOldFiles()
+                            alertMessage = "古い形式のファイルを削除しました"
+                            showAlert = true
+                        }) {
+                            HStack {
+                                Image(systemName: "trash.fill")
+                                Text("古いファイル削除")
+                            }
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.safeColor("WarningColor"))
+                            .foregroundColor(.white)
+                            .cornerRadius(8)
+                        }
                     }
                 }
-                .padding()
-                .background(Color.safeColor("RecordingActive").opacity(0.1))
-                .cornerRadius(12)
-            }
-            
-            // 録音一覧（アップロード失敗またはアップロード待ちのファイルのみ）
-            if !audioRecorder.recordings.isEmpty {
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("録音ファイル（未送信）")
-                        .font(.headline)
-                        .padding(.horizontal)
-                    
-                    VStack(spacing: 8) {
-                        // 古いファイルクリーンアップボタン
-                        if audioRecorder.recordings.contains(where: { $0.fileName.hasPrefix("recording_") }) {
-                            Button(action: {
-                                audioRecorder.cleanupOldFiles()
-                                alertMessage = "古い形式のファイルを削除しました"
-                                showAlert = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "trash.fill")
-                                    Text("古いファイルを一括削除")
-                                }
+                .padding(.horizontal)
+                
+                // 録音状態の表示エリア
+                if audioRecorder.isRecording {
+                    // 録音中の表示
+                    VStack(spacing: 16) {
+                        // 波形表示
+                        HStack(spacing: 3) {
+                            ForEach(0..<audioRecorder.audioLevels.count, id: \.self) { index in
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.safeColor("RecordingActive"))
+                                    .frame(width: 4, height: max(4, audioRecorder.audioLevels[index] * 60))
+                                    .animation(.easeInOut(duration: 0.05), value: audioRecorder.audioLevels[index])
+                            }
+                        }
+                        .frame(height: 60)
+                        
+                        VStack(spacing: 8) {
+                            Text("録音中")
+                                .font(.headline)
+                                .foregroundColor(Color.safeColor("RecordingActive"))
+                            
+                            Text(audioRecorder.formatTime(audioRecorder.recordingTime))
+                                .font(.title2)
+                                .fontWeight(.bold)
+                                .foregroundColor(Color.safeColor("RecordingActive"))
+                            
+                            Text(audioRecorder.getCurrentSlotInfo())
                                 .font(.caption)
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(Color.safeColor("WarningColor"))
-                                .foregroundColor(.white)
-                                .cornerRadius(8)
-                            }
+                                .foregroundColor(.secondary)
                         }
-                        
-                        ScrollView {
-                            LazyVStack(spacing: 8) {
-                                ForEach(audioRecorder.recordings, id: \.fileName) { recording in
-                                    RecordingRowView(
-                                        recording: recording,
-                                        isSelected: selectedRecording?.fileName == recording.fileName,
-                                        onSelect: { selectedRecording = recording },
-                                        onDelete: { recording in
-                                            audioRecorder.deleteRecording(recording)
-                                        }
-                                    )
+                    }
+                    .padding()
+                    .background(Color.safeColor("RecordingActive").opacity(0.1))
+                    .cornerRadius(12)
+                    .padding(.horizontal)
+                }
+                
+                // 録音ファイルリストまたはプレースホルダー
+                if audioRecorder.recordings.isEmpty && !audioRecorder.isRecording {
+                    // プレースホルダー
+                    VStack(spacing: 16) {
+                        Image(systemName: "waveform")
+                            .font(.system(size: 40))
+                            .foregroundColor(Color.secondary.opacity(0.5))
+                        Text("録音データがありません")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                        Text("録音ボタンをタップして開始")
+                            .font(.caption)
+                            .foregroundColor(Color.secondary.opacity(0.7))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                } else if !audioRecorder.recordings.isEmpty {
+                    // 録音ファイルリスト
+                    VStack(spacing: 8) {
+                        ForEach(audioRecorder.recordings, id: \.fileName) { recording in
+                            RecordingRowView(
+                                recording: recording,
+                                isSelected: selectedRecording?.fileName == recording.fileName,
+                                onSelect: { selectedRecording = recording },
+                                onDelete: { recording in
+                                    audioRecorder.deleteRecording(recording)
                                 }
-                            }
-                            .padding(.horizontal)
+                            )
                         }
-                        .frame(maxHeight: 300)
-                        
-                        // 一括アップロードボタン（最下部に大きく表示）
-                        if audioRecorder.recordings.filter({ !$0.isRecordingFailed && !$0.isUploaded && $0.canUpload }).count > 0 {
+                    }
+                    .padding(.horizontal)
+                    
+                    // 一括アップロードボタン
+                    if audioRecorder.recordings.filter({ !$0.isRecordingFailed && !$0.isUploaded && $0.canUpload }).count > 0 {
+                        Button(action: {
+                            manualBatchUpload()
+                        }) {
+                            HStack {
+                                Image(systemName: "icloud.and.arrow.up")
+                                    .font(.title3)
+                                Text("すべてアップロード")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color.safeColor("AppAccentColor"))
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
+                        .disabled(networkManager.connectionStatus == .uploading)
+                    }
+                }
+            }
+            .padding()
+            .background(Color(.systemBackground))
+            .cornerRadius(12)
+            .padding()
+                        }
+                        .padding(.bottom, 100) // 録音ボタンのスペースを確保
+                    }
+                }
+                
+                // 下部固定ボタン
+                VStack {
+                    Spacer()
+                    VStack(spacing: 0) {
+                        Divider()
+                        // 録音開始/停止ボタン
+                        if audioRecorder.isRecording {
+                            // 録音停止ボタン
                             Button(action: {
-                                manualBatchUpload()
+                                audioRecorder.stopRecording()
                             }) {
                                 HStack {
-                                    Image(systemName: "icloud.and.arrow.up")
-                                        .font(.title3)
-                                    Text("すべてアップロード")
+                                    Image(systemName: "stop.circle.fill")
+                                        .font(.title2)
+                                    Text("録音を停止")
                                         .font(.headline)
-                                        .fontWeight(.semibold)
                                 }
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(Color.safeColor("UploadActive"))
+                                .padding()
+                                .background(Color.red)
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
                             }
-                            .padding(.horizontal)
-                            .disabled(networkManager.connectionStatus == .uploading)
+                            .padding()
+                        } else {
+                            // 録音開始ボタン
+                            Button(action: {
+                                // デバイスが連携されているか確認
+                                if deviceManager.localDeviceIdentifier == nil {
+                                    showDeviceLinkAlert = true
+                                } else {
+                                    audioRecorder.startRecording()
+                                }
+                            }) {
+                                HStack {
+                                    Image(systemName: "mic.circle.fill")
+                                        .font(.title2)
+                                    Text("録音を開始")
+                                        .font(.headline)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.safeColor("RecordingActive"))
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                            }
+                            .padding()
                         }
                     }
+                    .background(Color(.systemBackground))
                 }
-            } else {
-                Text("未送信の録音ファイルはありません")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .padding()
-            }
-                }
-                .padding()
             }
             .navigationTitle("録音")
         .navigationBarTitleDisplayMode(.inline)
