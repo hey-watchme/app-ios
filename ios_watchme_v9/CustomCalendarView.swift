@@ -216,7 +216,7 @@ struct CustomCalendarView: View {
     }
     
     private func loadMonthlyData() async {
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else { return }
+        guard let deviceId = deviceManager.selectedDeviceID else { return }
         
         isLoadingData = true
         defer { isLoadingData = false }

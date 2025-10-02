@@ -33,12 +33,6 @@ class DeviceManager: ObservableObject {
     }
     
     @Published var state: State = .idle
-    @Published var isDeviceRegistered: Bool = false
-    @Published var localDeviceIdentifier: String? = nil {  // この物理デバイス自身のID
-        didSet {
-            print("✅ DeviceManager: localDeviceIdentifier changed to \(localDeviceIdentifier ?? "nil")")
-        }
-    }
     @Published var userDevices: [Device] = []  // ユーザーの全デバイス
     @Published var selectedDeviceID: String? = nil {  // 選択中のデバイスID
         didSet {
@@ -57,36 +51,12 @@ class DeviceManager: ObservableObject {
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
     
     // UserDefaults キー
-    private let localDeviceIdentifierKey = "watchme_device_id"  // UserDefaultsのキーは互換性のため維持
-    private let isRegisteredKey = "watchme_device_registered"
     private let selectedDeviceIDKey = "watchme_selected_device_id"  // 選択中のデバイスID永続化用
-    
+
     init() {
-        checkDeviceRegistrationStatus()
         restoreSelectedDevice()
     }
     
-    // MARK: - デバイス登録状態確認
-    private func checkDeviceRegistrationStatus() {
-        let savedDeviceID = UserDefaults.standard.string(forKey: localDeviceIdentifierKey)
-        let isSupabaseRegistered = UserDefaults.standard.bool(forKey: "watchme_supabase_registered")
-        
-        if let deviceID = savedDeviceID, isSupabaseRegistered {
-            self.localDeviceIdentifier = deviceID
-            self.isDeviceRegistered = true
-            print("📱 Supabaseデバイス登録確認: \(deviceID)")
-        } else {
-            self.isDeviceRegistered = false
-            print("📱 デバイス未登録 - Supabase登録が必要")
-            
-            // 古いローカル登録データがあれば削除
-            if UserDefaults.standard.string(forKey: localDeviceIdentifierKey) != nil {
-                print("🗑️ 古いローカル登録データを削除")
-                UserDefaults.standard.removeObject(forKey: localDeviceIdentifierKey)
-                UserDefaults.standard.removeObject(forKey: isRegisteredKey)
-            }
-        }
-    }
     // MARK: - デバイス登録処理（ユーザーが明示的に登録する場合のみ使用）
     func registerDevice(userId: String) {
         isLoading = true
@@ -163,9 +133,8 @@ class DeviceManager: ObservableObject {
                         }
                     }
                 }
-                
-                // 最後にローカルのデバイス情報を保存
-                self.saveSupabaseDeviceRegistration(deviceID: newDeviceId)
+
+                // 登録完了
                 self.isLoading = false
                 self.registrationError = nil  // エラーをクリア
                 
@@ -253,40 +222,12 @@ class DeviceManager: ObservableObject {
                     }
                 }
             }
-            
-            // 最後にローカルのデバイス情報を保存
-            await MainActor.run {
-                self.saveSupabaseDeviceRegistration(deviceID: newDeviceId)
-            }
-            
+
         } catch {
             print("❌ デバイス登録処理全体でエラー: \(error)")
         }
     }
     
-    // MARK: - Supabaseデバイス登録情報保存
-    private func saveSupabaseDeviceRegistration(deviceID: String) {
-        UserDefaults.standard.set(deviceID, forKey: localDeviceIdentifierKey)
-        UserDefaults.standard.set(true, forKey: "watchme_supabase_registered")
-        
-        self.localDeviceIdentifier = deviceID
-        self.isDeviceRegistered = true
-        
-        print("💾 Supabaseデバイス登録完了")
-        print("   - Device ID: \(deviceID)")
-    }
-    
-    // MARK: - デバイス登録状態リセット（デバッグ用）
-    func resetDeviceRegistration() {
-        UserDefaults.standard.removeObject(forKey: localDeviceIdentifierKey)
-        UserDefaults.standard.removeObject(forKey: "watchme_supabase_registered")
-        
-        self.localDeviceIdentifier = nil
-        self.isDeviceRegistered = false
-        self.registrationError = nil
-        
-        print("🔄 デバイス登録状態リセット完了")
-    }
     
     // MARK: - 統合初期化処理（State管理版）
     @MainActor
@@ -312,14 +253,6 @@ class DeviceManager: ObservableObject {
                 print("📱 DeviceManager: No devices found for user")
                 self.userDevices = []
                 self.state = .noDevices
-                
-                // ローカルデバイスIDがあればそれを選択
-                if let localId = self.localDeviceIdentifier {
-                    self.selectedDeviceID = localId
-                    print("📱 Using local device as fallback: \(localId)")
-                    // ローカルデバイスのみの場合も ready とする
-                    self.state = .ready
-                }
             } else {
                 self.userDevices = devices
                 print("✅ DeviceManager: Found \(devices.count) devices")
@@ -456,19 +389,13 @@ class DeviceManager: ObservableObject {
             }
             
             if userDevices.isEmpty {
-                print("⚠️ DeviceManager: No user devices found. Attempting localIdentifier.")
+                print("⚠️ DeviceManager: No user devices found.")
                 await MainActor.run {
                     self.userDevices = []
                     self.isLoading = false  // ローディング状態を解除
-                    // ユーザーに紐付くデバイスがない場合、このデバイス自身のIDを使用
-                    if let localId = self.localDeviceIdentifier {
-                        self.selectedDeviceID = localId
-                        print("✅ DeviceManager: Found user device: \(localId)")
-                    } else {
-                        print("❌ DeviceManager: No localDeviceIdentifier available!")
-                    }
+                    self.selectedDeviceID = nil
                 }
-                print("➡️ DeviceManager: fetchUserDevices completed. Final selectedDeviceID: \(self.selectedDeviceID ?? "nil")")
+                print("➡️ DeviceManager: fetchUserDevices completed. No devices available.")
                 return
             }
             
@@ -516,10 +443,6 @@ class DeviceManager: ObservableObject {
                 } else if let firstDevice = devices.first {
                     self.selectedDeviceID = firstDevice.device_id
                     print("🔍 Selected first device: \(firstDevice.device_id)")
-                } else {
-                    // デバイスが見つからない場合
-                    print("⚠️ DeviceManager: No devices found after fetching. Using localIdentifier.")
-                    self.selectedDeviceID = self.localDeviceIdentifier
                 }
                 
                 print("➡️ DeviceManager: fetchUserDevices completed. Final selectedDeviceID: \(self.selectedDeviceID ?? "nil")")
@@ -570,13 +493,10 @@ class DeviceManager: ObservableObject {
     
     // MARK: - デバイス情報取得
     func getDeviceInfo() -> DeviceInfo? {
-        // 選択されたデバイスIDがあればそれを使用、なければこの物理デバイスのIDを使用
-        let deviceID = selectedDeviceID ?? localDeviceIdentifier
-        
-        guard let deviceID = deviceID else {
+        guard let deviceID = selectedDeviceID else {
             return nil
         }
-        
+
         return DeviceInfo(
             deviceID: deviceID,
             deviceType: "ios"

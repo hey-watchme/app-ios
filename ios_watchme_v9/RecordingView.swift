@@ -19,81 +19,18 @@ struct RecordingView: View {
     @State private var selectedRecording: RecordingModel?
     @State private var uploadingTotalCount = 0
     @State private var uploadingCurrentIndex = 0
-    @State private var showDeviceLinkAlert = false
-    @State private var isLinkingDevice = false
-    @State private var currentTimeSlot = SlotTimeUtility.getCurrentSlot()
-    @State private var deviceCurrentTime = ""
+    @State private var recordingDataPoint = ""
     @State private var timer: Timer?
     
     var body: some View {
         NavigationView {
             ZStack {
+                // 背景色
+                Color(.systemGray6)
+                    .ignoresSafeArea()
+                
                 // メインコンテンツ
                 VStack(spacing: 0) {
-                    // 上部説明セクション（固定）
-                    VStack(spacing: 16) {
-                        // 音声分析説明
-                        VStack(spacing: 12) {
-                            Image(systemName: "waveform.circle.fill")
-                                .font(.system(size: 100)) // 2倍サイズ
-                                .foregroundColor(Color.safeColor("AppAccentColor"))
-                                .padding(.top, 50) // 上側余白50ピクセル
-                            
-                            Text("音声から、気分・行動・感情を分析します。")
-                                .font(.subheadline)
-                                .multilineTextAlignment(.center)
-                                .foregroundColor(.primary)
-                        }
-                        
-                        Divider()
-                        
-                        // デバイスタイムゾーン情報（1行）
-                        HStack {
-                            Image(systemName: "globe")
-                                .font(.caption)
-                                .foregroundColor(.blue)
-                            Text("デバイスタイムゾーン:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(deviceManager.selectedDeviceTimezone.identifier)
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundColor(.blue)
-                            Spacer()
-                        }
-                        
-                        // 現在時刻（1行）
-                        HStack {
-                            Image(systemName: "clock")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text("現在時刻:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(deviceCurrentTime)
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(.primary)
-                            Spacer()
-                        }
-                        
-                        // 録音データポイント（1行）
-                        HStack {
-                            Image(systemName: "waveform.path")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                            Text("録音データポイント:")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                            Text(currentTimeSlot)
-                                .font(.caption)
-                                .fontWeight(.medium)
-                                .foregroundColor(.green)
-                            Spacer()
-                        }
-                    }
-                    .padding()
-                    .background(Color(.systemGray6))
             
             // 録音エラー表示
             if let errorMessage = audioRecorder.recordingError {
@@ -158,12 +95,47 @@ struct RecordingView: View {
             // 録音データセクション
             VStack(alignment: .leading, spacing: 12) {
                 // タイトル
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .center, spacing: 8) {
+                        Text("録音データ")
+                            .font(.system(size: 24, weight: .bold))
+                        Text("\(audioRecorder.recordings.count)件")
+                            .font(.headline)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 6) {
+                        // デバイスタイムゾーン情報（1行）
+                        HStack {
+                            Text("デバイスタイムゾーン:")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                            Text(deviceManager.selectedDeviceTimezone.identifier)
+                                .font(.caption)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+                            Spacer()
+                        }
+                        
+                        // データ取得時間帯（1行）
+                        HStack {
+                        Text("データ取得時間帯:")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Text(recordingDataPoint)
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        }
+                    }
+                    
+                    // 区切り線
+                    Divider()
+                        .padding(.vertical, 4)
+                }
                 HStack {
-                    Text("録音データ")
-                        .font(.headline)
-                    Text("\(audioRecorder.recordings.count)件")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
                     Spacer()
                     // 古いファイルクリーンアップボタン
                     if audioRecorder.recordings.contains(where: { $0.fileName.hasPrefix("recording_") }) {
@@ -211,16 +183,12 @@ struct RecordingView: View {
                                 .font(.title2)
                                 .fontWeight(.bold)
                                 .foregroundColor(Color.safeColor("RecordingActive"))
-                            
-                            Text(audioRecorder.getCurrentSlotInfo())
-                                .font(.caption)
-                                .foregroundColor(.secondary)
                         }
                     }
+                    .frame(maxWidth: .infinity)
                     .padding()
                     .background(Color.safeColor("RecordingActive").opacity(0.1))
                     .cornerRadius(12)
-                    .padding(.horizontal)
                 }
                 
                 // 録音ファイルリストまたはプレースホルダー
@@ -230,10 +198,10 @@ struct RecordingView: View {
                         Image(systemName: "waveform")
                             .font(.system(size: 40))
                             .foregroundColor(Color.secondary.opacity(0.5))
-                        Text("録音データがありません")
+                        Text("音声から、気分・行動・感情を分析します")
                             .font(.subheadline)
                             .foregroundColor(.secondary)
-                        Text("録音ボタンをタップして開始")
+                        Text("録音データがありません")
                             .font(.caption)
                             .foregroundColor(Color.secondary.opacity(0.7))
                     }
@@ -253,7 +221,6 @@ struct RecordingView: View {
                             )
                         }
                     }
-                    .padding(.horizontal)
                     
                     // 一括アップロードボタン
                     if audioRecorder.recordings.filter({ !$0.isRecordingFailed && !$0.isUploaded && $0.canUpload }).count > 0 {
@@ -261,9 +228,9 @@ struct RecordingView: View {
                             manualBatchUpload()
                         }) {
                             HStack {
-                                Image(systemName: "icloud.and.arrow.up")
+                                Image(systemName: "waveform.badge.magnifyingglass")
                                     .font(.title3)
-                                Text("すべてアップロード")
+                                Text("分析開始")
                                     .font(.headline)
                                     .fontWeight(.semibold)
                             }
@@ -273,7 +240,6 @@ struct RecordingView: View {
                             .foregroundColor(.white)
                             .cornerRadius(12)
                         }
-                        .padding(.horizontal)
                         .padding(.bottom, 8)
                         .disabled(networkManager.connectionStatus == .uploading)
                     }
@@ -282,8 +248,8 @@ struct RecordingView: View {
             .padding()
             .background(Color(.systemBackground))
             .cornerRadius(12)
-            .padding()
                         }
+                        .padding(.horizontal)
                         .padding(.bottom, 100) // 録音ボタンのスペースを確保
                     }
                 }
@@ -315,9 +281,13 @@ struct RecordingView: View {
                         } else {
                             // 録音開始ボタン
                             Button(action: {
-                                // デバイスが連携されているか確認
-                                if deviceManager.localDeviceIdentifier == nil {
-                                    showDeviceLinkAlert = true
+                                // デバイスが選択されているかチェック
+                                if deviceManager.selectedDeviceID == nil {
+                                    alertMessage = "デバイスが選択されていません。\nデバイス設定画面でデバイスを選択してください。"
+                                    showAlert = true
+                                } else if !deviceManager.shouldShowFAB {
+                                    alertMessage = "このデバイスは観測専用のため録音できません。"
+                                    showAlert = true
                                 } else {
                                     audioRecorder.startRecording()
                                 }
@@ -355,39 +325,6 @@ struct RecordingView: View {
         } message: {
             Text(alertMessage)
         }
-        .alert("デバイス連携が必要です", isPresented: $showDeviceLinkAlert) {
-            Button("はい") {
-                // デバイス連携を実行
-                linkDeviceAndStartRecording()
-            }
-            Button("キャンセル", role: .cancel) { }
-        } message: {
-            Text("デバイスが連携されていないため録音できません。\nこのデバイスを連携しますか？")
-        }
-        .overlay(
-            // デバイス連携中の表示
-            Group {
-                if isLinkingDevice {
-                    ZStack {
-                        Color.black.opacity(0.4)
-                            .ignoresSafeArea()
-                        
-                        VStack(spacing: 16) {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .scaleEffect(1.5)
-                            
-                            Text("デバイスを連携しています...")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                        }
-                        .padding(40)
-                        .background(Color.black.opacity(0.8))
-                        .cornerRadius(20)
-                    }
-                }
-            }
-        )
         .onAppear {
             // AudioRecorderにDeviceManagerの参照を設定
             audioRecorder.deviceManager = deviceManager
@@ -416,71 +353,46 @@ struct RecordingView: View {
     private func updateTimeInfo() {
         // デバイスのタイムゾーンを考慮した現在時刻を取得
         let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy年M月d日 HH:mm:ss"
+        formatter.dateFormat = "yyyy年M月d日"
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.timeZone = deviceManager.selectedDeviceTimezone
         
-        deviceCurrentTime = formatter.string(from: Date())
-        // デバイスのタイムゾーンを使用してスロットを計算
-        currentTimeSlot = SlotTimeUtility.getCurrentSlot(timezone: deviceManager.selectedDeviceTimezone)
+        let dateString = formatter.string(from: Date())
+        let timeSlot = SlotTimeUtility.getCurrentSlot(timezone: deviceManager.selectedDeviceTimezone)
+        
+        // 時間帯形式に変換 (例: "14-30" -> "14:30-15:00")
+        let timeRange = convertToTimeRange(timeSlot)
+        
+        // 年月日と時間帯を組み合わせ
+        recordingDataPoint = "\(dateString) \(timeRange)"
     }
     
-    // デバイス連携後に録音を開始する
-    private func linkDeviceAndStartRecording() {
-        guard let userId = userAccountManager.currentUser?.id else {
-            alertMessage = "ユーザー情報が取得できません"
-            showAlert = true
-            return
+    // タイムスロットを時間帯形式に変換
+    private func convertToTimeRange(_ slot: String) -> String {
+        // "14-30" -> ["14", "30"]
+        let components = slot.split(separator: "-")
+        guard components.count == 2,
+              let hour = Int(components[0]),
+              let minute = Int(components[1]) else {
+            return slot
         }
         
-        isLinkingDevice = true
+        // 開始時刻
+        let startTime = String(format: "%02d:%02d", hour, minute)
         
-        // デバイス連携を実行
-        deviceManager.registerDevice(userId: userId)
+        // 終了時刻（30分後）
+        var endHour = hour
+        var endMinute = minute + 30
+        if endMinute >= 60 {
+            endHour += 1
+            endMinute -= 60
+        }
+        if endHour >= 24 {
+            endHour = 0
+        }
+        let endTime = String(format: "%02d:%02d", endHour, endMinute)
         
-        // デバイス連携の完了を監視
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            checkDeviceLinkingStatus()
-        }
-    }
-    
-    // デバイス連携の状態を定期的にチェック
-    private func checkDeviceLinkingStatus() {
-        if deviceManager.isLoading {
-            // まだ連携中なので、再度チェック
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                checkDeviceLinkingStatus()
-            }
-        } else {
-            // 連携完了
-            isLinkingDevice = false
-            
-            if let error = deviceManager.registrationError {
-                // エラーが発生した場合
-                alertMessage = "デバイス連携に失敗しました: \(error)"
-                showAlert = true
-            } else if deviceManager.isDeviceRegistered {
-                // 連携成功
-                alertMessage = "デバイス連携が完了しました"
-                showAlert = true
-                
-                // ユーザーのデバイス一覧を再取得
-                Task {
-                    if let userId = userAccountManager.currentUser?.id {
-                        await deviceManager.fetchUserDevices(for: userId)
-                    }
-                    
-                    // 少し待ってから録音を開始
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                        audioRecorder.startRecording()
-                    }
-                }
-            } else {
-                // 予期しない状態
-                alertMessage = "デバイス連携の状態が不明です"
-                showAlert = true
-            }
-        }
+        return "\(startTime)-\(endTime)"
     }
     
     // シンプルな一括アップロード（NetworkManagerを直接使用）- 逐次実行版
@@ -556,14 +468,13 @@ struct RecordingRowView: View {
     let onDelete: (RecordingModel) -> Void
     @EnvironmentObject var deviceManager: DeviceManager
     
-    // ファイル名から日付と時間スロットを抽出
-    private var recordingDateTime: String {
+    // ファイル名から日付を抽出
+    private var recordingDate: String {
         // ファイル名形式: "2025-08-19/22-00.wav"
         let components = recording.fileName.split(separator: "/")
-        guard components.count == 2 else { return recording.fileName }
+        guard components.count == 2 else { return "" }
         
         let dateString = String(components[0])
-        let timeComponent = String(components[1]).replacingOccurrences(of: ".wav", with: "")
         
         // 日付をパース
         let dateFormatter = DateFormatter()
@@ -571,7 +482,7 @@ struct RecordingRowView: View {
         dateFormatter.timeZone = deviceManager.selectedDeviceTimezone
         
         guard let date = dateFormatter.date(from: dateString) else {
-            return recording.fileName
+            return dateString
         }
         
         // 日本語形式で日付を表示
@@ -580,20 +491,62 @@ struct RecordingRowView: View {
         displayFormatter.locale = Locale(identifier: "ja_JP")
         displayFormatter.timeZone = deviceManager.selectedDeviceTimezone
         
-        // 時間スロットを整形 (22-00 -> 22:00)
-        let timeFormatted = timeComponent.replacingOccurrences(of: "-", with: ":")
+        return displayFormatter.string(from: date)
+    }
+    
+    // ファイル名から時間帯を抽出
+    private var recordingTimeRange: String {
+        // ファイル名形式: "2025-08-19/22-00.wav"
+        let components = recording.fileName.split(separator: "/")
+        guard components.count == 2 else { return recording.fileName }
         
-        return "\(displayFormatter.string(from: date)) \(timeFormatted)"
+        let timeComponent = String(components[1]).replacingOccurrences(of: ".wav", with: "")
+        
+        // 時間帯形式に変換 (例: "22-00" -> "22:00-22:30")
+        return convertSlotToTimeRange(timeComponent)
+    }
+    
+    // スロットを時間帯形式に変換
+    private func convertSlotToTimeRange(_ slot: String) -> String {
+        // "14-30" -> ["14", "30"]
+        let components = slot.split(separator: "-")
+        guard components.count == 2,
+              let hour = Int(components[0]),
+              let minute = Int(components[1]) else {
+            return slot
+        }
+        
+        // 開始時刻
+        let startTime = String(format: "%02d:%02d", hour, minute)
+        
+        // 終了時刻（30分後）
+        var endHour = hour
+        var endMinute = minute + 30
+        if endMinute >= 60 {
+            endHour += 1
+            endMinute -= 60
+        }
+        if endHour >= 24 {
+            endHour = 0
+        }
+        let endTime = String(format: "%02d:%02d", endHour, endMinute)
+        
+        return "\(startTime)-\(endTime)"
     }
     
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
+                // 日付（小さく表示）
+                Text(recordingDate)
+                    .font(.caption2)
+                    .foregroundColor(.secondary)
+                
                 HStack {
-                    // わかりやすい日時表示
-                    Text(recordingDateTime)
-                        .font(.subheadline)
-                        .fontWeight(.medium)
+                    // 時間帯（大きく表示）
+                    Text(recordingTimeRange)
+                        .font(.headline)
+                        .fontWeight(.semibold)
                     
                     Spacer()
                     

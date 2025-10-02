@@ -112,7 +112,7 @@ struct HomeView: View {
     
     // データ取得メソッド
     private func loadTimeBlocks() async {
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+        guard let deviceId = deviceManager.selectedDeviceID else {
             print("❌ No device selected")
             return
         }

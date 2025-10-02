@@ -100,7 +100,7 @@ class NetworkManager: ObservableObject {
         print("   - アップロード試行: \(recording.uploadAttempts + 1)回目")
         print("   - ユーザーID: \(currentUserID)")
         print("   - サーバーURL: \(serverURL)")
-        print("   - デバイス登録状態: \(deviceManager?.isDeviceRegistered ?? false)")
+        print("   - 選択中のデバイスID: \(deviceManager?.selectedDeviceID ?? "nil")")
         print("   - 認証状態: \(userAccountManager?.isAuthenticated ?? false)")
         
         // 接続ステータスを更新

@@ -73,8 +73,8 @@ struct ReportTestView: View {
                         .padding(.vertical, 8)
                         .background(Color.safeColor("WarningColor").opacity(0.1))
                         .cornerRadius(8)
-                    } else if let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier {
-                        // デバイスが1つの場合は単純表示
+                    } else if let deviceId = deviceManager.selectedDeviceID {
+                        // デバイスが選択されている場合
                         HStack {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(Color.safeColor("SuccessColor"))
@@ -278,7 +278,6 @@ struct ReportTestView: View {
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             print("📊 ReportTestView onAppear")
-            print("   - localDeviceIdentifier: \(deviceManager.localDeviceIdentifier ?? "nil")")
             print("   - selectedDeviceID: \(deviceManager.selectedDeviceID ?? "nil")")
             print("   - userDevices count: \(deviceManager.userDevices.count)")
             
@@ -300,8 +299,8 @@ struct ReportTestView: View {
             return
         }
         
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
-            dataManager.errorMessage = "デバイスIDが見つかりません"
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            dataManager.errorMessage = "デバイスが選択されていません"
             return
         }
         
@@ -318,8 +317,8 @@ struct ReportTestView: View {
             return
         }
         
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
-            dataManager.errorMessage = "デバイスIDが見つかりません"
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            dataManager.errorMessage = "デバイスが選択されていません"
             return
         }
         

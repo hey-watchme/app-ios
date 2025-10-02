@@ -183,15 +183,8 @@ struct MainAppView: View {
     private func initializeApp() {
         guard !hasInitialized else { return }
         hasInitialized = true
-        
+
         print("🚀 MainAppView: アプリ初期化開始")
-        
-        // デバイスの自動登録は削除されました
-        if !deviceManager.isDeviceRegistered {
-            print("📱 未登録デバイス検知 - ユーザーの明示的な操作を待機")
-        } else {
-            print("📱 既存デバイス確認済み")
-        }
     }
     
     // checkAndRegisterDevice関数は削除されました（自動登録を行わないため）

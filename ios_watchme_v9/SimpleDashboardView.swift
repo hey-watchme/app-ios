@@ -567,12 +567,10 @@ struct SimpleDashboardView: View {
     private func loadAllData() async {
         print("🔄 SimpleDashboardView: loadAllData() called.")
         print("   - selectedDeviceID: \(deviceManager.selectedDeviceID ?? "nil")")
-        print("   - localDeviceIdentifier: \(deviceManager.localDeviceIdentifier ?? "nil")")
-        
-        guard let deviceId = deviceManager.selectedDeviceID ?? deviceManager.localDeviceIdentifier else {
+
+        guard let deviceId = deviceManager.selectedDeviceID else {
             print("❌ SimpleDashboardView: loadAllData() - deviceId is nil. Clearing data.")
             print("   - selectedDeviceID was: \(deviceManager.selectedDeviceID ?? "nil")")
-            print("   - localDeviceIdentifier was: \(deviceManager.localDeviceIdentifier ?? "nil")")
             // データをクリア
             await MainActor.run {
                 self.behaviorReport = nil
