@@ -23,6 +23,7 @@ class UserAccountManager: ObservableObject {
     @Published var isAuthenticated: Bool = false
     @Published var currentUser: SupabaseUser? = nil
     @Published var authError: String? = nil
+    @Published var signUpSuccess: Bool = false
     @Published var isLoading: Bool = false
     @Published var isCheckingAuthStatus: Bool = true  // 認証状態確認中フラグ
     
@@ -200,42 +201,94 @@ class UserAccountManager: ObservableObject {
     }
     
     // MARK: - サインアップ機能
-    func signUp(email: String, password: String) {
-        isLoading = true
-        authError = nil
-        
+    func signUp(email: String, password: String, displayName: String = "", newsletter: Bool = false) async {
+        await MainActor.run {
+            isLoading = true
+            authError = nil
+        }
+
         print("📝 サインアップ試行: \(email)")
-        
-        Task { @MainActor in
+
+        do {
+            // Step 1: auth.usersテーブルにユーザー作成
+            let authResponse = try await supabase.auth.signUp(
+                email: email,
+                password: password,
+                data: [
+                    "display_name": .string(displayName),
+                    "newsletter_subscription": .bool(newsletter)
+                ]
+            )
+
+            print("✅ auth.users作成成功 - User ID: \(authResponse.user.id)")
+            print("📧 メール確認状態: \(authResponse.user.confirmedAt != nil ? "確認済み" : "未確認")")
+
+            // Step 2: public.usersテーブルにプロファイル作成
             do {
-                // Supabase SDKの標準メソッドを使用
-                let authResponse = try await supabase.auth.signUp(
+                // 認証完了を待つ
+                try await Task.sleep(nanoseconds: 1_000_000_000) // 1秒待機
+
+                struct UserProfile: Encodable {
+                    let user_id: String
+                    let name: String
+                    let email: String
+                    let newsletter_subscription: Bool
+                    let created_at: String
+                }
+
+                let profileData = UserProfile(
+                    user_id: authResponse.user.id.uuidString,
+                    name: displayName,
                     email: email,
-                    password: password
+                    newsletter_subscription: newsletter,
+                    created_at: ISO8601DateFormatter().string(from: Date())
                 )
-                
-                print("✅ サインアップ成功")
-                print("📧 メール確認状態: \(authResponse.user.confirmedAt != nil ? "確認済み" : "未確認")")
-                
-                // サインアップ成功後の処理
+
+                try await supabase
+                    .from("users")
+                    .insert(profileData)
+                    .execute()
+
+                print("✅ public.usersプロファイル作成成功")
+
+            } catch {
+                print("❌ プロファイル作成エラー: \(error)")
+                await MainActor.run {
+                    self.authError = "認証は成功しましたが、プロファイル情報の保存に失敗しました。"
+                }
+            }
+
+            // サインアップ成功後の処理
+            await MainActor.run {
                 if authResponse.user.confirmedAt != nil {
                     // メール確認済みの場合は自動的にログイン
                     print("📧 メール確認済み - 自動ログイン実行")
                     self.signIn(email: email, password: password)
                 } else {
                     // メール確認が必要な場合
-                    self.authError = "サインアップ成功！確認メールをご確認ください。"
+                    self.signUpSuccess = true
                     print("📧 確認メールを送信しました")
                 }
-                
+
                 self.isLoading = false
-                
-            } catch {
+            }
+
+        } catch {
+            await MainActor.run {
                 self.isLoading = false
-                
+
                 // エラーハンドリング
-                self.authError = "サインアップに失敗しました: \(error.localizedDescription)"
-                
+                if let postgrestError = error as? PostgrestError {
+                    if postgrestError.message.contains("User already registered") ||
+                       postgrestError.message.contains("already exists") {
+                        self.authError = "このメールアドレスは既に登録されています。ログインページからサインインしてください。"
+                    } else {
+                        self.authError = "サインアップに失敗しました: \(postgrestError.message)"
+                    }
+                } else {
+                    self.authError = "サインアップに失敗しました: \(error.localizedDescription)"
+                }
+
                 print("❌ サインアップエラー: \(error)")
             }
         }

@@ -556,11 +556,6 @@ class DeviceManager: ObservableObject {
     // 2. スキャン時にデバイスIDとタイムゾーンの両方を取得
     // 3. デバイス追加時にタイムゾーンもDBに保存
     func addDeviceByQRCode(_ deviceId: String, for userId: String) async throws {
-        // UUIDの妥当性チェック
-        guard UUID(uuidString: deviceId) != nil else {
-            throw DeviceAddError.invalidDeviceId
-        }
-        
         // 既に追加済みかチェック
         if userDevices.contains(where: { $0.device_id == deviceId }) {
             throw DeviceAddError.alreadyAdded

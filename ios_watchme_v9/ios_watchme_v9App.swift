@@ -55,6 +55,7 @@ struct MainAppView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showLogin = false
+    @State private var showSignUp = false
     @State private var hasInitialized = false
     
     // フッターナビゲーション用の選択状態
@@ -127,50 +128,78 @@ struct MainAppView: View {
                     }
                 }
             } else {
-                // 未ログイン：ログイン画面表示ボタン
+                // 未ログイン：新規登録とログインボタン
                 VStack(spacing: 0) {
                     Spacer()
-                    
+
                     // ロゴを中央に配置
                     Image("WatchMeLogo")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 200, height: 70)
-                    
+
                     Spacer()
-                    
-                    // ログインボタンを最下部に配置
-                    Button(action: {
-                        showLogin = true
-                    }) {
-                        HStack {
-                            Image(systemName: "person.circle.fill")
-                            Text("ログイン / サインアップ")
-                                .fontWeight(.semibold)
+
+                    // ボタンを最下部に配置
+                    VStack(spacing: 16) {
+                        // 新規ではじめるボタン
+                        Button(action: {
+                            showSignUp = true
+                        }) {
+                            HStack {
+                                Image(systemName: "person.badge.plus")
+                                Text("新規ではじめる")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color.safeColor("AppAccentColor"))
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
                         }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(Color.safeColor("AppAccentColor"))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+
+                        // ログインボタン
+                        Button(action: {
+                            showLogin = true
+                        }) {
+                            HStack {
+                                Image(systemName: "person.circle.fill")
+                                Text("ログイン")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.safeColor("AppAccentColor"), lineWidth: 1.5)
+                            )
+                            .foregroundColor(Color.safeColor("AppAccentColor"))
+                        }
                     }
                     .padding(.horizontal, 40)
                     .padding(.bottom, 50)
                 }
                 .onAppear {
-                    print("📱 MainAppView: 未認証状態 - ログイン画面表示")
+                    print("📱 MainAppView: 未認証状態 - ログイン/サインアップ画面表示")
                 }
             }
         }
         .sheet(isPresented: $showLogin) {
             LoginView()
+                .environmentObject(userAccountManager)
+        }
+        .sheet(isPresented: $showSignUp) {
+            SignUpView()
+                .environmentObject(userAccountManager)
         }
         .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
             print("🔄 MainAppView: 認証状態変化 \(oldValue) → \(newValue)")
-            if newValue && showLogin {
-                // ログイン成功時にシートを閉じる
+            if newValue {
+                // ログイン/サインアップ成功時にシートを閉じる
                 showLogin = false
-                print("✅ ログイン成功 - メイン画面に遷移")
+                showSignUp = false
+                print("✅ 認証成功 - メイン画面に遷移")
             }
         }
         .onAppear {

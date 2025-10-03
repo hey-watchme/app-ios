@@ -12,6 +12,7 @@ struct LoginView: View {
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var showPassword: Bool = false
+    @State private var showSignUp: Bool = false
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -181,13 +182,11 @@ struct LoginView: View {
                 }
                 .padding(.horizontal, 40)
                 
-                // 新規アカウント作成リンク
+                // 新規登録リンク
                 Button(action: {
-                    if let url = URL(string: "https://hey-watch.me/signup.html") {
-                        UIApplication.shared.open(url)
-                    }
+                    showSignUp = true
                 }) {
-                    Text("新規アカウント作成はこちら")
+                    Text("新規ではじめる")
                         .font(.footnote)
                         .foregroundColor(Color.safeColor("AppAccentColor"))
                 }
@@ -196,6 +195,10 @@ struct LoginView: View {
                 Spacer()
             }
             .navigationBarHidden(true)
+        }
+        .sheet(isPresented: $showSignUp) {
+            SignUpView()
+                .environmentObject(userAccountManager)
         }
         .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
             if newValue {

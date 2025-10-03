@@ -115,13 +115,6 @@ struct DeviceSelectionView: View {
     }
     
     private func handleQRCodeScanned(_ code: String) async {
-        // UUIDの妥当性チェック
-        guard UUID(uuidString: code) != nil else {
-            addDeviceError = "無効なQRコードです。デバイスIDが正しくありません。"
-            showAddDeviceAlert = true
-            return
-        }
-        
         // 既に追加済みかチェック
         if deviceManager.userDevices.contains(where: { $0.device_id == code }) {
             addDeviceError = "このデバイスは既に追加されています。"

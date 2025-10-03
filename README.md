@@ -70,6 +70,15 @@ WatchMeプラットフォームのiOSアプリケーション（バージョン9
 
 ### ユーザー・デバイス管理
 - **Supabase認証**: メールアドレスとパスワードによる安全な認証
+- **会員登録・ログイン**:
+  - アプリ内で新規会員登録が可能（SignUpView）
+  - メールアドレス認証フロー実装済み
+  - 登録時に`auth.users`と`public.users`の両方にプロファイル作成
+  - 認証メール送信後に案内画面を表示
+- **メール配信**: Amazon SES（SMTP）による認証メール送信
+  - カスタムドメイン（hey-watch.me）からの送信
+  - DKIM/SPF/DMARC設定による到達率向上
+  - MAIL FROMドメイン設定でDMARC準拠
 - **マルチデバイス対応**: 1人のユーザーが複数のデバイスを管理可能
 - **デバイス選択方式**: 物理デバイスとの紐付けなし、ユーザーがデバイスを選択するだけ（v9.29.0〜）
   - どのiPhoneからでも、好きなデバイスIDを選択して使用可能
@@ -246,6 +255,160 @@ CREATE TABLE notification_reads (
     CONSTRAINT notification_reads_pkey PRIMARY KEY (user_id, notification_id)
 );
 ```
+
+## 📧 会員登録とメール認証のフロー
+
+### 新規会員登録プロセス
+
+#### 1. ユーザー登録（SignUpView）
+```swift
+// UserAccountManager.signUp()メソッドの処理フロー
+1. 入力検証
+   - 表示名（2文字以上）
+   - メールアドレス（形式チェック）
+   - パスワード（8文字以上）
+   - パスワード確認（一致チェック）
+   - 利用規約同意（必須）
+   - ニュースレター購読（任意、デフォルトON）
+
+2. auth.usersテーブルにユーザー作成
+   await supabase.auth.signUp(
+       email: email,
+       password: password,
+       data: ["display_name": displayName, "newsletter_subscription": newsletter]
+   )
+
+3. public.usersテーブルにプロファイル作成
+   - user_id（auth.users.idのコピー）
+   - name（表示名）
+   - email（メールアドレス）
+   - newsletter_subscription（ニュースレター設定）
+   - created_at（登録日時）
+```
+
+#### 2. 認証メール送信
+- **送信元**: `noreply@hey-watch.me`（Amazon SES経由）
+- **件名**: Supabaseのデフォルトテンプレート
+- **本文**: メール確認リンク付き
+- **配信経路**:
+  1. Supabase → Amazon SES SMTP
+  2. DKIM/SPF/DMARC認証
+  3. ユーザーのメールボックスへ配信
+
+#### 3. 認証案内画面（SignUpSuccessView）
+```
+✓ アイコン表示
+「認証メールを送信しました」
+
+登録したメールアドレス表示
+案内文：メールに記載された認証ボタンをクリックしてから、
+ログインしてください。
+
+[ログイン画面へ] ボタン
+```
+
+#### 4. メール認証完了後
+1. ユーザーがメール内のリンクをクリック
+2. Supabaseがメールアドレスを確認済みにする（`email_confirmed_at`更新）
+3. ユーザーがアプリでログイン可能になる
+
+### Amazon SES設定
+
+#### SMTP設定（Supabase側）
+```
+Enable Custom SMTP: ON（必須）
+
+Sender email: noreply@hey-watch.me
+Sender name: WatchMe
+
+Host: email-smtp.ap-southeast-2.amazonaws.com
+Port: 587
+Username: SMTP認証情報（AWS SESで作成）
+Password: SMTP認証情報（AWS SESで作成）
+Minimum interval: 60秒
+```
+
+**⚠️ 重要**: ホスト名は `.amazonaws.com` です（`.amazonses.com` ではありません）
+
+#### DNS設定（お名前.com）
+
+**重要**: お名前.comでは、ホスト名から`.hey-watch.me`を省略して入力してください。
+
+1. **DKIMレコード（3つのCNAME）**: メール署名検証用
+   ```
+   タイプ: CNAME
+   ホスト名: xxxxx._domainkey（.hey-watch.meは省略）
+   VALUE: xxxxx.dkim.amazonses.com
+   ```
+
+2. **MXレコード**: MAIL FROMドメイン用
+   ```
+   タイプ: MX
+   ホスト名: bounce（.hey-watch.meは省略）
+   VALUE: feedback-smtp.ap-southeast-2.amazonses.com（優先度10は別欄）
+   優先度: 10
+   ```
+
+3. **TXTレコード（MAIL FROM用）**: SPF設定
+   ```
+   タイプ: TXT
+   ホスト名: bounce
+   VALUE: v=spf1 include:amazonses.com ~all（クォート不要）
+   ```
+
+4. **TXTレコード（DMARC）**: DMARC設定
+   ```
+   タイプ: TXT
+   ホスト名: _dmarc
+   VALUE: v=DMARC1; p=none;（クォート不要）
+   ```
+
+**設定後**: DNS反映まで5-30分（最大72時間）待つ
+
+#### セキュリティと到達率
+- **DKIM署名**: メールの改ざん防止
+- **SPF設定**: 送信元サーバーの正当性検証
+- **DMARC準拠**: Header FromとMAIL FROMのドメイン一致
+- **カスタムMAIL FROM**: `bounce.hey-watch.me`を使用
+
+### トラブルシューティング
+
+#### メールが届かない場合
+1. **迷惑メールフォルダを確認**
+2. **DNS設定の確認**
+   - AWS SESで「Verified」ステータスになっているか
+   - DKIM/SPF/DMARCレコードが正しく設定されているか
+3. **Sandboxモード確認**
+   - 本番環境では「Production access」申請が必要
+   - Sandboxモードでは検証済みメールアドレスにのみ送信可能
+   - テスト時は検証済みアドレス（例: matsumotokaya@gmail.com）を使用
+
+#### 登録エラーの対処
+
+**「Error sending confirmation email」エラー**
+1. **ホスト名を確認**
+   - 正: `email-smtp.ap-southeast-2.amazonaws.com`
+   - 誤: `email-smtp.ap-southeast-2.amazonses.com`
+2. **SMTP認証情報を再作成**
+   - AWS SES → SMTP settings → Create SMTP credentials
+   - 新しいUsernameとPasswordをSupabaseに設定
+3. **Enable Custom SMTPがONか確認**
+4. **Rate limitを確認**
+   - Supabase → Authentication → Rate Limits
+   - 「Rate limit for sending emails」を100以上に設定
+
+**「このメールアドレスは既に登録されています」**
+- ログイン画面から既存アカウントでログイン
+
+**「パスワードは8文字以上」**
+- パスワードを8文字以上に設定
+
+**「パスワードが一致しません」**
+- パスワード確認欄を正しく入力
+
+**「Email rate limit exceeded」**
+- Supabaseのレート制限を緩和（デフォルト2 → 100以上）
+- カスタムSMTPが有効になっているか確認
 
 ## 🚨 重要：認証とユーザー管理の設計原則
 
