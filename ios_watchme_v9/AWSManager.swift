@@ -38,19 +38,14 @@ class AWSManager: ObservableObject {
     /// - Parameters:
     ///   - image: アップロードする画像
     ///   - type: アバターのタイプ（"users" または "subjects"）
-    ///   - id: ユーザーIDまたはサブジェクトID（UUID形式必須）
+    ///   - id: ユーザーIDまたはサブジェクトID
     ///   - authToken: 認証トークン（オプション）
     /// - Returns: アップロードされた画像のURL
     func uploadAvatar(image: UIImage, type: String, id: String, authToken: String? = nil) async throws -> URL {
-        // UUIDを小文字に変換（S3パスの一貫性のため）
+        // IDを小文字に変換（S3パスの一貫性のため）
         let lowercaseId = id.lowercased()
         print("📤 Starting avatar upload for \(type)/\(lowercaseId)")
-        
-        // UUIDの形式チェック
-        guard UUID(uuidString: lowercaseId) != nil else {
-            throw AWSError.invalidID("IDはUUID形式である必要があります: \(lowercaseId)")
-        }
-        
+
         // 画像をJPEGに変換（品質80%）
         guard let imageData = image.jpegData(compressionQuality: 0.8) else {
             throw AWSError.imageConversionFailed
@@ -176,7 +171,7 @@ class AWSManager: ObservableObject {
     ///   - id: ユーザーIDまたはサブジェクトID
     /// - Returns: アバター画像のURL
     func getAvatarURL(type: String, id: String) -> URL {
-        // UUIDを小文字に変換（S3パスの一貫性のため）
+        // IDを小文字に変換（S3パスの一貫性のため）
         let lowercaseId = id.lowercased()
         // S3の実際のURL形式（ap-southeast-2リージョン、watchme-avatarsバケット）
         let s3URL = "https://watchme-avatars.s3.ap-southeast-2.amazonaws.com/\(type)/\(lowercaseId)/avatar.jpg"
@@ -235,10 +230,10 @@ enum AWSError: Error, LocalizedError {
     - AWSの認証情報はクライアントに保持しない
     - サーバー側でS3へのアップロードを処理
  
- 2. UUID形式のID必須
-    - user_idおよびsubject_idはUUID形式である必要がある
-    - 形式チェックを実装済み
- 
+ 2. 柔軟なID形式対応
+    - 任意の文字列IDに対応（UUID、サンプルIDなど）
+    - 小文字に統一してS3パスの一貫性を保証
+
  3. multipart/form-dataでのアップロード
     - fileとavatar_typeをパラメータとして送信
     - 画像はJPEG形式（品質80%）に変換
