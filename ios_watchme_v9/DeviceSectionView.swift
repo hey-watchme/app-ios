@@ -55,6 +55,7 @@ struct DeviceSectionView: View {
                 if showSelectionUI {
                     // 選択可能なボタンスタイル（DeviceSelectionView用）
                     Button(action: {
+                        print("🔵 DeviceSectionView: Button tapped for \(device.device_id.prefix(8))")
                         onDeviceSelected?(device.device_id)
                     }) {
                         deviceInfoContent(for: device)

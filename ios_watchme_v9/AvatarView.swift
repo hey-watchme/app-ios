@@ -48,14 +48,8 @@ struct AvatarView: View {
     var body: some View {
         Group {
             if isLoadingAvatar {
-                // 読み込み中
-                ZStack {
-                    Circle()
-                        .fill(Color.safeColor("BorderLight").opacity(0.1))
-                        .frame(width: size, height: size)
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                }
+                // 読み込み中はデフォルトアイコンをプレースホルダーとして表示
+                defaultAvatarView
             } else if let url = avatarUrl {
                 // アバター画像を表示
                 AsyncImage(url: url) { phase in
@@ -74,14 +68,8 @@ struct AvatarView: View {
                         // エラー時のデフォルトアイコン
                         defaultAvatarView
                     case .empty:
-                        // 読み込み中
-                        ZStack {
-                            Circle()
-                                .fill(Color.safeColor("BorderLight").opacity(0.1))
-                                .frame(width: size, height: size)
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle())
-                        }
+                        // 読み込み中もデフォルトアイコンを表示
+                        defaultAvatarView
                     @unknown default:
                         defaultAvatarView
                     }
@@ -136,8 +124,20 @@ struct AvatarView: View {
     }
     
     private var defaultAvatarView: some View {
-        Image(systemName: "person.crop.circle.fill")
-            .font(.system(size: size))
-            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+        ZStack {
+            // 白い背景の円
+            Circle()
+                .fill(Color.white)
+                .frame(width: size, height: size)
+
+            // デフォルトアイコン
+            Image(systemName: "person.crop.circle.fill")
+                .font(.system(size: size))
+                .foregroundColor(Color.safeColor("PrimaryActionColor"))
+        }
+        .overlay(
+            Circle()
+                .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)
+        )
     }
 }

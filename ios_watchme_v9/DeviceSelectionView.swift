@@ -112,10 +112,20 @@ struct DeviceSelectionView: View {
                                 subjectsByDevice: subjectsByDevice,
                                 showSelectionUI: true,
                                 onDeviceSelected: { deviceId in
-                                    deviceManager.selectDevice(deviceId)
-                                    // 少し遅延を入れてからシートを閉じる（アニメーション用）
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                                        isPresented = false
+                                    print("🔘 デバイスタップ: \(deviceId.prefix(8))")
+                                    print("🔘 現在の選択: \(deviceManager.selectedDeviceID?.prefix(8) ?? "なし")")
+
+                                    // 既に選択中のデバイスをタップした場合は選択解除
+                                    if deviceManager.selectedDeviceID == deviceId {
+                                        print("🔘 同じデバイス → 選択解除")
+                                        deviceManager.selectDevice(nil)
+                                    } else {
+                                        print("🔘 別のデバイス → 選択")
+                                        deviceManager.selectDevice(deviceId)
+                                        // 少し遅延を入れてからシートを閉じる（アニメーション用）
+                                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                                            isPresented = false
+                                        }
                                     }
                                 }
                             )

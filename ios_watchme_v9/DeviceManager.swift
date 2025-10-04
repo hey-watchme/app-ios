@@ -255,6 +255,8 @@ class DeviceManager: ObservableObject {
             if devices.isEmpty {
                 print("📱 DeviceManager: No devices found for user")
                 self.userDevices = []
+                self.selectedDeviceID = nil
+                UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
                 self.state = .noDevices
             } else {
                 self.userDevices = devices
@@ -327,14 +329,14 @@ class DeviceManager: ObservableObject {
             .value
         
         print("📊 Found \(userDevices.count) user-device relationships")
-        
+
         if userDevices.isEmpty {
             return []
         }
-        
+
         // Step 2: device_idのリストを作成してdevicesテーブルから詳細を取得
         let deviceIds = userDevices.map { $0.device_id }
-        
+
         // Step 3: devicesテーブルから詳細情報を取得
         var devices: [Device] = try await supabase
             .from("devices")
@@ -342,16 +344,16 @@ class DeviceManager: ObservableObject {
             .in("device_id", values: deviceIds)
             .execute()
             .value
-        
+
         print("📊 Fetched \(devices.count) device details")
-        
+
         // Step 4: roleの情報をデバイスに付与
         for i in devices.indices {
             if let userDevice = userDevices.first(where: { $0.device_id == devices[i].device_id }) {
                 devices[i].role = userDevice.role
             }
         }
-        
+
         return devices
     }
     
@@ -462,7 +464,22 @@ class DeviceManager: ObservableObject {
     }
     
     // MARK: - デバイス選択
-    func selectDevice(_ deviceId: String) {
+    func selectDevice(_ deviceId: String?) {
+        // nilの場合は選択を解除
+        guard let deviceId = deviceId else {
+            selectedDeviceID = nil
+            UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
+            print("📱 Device selection cleared")
+
+            // デバイスなし状態に遷移
+            if userDevices.isEmpty {
+                self.state = .noDevices
+            } else {
+                self.state = .ready
+            }
+            return
+        }
+
         // サンプルデバイスまたはuserDevicesに含まれるデバイスの場合のみ選択可能
         let isSampleDevice = deviceId == DeviceManager.sampleDeviceID
         let isUserDevice = userDevices.contains(where: { $0.device_id == deviceId })
@@ -515,6 +532,12 @@ class DeviceManager: ObservableObject {
         )
     }
     
+    // MARK: - サンプルデバイス判定
+    /// サンプルデバイスが選択されているかどうか
+    var isSampleDeviceSelected: Bool {
+        selectedDeviceID == DeviceManager.sampleDeviceID
+    }
+
     // MARK: - FAB表示判定
     /// 選択中のデバイスタイプがobserverの場合はFABを非表示
     var shouldShowFAB: Bool {

@@ -17,6 +17,7 @@ struct ContentView: View {
     @State private var showLogoutConfirmation = false
     @State private var showRecordingSheet = false
     @State private var showQRScanner = false
+    @State private var showDeviceRegistrationConfirm = false
     
     // NetworkManagerの初期化（録音機能のため必要）
     @StateObject private var audioRecorder = AudioRecorder()
@@ -105,24 +106,39 @@ struct ContentView: View {
                     
                 case .noDevices:
                     // デバイスがない時のUI
-                    VStack(spacing: 0) {
-                        // 上部の余白（調整済み）
-                        Spacer()
-                            .frame(height: 50)
-
-                        // メインメッセージ
-                        Text("あなたの声から\n「こころ」をチェックしよう。")
-                            .font(.title2)
+                    VStack(alignment: .leading, spacing: 0) {
+                        // タイトル「ダッシュボード」
+                        Text("ダッシュボード")
+                            .font(.title)
                             .fontWeight(.bold)
-                            .multilineTextAlignment(.center)
+                            .padding(.top, 40)
                             .padding(.horizontal, 40)
-                            .padding(.bottom, 50)
+
+                        // 説明文
+                        Text("あなたの声から、気分・行動・感情を分析します。")
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .padding(.top, 8)
+                            .padding(.horizontal, 40)
+
+                        // グラフアイコン（うっすらグレー、中央配置）
+                        Spacer()
+
+                        HStack {
+                            Spacer()
+                            Image(systemName: "chart.bar.fill")
+                                .font(.system(size: 100))
+                                .foregroundColor(.gray.opacity(0.15))
+                            Spacer()
+                        }
+
+                        Spacer()
 
                         // ボタンエリア
                         VStack(spacing: 16) {
                             // 1. このデバイスで測定するボタン
                             Button(action: {
-                                handleRegisterCurrentDevice()
+                                showDeviceRegistrationConfirm = true
                             }) {
                                 HStack {
                                     Image(systemName: "iphone")
@@ -173,8 +189,7 @@ struct ContentView: View {
                             }
                         }
                         .padding(.horizontal, 40)
-
-                        Spacer()
+                        .padding(.bottom, 40)
                     }
                     
                 case .error(let errorMessage):
@@ -270,6 +285,14 @@ struct ContentView: View {
             }
         } message: {
             Text("本当にログアウトしますか？")
+        }
+        .alert("デバイスを連携", isPresented: $showDeviceRegistrationConfirm) {
+            Button("キャンセル", role: .cancel) { }
+            Button("連携", role: .none) {
+                handleRegisterCurrentDevice()
+            }
+        } message: {
+            Text("このデバイスのマイクを使って音声情報を分析します。")
         }
         .onAppear {
             initializeNetworkManager()

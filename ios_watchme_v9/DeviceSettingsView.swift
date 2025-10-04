@@ -174,7 +174,12 @@ struct DeviceSettingsView: View {
                     isSelected: device.device_id == deviceManager.selectedDeviceID,
                     subject: subjectsByDevice[device.device_id],
                     onSelect: {
-                        deviceManager.selectDevice(device.device_id)
+                        // 既に選択中なら解除、そうでなければ選択
+                        if deviceManager.selectedDeviceID == device.device_id {
+                            deviceManager.selectDevice(nil)
+                        } else {
+                            deviceManager.selectDevice(device.device_id)
+                        }
                     },
                     onEditSubject: { subject in
                         // sheet(item:)パターンで編集コンテキストを設定
@@ -216,7 +221,12 @@ struct DeviceSettingsView: View {
                     isSelected: sampleDevice.device_id == deviceManager.selectedDeviceID,
                     subject: subjectsByDevice[sampleDevice.device_id],
                     onSelect: {
-                        deviceManager.selectDevice(sampleDevice.device_id)
+                        // 既に選択中なら解除、そうでなければ選択
+                        if deviceManager.selectedDeviceID == sampleDevice.device_id {
+                            deviceManager.selectDevice(nil)
+                        } else {
+                            deviceManager.selectDevice(sampleDevice.device_id)
+                        }
                     },
                     onEditSubject: { subject in
                         editingContext = SubjectEditingContext(

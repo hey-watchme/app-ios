@@ -106,23 +106,23 @@ class SupabaseDataManager: ObservableObject {
         
         print("📅 月間データ取得: \(startDateString) 〜 \(endDateString)")
         
-        // Supabaseから月間データを取得
+        // Supabaseから月間データを取得（dashboard_summaryテーブルを使用）
         do {
-            let vibeReports: [DailyVibeReport] = try await supabase
-                .from("vibe_whisper_summary")
+            let dashboardReports: [DashboardSummary] = try await supabase
+                .from("dashboard_summary")
                 .select()
                 .eq("device_id", value: deviceId)
                 .gte("date", value: startDateString)
                 .lte("date", value: endDateString)
                 .execute()
                 .value
-            
-            print("✅ \(vibeReports.count)件の気分データを取得")
-            
+
+            print("✅ \(dashboardReports.count)件の気分データを取得")
+
             // MonthlyVibeData形式に変換
-            return vibeReports.compactMap { report in
+            return dashboardReports.compactMap { report -> MonthlyVibeData? in
                 guard let date = formatter.date(from: report.date) else { return nil }
-                return MonthlyVibeData(date: date, averageScore: report.averageScore)
+                return MonthlyVibeData(date: date, averageScore: report.averageVibe.map { Double($0) })
             }
         } catch {
             print("❌ 月間データ取得エラー: \(error)")

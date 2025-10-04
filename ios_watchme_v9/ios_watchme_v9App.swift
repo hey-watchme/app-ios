@@ -56,6 +56,7 @@ struct MainAppView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showLogin = false
     @State private var showSignUp = false
+    @State private var showOnboarding = false
     @State private var hasInitialized = false
     
     // フッターナビゲーション用の選択状態
@@ -182,8 +183,13 @@ struct MainAppView: View {
                 }
                 .onAppear {
                     print("📱 MainAppView: 未認証状態 - ログイン/サインアップ画面表示")
+                    // 未認証状態になったらオンボーディングを表示
+                    showOnboarding = true
                 }
             }
+        }
+        .fullScreenCover(isPresented: $showOnboarding) {
+            OnboardingView(isPresented: $showOnboarding)
         }
         .sheet(isPresented: $showLogin) {
             LoginView()

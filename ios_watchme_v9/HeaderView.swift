@@ -98,30 +98,13 @@ struct HeaderView: View {
     // 現在の観測対象またはデバイス情報を表示するView
     @ViewBuilder
     private var currentTargetView: some View {
-        if deviceManager.userDevices.isEmpty {
-            // デバイス未連携の場合
-            HStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(Color.safeColor("WarningColor").opacity(0.1))
-                        .frame(width: 32, height: 32)
-                    
-                    Image(systemName: "iphone.slash")
-                        .font(.system(size: 18))
-                        .foregroundColor(Color.safeColor("WarningColor"))
-                }
-                
-                Text("デバイス連携: なし")
-                    .font(.subheadline)
-                    .foregroundColor(Color.safeColor("WarningColor"))
-            }
-        } else if let subject = subject {
+        if let subject = subject {
             // 観測対象が設定されている場合
             HStack(spacing: 8) {
                 // アバター表示（AvatarViewコンポーネントを使用）
                 AvatarView(type: .subject, id: subject.subjectId, size: 32)
                     .environmentObject(dataManager)
-                
+
                 // 観測対象名（「さん」付き）
                 if let name = subject.name, !name.isEmpty {
                     Text("\(name)さん")
@@ -134,41 +117,78 @@ struct HeaderView: View {
                 }
             }
         } else if let deviceId = deviceManager.selectedDeviceID {
-            // 観測対象が未設定の場合、デバイス情報を表示
+            // デバイスが選択されている場合
+            if deviceManager.isSampleDeviceSelected {
+                // サンプルデバイス選択中
+                HStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue.opacity(0.1))
+                            .frame(width: 32, height: 32)
+
+                        Image(systemName: "eye.circle")
+                            .font(.system(size: 18))
+                            .foregroundColor(.blue)
+                    }
+
+                    Text("サンプルデバイス")
+                        .font(.subheadline)
+                        .foregroundColor(.blue)
+                }
+            } else {
+                // 通常のデバイス選択中（観測対象未設定）
+                HStack(spacing: 8) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.safeColor("PrimaryActionColor").opacity(0.1))
+                            .frame(width: 32, height: 32)
+
+                        Image(systemName: "iphone")
+                            .font(.system(size: 18))
+                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                    }
+
+                    // デバイスIDの最初の8文字を表示
+                    let shortDeviceId = String(deviceId.prefix(8))
+                    Text(shortDeviceId)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .monospaced()
+                }
+            }
+        } else if deviceManager.userDevices.isEmpty {
+            // デバイス未連携の場合
             HStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(Color.safeColor("PrimaryActionColor").opacity(0.1))
+                        .fill(Color.black.opacity(0.05))
                         .frame(width: 32, height: 32)
-                    
-                    Image(systemName: "iphone")
+
+                    Image(systemName: "iphone.slash")
                         .font(.system(size: 18))
-                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                        .foregroundColor(.black)
                 }
-                
-                // デバイスIDの最初の8文字を表示
-                let shortDeviceId = String(deviceId.prefix(8))
-                Text(shortDeviceId)
+
+                Text("デバイス連携: なし")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .monospaced()
+                    .foregroundColor(.black)
             }
         } else {
-            // フォールバック
+            // フォールバック（デバイスはあるが選択されていない）
             HStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(Color.safeColor("PrimaryActionColor").opacity(0.1))
+                        .fill(Color.black.opacity(0.05))
                         .frame(width: 32, height: 32)
-                    
-                    Image(systemName: "gear")
+
+                    Image(systemName: "iphone")
                         .font(.system(size: 18))
-                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                        .foregroundColor(.black)
                 }
-                
-                Text("デバイス設定")
+
+                Text("デバイスを選択")
                     .font(.subheadline)
-                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                    .foregroundColor(.black)
             }
         }
     }
