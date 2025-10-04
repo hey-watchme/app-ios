@@ -53,32 +53,29 @@ struct SubjectRegistrationView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    // ヘッダー
-                    headerSection
-                    
                     // プロフィール写真
                     profileImageSection
-                    
+
                     // 基本情報
                     basicInfoSection
-                    
+
                     // メモ
                     notesSection
-                    
+
                     Spacer(minLength: 50)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
             }
-            .navigationTitle(isEditing ? "観測対象の編集" : "観測対象の登録")
-            .navigationBarTitleDisplayMode(.large)
+            .navigationTitle(isEditing ? "観測対象を編集" : "観測対象を追加")
+            .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("キャンセル") {
-                        dismiss()  // iOS 15+の推奨パターン
+                        dismiss()
                     }
                 }
-                
+
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(isEditing ? "更新" : "登録") {
                         Task {
@@ -175,26 +172,6 @@ struct SubjectRegistrationView: View {
                 .foregroundColor(Color.safeColor("BorderLight"))
         }
     }
-    
-    // MARK: - Header Section
-    private var headerSection: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "person.badge.plus")
-                .font(.system(size: 50))
-                .foregroundColor(Color.safeColor("WarningColor"))
-            
-            Text(isEditing ? "観測対象のプロフィールを編集" : "観測対象のプロフィールを登録")
-                .font(.title2)
-                .fontWeight(.semibold)
-                .multilineTextAlignment(.center)
-            
-            Text(isEditing ? "観測対象の基本情報を編集してください" : "このデバイスで観測する人物の基本情報を入力してください")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
-        }
-    }
-    
     // MARK: - Profile Image Section
     private var profileImageSection: some View {
         VStack(spacing: 16) {
