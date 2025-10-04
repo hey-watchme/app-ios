@@ -179,33 +179,44 @@ struct SubjectRegistrationView: View {
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-            // UserInfoViewと同じUIデザイン：アバター + 右下にカメラアイコン
-            Button(action: {
-                showingAvatarPicker = true
-            }) {
-                ZStack(alignment: .bottomTrailing) {
-                    // アバター画像表示
-                    avatarImageView
-                        .frame(width: 100, height: 100)
-                        .clipShape(Circle())
-                        .overlay(
-                            Circle()
-                                .stroke(Color(.systemBackground), lineWidth: 4)
-                        )
+            VStack(spacing: 12) {
+                // UserInfoViewと同じUIデザイン：アバター + 右下にカメラアイコン
+                Button(action: {
+                    showingAvatarPicker = true
+                }) {
+                    ZStack(alignment: .bottomTrailing) {
+                        // アバター画像表示
+                        avatarImageView
+                            .frame(width: 100, height: 100)
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(Color(.systemBackground), lineWidth: 4)
+                            )
 
-                    // カメラアイコンを追加（UserInfoViewと同じ）
-                    Circle()
-                        .fill(Color.black)
-                        .frame(width: 32, height: 32)
-                        .overlay(
-                            Image(systemName: "camera.fill")
-                                .font(.system(size: 16))
-                                .foregroundColor(.white)
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(Color(.systemBackground), lineWidth: 2)
-                        )
+                        // カメラアイコンを追加（UserInfoViewと同じ）
+                        Circle()
+                            .fill(Color.black)
+                            .frame(width: 32, height: 32)
+                            .overlay(
+                                Image(systemName: "camera.fill")
+                                    .font(.system(size: 16))
+                                    .foregroundColor(.white)
+                            )
+                            .overlay(
+                                Circle()
+                                    .stroke(Color(.systemBackground), lineWidth: 2)
+                            )
+                    }
+                }
+                .disabled(!isEditing)
+                .opacity(isEditing ? 1.0 : 0.5)
+
+                // 新規登録時の説明テキスト
+                if !isEditing {
+                    Text("写真は登録完了後に設定できます")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
                 }
             }
         }
