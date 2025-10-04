@@ -36,7 +36,8 @@ struct DeviceSettingsView: View {
     @State private var addDeviceError: String?
     @State private var showSuccessAlert = false
     @State private var addedDeviceId: String?
-    
+    @State private var sampleDevice: Device? = nil  // サンプルデバイス（DBから取得）
+
     // sheet(item:)パターン用の状態管理
     @State private var editingContext: SubjectEditingContext? = nil
     @State private var deviceEditingContext: DeviceEditingContext? = nil
@@ -52,7 +53,10 @@ struct DeviceSettingsView: View {
                 } else {
                     DeviceList()
                 }
-                
+
+                // サンプルデバイスセクション
+                SampleDeviceSection()
+
                 // デバイス追加カード
                 DeviceAddCard()
                 
@@ -71,6 +75,7 @@ struct DeviceSettingsView: View {
         .task {
             // iOS 15+の推奨パターン：.taskモディファイアで非同期処理
             await loadSubjectsForAllDevices()
+            await loadSampleDevice()
             isLoadingSubjects = false
         }
         .sheet(isPresented: $showQRScanner) {
@@ -195,6 +200,45 @@ struct DeviceSettingsView: View {
         }
     }
     
+    // MARK: - Sample Device Section
+    @ViewBuilder
+    private func SampleDeviceSection() -> some View {
+        if let sampleDevice = sampleDevice {
+            VStack(alignment: .leading, spacing: 16) {
+                // サンプルデバイス タイトル
+                Text("サンプルデバイス")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundColor(.primary)
+                    .padding(.horizontal)
+
+                DeviceCard(
+                    device: sampleDevice,
+                    isSelected: sampleDevice.device_id == deviceManager.selectedDeviceID,
+                    subject: subjectsByDevice[sampleDevice.device_id],
+                    onSelect: {
+                        deviceManager.selectDevice(sampleDevice.device_id)
+                    },
+                    onEditSubject: { subject in
+                        editingContext = SubjectEditingContext(
+                            deviceID: sampleDevice.device_id,
+                            editingSubject: subject
+                        )
+                    },
+                    onAddSubject: {
+                        editingContext = SubjectEditingContext(
+                            deviceID: sampleDevice.device_id,
+                            editingSubject: nil
+                        )
+                    },
+                    onEditDevice: {
+                        // サンプルデバイスは編集不可
+                    }
+                )
+                .padding(.horizontal)
+            }
+        }
+    }
+
     // MARK: - Device Add Card
     @ViewBuilder
     private func DeviceAddCard() -> some View {
@@ -314,6 +358,29 @@ struct DeviceSettingsView: View {
         } catch {
             addDeviceError = "デバイスの追加に失敗しました: \(error.localizedDescription)"
             showAddDeviceAlert = true
+        }
+    }
+
+    // MARK: - サンプルデバイスの取得
+    private func loadSampleDevice() async {
+        do {
+            let devices: [Device] = try await supabase
+                .from("devices")
+                .select("*")
+                .eq("device_id", value: DeviceManager.sampleDeviceID)
+                .execute()
+                .value
+
+            if let device = devices.first {
+                await MainActor.run {
+                    self.sampleDevice = device
+                }
+                print("✅ サンプルデバイスを取得: \(device.device_id), type: \(device.device_type)")
+            } else {
+                print("⚠️ サンプルデバイスが見つかりません")
+            }
+        } catch {
+            print("❌ サンプルデバイスの取得に失敗: \(error)")
         }
     }
 }

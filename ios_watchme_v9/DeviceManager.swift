@@ -12,6 +12,9 @@ import Supabase
 
 // デバイス登録管理クラス
 class DeviceManager: ObservableObject {
+    // MARK: - Constants
+    static let sampleDeviceID = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"  // サンプルデバイスID（全ユーザー共通）
+
     // MARK: - State Management
     enum State: Equatable {
         case idle           // 初期状態
@@ -460,14 +463,23 @@ class DeviceManager: ObservableObject {
     
     // MARK: - デバイス選択
     func selectDevice(_ deviceId: String) {
-        if userDevices.contains(where: { $0.device_id == deviceId }) {
+        // サンプルデバイスまたはuserDevicesに含まれるデバイスの場合のみ選択可能
+        let isSampleDevice = deviceId == DeviceManager.sampleDeviceID
+        let isUserDevice = userDevices.contains(where: { $0.device_id == deviceId })
+
+        if isSampleDevice || isUserDevice {
             // 一旦loadingに戻してから選択を更新
             self.state = .loading
             selectedDeviceID = deviceId
             // 選択したデバイスIDを永続化
             UserDefaults.standard.set(deviceId, forKey: selectedDeviceIDKey)
-            print("📱 Selected device saved: \(deviceId)")
-            
+
+            if isSampleDevice {
+                print("📱 Sample device selected: \(deviceId)")
+            } else {
+                print("📱 Selected device saved: \(deviceId)")
+            }
+
             // 少し遅延を入れてからready状態に遷移（UIの更新を確実にするため）
             Task { @MainActor in
                 try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
@@ -506,12 +518,20 @@ class DeviceManager: ObservableObject {
     // MARK: - FAB表示判定
     /// 選択中のデバイスタイプがobserverの場合はFABを非表示
     var shouldShowFAB: Bool {
-        // デバイスが選択されていない場合はデフォルトで表示
-        guard let deviceId = selectedDeviceID,
-              let device = userDevices.first(where: { $0.device_id == deviceId }) else {
-            return true
+        guard let deviceId = selectedDeviceID else {
+            return true  // デバイス未選択の場合はデフォルトで表示
         }
-        
+
+        // サンプルデバイスの場合（device_type = "observer"）
+        if deviceId == DeviceManager.sampleDeviceID {
+            return false  // observerなのでFABを非表示
+        }
+
+        // userDevicesから選択中のデバイスを取得
+        guard let device = userDevices.first(where: { $0.device_id == deviceId }) else {
+            return true  // デバイスが見つからない場合はデフォルトで表示
+        }
+
         // device_typeが "observer" の場合のみFABを非表示
         // それ以外（ios, android, その他）の場合は表示
         return device.device_type.lowercased() != "observer"

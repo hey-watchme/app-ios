@@ -16,6 +16,7 @@ struct ContentView: View {
     @State private var selectedDate: Date = Date()  // 初期値は現在時刻（後でonAppearで調整）
     @State private var showLogoutConfirmation = false
     @State private var showRecordingSheet = false
+    @State private var showQRScanner = false
     
     // NetworkManagerの初期化（録音機能のため必要）
     @StateObject private var audioRecorder = AudioRecorder()
@@ -103,20 +104,78 @@ struct ContentView: View {
                     }
                     
                 case .noDevices:
-                    // ユーザーはデバイスを1つも連携していない
-                    Spacer()
-                    VStack(spacing: 20) {
-                        Image(systemName: "iphone.slash")
-                            .font(.system(size: 60))
-                            .foregroundColor(.secondary)
-                        Text("利用可能なデバイスがありません")
-                            .font(.title3)
-                            .foregroundColor(.primary)
-                        Text("マイページからデバイスを連携してください")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                    // デバイスがない時のUI
+                    VStack(spacing: 0) {
+                        // 上部の余白（調整済み）
+                        Spacer()
+                            .frame(height: 50)
+
+                        // メインメッセージ
+                        Text("あなたの声から\n「こころ」をチェックしよう。")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 40)
+                            .padding(.bottom, 50)
+
+                        // ボタンエリア
+                        VStack(spacing: 16) {
+                            // 1. このデバイスで測定するボタン
+                            Button(action: {
+                                handleRegisterCurrentDevice()
+                            }) {
+                                HStack {
+                                    Image(systemName: "iphone")
+                                        .font(.title3)
+                                    Text("このデバイスで測定する")
+                                        .font(.headline)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.safeColor("AppAccentColor"))
+                                .foregroundColor(.white)
+                                .cornerRadius(12)
+                            }
+
+                            // 2. サンプルを見るボタン
+                            Button(action: {
+                                // サンプルデバイスを選択
+                                deviceManager.selectDevice(DeviceManager.sampleDeviceID)
+                            }) {
+                                HStack {
+                                    Image(systemName: "eye")
+                                        .font(.title3)
+                                    Text("サンプルを見る")
+                                        .font(.headline)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.gray.opacity(0.2))
+                                .foregroundColor(Color.safeColor("AppAccentColor"))
+                                .cornerRadius(12)
+                            }
+
+                            // 3. QRコードでデバイスを追加ボタン
+                            Button(action: {
+                                showQRScanner = true
+                            }) {
+                                HStack {
+                                    Image(systemName: "qrcode.viewfinder")
+                                        .font(.title3)
+                                    Text("QRコードでデバイスを追加")
+                                        .font(.headline)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 16)
+                                .background(Color.gray.opacity(0.2))
+                                .foregroundColor(Color.safeColor("AppAccentColor"))
+                                .cornerRadius(12)
+                            }
+                        }
+                        .padding(.horizontal, 40)
+
+                        Spacer()
                     }
-                    Spacer()
                     
                 case .error(let errorMessage):
                     // エラーが発生した
@@ -195,6 +254,13 @@ struct ContentView: View {
                 RecordingView(audioRecorder: audioRecorder, networkManager: networkManager)
             }
         }
+        .sheet(isPresented: $showQRScanner) {
+            QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in
+                Task {
+                    await handleQRCodeScanned(scannedCode)
+                }
+            }
+        }
         .alert("ログアウト確認", isPresented: $showLogoutConfirmation) {
             Button("キャンセル", role: .cancel) { }
             Button("ログアウト", role: .destructive) {
@@ -238,9 +304,64 @@ struct ContentView: View {
     private func initializeNetworkManager() {
         audioRecorder.deviceManager = deviceManager
         networkManager = NetworkManager(userAccountManager: userAccountManager, deviceManager: deviceManager)
-        
+
         if let authUser = userAccountManager.currentUser {
             networkManager?.updateToAuthenticatedUserID(authUser.id)
+        }
+    }
+
+    // MARK: - このデバイスを登録する処理
+    private func handleRegisterCurrentDevice() {
+        guard let userId = userAccountManager.currentUser?.profile?.userId else {
+            print("❌ ユーザー情報の取得に失敗しました")
+            return
+        }
+
+        Task {
+            // DeviceManagerのregisterDeviceメソッドを呼び出す
+            await MainActor.run {
+                deviceManager.registerDevice(userId: userId)
+            }
+
+            // 登録完了まで待機（最大5秒）
+            var attempts = 0
+            while deviceManager.isLoading && attempts < 50 {
+                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+                attempts += 1
+            }
+
+            await MainActor.run {
+                // エラーチェック
+                if let error = deviceManager.registrationError {
+                    print("❌ デバイス登録エラー: \(error)")
+                } else if !deviceManager.userDevices.isEmpty {
+                    // 登録成功 - デバイスが追加されたのでUIが自動的に更新される
+                    print("✅ デバイス登録成功")
+                } else {
+                    print("❌ デバイスの登録に失敗しました")
+                }
+            }
+        }
+    }
+
+    // MARK: - QRコードスキャン処理
+    private func handleQRCodeScanned(_ code: String) async {
+        // 既に追加済みかチェック
+        if deviceManager.userDevices.contains(where: { $0.device_id == code }) {
+            print("⚠️ このデバイスは既に追加されています")
+            return
+        }
+
+        // デバイスを追加
+        do {
+            if let userId = userAccountManager.currentUser?.id {
+                try await deviceManager.addDeviceByQRCode(code, for: userId)
+                print("✅ デバイスを追加しました: \(code)")
+            } else {
+                print("❌ ユーザー情報の取得に失敗しました")
+            }
+        } catch {
+            print("❌ デバイスの追加に失敗しました: \(error.localizedDescription)")
         }
     }
 }
