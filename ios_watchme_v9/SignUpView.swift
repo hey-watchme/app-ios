@@ -345,13 +345,15 @@ struct SignUpView: View {
         }
         .onChange(of: userAccountManager.signUpSuccess) { oldValue, newValue in
             if newValue {
-                print("🔄 サインアップ成功 - 案内画面を表示")
-                showSuccessView = true
+                print("🔄 サインアップ成功")
+                // メール確認が無効化されている場合は案内画面を表示しない
+                // showSuccessView = true  // コメントアウト：メール確認不要なので案内画面は不要
                 // フラグをリセット
                 userAccountManager.signUpSuccess = false
             }
         }
         .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
+            print("🔍 SignUpView - isAuthenticated変更検知: \(oldValue) → \(newValue)")
             if newValue {
                 print("🔄 ログイン成功 - SignUpViewからdismiss実行")
                 dismiss()

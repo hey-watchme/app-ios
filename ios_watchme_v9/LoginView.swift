@@ -201,8 +201,12 @@ struct LoginView: View {
                 .environmentObject(userAccountManager)
         }
         .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
+            print("🔍 LoginView - isAuthenticated変更検知: \(oldValue) → \(newValue)")
             if newValue {
                 print("🔄 ログイン成功 - LoginViewからdismiss実行")
+                // サインアップシートを閉じる
+                showSignUp = false
+                // LoginView自体も閉じる
                 dismiss()
             }
         }

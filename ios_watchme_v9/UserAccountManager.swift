@@ -148,53 +148,64 @@ class UserAccountManager: ObservableObject {
     
     // MARK: - ログイン機能
     func signIn(email: String, password: String) {
-        isLoading = true
-        authError = nil
-        
-        print("🔐 ログイン試行: \(email)")
-        
         Task { @MainActor in
-            do {
-                // Supabaseクライアントの組み込みメソッドを使用
-                let session = try await supabase.auth.signIn(
-                    email: email,
-                    password: password
-                )
-                
-                print("✅ ログイン成功: \(email)")
-                print("📡 認証レスポンス取得完了")
-                
-                // 認証情報を保存
-                let user = SupabaseUser(
-                    id: session.user.id.uuidString,
-                    email: session.user.email ?? email,
-                    accessToken: session.accessToken,
-                    refreshToken: session.refreshToken
-                )
-                
+            await performSignIn(email: email, password: password)
+        }
+    }
+
+    // 内部用の async ログイン処理
+    private func performSignIn(email: String, password: String) async {
+        await MainActor.run {
+            isLoading = true
+            authError = nil
+        }
+
+        print("🔐 ログイン試行: \(email)")
+
+        do {
+            // Supabaseクライアントの組み込みメソッドを使用
+            let session = try await supabase.auth.signIn(
+                email: email,
+                password: password
+            )
+
+            print("✅ ログイン成功: \(email)")
+            print("📡 認証レスポンス取得完了")
+
+            // 認証情報を保存
+            let user = SupabaseUser(
+                id: session.user.id.uuidString,
+                email: session.user.email ?? email,
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken
+            )
+
+            await MainActor.run {
                 self.currentUser = user
                 self.isAuthenticated = true
                 self.saveUserToDefaults(user)
-                
+
                 print("🔄 認証状態を更新: isAuthenticated = true")
-                
+
                 // トークンリフレッシュタイマーを開始
                 self.startTokenRefreshTimer()
-                
+
                 // ユーザープロファイルを取得
                 self.fetchUserProfile(userId: user.id)
-                
-                // ユーザーのデバイス一覧を取得（新規登録はしない）
-                await self.deviceManager.fetchUserDevices(for: user.id)
-                
+
                 self.isLoading = false
-                
-            } catch {
+            }
+
+            // ユーザーのデバイス一覧を取得（新規登録はしない）
+            await self.deviceManager.fetchUserDevices(for: user.id)
+
+        } catch {
+            await MainActor.run {
                 self.isLoading = false
-                
+
                 // エラーハンドリング
                 self.authError = "ログインに失敗しました: \(error.localizedDescription)"
-                
+
                 print("❌ ログインエラー: \(error)")
             }
         }
@@ -259,19 +270,9 @@ class UserAccountManager: ObservableObject {
             }
 
             // サインアップ成功後の処理
-            await MainActor.run {
-                if authResponse.user.confirmedAt != nil {
-                    // メール確認済みの場合は自動的にログイン
-                    print("📧 メール確認済み - 自動ログイン実行")
-                    self.signIn(email: email, password: password)
-                } else {
-                    // メール確認が必要な場合
-                    self.signUpSuccess = true
-                    print("📧 確認メールを送信しました")
-                }
-
-                self.isLoading = false
-            }
+            // メール確認状態に関係なく、常に自動ログインを実行
+            print("📧 サインアップ成功 - 自動ログイン実行（メール確認状態: \(authResponse.user.confirmedAt != nil ? "確認済み" : "未確認")）")
+            await self.performSignIn(email: email, password: password)
 
         } catch {
             await MainActor.run {
