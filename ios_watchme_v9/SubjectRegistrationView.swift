@@ -144,10 +144,9 @@ struct SubjectRegistrationView: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFill()
-        } else if let subject = editingSubject, selectedImageData == nil {
-            // 編集時で新規画像が選択されていない場合: S3から表示
+        } else if let subject = editingSubject {
+            // 編集時：S3から表示（AvatarViewと同じロジック）
             let baseURL = AWSManager.shared.getAvatarURL(type: "subjects", id: subject.subjectId)
-            // タイムスタンプを追加してキャッシュを回避
             let avatarURL = URL(string: "\(baseURL.absoluteString)?t=\(Date().timeIntervalSince1970)")
             AsyncImage(url: avatarURL) { phase in
                 switch phase {
@@ -156,19 +155,23 @@ struct SubjectRegistrationView: View {
                         .resizable()
                         .scaledToFill()
                 case .failure(_), .empty:
+                    // デフォルトアイコン（グレー）
                     Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 60))
+                        .resizable()
+                        .scaledToFit()
                         .foregroundColor(Color.safeColor("BorderLight"))
                 @unknown default:
                     Image(systemName: "person.crop.circle.fill")
-                        .font(.system(size: 60))
+                        .resizable()
+                        .scaledToFit()
                         .foregroundColor(Color.safeColor("BorderLight"))
                 }
             }
         } else {
-            // 新規登録時またはデフォルト
+            // 新規登録時：デフォルトアイコン（グレー）
             Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: 60))
+                .resizable()
+                .scaledToFit()
                 .foregroundColor(Color.safeColor("BorderLight"))
         }
     }
@@ -198,49 +201,35 @@ struct SubjectRegistrationView: View {
             Text("プロフィール写真")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
-            HStack {
-                // 写真表示
-                Button(action: {
-                    showingAvatarPicker = true
-                }) {
+
+            // UserInfoViewと同じUIデザイン：アバター + 右下にカメラアイコン
+            Button(action: {
+                showingAvatarPicker = true
+            }) {
+                ZStack(alignment: .bottomTrailing) {
+                    // アバター画像表示
                     avatarImageView
-                        .frame(width: 80, height: 80)
+                        .frame(width: 100, height: 100)
                         .clipShape(Circle())
                         .overlay(
                             Circle()
-                                .stroke(Color.safeColor("BorderLight").opacity(0.3), lineWidth: 1)
+                                .stroke(Color(.systemBackground), lineWidth: 4)
+                        )
+
+                    // カメラアイコンを追加（UserInfoViewと同じ）
+                    Circle()
+                        .fill(Color.black)
+                        .frame(width: 32, height: 32)
+                        .overlay(
+                            Image(systemName: "camera.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.white)
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(Color(.systemBackground), lineWidth: 2)
                         )
                 }
-                
-                VStack(alignment: .leading, spacing: 8) {
-                    Button(action: {
-                        showingAvatarPicker = true
-                    }) {
-                        HStack {
-                            Image(systemName: "photo")
-                            Text("写真を選択")
-                        }
-                        .font(.subheadline)
-                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 8)
-                        .background(Color.safeColor("PrimaryActionColor").opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    
-                    if selectedImage != nil || selectedImageData != nil {
-                        Button("削除") {
-                            selectedItem = nil
-                            selectedImage = nil
-                            selectedImageData = nil
-                        }
-                        .font(.caption)
-                        .foregroundColor(Color.safeColor("ErrorColor"))
-                    }
-                }
-                
-                Spacer()
             }
         }
         .sheet(isPresented: $showingAvatarPicker) {
