@@ -1,0 +1,12 @@
+/* Mantis Image Cropper - English Localization */
+
+/* Toolbar buttons */
+"Mantis.Done" = "Done";
+"Mantis.Cancel" = "Cancel";
+
+/* Cropping actions */
+"Mantis.Reset" = "Reset";
+
+/* Aspect ratio options */
+"Mantis.Original" = "Original";
+"Mantis.Square" = "Square";

@@ -114,7 +114,7 @@ struct UserInfoView: View {
                             
                             // カメラアイコンを追加
                             Circle()
-                                .fill(Color.blue)
+                                .fill(Color.black)
                                 .frame(width: 32, height: 32)
                                 .overlay(
                                     Image(systemName: "camera.fill")
@@ -133,64 +133,68 @@ struct UserInfoView: View {
                 
                 // ユーザー情報セクション
                 VStack(spacing: 20) {
-                    // ユーザーアカウント情報
-                    InfoSection(title: "ユーザーアカウント情報") {
+                    // ユーザーアカウント情報（リストスタイル）
+                    InfoListSection(title: "ユーザーアカウント情報") {
                         if let user = userAccountManager.currentUser {
-                            // 名前（profile.nameから取得）
+                            // 名前
                             if let profile = user.profile, let name = profile.name {
-                                InfoRowTwoLine(label: "名前", value: name, icon: "person.fill")
+                                InfoListRow(label: "名前", value: name)
                             }
-                            
-                            InfoRowTwoLine(label: "メールアドレス", value: user.email, icon: "envelope.fill")
-                            
-                            // ニュースレター配信設定（会員登録日より上に配置）
+
+                            // メールアドレス
+                            InfoListRow(label: "メールアドレス", value: user.email)
+
+                            // ニュースレター配信設定
                             if let profile = user.profile {
-                                
                                 // ニュースレター設定切り替え
-                                HStack {
-                                    Image(systemName: "envelope.badge")
-                                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                        .frame(width: 20)
-                                    
-                                    Text("ニュースレター配信")
-                                        .font(.subheadline)
-                                        .foregroundColor(.secondary)
-                                    
-                                    Spacer()
-                                    
-                                    if let newsletter = profile.newsletter {
-                                        Toggle("", isOn: Binding(
-                                            get: { newsletter },
-                                            set: { newValue in
-                                                userAccountManager.updateUserProfile(newsletterSubscription: newValue)
-                                            }
-                                        ))
-                                        .labelsHidden()
-                                    } else {
-                                        // 未設定の場合はデフォルトでfalse
-                                        Toggle("", isOn: Binding(
-                                            get: { false },
-                                            set: { newValue in
-                                                userAccountManager.updateUserProfile(newsletterSubscription: newValue)
-                                            }
-                                        ))
-                                        .labelsHidden()
+                                VStack(spacing: 0) {
+                                    HStack {
+                                        Text("ニュースレター配信")
+                                            .font(.subheadline)
+                                            .foregroundColor(.secondary)
+
+                                        Spacer()
+
+                                        if let newsletter = profile.newsletter {
+                                            Toggle("", isOn: Binding(
+                                                get: { newsletter },
+                                                set: { newValue in
+                                                    userAccountManager.updateUserProfile(newsletterSubscription: newValue)
+                                                }
+                                            ))
+                                            .labelsHidden()
+                                        } else {
+                                            // 未設定の場合はデフォルトでfalse
+                                            Toggle("", isOn: Binding(
+                                                get: { false },
+                                                set: { newValue in
+                                                    userAccountManager.updateUserProfile(newsletterSubscription: newValue)
+                                                }
+                                            ))
+                                            .labelsHidden()
+                                        }
                                     }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+
+                                    Divider()
+                                        .background(Color(.systemGray4))
                                 }
-                                
+
                                 // 会員登録日
                                 if let createdAt = profile.createdAt {
                                     let formattedDate = formatDate(createdAt)
-                                    InfoRow(label: "会員登録日", value: formattedDate, icon: "calendar.badge.plus")
+                                    InfoListRow(label: "会員登録日", value: formattedDate)
                                 }
                             }
-                            
-                            InfoRowTwoLine(label: "ユーザーID", value: user.id, icon: "person.text.rectangle.fill")
+
+                            // ユーザーID（最後なので罫線なし）
+                            InfoListRow(label: "ユーザーID", value: user.id, showDivider: false)
                         } else {
-                            InfoRow(label: "状態", value: "ログインしていません", icon: "exclamationmark.triangle.fill", valueColor: Color.safeColor("ErrorColor"))
+                            InfoListRow(label: "状態", value: "ログインしていません", showDivider: false, valueColor: Color.safeColor("ErrorColor"))
                         }
                     }
-                    
+
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 20)

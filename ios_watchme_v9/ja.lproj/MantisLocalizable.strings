@@ -1,0 +1,12 @@
+/* Mantis Image Cropper - Japanese Localization */
+
+/* Toolbar buttons */
+"Mantis.Done" = "完了";
+"Mantis.Cancel" = "キャンセル";
+
+/* Cropping actions */
+"Mantis.Reset" = "リセット";
+
+/* Aspect ratio options */
+"Mantis.Original" = "オリジナル";
+"Mantis.Square" = "正方形";

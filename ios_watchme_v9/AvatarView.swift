@@ -125,16 +125,19 @@ struct AvatarView: View {
     
     private var defaultAvatarView: some View {
         ZStack {
-            // 白い背景の円
+            // 白い背景
             Circle()
                 .fill(Color.white)
                 .frame(width: size, height: size)
 
-            // デフォルトアイコン
+            // グレーのアイコン
             Image(systemName: "person.crop.circle.fill")
-                .font(.system(size: size))
-                .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(width: size, height: size)
+                .foregroundColor(.gray)
         }
+        .clipShape(Circle())
         .overlay(
             Circle()
                 .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)

@@ -123,29 +123,29 @@ struct HeaderView: View {
                 HStack(spacing: 8) {
                     ZStack {
                         Circle()
-                            .fill(Color.blue.opacity(0.1))
+                            .fill(Color.black.opacity(0.1))
                             .frame(width: 32, height: 32)
 
                         Image(systemName: "eye.circle")
                             .font(.system(size: 18))
-                            .foregroundColor(.blue)
+                            .foregroundColor(.black)
                     }
 
                     Text("サンプルデバイス")
                         .font(.subheadline)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.black)
                 }
             } else {
                 // 通常のデバイス選択中（観測対象未設定）
                 HStack(spacing: 8) {
                     ZStack {
                         Circle()
-                            .fill(Color.safeColor("PrimaryActionColor").opacity(0.1))
+                            .fill(Color.black.opacity(0.1))
                             .frame(width: 32, height: 32)
 
                         Image(systemName: "iphone")
                             .font(.system(size: 18))
-                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                            .foregroundColor(.black)
                     }
 
                     // デバイスIDの最初の8文字を表示

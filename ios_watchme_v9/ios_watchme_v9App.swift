@@ -206,7 +206,13 @@ struct MainAppView: View {
                 // ログイン/サインアップ成功時にシートを閉じる
                 showLogin = false
                 showSignUp = false
-                print("✅ 認証成功 - メイン画面に遷移")
+                // ホーム画面にリセット
+                selectedTab = .home
+                print("✅ 認証成功 - ホーム画面に遷移")
+            } else {
+                // ログアウト時もホーム画面にリセット
+                selectedTab = .home
+                print("🔄 ログアウト - タブをリセット")
             }
         }
         .onAppear {

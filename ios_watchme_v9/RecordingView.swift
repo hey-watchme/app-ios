@@ -21,6 +21,7 @@ struct RecordingView: View {
     @State private var uploadingCurrentIndex = 0
     @State private var recordingDataPoint = ""
     @State private var timer: Timer?
+    @State private var showDeviceRegistrationConfirm = false  // デバイス連携確認ポップアップ
     
     var body: some View {
         NavigationView {
@@ -283,8 +284,8 @@ struct RecordingView: View {
                             Button(action: {
                                 // デバイスが選択されているかチェック
                                 if deviceManager.selectedDeviceID == nil {
-                                    alertMessage = "デバイスが選択されていません。\nデバイス設定画面でデバイスを選択してください。"
-                                    showAlert = true
+                                    // デバイス未連携の場合、連携確認ポップアップを表示
+                                    showDeviceRegistrationConfirm = true
                                 } else if !deviceManager.shouldShowFAB {
                                     alertMessage = "このデバイスは観測専用のため録音できません。"
                                     showAlert = true
@@ -324,6 +325,16 @@ struct RecordingView: View {
             Button("OK", role: .cancel) { }
         } message: {
             Text(alertMessage)
+        }
+        .confirmationDialog("デバイスを連携", isPresented: $showDeviceRegistrationConfirm, titleVisibility: .visible) {
+            Button("連携") {
+                Task {
+                    await registerDevice()
+                }
+            }
+            Button("キャンセル", role: .cancel) { }
+        } message: {
+            Text("このデバイスのマイクを使って音声情報を分析します")
         }
         .onAppear {
             // AudioRecorderにDeviceManagerの参照を設定
@@ -376,10 +387,10 @@ struct RecordingView: View {
               let minute = Int(components[1]) else {
             return slot
         }
-        
+
         // 開始時刻
         let startTime = String(format: "%02d:%02d", hour, minute)
-        
+
         // 終了時刻（30分後）
         var endHour = hour
         var endMinute = minute + 30
@@ -391,10 +402,52 @@ struct RecordingView: View {
             endHour = 0
         }
         let endTime = String(format: "%02d:%02d", endHour, endMinute)
-        
+
         return "\(startTime)-\(endTime)"
     }
-    
+
+    // MARK: - このデバイスを登録する処理
+    private func registerDevice() async {
+        guard let userId = userAccountManager.currentUser?.profile?.userId else {
+            print("❌ ユーザー情報の取得に失敗しました")
+            await MainActor.run {
+                alertMessage = "ユーザー情報の取得に失敗しました"
+                showAlert = true
+            }
+            return
+        }
+
+        // DeviceManagerのregisterDeviceメソッドを呼び出す
+        await MainActor.run {
+            deviceManager.registerDevice(userId: userId)
+        }
+
+        // 登録完了まで待機（最大5秒）
+        var attempts = 0
+        while deviceManager.isLoading && attempts < 50 {
+            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
+            attempts += 1
+        }
+
+        await MainActor.run {
+            // エラーチェック
+            if let error = deviceManager.registrationError {
+                print("❌ デバイス登録エラー: \(error)")
+                alertMessage = "デバイス登録に失敗しました: \(error)"
+                showAlert = true
+            } else if !deviceManager.userDevices.isEmpty {
+                // 登録成功 - デバイスが追加されたのでUIが自動的に更新される
+                print("✅ デバイス登録成功")
+                // 登録成功後、録音を自動的に開始
+                audioRecorder.startRecording()
+            } else {
+                print("❌ デバイスの登録に失敗しました")
+                alertMessage = "デバイスの登録に失敗しました"
+                showAlert = true
+            }
+        }
+    }
+
     // シンプルな一括アップロード（NetworkManagerを直接使用）- 逐次実行版
     private func manualBatchUpload() {
         // アップロード対象のリストを取得（録音失敗ファイルを除外）

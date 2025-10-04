@@ -75,33 +75,39 @@ struct ContentView: View {
                     Spacer()
                     
                 case .ready:
-                    // 準備完了！ここで初めてダッシュボード本体を表示
-                    ZStack(alignment: .top) {
-                        // TabViewでラップしてスワイプ対応
-                        TabView(selection: $selectedDate) {
-                            ForEach(dateRange, id: \.self) { date in
-                                SimpleDashboardView(
-                                    selectedDate: $selectedDate
-                                )
-                                .tag(date) // 日付を各ページに紐付け
+                    // 準備完了！デバイスが選択されているかチェック
+                    if deviceManager.selectedDeviceID != nil {
+                        // デバイスが選択されている場合：ダッシュボード本体を表示
+                        ZStack(alignment: .top) {
+                            // TabViewでラップしてスワイプ対応
+                            TabView(selection: $selectedDate) {
+                                ForEach(dateRange, id: \.self) { date in
+                                    SimpleDashboardView(
+                                        selectedDate: $selectedDate
+                                    )
+                                    .tag(date) // 日付を各ページに紐付け
+                                }
                             }
+                            .id(deviceManager.selectedDeviceID) // デバイスが変わったらTabViewを再構築
+                            .tabViewStyle(.page(indexDisplayMode: .never)) // 横スワイプのスタイル、ドットは非表示
                         }
-                        .id(deviceManager.selectedDeviceID) // デバイスが変わったらTabViewを再構築
-                        .tabViewStyle(.page(indexDisplayMode: .never)) // 横スワイプのスタイル、ドットは非表示
-                    }
-                    .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
-                        // デバイスが切り替わったら日付を今日（配列の最後）にリセット
-                        if oldValue != newValue && newValue != nil {
-                            // dateRangeの最後の要素（今日）を取得
-                            if let todayDate = dateRange.last {
-                                // TabViewを確実に更新するため、少し遅延を入れる
-                                Task { @MainActor in
-                                    selectedDate = todayDate
-                                    print("📅 ContentView: Device changed, resetting date to last element (today): \(todayDate)")
-                                    print("📅 Index in dateRange: \(dateRange.firstIndex(of: todayDate) ?? -1) of \(dateRange.count)")
+                        .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
+                            // デバイスが切り替わったら日付を今日（配列の最後）にリセット
+                            if oldValue != newValue && newValue != nil {
+                                // dateRangeの最後の要素（今日）を取得
+                                if let todayDate = dateRange.last {
+                                    // TabViewを確実に更新するため、少し遅延を入れる
+                                    Task { @MainActor in
+                                        selectedDate = todayDate
+                                        print("📅 ContentView: Device changed, resetting date to last element (today): \(todayDate)")
+                                        print("📅 Index in dateRange: \(dateRange.firstIndex(of: todayDate) ?? -1) of \(dateRange.count)")
+                                    }
                                 }
                             }
                         }
+                    } else {
+                        // デバイスが選択されていない場合：デバイスなし画面を表示
+                        noDevicesView
                     }
                     
                 case .noDevices:
@@ -366,6 +372,95 @@ struct ContentView: View {
                     print("❌ デバイスの登録に失敗しました")
                 }
             }
+        }
+    }
+
+    // MARK: - デバイスなし画面
+    private var noDevicesView: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // タイトル「ダッシュボード」
+            Text("ダッシュボード")
+                .font(.title)
+                .fontWeight(.bold)
+                .padding(.top, 40)
+                .padding(.horizontal, 40)
+
+            // 説明文
+            Text("あなたの声から、気分・行動・感情を分析します。")
+                .font(.subheadline)
+                .foregroundColor(.secondary)
+                .padding(.top, 8)
+                .padding(.horizontal, 40)
+
+            // グラフアイコン（うっすらグレー、中央配置）
+            Spacer()
+
+            HStack {
+                Spacer()
+                Image(systemName: "chart.bar.fill")
+                    .font(.system(size: 100))
+                    .foregroundColor(.gray.opacity(0.15))
+                Spacer()
+            }
+
+            Spacer()
+
+            // ボタンエリア
+            VStack(spacing: 16) {
+                // 1. このデバイスで測定するボタン
+                Button(action: {
+                    showDeviceRegistrationConfirm = true
+                }) {
+                    HStack {
+                        Image(systemName: "iphone")
+                            .font(.title3)
+                        Text("このデバイスで測定する")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.safeColor("AppAccentColor"))
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
+                }
+
+                // 2. サンプルを見るボタン
+                Button(action: {
+                    // サンプルデバイスを選択
+                    deviceManager.selectDevice(DeviceManager.sampleDeviceID)
+                }) {
+                    HStack {
+                        Image(systemName: "eye")
+                            .font(.title3)
+                        Text("サンプルを見る")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.gray.opacity(0.2))
+                    .foregroundColor(Color.safeColor("AppAccentColor"))
+                    .cornerRadius(12)
+                }
+
+                // 3. QRコードでデバイスを追加ボタン
+                Button(action: {
+                    showQRScanner = true
+                }) {
+                    HStack {
+                        Image(systemName: "qrcode.viewfinder")
+                            .font(.title3)
+                        Text("QRコードでデバイスを追加")
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(Color.gray.opacity(0.2))
+                    .foregroundColor(Color.safeColor("AppAccentColor"))
+                    .cornerRadius(12)
+                }
+            }
+            .padding(.horizontal, 40)
+            .padding(.bottom, 40)
         }
     }
 
