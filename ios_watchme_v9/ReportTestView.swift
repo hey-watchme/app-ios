@@ -282,7 +282,8 @@ struct ReportTestView: View {
             print("   - userDevices count: \(deviceManager.userDevices.count)")
             
             // もしデバイスが取得されていない場合は再取得
-            if deviceManager.userDevices.isEmpty, let userId = userAccountManager.currentUser?.id {
+            // ✅ CLAUDE.md: public.usersのuser_idを使用
+            if deviceManager.userDevices.isEmpty, let userId = userAccountManager.currentUser?.profile?.userId {
                 print("🔄 デバイスが未取得のため再取得を実行")
                 Task {
                     await deviceManager.fetchUserDevices(for: userId)

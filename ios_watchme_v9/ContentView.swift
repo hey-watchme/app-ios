@@ -211,7 +211,8 @@ struct ContentView: View {
                         Button(action: {
                             // 再度初期化処理を呼び出す
                             Task {
-                                if let userId = userAccountManager.currentUser?.id {
+                                // ✅ CLAUDE.md: public.usersのuser_idを使用
+                                if let userId = userAccountManager.currentUser?.profile?.userId {
                                     await deviceManager.initializeDeviceState(for: userId)
                                 }
                             }
@@ -296,10 +297,11 @@ struct ContentView: View {
         }
         .onAppear {
             initializeNetworkManager()
-            
+
             // デバイス初期化処理を呼び出す
             Task {
-                if let userId = userAccountManager.currentUser?.id {
+                // ✅ CLAUDE.md: public.usersのuser_idを使用
+                if let userId = userAccountManager.currentUser?.profile?.userId {
                     await deviceManager.initializeDeviceState(for: userId)
                 }
             }
@@ -377,7 +379,8 @@ struct ContentView: View {
 
         // デバイスを追加
         do {
-            if let userId = userAccountManager.currentUser?.id {
+            // ✅ CLAUDE.md: public.usersのuser_idを使用
+            if let userId = userAccountManager.currentUser?.profile?.userId {
                 try await deviceManager.addDeviceByQRCode(code, for: userId)
                 print("✅ デバイスを追加しました: \(code)")
             } else {

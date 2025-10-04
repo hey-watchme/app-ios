@@ -232,7 +232,8 @@ struct DeviceSelectionView: View {
 
         // デバイスを追加
         do {
-            if let userId = userAccountManager.currentUser?.id {
+            // ✅ CLAUDE.md: public.usersのuser_idを使用
+            if let userId = userAccountManager.currentUser?.profile?.userId {
                 try await deviceManager.addDeviceByQRCode(code, for: userId)
                 // 成功時のフィードバック
                 addedDeviceId = code

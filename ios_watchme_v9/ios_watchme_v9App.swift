@@ -121,7 +121,8 @@ struct MainAppView: View {
                 .onAppear {
                     print("📱 MainAppView: 認証済み状態 - メイン画面表示")
                     // ユーザーに紐付く全デバイスを取得
-                    if let userId = userAccountManager.currentUser?.id {
+                    // ✅ CLAUDE.md: public.usersのuser_idを使用
+                    if let userId = userAccountManager.currentUser?.profile?.userId {
                         print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
                         Task {
                             await deviceManager.fetchUserDevices(for: userId)

@@ -117,20 +117,22 @@ struct NotificationView: View {
     private func loadNotifications() async {
         isLoading = true
         errorMessage = nil
-        
-        guard let userId = userAccountManager.currentUser?.id else {
+
+        // ✅ CLAUDE.md: public.usersのuser_idを使用
+        guard let userId = userAccountManager.currentUser?.profile?.userId else {
             errorMessage = "ユーザー情報が取得できません"
             isLoading = false
             return
         }
-        
+
         notifications = await dataManager.fetchNotifications(userId: userId)
         isLoading = false
     }
     
     // 通知を既読にする
     private func markAsRead(_ notification: Notification) async {
-        guard let userId = userAccountManager.currentUser?.id else { return }
+        // ✅ CLAUDE.md: public.usersのuser_idを使用
+        guard let userId = userAccountManager.currentUser?.profile?.userId else { return }
         
         // UIを即座に更新
         if let index = notifications.firstIndex(where: { $0.id == notification.id }) {
@@ -152,7 +154,8 @@ struct NotificationView: View {
     
     // すべての通知を既読にする
     private func markAllAsRead() async {
-        guard let userId = userAccountManager.currentUser?.id else { return }
+        // ✅ CLAUDE.md: public.usersのuser_idを使用
+        guard let userId = userAccountManager.currentUser?.profile?.userId else { return }
         
         // UIを即座に更新
         for index in notifications.indices {

@@ -82,7 +82,8 @@ struct UserInfoView: View {
                                     }
                                     
                                     // ID（フルで表示）
-                                    if let userId = userAccountManager.currentUser?.id {
+                                    // ✅ CLAUDE.md: public.usersのuser_idを使用
+                                    if let userId = userAccountManager.currentUser?.profile?.userId {
                                         Text("ID: \(userId)")
                                             .font(.caption)
                                             .foregroundColor(.secondary)
@@ -104,7 +105,8 @@ struct UserInfoView: View {
                         showingAvatarPicker = true
                     }) {
                         ZStack(alignment: .bottomTrailing) {
-                            AvatarView(userId: userAccountManager.currentUser?.id, size: 100)
+                            // ✅ CLAUDE.md: public.usersのuser_idを使用
+                            AvatarView(userId: userAccountManager.currentUser?.profile?.userId, size: 100)
                                 .overlay(
                                     Circle()
                                         .stroke(Color(.systemBackground), lineWidth: 4)
@@ -207,7 +209,8 @@ struct UserInfoView: View {
             NavigationStack {
                 AvatarPickerView(
                     viewModel: avatarViewModel,
-                    currentAvatarURL: userAccountManager.currentUser?.id != nil ? AWSManager.shared.getAvatarURL(type: "users", id: userAccountManager.currentUser!.id) : nil
+                    // ✅ CLAUDE.md: public.usersのuser_idを使用
+                    currentAvatarURL: userAccountManager.currentUser?.profile?.userId != nil ? AWSManager.shared.getAvatarURL(type: "users", id: userAccountManager.currentUser!.profile!.userId) : nil
                 )
                 .navigationTitle("アバターを選択")
                 .navigationBarTitleDisplayMode(.inline)
@@ -223,9 +226,12 @@ struct UserInfoView: View {
         }
         .onAppear {
             // ViewModelの初期化
-            if let userId = userAccountManager.currentUser?.id {
+            // ✅ CLAUDE.md: public.usersのuser_idを使用
+            if let userId = userAccountManager.currentUser?.profile?.userId {
                 avatarViewModel.entityId = userId
                 avatarViewModel.authToken = userAccountManager.getAccessToken()
+            } else {
+                print("❌ ユーザープロファイルが読み込まれていません")
             }
         }
     }

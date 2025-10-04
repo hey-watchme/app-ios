@@ -116,7 +116,8 @@ struct DeviceSettingsView: View {
         .sheet(item: $deviceEditingContext, onDismiss: {
             // シートが閉じられた後にデバイス一覧を再読み込み
             Task {
-                if let userId = userAccountManager.currentUser?.id {
+                // ✅ CLAUDE.md: public.usersのuser_idを使用
+                if let userId = userAccountManager.currentUser?.profile?.userId {
                     await deviceManager.fetchUserDevices(for: userId)
                     await loadSubjectsForAllDevices()
                 }
@@ -354,7 +355,8 @@ struct DeviceSettingsView: View {
         
         // デバイスを追加
         do {
-            if let userId = userAccountManager.currentUser?.id {
+            // ✅ CLAUDE.md: public.usersのuser_idを使用
+            if let userId = userAccountManager.currentUser?.profile?.userId {
                 try await deviceManager.addDeviceByQRCode(code, for: userId)
                 // 成功時のフィードバック
                 addedDeviceId = code

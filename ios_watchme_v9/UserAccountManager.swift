@@ -110,15 +110,20 @@ class UserAccountManager: ObservableObject {
                         print("✅ 保存された認証状態を復元: \(savedUser.email)")
                         print("🔄 認証状態復元: isAuthenticated = true")
                         print("🔑 セッショントークンも復元しました")
-                        
+
                         // トークンリフレッシュタイマーを開始
                         startTokenRefreshTimer()
-                        
-                        // プロファイルを取得
-                        fetchUserProfile(userId: currentUser?.id ?? savedUser.id)
-                        
-                        // デバイス情報を取得（登録はせず、既存のデバイス一覧のみ取得）
-                        await deviceManager.fetchUserDevices(for: currentUser?.id ?? savedUser.id)
+
+                        // プロファイルを取得（auth.users.idを使用）
+                        await fetchUserProfile(userId: currentUser?.id ?? savedUser.id)
+
+                        // プロファイル取得後、public.usersのuser_idでデバイス一覧を取得
+                        // ✅ CLAUDE.md: public.usersのuser_idを使用
+                        if let userId = currentUser?.profile?.userId {
+                            await deviceManager.fetchUserDevices(for: userId)
+                        } else {
+                            print("⚠️ プロファイルのuser_idが取得できないため、デバイス一覧の取得をスキップ")
+                        }
                     }
                     
                     self.isCheckingAuthStatus = false  // 認証確認完了
@@ -190,14 +195,19 @@ class UserAccountManager: ObservableObject {
                 // トークンリフレッシュタイマーを開始
                 self.startTokenRefreshTimer()
 
-                // ユーザープロファイルを取得
-                self.fetchUserProfile(userId: user.id)
-
                 self.isLoading = false
             }
 
-            // ユーザーのデバイス一覧を取得（新規登録はしない）
-            await self.deviceManager.fetchUserDevices(for: user.id)
+            // ユーザープロファイルを取得（auth.users.idを使用）
+            await self.fetchUserProfile(userId: user.id)
+
+            // プロファイル取得後、public.usersのuser_idでデバイス一覧を取得
+            // ✅ CLAUDE.md: public.usersのuser_idを使用
+            if let userId = currentUser?.profile?.userId {
+                await self.deviceManager.fetchUserDevices(for: userId)
+            } else {
+                print("⚠️ プロファイルのuser_idが取得できないため、デバイス一覧の取得をスキップ")
+            }
 
         } catch {
             await MainActor.run {
@@ -367,43 +377,44 @@ class UserAccountManager: ObservableObject {
     }
     
     // MARK: - ユーザープロファイル取得
-    func fetchUserProfile(userId: String) {
+    func fetchUserProfile(userId: String) async {
         print("👤 ユーザープロファイル取得開始: \(userId)")
-        
-        Task { @MainActor in
-            do {
-                // Supabase SDKの標準メソッドを使用
-                let profiles: [UserProfile] = try await supabase
-                    .from("users")
-                    .select()
-                    .eq("user_id", value: userId)
-                    .limit(1)
-                    .execute()
-                    .value
-                
-                if let profile = profiles.first {
-                    // currentUserにプロファイルを設定
+
+        do {
+            // Supabase SDKの標準メソッドを使用
+            let profiles: [UserProfile] = try await supabase
+                .from("users")
+                .select()
+                .eq("user_id", value: userId)
+                .limit(1)
+                .execute()
+                .value
+
+            if let profile = profiles.first {
+                // currentUserにプロファイルを設定
+                await MainActor.run {
                     if var updatedUser = self.currentUser {
                         updatedUser.profile = profile
                         self.currentUser = updatedUser
                         self.saveUserToDefaults(updatedUser)
                     }
-                    
-                    print("✅ プロファイル取得成功")
-                    print("   - 名前: \(profile.name ?? "未設定")")
-                    print("   - ステータス: \(profile.status ?? "未設定")")
-                    print("   - ニュースレター: \(String(describing: profile.newsletter))")
-                } else {
-                    print("⚠️ プロファイルが見つかりません")
                 }
-                
-            } catch {
-                print("❌ プロファイル取得エラー: \(error)")
-                // データベースエラーの詳細を表示
-                if let dbError = error as? PostgrestError {
-                    print("   - コード: \(dbError.code ?? "不明")")
-                    print("   - メッセージ: \(dbError.message)")
-                }
+
+                print("✅ プロファイル取得成功")
+                print("   - 名前: \(profile.name ?? "未設定")")
+                print("   - ステータス: \(profile.status ?? "未設定")")
+                print("   - ニュースレター: \(String(describing: profile.newsletter))")
+                print("   - user_id: \(profile.userId)")
+            } else {
+                print("⚠️ プロファイルが見つかりません")
+            }
+
+        } catch {
+            print("❌ プロファイル取得エラー: \(error)")
+            // データベースエラーの詳細を表示
+            if let dbError = error as? PostgrestError {
+                print("   - コード: \(dbError.code ?? "不明")")
+                print("   - メッセージ: \(dbError.message)")
             }
         }
     }
@@ -491,9 +502,9 @@ class UserAccountManager: ObservableObject {
                     .execute()
                 
                 print("✅ プロファイル更新成功")
-                
-                // 更新後のプロファイルを再取得
-                self.fetchUserProfile(userId: currentUser.id)
+
+                // 更新後のプロファイルを再取得（auth.users.idを使用）
+                await self.fetchUserProfile(userId: currentUser.id)
                 
             } catch {
                 print("❌ プロファイル更新エラー: \(error)")
