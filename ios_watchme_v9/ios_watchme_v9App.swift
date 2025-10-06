@@ -55,10 +55,9 @@ struct MainAppView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showLogin = false
-    @State private var showSignUp = false
     @State private var showOnboarding = false
-    @State private var hasInitialized = false
-    
+    @State private var onboardingCompleted = false  // オンボーディング完了フラグ
+
     // フッターナビゲーション用の選択状態
     @State private var selectedTab: FooterTab = .home
     
@@ -74,27 +73,31 @@ struct MainAppView: View {
                 // 認証状態確認中：ローディング画面
                 VStack {
                     Spacer()
-                    
+
                     // ロゴを表示
                     Image("WatchMeLogo")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 200, height: 70)
-                    
+
                     // ローディングインジケーター
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle())
                         .scaleEffect(1.5)
                         .padding(.top, 40)
-                    
+
                     Text("認証状態を確認中...")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.top, 10)
-                    
+
                     Spacer()
                 }
-            } else if userAccountManager.isAuthenticated {
+                .onAppear {
+                    // 認証チェック完了後にオンボーディング表示判定
+                    print("📱 MainAppView: 認証状態確認中...")
+                }
+            } else if userAccountManager.authState == .authenticated {
                 // ログイン済み：メイン機能画面（単一のNavigationStackでラップ）
                 NavigationStack {
                     VStack(spacing: 0) {
@@ -120,72 +123,87 @@ struct MainAppView: View {
                 }
                 .onAppear {
                     print("📱 MainAppView: 認証済み状態 - メイン画面表示")
-                    // ユーザーに紐付く全デバイスを取得
-                    // ✅ CLAUDE.md: public.usersのuser_idを使用
-                    if let userId = userAccountManager.currentUser?.profile?.userId {
-                        print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
-                        Task {
-                            await deviceManager.fetchUserDevices(for: userId)
-                        }
-                    }
+                    // デバイス取得は認証成功時（onChange）で実行済み
                 }
             } else {
-                // 未ログイン：新規登録とログインボタン
-                VStack(spacing: 0) {
-                    Spacer()
-
-                    // ロゴを中央に配置
-                    Image("WatchMeLogo")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 200, height: 70)
-
-                    Spacer()
-
-                    // ボタンを最下部に配置
-                    VStack(spacing: 16) {
-                        // 新規ではじめるボタン
-                        Button(action: {
-                            showSignUp = true
-                        }) {
-                            HStack {
-                                Image(systemName: "person.badge.plus")
-                                Text("新規ではじめる")
-                                    .fontWeight(.semibold)
+                // ゲストモード
+                if onboardingCompleted {
+                    // オンボーディング完了後：ガイド画面（ダッシュボード）
+                    NavigationStack {
+                        VStack(spacing: 0) {
+                            // コンテンツエリア
+                            ZStack {
+                                switch selectedTab {
+                                case .home:
+                                    ContentView()
+                                        .environmentObject(userAccountManager)
+                                        .environmentObject(deviceManager)
+                                        .environmentObject(dataManager)
+                                case .myPage:
+                                    UserInfoView(userAccountManager: userAccountManager)
+                                        .environmentObject(deviceManager)
+                                        .environmentObject(dataManager)
+                                }
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(Color.safeColor("AppAccentColor"))
-                            .foregroundColor(.white)
-                            .cornerRadius(10)
-                        }
 
-                        // ログインボタン
-                        Button(action: {
-                            showLogin = true
-                        }) {
-                            HStack {
-                                Image(systemName: "person.circle.fill")
+                            // カスタムフッターナビゲーション
+                            CustomFooterNavigation(selectedTab: $selectedTab)
+                        }
+                        .edgesIgnoringSafeArea(.bottom)
+                    }
+                    .onAppear {
+                        print("📱 MainAppView: ゲストモード - ガイド画面表示")
+                    }
+                } else {
+                    // 初期画面（「はじめる」「ログイン」）
+                    VStack(spacing: 0) {
+                        Spacer()
+
+                        // ロゴを中央に配置
+                        Image("WatchMeLogo")
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .frame(width: 200, height: 70)
+
+                        Spacer()
+
+                        // ボタンを最下部に配置
+                        VStack(spacing: 16) {
+                            // はじめるボタン → オンボーディング表示
+                            Button(action: {
+                                showOnboarding = true
+                            }) {
+                                Text("はじめる")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44)
+                                    .background(Color.safeColor("AppAccentColor"))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
+                            }
+
+                            // ログインボタン
+                            Button(action: {
+                                showLogin = true
+                            }) {
                                 Text("ログイン")
                                     .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44)
+                                    .background(Color.clear)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.safeColor("AppAccentColor"), lineWidth: 1.5)
+                                    )
+                                    .foregroundColor(Color.safeColor("AppAccentColor"))
                             }
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 44)
-                            .background(Color.clear)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color.safeColor("AppAccentColor"), lineWidth: 1.5)
-                            )
-                            .foregroundColor(Color.safeColor("AppAccentColor"))
                         }
+                        .padding(.horizontal, 40)
+                        .padding(.bottom, 50)
                     }
-                    .padding(.horizontal, 40)
-                    .padding(.bottom, 50)
-                }
-                .onAppear {
-                    print("📱 MainAppView: 未認証状態 - ログイン/サインアップ画面表示")
-                    // 未認証状態になったらオンボーディングを表示
-                    showOnboarding = true
+                    .onAppear {
+                        print("📱 MainAppView: ゲストモード - 初期画面表示")
+                    }
                 }
             }
         }
@@ -196,37 +214,42 @@ struct MainAppView: View {
             LoginView()
                 .environmentObject(userAccountManager)
         }
-        .sheet(isPresented: $showSignUp) {
-            SignUpView()
-                .environmentObject(userAccountManager)
+        .onChange(of: showOnboarding) { oldValue, newValue in
+            // オンボーディングが閉じられた時
+            if oldValue == true && newValue == false {
+                print("✅ オンボーディング完了")
+                onboardingCompleted = true
+            }
         }
-        .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
+        .task {
+            // アプリ起動時に非同期で認証チェック
+            print("🚀 MainAppView: 認証チェック開始")
+            userAccountManager.checkAuthStatus()
+        }
+        .onChange(of: userAccountManager.authState) { oldValue, newValue in
             print("🔄 MainAppView: 認証状態変化 \(oldValue) → \(newValue)")
-            if newValue {
-                // ログイン/サインアップ成功時にシートを閉じる
+            if newValue == .authenticated {
+                // ログイン/サインアップ成功時
+                // シートを閉じる
                 showLogin = false
-                showSignUp = false
                 // ホーム画面にリセット
                 selectedTab = .home
                 print("✅ 認証成功 - ホーム画面に遷移")
-            } else {
-                // ログアウト時もホーム画面にリセット
+
+                // ユーザーに紐付く全デバイスを取得
+                if let userId = userAccountManager.currentUser?.profile?.userId {
+                    print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
+                    Task {
+                        await deviceManager.fetchUserDevices(for: userId)
+                    }
+                }
+            } else if newValue == .guest {
+                // ゲストモードに移行（ログアウト時）
                 selectedTab = .home
-                print("🔄 ログアウト - タブをリセット")
+                onboardingCompleted = false  // オンボーディング完了フラグをリセット
+                print("🔄 ゲストモード - 初期状態にリセット")
             }
         }
-        .onAppear {
-            initializeApp()
-        }
-        // デバイス登録エラーアラートは削除（自動登録を行わないため）
-    }
-    
-    // MARK: - アプリ初期化
-    private func initializeApp() {
-        guard !hasInitialized else { return }
-        hasInitialized = true
-
-        print("🚀 MainAppView: アプリ初期化開始")
     }
     
     // checkAndRegisterDevice関数は削除されました（自動登録を行わないため）

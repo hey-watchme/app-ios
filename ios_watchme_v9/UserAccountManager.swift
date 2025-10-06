@@ -18,14 +18,22 @@ let supabase = SupabaseClient(
     supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
 )
 
+// ユーザー認証状態
+enum UserAuthState {
+    case guest           // ゲストユーザー（未認証）
+    case authenticated   // 認証済みユーザー
+}
+
 // ユーザーアカウント管理クラス（認証とプロファイル）
 class UserAccountManager: ObservableObject {
+    @Published var authState: UserAuthState = .guest
     @Published var isAuthenticated: Bool = false
     @Published var currentUser: SupabaseUser? = nil
     @Published var authError: String? = nil
     @Published var signUpSuccess: Bool = false
     @Published var isLoading: Bool = false
     @Published var isCheckingAuthStatus: Bool = true  // 認証状態確認中フラグ
+    @Published var guestId: String? = nil  // ゲストID
     
     // DeviceManagerへの参照
     private let deviceManager: DeviceManager
@@ -40,10 +48,9 @@ class UserAccountManager: ObservableObject {
     
     init(deviceManager: DeviceManager) {
         self.deviceManager = deviceManager
-        // 保存された認証状態を確認
-        checkAuthStatus()
         // アプリがフォアグラウンドに戻った時の処理を設定
         setupNotificationObservers()
+        // 認証チェックはMainAppViewの.taskで非同期に実行
     }
     
     // MARK: - アクセストークン取得
@@ -80,35 +87,36 @@ class UserAccountManager: ObservableObject {
     }
     
     // MARK: - 認証状態確認
-    private func checkAuthStatus() {
-        if let savedUser = loadUserFromDefaults() {
-            // 保存されたトークンでセッションを復元
-            Task { @MainActor in
+    func checkAuthStatus() {
+        Task { @MainActor in
+            if let savedUser = loadUserFromDefaults() {
+                // 保存されたトークンでセッションを復元
                 do {
                     // リフレッシュトークンがある場合のみセッションを復元
                     if let refreshToken = savedUser.refreshToken {
                         // まずリフレッシュトークンでトークンを更新してみる
                         let success = await refreshTokenWithRetry(refreshToken: refreshToken)
-                        
+
                         if !success {
                             // リフレッシュ失敗時は保存されたトークンで復元を試みる
                             _ = try await supabase.auth.setSession(
                                 accessToken: savedUser.accessToken,
                                 refreshToken: refreshToken
                             )
-                            
+
                             self.currentUser = savedUser
                             self.isAuthenticated = true
+                            self.authState = .authenticated
                         }
                         // refreshTokenWithRetryが成功した場合は、その中で既にcurrentUserとisAuthenticatedが設定済み
                     } else {
                         // リフレッシュトークンがない場合は再ログインが必要
                         throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "リフレッシュトークンがありません"])
                     }
-                    
+
                     if self.isAuthenticated {
                         print("✅ 保存された認証状態を復元: \(savedUser.email)")
-                        print("🔄 認証状態復元: isAuthenticated = true")
+                        print("🔄 認証状態復元: authState = authenticated")
                         print("🔑 セッショントークンも復元しました")
 
                         // トークンリフレッシュタイマーを開始
@@ -125,30 +133,67 @@ class UserAccountManager: ObservableObject {
                             print("⚠️ プロファイルのuser_idが取得できないため、デバイス一覧の取得をスキップ")
                         }
                     }
-                    
+
                     self.isCheckingAuthStatus = false  // 認証確認完了
-                    
+
                 } catch {
                     print("❌ セッション復元エラー: \(error)")
                     print("🔄 リフレッシュトークンでの再試行を開始...")
-                    
+
                     // エラー時はリフレッシュトークンで再試行
                     if let refreshToken = savedUser.refreshToken {
                         let success = await refreshTokenWithRetry(refreshToken: refreshToken)
                         if !success {
-                            print("⚠️ 再ログインが必要です")
+                            print("⚠️ 再ログインが必要です - ゲストモードに移行")
                             clearLocalAuthData()
+                            initializeGuestMode()
                         }
                     } else {
                         clearLocalAuthData()
+                        initializeGuestMode()
                     }
                     self.isCheckingAuthStatus = false  // 認証確認完了
                 }
+            } else {
+                print("⚠️ 保存された認証状態なし - ゲストモードで初期化")
+                initializeGuestMode()
+                self.isCheckingAuthStatus = false  // 認証確認完了
             }
-        } else {
-            print("⚠️ 保存された認証状態なし: isAuthenticated = false")
-            self.isCheckingAuthStatus = false  // 認証確認完了
         }
+    }
+
+    // MARK: - ゲストモード管理
+    func initializeGuestMode() {
+        // DeviceManagerの状態をクリア
+        deviceManager.clearState()
+
+        // 既存のゲストIDを確認
+        if let savedGuestId = UserDefaults.standard.string(forKey: "guest_id") {
+            print("👤 既存のゲストIDを読み込み: \(savedGuestId)")
+            guestId = savedGuestId
+            authState = .guest
+            isAuthenticated = false
+        } else {
+            // 新規ゲストIDを作成
+            createGuestUser()
+        }
+
+        // サンプルデバイスの自動選択は行わない
+        // ユーザーがガイド画面で「サンプルを見る」を選択したときのみデバイスを選択
+    }
+
+    func createGuestUser() {
+        let newGuestId = UUID().uuidString
+        UserDefaults.standard.set(newGuestId, forKey: "guest_id")
+        guestId = newGuestId
+        authState = .guest
+        isAuthenticated = false
+        print("✨ 新規ゲストユーザーを作成: \(newGuestId)")
+    }
+
+    // 認証が必要かチェック
+    func requireAuthentication() -> Bool {
+        return authState == .guest
     }
     
     // MARK: - ログイン機能
@@ -188,9 +233,14 @@ class UserAccountManager: ObservableObject {
             await MainActor.run {
                 self.currentUser = user
                 self.isAuthenticated = true
+                self.authState = .authenticated
                 self.saveUserToDefaults(user)
 
-                print("🔄 認証状態を更新: isAuthenticated = true")
+                print("🔄 認証状態を更新: authState = authenticated")
+
+                // ゲストIDをクリア（認証済みユーザーに移行）
+                UserDefaults.standard.removeObject(forKey: "guest_id")
+                self.guestId = nil
 
                 // トークンリフレッシュタイマーを開始
                 self.startTokenRefreshTimer()
@@ -364,16 +414,20 @@ class UserAccountManager: ObservableObject {
         print("🧹 ローカル認証データクリア開始")
         currentUser = nil
         isAuthenticated = false
+        authState = .guest
         authError = nil
-        
+
         // トークンリフレッシュタイマーを停止
         refreshTimer?.invalidate()
         refreshTimer = nil
-        
+
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
-        
-        print("👋 ログアウト完了: isAuthenticated = false")
+
+        // DeviceManagerの状態もクリア
+        deviceManager.clearState()
+
+        print("👋 ログアウト完了: authState = guest")
     }
     
     // MARK: - ユーザープロファイル取得
@@ -579,11 +633,12 @@ class UserAccountManager: ObservableObject {
                     
                     self.currentUser = updatedUser
                     self.isAuthenticated = true
+                    self.authState = .authenticated
                     self.saveUserToDefaults(updatedUser)
-                    
+
                     print("✅ トークンリフレッシュ成功")
                     print("📅 新しいアクセストークンを取得")
-                    
+
                     return true
                 }
             } catch {

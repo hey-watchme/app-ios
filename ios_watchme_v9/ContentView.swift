@@ -18,6 +18,7 @@ struct ContentView: View {
     @State private var showRecordingSheet = false
     @State private var showQRScanner = false
     @State private var showDeviceRegistrationConfirm = false
+    @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
     
     // NetworkManagerの初期化（録音機能のため必要）
     @StateObject private var audioRecorder = AudioRecorder()
@@ -144,6 +145,16 @@ struct ContentView: View {
                         VStack(spacing: 16) {
                             // 1. このデバイスで測定するボタン
                             Button(action: {
+                                print("🔘 .noDevices: このデバイスで測定するボタン押下")
+                                print("🔍 authState: \(userAccountManager.authState)")
+
+                                // ゲストモードチェック
+                                if userAccountManager.requireAuthentication() {
+                                    print("❗️ ゲストモード検出 - 会員登録シート表示")
+                                    showSignUpPrompt = true
+                                    return
+                                }
+                                print("✅ 認証済み - デバイス登録確認表示")
                                 showDeviceRegistrationConfirm = true
                             }) {
                                 HStack {
@@ -179,6 +190,15 @@ struct ContentView: View {
 
                             // 3. QRコードでデバイスを追加ボタン
                             Button(action: {
+                                print("🔘 .noDevices: QRコードボタン押下")
+
+                                // ゲストモードチェック
+                                if userAccountManager.requireAuthentication() {
+                                    print("❗️ ゲストモード検出 - 会員登録シート表示")
+                                    showSignUpPrompt = true
+                                    return
+                                }
+                                print("✅ 認証済み - QRスキャナー表示")
                                 showQRScanner = true
                             }) {
                                 HStack {
@@ -244,6 +264,16 @@ struct ContentView: View {
                         Spacer()
                         
                         Button(action: {
+                            print("🔘 FAB: 録音ボタン押下")
+                            print("🔍 authState: \(userAccountManager.authState)")
+
+                            // ゲストモードチェック
+                            if userAccountManager.requireAuthentication() {
+                                print("❗️ ゲストモード検出 - 会員登録シート表示")
+                                showSignUpPrompt = true
+                                return
+                            }
+                            print("✅ 認証済み - 録音シート表示")
                             showRecordingSheet = true
                         }) {
                             ZStack {
@@ -301,17 +331,15 @@ struct ContentView: View {
         } message: {
             Text("このデバイスのマイクを使って音声情報を分析します。")
         }
+        .sheet(isPresented: $showSignUpPrompt) {
+            SignUpView()
+                .environmentObject(userAccountManager)
+        }
         .onAppear {
             initializeNetworkManager()
 
-            // デバイス初期化処理を呼び出す
-            Task {
-                // ✅ CLAUDE.md: public.usersのuser_idを使用
-                if let userId = userAccountManager.currentUser?.profile?.userId {
-                    await deviceManager.initializeDeviceState(for: userId)
-                }
-            }
-            
+            // デバイス初期化処理はMainAppViewの認証成功時に実行済み
+
             // 日付を今日に設定（初期表示時）- 最後の要素を使用
             if let todayDate = dateRange.last {
                 selectedDate = todayDate
@@ -400,6 +428,16 @@ struct ContentView: View {
             VStack(spacing: 16) {
                 // 1. このデバイスで測定するボタン
                 Button(action: {
+                    print("🔘 noDevicesView: このデバイスで測定するボタン押下")
+                    print("🔍 authState: \(userAccountManager.authState)")
+
+                    // ゲストモードチェック
+                    if userAccountManager.requireAuthentication() {
+                        print("❗️ ゲストモード検出 - 会員登録シート表示")
+                        showSignUpPrompt = true
+                        return
+                    }
+                    print("✅ 認証済み - デバイス登録確認表示")
                     showDeviceRegistrationConfirm = true
                 }) {
                     HStack {
@@ -435,6 +473,11 @@ struct ContentView: View {
 
                 // 3. QRコードでデバイスを追加ボタン
                 Button(action: {
+                    // ゲストモードチェック
+                    if userAccountManager.requireAuthentication() {
+                        showSignUpPrompt = true
+                        return
+                    }
                     showQRScanner = true
                 }) {
                     HStack {

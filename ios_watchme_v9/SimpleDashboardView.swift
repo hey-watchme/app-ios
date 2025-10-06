@@ -29,6 +29,7 @@ struct SimpleDashboardView: View {
     @State private var dashboardSummary: DashboardSummary?  // メインデータソース
     @State private var subjectComments: [SubjectComment] = []  // コメント機能追加
     @State private var isLoading = false
+    @State private var lastLoadedDeviceID: String? = nil  // 最後に読み込んだデバイスID
     
     // コメント入力用
     @State private var newCommentText = ""
@@ -145,9 +146,20 @@ struct SimpleDashboardView: View {
         .onChange(of: deviceManager.state) { oldState, newState in
             // DeviceManagerがidleやloadingからreadyに変わったときにデータを取得
             if oldState != .ready && newState == .ready {
-                print("🎯 SimpleDashboardView: DeviceManager became ready, loading data")
-                Task {
-                    await loadAllData()
+                let currentDeviceID = deviceManager.selectedDeviceID
+
+                // デバイスIDが実際に変更された場合のみデータ取得
+                if currentDeviceID != lastLoadedDeviceID && currentDeviceID != nil {
+                    print("🎯 SimpleDashboardView: Device changed to \(currentDeviceID ?? "nil"), loading data")
+                    Task {
+                        await loadAllData()
+                        // 読み込み完了後にデバイスIDを記録
+                        await MainActor.run {
+                            lastLoadedDeviceID = currentDeviceID
+                        }
+                    }
+                } else {
+                    print("⏭️ SimpleDashboardView: State ready but device unchanged (\(currentDeviceID ?? "nil")), skipping reload")
                 }
             }
         }
@@ -258,18 +270,21 @@ struct SimpleDashboardView: View {
                         VStack(spacing: 8) {
                             Text("🚶")
                                 .font(.system(size: 108))  // 1.5倍に拡大（72 * 1.5 = 108）
-                            
-                            Text(topBehavior.event)
-                                .font(.caption)
-                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))  // 黒に変更
-                                .textCase(.uppercase)
-                                .tracking(1.0)
-                            
-                            Text("\(topBehavior.count)回")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))  // 黒に変更
+
+                            HStack(spacing: 8) {
+                                Text(topBehavior.event)
+                                    .font(.caption)
+                                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                                    .textCase(.uppercase)
+                                    .tracking(1.0)
+
+                                Text("\(topBehavior.count)回")
+                                    .font(.caption)
+                                    .fontWeight(.semibold)
+                                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                            }
                         }
+                        .padding(.bottom, 30)  // 下に30px余白
                     }
                     
                     behaviorReportContent(behaviorReport)
@@ -413,20 +428,20 @@ struct SimpleDashboardView: View {
                     ForEach(Array(filteredRanking.prefix(10).enumerated()), id: \.element.id) { index, behavior in
                         HStack(spacing: 8) {
                             Text("\(index + 1)")
-                                .font(.caption)
+                                .font(.body)  // caption → body
                                 .fontWeight(.medium)
                                 .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
-                                .frame(width: 20, alignment: .leading)
-                            
+                                .frame(width: 24, alignment: .leading)
+
                             Text(behavior.event)
-                                .font(.subheadline)
+                                .font(.body)  // subheadline → body
                                 .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
                                 .lineLimit(1)
-                            
+
                             Spacer()
-                            
+
                             Text("\(behavior.count)")
-                                .font(.caption)
+                                .font(.body)  // caption → body
                                 .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
                         }
                     }
@@ -484,21 +499,22 @@ struct SimpleDashboardView: View {
                     ForEach(Array(topEmotions.enumerated()), id: \.element.0) { index, emotion in
                         VStack(spacing: 4) {
                             Text(emotion.2)
-                                .font(.system(size: 36))
-                            
+                                .font(.system(size: 54))  // 36 * 1.5 = 54
+
                             Text("\(Int(emotion.1.rounded()))%")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }
                     }
                 }
+                .padding(.vertical, 30)  // 上下に30px余白
                 
                 // 感情バー
                 VStack(alignment: .leading, spacing: 8) {
                     ForEach(Array(topEmotions.enumerated()), id: \.element.0) { index, emotion in
                         HStack {
                             Text(emotionLabel(for: emotion.0))
-                                .font(.caption)
+                                .font(.body)  // caption → body
                                 .frame(width: 80, alignment: .leading)
                             
                             GeometryReader { geometry in
