@@ -266,6 +266,7 @@ struct DeviceEditView_Previews: PreviewProvider {
             owner_user_id: "user1",
             subject_id: nil,
             created_at: "2025-08-15T10:30:00Z",
+            status: "active",
             role: "owner"
         )
         

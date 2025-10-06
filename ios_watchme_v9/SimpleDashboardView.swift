@@ -154,7 +154,6 @@ struct SimpleDashboardView: View {
         .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
             // デバイスが切り替わったときにデータをクリア
             if oldDeviceId != nil && newDeviceId != nil && oldDeviceId != newDeviceId {
-                print("🔄 SimpleDashboardView: Device changed from \(oldDeviceId!) to \(newDeviceId!), clearing data")
                 clearAllData()
             }
         }
@@ -556,7 +555,6 @@ struct SimpleDashboardView: View {
     }
     
     private func clearAllData() {
-        print("🧹 SimpleDashboardView: Clearing all data")
         behaviorReport = nil
         emotionReport = nil
         subject = nil

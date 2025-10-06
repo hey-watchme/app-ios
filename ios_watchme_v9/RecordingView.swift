@@ -417,17 +417,8 @@ struct RecordingView: View {
             return
         }
 
-        // DeviceManagerのregisterDeviceメソッドを呼び出す
-        await MainActor.run {
-            deviceManager.registerDevice(userId: userId)
-        }
-
-        // 登録完了まで待機（最大5秒）
-        var attempts = 0
-        while deviceManager.isLoading && attempts < 50 {
-            try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
-            attempts += 1
-        }
+        // DeviceManagerのregisterDeviceメソッドを呼び出す（完了まで待機）
+        await deviceManager.registerDevice(userId: userId)
 
         await MainActor.run {
             // エラーチェック

@@ -270,6 +270,7 @@ struct DeviceSectionView_Previews: PreviewProvider {
                 owner_user_id: "user1",
                 subject_id: nil,
                 created_at: nil,
+                status: "active",
                 role: "owner"
             ),
             Device(
@@ -279,6 +280,7 @@ struct DeviceSectionView_Previews: PreviewProvider {
                 owner_user_id: "user1",
                 subject_id: nil,
                 created_at: nil,
+                status: "active",
                 role: "viewer"
             )
         ]

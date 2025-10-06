@@ -428,8 +428,13 @@ struct SubjectRegistrationView: View {
             try await dataManager.updateDeviceSubjectId(deviceId: deviceID, subjectId: subjectId)
             
             // データを再取得
-            await dataManager.fetchAllReports(deviceId: deviceID, date: Date())
-            
+            _ = await dataManager.fetchAllReports(deviceId: deviceID, date: Date())
+
+            // 親ビューに観測対象が更新されたことを通知
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
+            }
+
             await MainActor.run {
                 isLoading = false
                 showingSuccessAlert = true
@@ -520,8 +525,13 @@ struct SubjectRegistrationView: View {
             }
             
             // データを再取得
-            await dataManager.fetchAllReports(deviceId: deviceID, date: Date())
-            
+            _ = await dataManager.fetchAllReports(deviceId: deviceID, date: Date())
+
+            // 親ビューに観測対象が更新されたことを通知
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
+            }
+
             await MainActor.run {
                 isLoading = false
                 // プロフィール更新の場合のみ成功アラートを表示
