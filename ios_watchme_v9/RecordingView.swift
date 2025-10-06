@@ -22,6 +22,7 @@ struct RecordingView: View {
     @State private var recordingDataPoint = ""
     @State private var timer: Timer?
     @State private var showDeviceRegistrationConfirm = false  // デバイス連携確認ポップアップ
+    @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
     
     var body: some View {
         NavigationView {
@@ -282,6 +283,13 @@ struct RecordingView: View {
                         } else {
                             // 録音開始ボタン
                             Button(action: {
+                                // ゲストモードチェック
+                                if userAccountManager.requireAuthentication() {
+                                    // ゲストモードの場合、会員登録を促す
+                                    showSignUpPrompt = true
+                                    return
+                                }
+
                                 // デバイスが選択されているかチェック
                                 if deviceManager.selectedDeviceID == nil {
                                     // デバイス未連携の場合、連携確認ポップアップを表示
@@ -335,6 +343,10 @@ struct RecordingView: View {
             Button("キャンセル", role: .cancel) { }
         } message: {
             Text("このデバイスのマイクを使って音声情報を分析します")
+        }
+        .sheet(isPresented: $showSignUpPrompt) {
+            SignUpView()
+                .environmentObject(userAccountManager)
         }
         .onAppear {
             // AudioRecorderにDeviceManagerの参照を設定

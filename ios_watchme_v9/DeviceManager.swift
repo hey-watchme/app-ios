@@ -209,7 +209,7 @@ class DeviceManager: ObservableObject {
             print("🔍 Restored previously selected device: \(savedDeviceId)")
             return
         }
-        
+
         // 2. ownerロールのデバイスを優先
         let ownerDevices = devices.filter { $0.role == "owner" }
         if let firstOwnerDevice = ownerDevices.first {
@@ -217,7 +217,7 @@ class DeviceManager: ObservableObject {
             print("🔍 Auto-selected owner device: \(firstOwnerDevice.device_id)")
             return
         }
-        
+
         // 3. viewerロールのデバイス
         let viewerDevices = devices.filter { $0.role == "viewer" }
         if let firstViewerDevice = viewerDevices.first {
@@ -225,12 +225,52 @@ class DeviceManager: ObservableObject {
             print("🔍 Auto-selected viewer device: \(firstViewerDevice.device_id)")
             return
         }
-        
+
         // 4. 最後の手段：リストの最初のデバイス
         if let firstDevice = devices.first {
             self.selectedDeviceID = firstDevice.device_id
             print("🔍 Auto-selected first device: \(firstDevice.device_id)")
         }
+    }
+
+    // MARK: - ゲストモード対応
+    func selectSampleDeviceForGuest() {
+        print("👤 ゲストモード: サンプルデバイスを自動選択")
+
+        // サンプルデバイスを作成（データベースから取得しない）
+        var sampleDevice = Device(
+            device_id: DeviceManager.sampleDeviceID,
+            device_type: "observer",
+            timezone: "Asia/Tokyo",
+            owner_user_id: nil,
+            subject_id: nil,
+            created_at: nil,
+            status: "active",
+            role: nil
+        )
+        sampleDevice.role = "viewer"
+
+        // userDevicesリストにサンプルデバイスのみを設定
+        userDevices = [sampleDevice]
+        selectedDeviceID = DeviceManager.sampleDeviceID
+        state = .ready
+
+        print("✅ ゲストモード: サンプルデバイスを選択完了")
+    }
+
+    // MARK: - 状態クリア
+    func clearState() {
+        print("🧹 DeviceManager: 状態をクリア")
+        userDevices = []
+        selectedDeviceID = nil
+        state = .ready  // デバイス未選択でもready状態にする（ガイド画面を表示するため）
+        registrationError = nil
+        isLoading = false
+
+        // UserDefaultsに保存されたデバイスIDもクリア
+        UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
+
+        print("✅ DeviceManager: 状態クリア完了（state = .ready）")
     }
     
     // 内部用のデバイス取得関数（エラーをthrowする）

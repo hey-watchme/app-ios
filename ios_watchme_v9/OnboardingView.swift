@@ -59,14 +59,14 @@ struct OnboardingView: View {
                 Spacer()
             }
 
-            // 最後のページの「始める」ボタン
+            // 最後のページの「はじめる」ボタン
             if currentPage == pages.count - 1 {
                 VStack {
                     Spacer()
                     Button(action: {
                         isPresented = false
                     }) {
-                        Text("始める")
+                        Text("はじめる")
                             .font(.system(size: 18, weight: .bold))
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)

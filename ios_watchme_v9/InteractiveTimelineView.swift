@@ -32,43 +32,43 @@ struct InteractiveTimelineView: View {
     var body: some View {
         VStack(spacing: 16) {
             // メイングラフエリア（ジェスチャー対応）
-            ZStack(alignment: .topTrailing) {
-                GeometryReader { geometry in
-                    ZStack {
-                        // グラフ背景とライン
-                        graphView(in: geometry)
-                        
-                        // パーティクルエフェクト層（Phase 3）
-                        if showParticles,
-                           currentTimeIndex < vibeScores.count,
-                           let score = vibeScores[currentTimeIndex] {
-                            ParticleEffectView(
-                                emotionScore: score,
-                                isActive: true  // 常にアクティブ（自動再生中）
-                            )
-                            .allowsHitTesting(false)
-                        }
-                        
-                        // タイムインジケーター（垂直線）
-                        timeIndicator(in: geometry)
-                        
-                        // イベントポップアップ
-                        if showEventDetail, let event = selectedEvent {
-                            eventPopup(event: event, in: geometry)
-                        }
+            GeometryReader { geometry in
+                ZStack(alignment: .topTrailing) {
+                    // グラフ背景とライン
+                    graphView(in: geometry)
+
+                    // パーティクルエフェクト層（Phase 3）
+                    if showParticles,
+                       currentTimeIndex < vibeScores.count,
+                       let score = vibeScores[currentTimeIndex] {
+                        ParticleEffectView(
+                            emotionScore: score,
+                            isActive: true  // 常にアクティブ（自動再生中）
+                        )
+                        .allowsHitTesting(false)
                     }
-                    .onTapGesture { location in
-                        // タップでインジケーターを即座に移動
-                        handleTap(location: location, width: geometry.size.width)
+
+                    // タイムインジケーター（垂直線）
+                    timeIndicator(in: geometry)
+
+                    // 現在の時刻と感情スコア表示（右上に配置）
+                    currentStatusView
+                        .padding(.trailing, 8)
+                        .padding(.top, 8)
+                        .zIndex(100)  // イベントポップアップより下
+
+                    // イベントポップアップ（最前面）
+                    if showEventDetail, let event = selectedEvent {
+                        eventPopup(event: event, in: geometry)
+                            .zIndex(200)  // 最前面に表示
                     }
                 }
-                .frame(height: 200) // グラフの高さを固定
-                
-                // 現在の時刻と感情スコア表示（右上に配置）
-                currentStatusView
-                    .padding(.trailing, 8)
-                    .padding(.top, 8)
+                .onTapGesture { location in
+                    // タップでインジケーターを即座に移動
+                    handleTap(location: location, width: geometry.size.width)
+                }
             }
+            .frame(height: 200) // グラフの高さを固定
         }
         .onAppear {
             // デバッグ: データソースの確認
@@ -225,10 +225,10 @@ struct InteractiveTimelineView: View {
                         let x = geometry.size.width * CGFloat(slot) / CGFloat(vibeScores.count - 1)
                         let normalizedScore = (Double(event.toScore) + 100) / 200
                         let y = geometry.size.height * (1 - normalizedScore)
-                        
-                        Star()
+
+                        Circle()
                             .fill(slot <= currentTimeIndex ? Color.safeColor("VibeChangeIndicatorColor") : Color.safeColor("VibeChangeIndicatorColor").opacity(0.3))
-                            .frame(width: 12, height: 12)
+                            .frame(width: 8, height: 8)
                             .position(x: x, y: y)
                             .animation(.spring(response: 0.3), value: currentTimeIndex)
                             .onTapGesture {
@@ -249,10 +249,10 @@ struct InteractiveTimelineView: View {
                         let x = geometry.size.width * CGFloat(slot) / CGFloat(vibeScores.count - 1)
                         let normalizedScore = (change.score + 100) / 200
                         let y = geometry.size.height * (1 - normalizedScore)
-                        
-                        Star()
+
+                        Circle()
                             .fill(slot <= currentTimeIndex ? Color.safeColor("VibeChangeIndicatorColor") : Color.safeColor("VibeChangeIndicatorColor").opacity(0.3))
-                            .frame(width: 12, height: 12)
+                            .frame(width: 8, height: 8)
                             .position(x: x, y: y)
                             .animation(.spring(response: 0.3), value: currentTimeIndex)
                             .onTapGesture {
@@ -342,12 +342,12 @@ struct InteractiveTimelineView: View {
             Text(event.time)
                 .font(.caption2)
                 .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
-            
+
             Text(event.event)
                 .font(.caption)
                 .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
                 .lineLimit(2)
-            
+
             HStack {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .font(.caption2)
@@ -367,7 +367,6 @@ struct InteractiveTimelineView: View {
             x: geometry.size.width / 2,
             y: geometry.size.height / 2
         )
-        .zIndex(999)
         .transition(.scale.combined(with: .opacity))
         .onTapGesture {
             withAnimation {
@@ -393,15 +392,22 @@ struct InteractiveTimelineView: View {
     private func handleTap(location: CGPoint, width: CGFloat) {
         // タップ位置にインジケーターを移動
         stopPlayback()
-        
+
+        // 有効なデータのインデックスリストを取得
+        let validIndices = findValidDataIndices()
+        guard !validIndices.isEmpty else { return }
+
         let progress = min(max(0, location.x / width), 1)
-        let newIndex = Int(progress * CGFloat(vibeScores.count - 1))
-        
+        let rawIndex = Int(progress * CGFloat(vibeScores.count - 1))
+
+        // 最も近い有効なインデックスを見つける
+        let newIndex = validIndices.min(by: { abs($0 - rawIndex) < abs($1 - rawIndex) }) ?? currentTimeIndex
+
         withAnimation(.spring(response: 0.3)) {
             currentTimeIndex = newIndex
             checkForEventDuringDrag()
         }
-        
+
         // 軽い振動フィードバック
         hapticManager.playLightImpact()
     }
@@ -421,13 +427,20 @@ struct InteractiveTimelineView: View {
             // 振動フィードバック
             hapticManager.playLightImpact()
         }
-        
+
+        // 有効なデータのインデックスリストを取得
+        let validIndices = findValidDataIndices()
+        guard !validIndices.isEmpty else { return }
+
         // ドラッグ開始位置からの相対移動で計算
         let startX = width * CGFloat(dragStartIndex) / CGFloat(max(1, vibeScores.count - 1))
         let newX = startX + value.translation.width
         let progress = min(max(0, newX / width), 1)
-        let newIndex = Int(progress * CGFloat(vibeScores.count - 1))
-        
+        let rawIndex = Int(progress * CGFloat(vibeScores.count - 1))
+
+        // 最も近い有効なインデックスを見つける
+        let newIndex = validIndices.min(by: { abs($0 - rawIndex) < abs($1 - rawIndex) }) ?? currentTimeIndex
+
         // インデックスが変わった場合のみ更新
         if newIndex != currentTimeIndex {
             currentTimeIndex = newIndex
@@ -724,11 +737,13 @@ struct InteractiveTimelineView: View {
     
     private var currentScoreString: String {
         guard currentTimeIndex < vibeScores.count else {
-            return "---"
+            return "--"
         }
-        // nilの場合は0として扱う
-        let score = vibeScores[currentTimeIndex] ?? 0
-        return String(format: "%.1f", score)
+        // nilの場合は "--" を表示
+        guard let score = vibeScores[currentTimeIndex] else {
+            return "--"
+        }
+        return String(format: "%.0f", score)
     }
     
     private var currentScoreColor: Color {

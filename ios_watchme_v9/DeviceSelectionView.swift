@@ -18,6 +18,7 @@ struct DeviceSelectionView: View {
     @State private var addDeviceError: String?
     @State private var showSuccessAlert = false
     @State private var addedDeviceId: String?
+    @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
     
     var body: some View {
         NavigationView {
@@ -44,6 +45,11 @@ struct DeviceSelectionView: View {
                         VStack(spacing: 16) {
                             // 1. このデバイスで測定するボタン
                             Button(action: {
+                                // ゲストモードチェック
+                                if userAccountManager.requireAuthentication() {
+                                    showSignUpPrompt = true
+                                    return
+                                }
                                 handleRegisterCurrentDevice()
                             }) {
                                 HStack {
@@ -83,6 +89,11 @@ struct DeviceSelectionView: View {
 
                             // 3. QRコードでデバイスを追加ボタン
                             Button(action: {
+                                // ゲストモードチェック
+                                if userAccountManager.requireAuthentication() {
+                                    showSignUpPrompt = true
+                                    return
+                                }
                                 showQRScanner = true
                             }) {
                                 HStack {
@@ -181,6 +192,10 @@ struct DeviceSelectionView: View {
                 if let deviceId = addedDeviceId {
                     Text("device_id: \(deviceId.prefix(8))... が閲覧可能になりました！")
                 }
+            }
+            .sheet(isPresented: $showSignUpPrompt) {
+                SignUpView()
+                    .environmentObject(userAccountManager)
             }
         }
     }

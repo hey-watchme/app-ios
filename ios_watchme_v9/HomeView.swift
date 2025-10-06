@@ -146,71 +146,70 @@ struct TimeBlockRowView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             // メイン行（時間、スコア、サマリー1行目、展開アイコン）
-            Button(action: { 
-                if timeBlock.summary != nil || timeBlock.behavior != nil {
-                    isExpanded.toggle()
+            HStack(alignment: .center, spacing: 12) {
+                // 時間表示
+                Text(timeBlock.displayTime)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                    .frame(width: 45, alignment: .leading)
+
+                // スコア表示
+                Group {
+                    if let score = timeBlock.vibeScore {
+                        HStack(spacing: 3) {
+                            Circle()
+                                .fill(timeBlock.scoreColor)
+                                .frame(width: 6, height: 6)
+                            Text(String(format: "%@%.0fpt", score >= 0 ? "+" : "", score))
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(timeBlock.scoreColor)
+                        }
+                        .frame(width: 60, alignment: .leading)
+                    } else {
+                        Text("-")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                            .frame(width: 60, alignment: .center)
+                    }
                 }
-            }) {
-                HStack(alignment: .center, spacing: 12) {
-                    // 時間表示
-                    Text(timeBlock.displayTime)
-                        .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
-                        .frame(width: 45, alignment: .leading)
-                    
-                    // スコア表示
-                    Group {
-                        if let score = timeBlock.vibeScore {
-                            HStack(spacing: 3) {
-                                Circle()
-                                    .fill(timeBlock.scoreColor)
-                                    .frame(width: 6, height: 6)
-                                Text(String(format: "%@%.0fpt", score >= 0 ? "+" : "", score))
-                                    .font(.system(size: 13, weight: .medium))
-                                    .foregroundColor(timeBlock.scoreColor)
-                            }
-                            .frame(width: 60, alignment: .leading)
-                        } else {
-                            Text("-")
-                                .font(.system(size: 13))
-                                .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                                .frame(width: 60, alignment: .center)
-                        }
+
+                // behaviorまたはサマリーの1行目を表示
+                VStack(alignment: .leading, spacing: 2) {
+                    if let behavior = behaviorDisplay {
+                        Text(behavior)
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
-                    
-                    // behaviorまたはサマリーの1行目を表示
-                    VStack(alignment: .leading, spacing: 2) {
-                        if let behavior = behaviorDisplay {
-                            Text(behavior)
-                                .font(.system(size: 11, weight: .medium))
-                                .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
-                        if let firstLine = summaryFirstLine {
-                            Text(firstLine)
-                                .font(.system(size: 11))
-                                .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                        }
+                    if let firstLine = summaryFirstLine {
+                        Text(firstLine)
+                            .font(.system(size: 11))
+                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    // 展開/折りたたみアイコン
-                    if timeBlock.summary != nil || timeBlock.behavior != nil {
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+                // 展開/折りたたみアイコン（ここだけクリック可能）
+                if timeBlock.summary != nil || timeBlock.behavior != nil {
+                    Button(action: {
+                        isExpanded.toggle()
+                    }) {
                         Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                             .font(.system(size: 10))
                             .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
-                            .frame(width: 20)
-                    } else {
-                        Color.clear.frame(width: 20)
+                            .frame(width: 44, height: 44)  // タップ領域を広げる
+                            .contentShape(Rectangle())
                     }
+                    .buttonStyle(PlainButtonStyle())
+                } else {
+                    Color.clear.frame(width: 44)
                 }
-                .padding(.vertical, 10)
-                .padding(.horizontal, 12)
             }
-            .buttonStyle(BorderlessButtonStyle())
+            .padding(.vertical, 10)
+            .padding(.horizontal, 12)
             
             // 展開時の詳細表示
             if isExpanded {
