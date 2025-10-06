@@ -18,184 +18,203 @@ struct DeviceCard: View {
     let onEditDevice: (() -> Void)?
     
     var body: some View {
-        Button(action: onSelect) {
-            ZStack {
-                // 背景 - 選択時はパープル、通常時は白
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(isSelected ? Color.safeColor("AppAccentColor") : Color.white) // パープル #6200ff
-                    .shadow(color: .black.opacity(isSelected ? 0.15 : 0.1), radius: 10, x: 0, y: 5)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(
-                                isSelected ? Color.clear : Color.safeColor("BorderLight").opacity(0.1),
-                                lineWidth: 1
-                            )
-                    )
-                
-                VStack(spacing: 16) {
-                    // トグルボタンと選択状態
+        ZStack {
+            // 背景 - 選択時はパープル、通常時は白
+            RoundedRectangle(cornerRadius: 24)
+                .fill(isSelected ? Color.safeColor("AppAccentColor") : Color.white) // パープル #6200ff
+                .shadow(color: .black.opacity(isSelected ? 0.15 : 0.1), radius: 10, x: 0, y: 5)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(
+                            isSelected ? Color.clear : Color.safeColor("BorderLight").opacity(0.1),
+                            lineWidth: 1
+                        )
+                )
+
+            VStack(spacing: 16) {
+                // トグルボタンと選択状態（左右反転）- 行全体をクリック可能に
+                Button(action: onSelect) {
                     HStack {
-                        // カスタムトグルスタイル - 紫色背景時は専用デザイン
-                        Toggle("", isOn: .constant(isSelected))
-                            .labelsHidden()
-                            .toggleStyle(PurpleBackgroundToggleStyle(isOnPurpleBackground: isSelected))
-                            .disabled(true) // ボタン全体でクリックするので、トグル自体は無効化
-                        
                         Text(isSelected ? "選択中のデバイス" : "このデバイスを選択する")
                             .font(.body)
                             .fontWeight(isSelected ? .semibold : .regular)
                             .foregroundColor(isSelected ? .white : .primary)
-                        
+
                         Spacer()
+
+                        // カスタムトグルスタイル - 紫色背景時は専用デザイン
+                        Toggle("", isOn: .constant(isSelected))
+                            .labelsHidden()
+                            .toggleStyle(PurpleBackgroundToggleStyle(isOnPurpleBackground: isSelected))
+                            .disabled(true)
+                            .allowsHitTesting(false)
                     }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
                     
                     // 区切り線（トグルボタンの下）
                     Divider()
                         .background(isSelected ? Color.white.opacity(0.5) : Color.gray.opacity(0.3))
-                    
-                    // デバイスID情報
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("デバイスID")
-                            .font(.caption)
-                            .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                        
-                        Text(device.device_id)
-                            .font(.system(.footnote, design: .monospaced))
-                            .fontWeight(.medium)
-                            .foregroundColor(isSelected ? .white : .primary)
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    // デバイス詳細情報
-                    VStack(alignment: .leading, spacing: 8) {
-                        // デバイスタイプ
-                        DetailInfoRowNoIcon(
-                            label: "デバイスタイプ",
-                            value: getDeviceTypeDisplayName(),
-                            isSelected: isSelected
-                        )
-                        
-                        // デバイスタイムゾーン
-                        DetailInfoRowNoIcon(
-                            label: "デバイスタイムゾーン",
-                            value: device.timezone ?? "未設定",
-                            isSelected: isSelected
-                        )
-                    }
-                    
-                    // デバイス情報編集ボタン
+
+                    // デバイスID情報（右端に>カーソル）- 行全体をクリック可能に
                     if let onEditDevice = onEditDevice {
-                        HStack {
-                            Spacer()
-                            Button(action: onEditDevice) {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "info.circle")
-                                    Text("デバイス詳細")
+                        Button(action: onEditDevice) {
+                            HStack(spacing: 12) {
+                                // デバイスタイプに応じたアイコン
+                                ZStack {
+                                    Circle()
+                                        .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                        .frame(width: 40, height: 40)
+
+                                    Image(systemName: getDeviceIcon())
+                                        .font(.system(size: 20))
+                                        .foregroundColor(isSelected ? .white : .black)
                                 }
-                                .font(.caption)
-                                .foregroundColor(isSelected ? .white.opacity(0.9) : Color.safeColor("PrimaryActionColor"))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 6)
-                                .background(
-                                    Capsule()
-                                        .stroke(isSelected ? Color.white.opacity(0.3) : Color.safeColor("PrimaryActionColor").opacity(0.3), lineWidth: 1)
-                                )
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("デバイスID")
+                                        .font(.caption)
+                                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+
+                                    Text(getShortDeviceId())
+                                        .font(.system(.footnote, design: .monospaced))
+                                        .fontWeight(.medium)
+                                        .foregroundColor(isSelected ? .white : .primary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
                             }
+                            .contentShape(Rectangle())
                         }
-                        .padding(.top, 4)
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        HStack(spacing: 12) {
+                            ZStack {
+                                Circle()
+                                    .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                    .frame(width: 40, height: 40)
+
+                                Image(systemName: getDeviceIcon())
+                                    .font(.system(size: 20))
+                                    .foregroundColor(isSelected ? .white : .black)
+                            }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("デバイスID")
+                                    .font(.caption)
+                                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+
+                                Text(getShortDeviceId())
+                                    .font(.system(.footnote, design: .monospaced))
+                                    .fontWeight(.medium)
+                                    .foregroundColor(isSelected ? .white : .primary)
+                            }
+
+                            Spacer()
+                        }
                     }
-                    
+
                     // 区切り線
                     Divider()
                         .background(isSelected ? Color.white.opacity(0.3) : Color.gray.opacity(0.3))
-                    
-                    // 観測対象情報
-                    HStack(spacing: 12) {
-                        // 観測対象アバター（AvatarViewコンポーネントを使用）
-                        if let subject = subject {
-                            ZStack {
-                                AvatarView(type: .subject, id: subject.subjectId, size: 50)
-                                
-                                // 選択時の枠線
-                                Circle()
-                                    .stroke(isSelected ? Color.white.opacity(0.3) : Color.safeColor("BorderLight").opacity(0.2), lineWidth: 2)
-                                    .frame(width: 50, height: 50)
+
+                    // 観測対象情報（右端に>カーソル）- 行全体をクリック可能に
+                    if let subject = subject, let onEditSubject = onEditSubject {
+                        Button(action: { onEditSubject(subject) }) {
+                            HStack(spacing: 12) {
+                                ZStack {
+                                    AvatarView(type: .subject, id: subject.subjectId, size: 40)
+
+                                    Circle()
+                                        .stroke(isSelected ? Color.white.opacity(0.3) : Color.safeColor("BorderLight").opacity(0.2), lineWidth: 2)
+                                        .frame(width: 40, height: 40)
+                                }
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("観測対象")
+                                        .font(.caption)
+                                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+
+                                    Text(subject.name ?? "未設定")
+                                        .font(.footnote)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(isSelected ? .white : .primary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
                             }
-                        } else {
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else if let onAddSubject = onAddSubject {
+                        Button(action: onAddSubject) {
+                            HStack(spacing: 12) {
+                                Circle()
+                                    .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                    .frame(width: 40, height: 40)
+                                    .overlay(
+                                        Image(systemName: "person.fill.questionmark")
+                                            .font(.system(size: 18))
+                                            .foregroundColor(isSelected ? .white.opacity(0.6) : .black)
+                                    )
+
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("観測対象")
+                                        .font(.caption)
+                                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+
+                                    Text("未設定")
+                                        .font(.footnote)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(isSelected ? .white : .primary)
+                                }
+
+                                Spacer()
+
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 14, weight: .semibold))
+                                    .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } else {
+                        HStack(spacing: 12) {
                             Circle()
-                                .fill(isSelected ? Color.white.opacity(0.2) : Color.safeColor("BorderLight").opacity(0.1))
-                                .frame(width: 50, height: 50)
+                                .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                .frame(width: 40, height: 40)
                                 .overlay(
                                     Image(systemName: "person.fill.questionmark")
-                                        .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
+                                        .font(.system(size: 18))
+                                        .foregroundColor(isSelected ? .white.opacity(0.6) : .black)
                                 )
-                        }
-                        
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("観測対象")
-                                .font(.caption)
-                                .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
-                            
-                            Text(subject?.name ?? "未設定")
-                                .font(.body)
-                                .fontWeight(.medium)
-                                .foregroundColor(isSelected ? .white : .primary)
-                        }
-                        
-                        Spacer()
-                    }
-                    
-                    // 観測対象アクション
-                    HStack {
-                        Spacer()
-                        
-                        if let subject = subject {
-                            // 編集ボタン
-                            if let onEditSubject = onEditSubject {
-                                Button(action: {
-                                    onEditSubject(subject)
-                                }) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "pencil")
-                                        Text("観測対象を編集")
-                                    }
+
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("観測対象")
                                     .font(.caption)
-                                    .foregroundColor(isSelected ? Color.safeColor("AppAccentColor") : Color.safeColor("PrimaryActionColor"))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule()
-                                            .fill(isSelected ? Color.white : Color.safeColor("PrimaryActionColor").opacity(0.1))
-                                    )
-                                }
+                                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+
+                                Text("未設定")
+                                    .font(.footnote)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(isSelected ? .white : .primary)
                             }
-                        } else {
-                            // 追加ボタン
-                            if let onAddSubject = onAddSubject {
-                                Button(action: onAddSubject) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "person.badge.plus")
-                                        Text("観測対象を追加")
-                                    }
-                                    .font(.caption)
-                                    .foregroundColor(isSelected ? Color.safeColor("WarningColor") : Color.safeColor("WarningColor"))
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 6)
-                                    .background(
-                                        Capsule()
-                                            .fill(isSelected ? Color.white : Color.safeColor("WarningColor").opacity(0.1))
-                                    )
-                                }
-                            }
+
+                            Spacer()
                         }
                     }
                 }
                 .padding(20)
-            }
         }
-        .buttonStyle(PlainButtonStyle())
     }
     
     private func getDeviceIcon() -> String {
@@ -206,9 +225,17 @@ struct DeviceCard: View {
             return "smartphone"
         case "web":
             return "desktopcomputer"
+        case "observer":
+            return "mic.fill"
         default:
             return "square.dashed"
         }
+    }
+
+    private func getShortDeviceId() -> String {
+        // デバイスIDの最初の8文字を表示
+        let prefix = String(device.device_id.prefix(8))
+        return "\(prefix)..."
     }
     
     private func getDeviceTypeDisplayName() -> String {
@@ -407,6 +434,7 @@ struct DeviceCard_Previews: PreviewProvider {
             owner_user_id: "user1",
             subject_id: nil,
             created_at: "2025-08-15T10:30:00Z",
+            status: "active",
             role: "owner"
         )
         
