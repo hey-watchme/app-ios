@@ -13,6 +13,17 @@ struct LoadDataTrigger: Equatable {
     let deviceId: String?
 }
 
+// 📊 パフォーマンス最適化: キャッシュデータ構造（Phase 1-A）
+struct CachedDashboardData {
+    let dashboardSummary: DashboardSummary?
+    let behaviorReport: BehaviorReport?
+    let emotionReport: EmotionReport?
+    let subject: Subject?
+    let subjectComments: [SubjectComment]
+    let cachedEmotionPercentages: [(String, Double, String, Color)]
+    let timestamp: Date
+}
+
 struct SimpleDashboardView: View {
     @Binding var selectedDate: Date
     @EnvironmentObject var deviceManager: DeviceManager
@@ -30,12 +41,20 @@ struct SimpleDashboardView: View {
     @State private var subjectComments: [SubjectComment] = []  // コメント機能追加
     @State private var isLoading = false
     @State private var lastLoadedDeviceID: String? = nil  // 最後に読み込んだデバイスID
-    
+
+    // 📊 パフォーマンス最適化: 計算結果のキャッシュ
+    @State private var cachedEmotionPercentages: [(String, Double, String, Color)] = []
+
+    // 📊 パフォーマンス最適化: データキャッシュ（Phase 1-A）
+    @State private var dataCache: [String: CachedDashboardData] = [:]
+    @State private var cacheKeys: [String] = []  // LRU管理用
+    private let maxCacheSize = 5  // 最近5日分をキャッシュ
+
     // コメント入力用
     @State private var newCommentText = ""
     @State private var isAddingComment = false
     @FocusState private var isCommentFieldFocused: Bool  // キーボード制御用
-    
+
     // モーダル表示管理
     @State private var showVibeSheet = false
     @State private var showBehaviorSheet = false
@@ -103,15 +122,12 @@ struct SimpleDashboardView: View {
             }
             .coordinateSpace(name: "scroll")
             .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
+                // 📊 パフォーマンス最適化: ログ出力を削減
                 // LargeDateSectionが画面外に出そうになったら固定ヘッダーを表示
-                // LargeDateSectionの高さが約200ptなので、-150ptを闾値とする
-                print("📍 SimpleDashboardView: Scroll offset detected: \(value)")
                 let shouldShowStickyHeader = value < -150
-                print("📍 SimpleDashboardView: shouldShowStickyHeader = \(shouldShowStickyHeader), current showStickyHeader = \(showStickyHeader)")
                 if shouldShowStickyHeader != showStickyHeader {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showStickyHeader = shouldShowStickyHeader
-                        print("📍 SimpleDashboardView: Updated showStickyHeader to \(showStickyHeader)")
                     }
                 }
             }
@@ -135,38 +151,96 @@ struct SimpleDashboardView: View {
             }
         }
         .task(id: LoadDataTrigger(date: selectedDate, deviceId: deviceManager.selectedDeviceID)) {
-            // DeviceManagerがready状態の時のみデータ取得を実行
+            // 📊 パフォーマンス最適化: データ取得を一元化（Phase 1-A: デバウンス + キャッシュ）
             guard deviceManager.state == .ready else {
                 return
             }
-            
-            // 日付またはデバイスIDが変更されたときに実行
-            await loadAllData()
-        }
-        .onChange(of: deviceManager.state) { oldState, newState in
-            // DeviceManagerがidleやloadingからreadyに変わったときにデータを取得
-            if oldState != .ready && newState == .ready {
-                let currentDeviceID = deviceManager.selectedDeviceID
 
-                // デバイスIDが実際に変更された場合のみデータ取得
-                if currentDeviceID != lastLoadedDeviceID && currentDeviceID != nil {
-                    print("🎯 SimpleDashboardView: Device changed to \(currentDeviceID ?? "nil"), loading data")
-                    Task {
-                        await loadAllData()
-                        // 読み込み完了後にデバイスIDを記録
-                        await MainActor.run {
-                            lastLoadedDeviceID = currentDeviceID
-                        }
-                    }
-                } else {
-                    print("⏭️ SimpleDashboardView: State ready but device unchanged (\(currentDeviceID ?? "nil")), skipping reload")
+            // キャッシュキーの生成
+            guard let deviceId = deviceManager.selectedDeviceID else {
+                await MainActor.run {
+                    clearAllData()
                 }
+                return
+            }
+
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            formatter.timeZone = deviceManager.getTimezone(for: deviceId)
+            let dateString = formatter.string(from: selectedDate)
+            let cacheKey = "\(deviceId)_\(dateString)"
+
+            // ✅ キャッシュヒット → 即座に表示（スワイプ超高速）
+            if let cached = dataCache[cacheKey] {
+                // キャッシュが新鮮か確認（5分以内）
+                if Date().timeIntervalSince(cached.timestamp) < 300 {
+                    await MainActor.run {
+                        self.dashboardSummary = cached.dashboardSummary
+                        self.behaviorReport = cached.behaviorReport
+                        self.emotionReport = cached.emotionReport
+                        self.subject = cached.subject
+                        self.subjectComments = cached.subjectComments
+                        self.cachedEmotionPercentages = cached.cachedEmotionPercentages
+                    }
+                    print("✅ [Cache HIT] Data loaded from cache for \(dateString)")
+                    return
+                } else {
+                    print("⚠️ [Cache EXPIRED] Cache data is older than 5 minutes for \(dateString)")
+                }
+            }
+
+            // ✅ キャッシュミス → デバウンス処理（スワイプ中の無駄なリクエスト防止）
+            print("⏳ [Debounce] Waiting 300ms before loading data for \(dateString)...")
+            try? await Task.sleep(for: .milliseconds(300))
+
+            // スワイプ継続中ならキャンセルされている
+            guard !Task.isCancelled else {
+                print("🚫 [Cancelled] Data loading cancelled for \(dateString)")
+                return
+            }
+
+            // ✅ スワイプ停止後のみデータ取得
+            print("📡 [API Request] Loading data for \(dateString)...")
+            await loadAllData()
+
+            // ✅ キャッシュに保存
+            await MainActor.run {
+                let cached = CachedDashboardData(
+                    dashboardSummary: self.dashboardSummary,
+                    behaviorReport: self.behaviorReport,
+                    emotionReport: self.emotionReport,
+                    subject: self.subject,
+                    subjectComments: self.subjectComments,
+                    cachedEmotionPercentages: self.cachedEmotionPercentages,
+                    timestamp: Date()
+                )
+
+                dataCache[cacheKey] = cached
+
+                // LRU管理: 既存のキーを削除してから追加
+                if let existingIndex = cacheKeys.firstIndex(of: cacheKey) {
+                    cacheKeys.remove(at: existingIndex)
+                }
+                cacheKeys.append(cacheKey)
+
+                // 古いキャッシュを削除
+                if cacheKeys.count > maxCacheSize {
+                    let oldKey = cacheKeys.removeFirst()
+                    dataCache.removeValue(forKey: oldKey)
+                    print("🗑️ [Cache LRU] Removed old cache for key: \(oldKey)")
+                }
+
+                print("💾 [Cache SAVED] Data cached for \(dateString) (total: \(cacheKeys.count)/\(maxCacheSize))")
             }
         }
         .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
-            // デバイスが切り替わったときにデータをクリア
+            // デバイスが切り替わったときにデータとキャッシュをクリア（Phase 1-A）
             if oldDeviceId != nil && newDeviceId != nil && oldDeviceId != newDeviceId {
                 clearAllData()
+                // キャッシュもクリア
+                dataCache.removeAll()
+                cacheKeys.removeAll()
+                print("🗑️ [Cache CLEARED] All cache cleared due to device change")
             }
         }
         .sheet(isPresented: $showVibeSheet) {
@@ -488,11 +562,10 @@ struct SimpleDashboardView: View {
         VStack(spacing: 16) {
             if !report.emotionGraph.isEmpty {
                 let activeTimePoints = report.emotionGraph.filter { $0.totalEmotions > 0 }
-                
+
                 if !activeTimePoints.isEmpty {
-                    let emotions = calculateEmotionPercentages(from: activeTimePoints)
-                    let nonZeroEmotions = emotions.filter { $0.1 > 0 }
-                    let topEmotions = nonZeroEmotions.sorted { $0.1 > $1.1 }.prefix(3)
+                    // 📊 パフォーマンス最適化: キャッシュされた結果を使用
+                    let topEmotions = cachedEmotionPercentages.prefix(3)
                 
                 // トップ感情を絵文字で表示
                 HStack(spacing: 16) {
@@ -579,12 +652,8 @@ struct SimpleDashboardView: View {
     }
     
     private func loadAllData() async {
-        print("🔄 SimpleDashboardView: loadAllData() called.")
-        print("   - selectedDeviceID: \(deviceManager.selectedDeviceID ?? "nil")")
-
+        // 📊 パフォーマンス最適化: 詳細ログを削減
         guard let deviceId = deviceManager.selectedDeviceID else {
-            print("❌ SimpleDashboardView: loadAllData() - deviceId is nil. Clearing data.")
-            print("   - selectedDeviceID was: \(deviceManager.selectedDeviceID ?? "nil")")
             // データをクリア
             await MainActor.run {
                 self.behaviorReport = nil
@@ -594,16 +663,6 @@ struct SimpleDashboardView: View {
             }
             return
         }
-        
-        print("✅ SimpleDashboardView: loadAllData() - deviceId is \(deviceId). Proceeding to fetch data.")
-        
-        // デバッグログ
-        print("🔍 SimpleDashboardView loading data")
-        print("   📱 Device ID: \(deviceId)")
-        print("   📅 Selected Date: \(selectedDate)")
-        print("   🌍 Device Timezone: \(deviceManager.getTimezone(for: deviceId).identifier)")
-        print("   🕐 Current iPhone Time: \(Date())")
-        print("   📱 iPhone Timezone: \(TimeZone.current.identifier)")
         
         // ローディング開始
         await MainActor.run {
@@ -630,18 +689,21 @@ struct SimpleDashboardView: View {
             self.emotionReport = result.emotionReport
             self.subject = result.subject
             self.dashboardSummary = result.dashboardSummary
-            self.subjectComments = result.subjectComments ?? []  // コメントデータも設定
-        }
-        
-        // デバッグログ - 取得結果
-        print("✅ SimpleDashboardView data loaded:")
-        print("   - Dashboard Summary: \(result.dashboardSummary != nil ? "✓" : "✗")")
-        print("   - Behavior: \(result.behaviorReport != nil ? "✓" : "✗")")
-        print("   - Emotion: \(result.emotionReport != nil ? "✓" : "✗")")
-        print("   - Subject: \(result.subject != nil ? "✓" : "✗")")
-        
-        if let summary = result.dashboardSummary {
-            print("   📊 Dashboard date: \(summary.date), average: \(summary.averageVibe ?? 0)")
+            self.subjectComments = result.subjectComments ?? []
+
+            // 📊 パフォーマンス最適化: 感情データのキャッシュを更新
+            if let emotionReport = result.emotionReport {
+                let activeTimePoints = emotionReport.emotionGraph.filter { $0.totalEmotions > 0 }
+                if !activeTimePoints.isEmpty {
+                    let emotions = calculateEmotionPercentages(from: activeTimePoints)
+                    let nonZeroEmotions = emotions.filter { $0.1 > 0 }
+                    self.cachedEmotionPercentages = nonZeroEmotions.sorted { $0.1 > $1.1 }
+                } else {
+                    self.cachedEmotionPercentages = []
+                }
+            } else {
+                self.cachedEmotionPercentages = []
+            }
         }
     }
     

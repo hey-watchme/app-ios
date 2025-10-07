@@ -236,13 +236,9 @@ struct MainAppView: View {
                 selectedTab = .home
                 print("✅ 認証成功 - ホーム画面に遷移")
 
-                // ユーザーに紐付く全デバイスを取得
-                if let userId = userAccountManager.currentUser?.profile?.userId {
-                    print("🔍 ユーザーの全デバイスを自動取得: \(userId)")
-                    Task {
-                        await deviceManager.fetchUserDevices(for: userId)
-                    }
-                }
+                // 📊 Phase 2-B: デバイス取得の重複を排除
+                // UserAccountManager内で既にfetchUserDevicesが実行されているため、ここでは不要
+                // L239-245を削除（重複処理）
             } else if newValue == .guest {
                 // ゲストモードに移行（ログアウト時）
                 selectedTab = .home

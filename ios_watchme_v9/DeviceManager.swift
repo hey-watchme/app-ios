@@ -322,110 +322,20 @@ class DeviceManager: ObservableObject {
         return devices
     }
     
-    // MARK: - ユーザーのデバイスを取得（旧バージョン - 互換性のため残す）
+    // MARK: - ユーザーのデバイスを取得（Phase 2-C: 重複処理を削除）
     func fetchUserDevices(for userId: String) async {
-        print("🔄 DeviceManager: fetchUserDevices called for user \(userId)")
-        
-        // 新しい初期化処理を呼び出す
+        print("🔄 [Phase 2-C] DeviceManager: fetchUserDevices called for user \(userId)")
+
+        // 📊 Phase 2-C: 新しい初期化処理を呼び出すだけ（重複処理を削除）
+        // L337-423の重複処理を削除
         await initializeDeviceState(for: userId)
-        
+
         // 旧コードとの互換性のため、isLoadingを更新
         await MainActor.run {
             self.isLoading = false
         }
-        
-        // Supabaseクライアントを使用してuser_devicesを取得
-        do {
-            print("📡 Fetching user devices for userId: \(userId)")
-            
-            // デバッグ: 現在の認証状態を確認
-            if let currentUser = try? await supabase.auth.session.user {
-                print("✅ 認証済みユーザー: \(currentUser.id)")
-            } else {
-                print("❌ 認証されていません - supabase.auth.session.userがnil")
-            }
-            
-            // Step 1: user_devicesテーブルからデータを取得
-            let userDevices: [UserDevice] = try await supabase
-                .from("user_devices")
-                .select("*")
-                .eq("user_id", value: userId)
-                .execute()
-                .value
-            
-            print("📊 Decoded user_devices count: \(userDevices.count)")
-            for userDevice in userDevices {
-                print("   - Device: \(userDevice.device_id), Role: \(userDevice.role)")
-            }
-            
-            if userDevices.isEmpty {
-                print("⚠️ DeviceManager: No user devices found.")
-                await MainActor.run {
-                    self.userDevices = []
-                    self.isLoading = false  // ローディング状態を解除
-                    self.selectedDeviceID = nil
-                }
-                print("➡️ DeviceManager: fetchUserDevices completed. No devices available.")
-                return
-            }
-            
-            print("📄 Found \(userDevices.count) user-device relationships")
-            
-            // Step 2: device_idのリストを作成してdevicesテーブルから詳細を取得
-            let deviceIds = userDevices.map { $0.device_id }
-            
-            // Step 3: devicesテーブルから詳細情報を取得
-            var devices: [Device] = try await supabase
-                .from("devices")
-                .select("*")
-                .in("device_id", values: deviceIds)
-                .execute()
-                .value
-            
-            print("📊 Fetched \(devices.count) device details")
-            
-            // Step 4: roleの情報をデバイスに付与
-            for i in devices.indices {
-                if let userDevice = userDevices.first(where: { $0.device_id == devices[i].device_id }) {
-                    devices[i].role = userDevice.role
-                }
-            }
-            
-            await MainActor.run { [devices] in
-                self.userDevices = devices
-                print("✅ Found \(devices.count) devices for user: \(userId)")
-                
-                // ownerロールのデバイスを優先的に選択
-                let ownerDevices = devices.filter { $0.role == "owner" }
-                let viewerDevices = devices.filter { $0.role == "viewer" }
-                
-                // 保存された選択デバイスがある場合はそれを優先
-                if let savedDeviceId = UserDefaults.standard.string(forKey: self.selectedDeviceIDKey),
-                   devices.contains(where: { $0.device_id == savedDeviceId }) {
-                    self.selectedDeviceID = savedDeviceId
-                    print("🔍 Restored previously selected device: \(savedDeviceId)")
-                } else if let firstOwnerDevice = ownerDevices.first {
-                    self.selectedDeviceID = firstOwnerDevice.device_id
-                    print("🔍 Auto-selected owner device: \(firstOwnerDevice.device_id)")
-                } else if let firstViewerDevice = viewerDevices.first {
-                    self.selectedDeviceID = firstViewerDevice.device_id
-                    print("🔍 Auto-selected viewer device: \(firstViewerDevice.device_id)")
-                } else if let firstDevice = devices.first {
-                    self.selectedDeviceID = firstDevice.device_id
-                    print("🔍 Selected first device: \(firstDevice.device_id)")
-                }
-                
-                print("➡️ DeviceManager: fetchUserDevices completed. Final selectedDeviceID: \(self.selectedDeviceID ?? "nil")")
-            }
-            
-        } catch {
-            print("❌ Device fetch error: \(error)")
-        }
-        
-        // ローディング状態を解除
-        await MainActor.run {
-            self.isLoading = false
-        }
+
+        print("✅ [Phase 2-C] fetchUserDevices completed (delegated to initializeDeviceState)")
     }
     
     // MARK: - デバイス選択

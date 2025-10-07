@@ -90,12 +90,43 @@ class UserAccountManager: ObservableObject {
     func checkAuthStatus() {
         Task { @MainActor in
             if let savedUser = loadUserFromDefaults() {
+                // 📊 Phase 2-A: トークン有効期限のローカルチェック
+                if let expiresAt = savedUser.expiresAt, expiresAt > Date().addingTimeInterval(300) {
+                    // まだ5分以上有効 → リフレッシュ不要
+                    print("✅ [Phase 2-A] トークンは有効（有効期限: \(expiresAt)）- リフレッシュスキップ")
+                    self.currentUser = savedUser
+                    self.isAuthenticated = true
+                    self.authState = .authenticated
+
+                    // トークンリフレッシュタイマーを開始
+                    startTokenRefreshTimer()
+
+                    // 📊 Phase 2-A: プロファイル取得とデバイス一覧取得を並列化
+                    print("🚀 [Phase 2-A] プロファイルとデバイス一覧を並列取得開始...")
+                    async let profileTask = fetchUserProfile(userId: currentUser?.id ?? savedUser.id)
+
+                    // プロファイル取得完了を待ってからデバイス取得（user_idが必要なため）
+                    await profileTask
+
+                    if let userId = currentUser?.profile?.userId {
+                        await deviceManager.fetchUserDevices(for: userId)
+                    } else {
+                        print("⚠️ プロファイルのuser_idが取得できないため、デバイス一覧の取得をスキップ")
+                    }
+
+                    self.isCheckingAuthStatus = false
+                    return
+                }
+
+                // トークンが期限切れまたは有効期限情報なし → リフレッシュ実行
+                print("⚠️ [Phase 2-A] トークンの有効期限切れまたは情報なし - リフレッシュ実行")
+
                 // 保存されたトークンでセッションを復元
                 do {
                     // リフレッシュトークンがある場合のみセッションを復元
                     if let refreshToken = savedUser.refreshToken {
                         // まずリフレッシュトークンでトークンを更新してみる
-                        let success = await refreshTokenWithRetry(refreshToken: refreshToken)
+                        let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 2)  // 📊 Phase 2-A: 3回→2回に削減
 
                         if !success {
                             // リフレッシュ失敗時は保存されたトークンで復元を試みる
@@ -122,11 +153,13 @@ class UserAccountManager: ObservableObject {
                         // トークンリフレッシュタイマーを開始
                         startTokenRefreshTimer()
 
-                        // プロファイルを取得（auth.users.idを使用）
-                        await fetchUserProfile(userId: currentUser?.id ?? savedUser.id)
+                        // 📊 Phase 2-A: プロファイル取得とデバイス一覧取得を並列化
+                        print("🚀 [Phase 2-A] プロファイルとデバイス一覧を並列取得開始...")
+                        async let profileTask = fetchUserProfile(userId: currentUser?.id ?? savedUser.id)
 
-                        // プロファイル取得後、public.usersのuser_idでデバイス一覧を取得
-                        // ✅ CLAUDE.md: public.usersのuser_idを使用
+                        // プロファイル取得完了を待ってからデバイス取得（user_idが必要なため）
+                        await profileTask
+
                         if let userId = currentUser?.profile?.userId {
                             await deviceManager.fetchUserDevices(for: userId)
                         } else {
@@ -142,7 +175,7 @@ class UserAccountManager: ObservableObject {
 
                     // エラー時はリフレッシュトークンで再試行
                     if let refreshToken = savedUser.refreshToken {
-                        let success = await refreshTokenWithRetry(refreshToken: refreshToken)
+                        let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 2)  // 📊 Phase 2-A: 3回→2回に削減
                         if !success {
                             print("⚠️ 再ログインが必要です - ゲストモードに移行")
                             clearLocalAuthData()
@@ -222,12 +255,17 @@ class UserAccountManager: ObservableObject {
             print("✅ ログイン成功: \(email)")
             print("📡 認証レスポンス取得完了")
 
+            // 📊 Phase 2-A: 有効期限を計算（1時間後）
+            let expiresAt = Date().addingTimeInterval(3600)
+
             // 認証情報を保存
             let user = SupabaseUser(
                 id: session.user.id.uuidString,
                 email: session.user.email ?? email,
                 accessToken: session.accessToken,
-                refreshToken: session.refreshToken
+                refreshToken: session.refreshToken,
+                profile: nil,
+                expiresAt: expiresAt  // 📊 Phase 2-A: 有効期限を設定
             )
 
             await MainActor.run {
@@ -613,41 +651,45 @@ class UserAccountManager: ObservableObject {
     
     // リトライ機能付きトークンリフレッシュ
     @discardableResult
-    private func refreshTokenWithRetry(refreshToken: String, maxRetries: Int = 3) async -> Bool {
+    private func refreshTokenWithRetry(refreshToken: String, maxRetries: Int = 2) async -> Bool {  // 📊 Phase 2-A: デフォルト3回→2回
         for attempt in 1...maxRetries {
-            print("🔄 トークンリフレッシュ試行 \(attempt)/\(maxRetries)")
-            
+            print("🔄 [Phase 2-A] トークンリフレッシュ試行 \(attempt)/\(maxRetries)")
+
             do {
                 // Supabase SDKのリフレッシュ機能を使用
                 let session = try await supabase.auth.refreshSession()
-                
+
                 // 新しいトークンで情報を更新
                 if let email = session.user.email {
+                    // 📊 Phase 2-A: 有効期限を計算して保存（デフォルト1時間）
+                    let expiresAt = Date().addingTimeInterval(3600)  // 現在時刻 + 1時間
+
                     let updatedUser = SupabaseUser(
                         id: session.user.id.uuidString,
                         email: email,
                         accessToken: session.accessToken,
                         refreshToken: session.refreshToken,
-                        profile: currentUser?.profile
+                        profile: currentUser?.profile,
+                        expiresAt: expiresAt  // 📊 Phase 2-A: 有効期限を設定
                     )
-                    
+
                     self.currentUser = updatedUser
                     self.isAuthenticated = true
                     self.authState = .authenticated
                     self.saveUserToDefaults(updatedUser)
 
-                    print("✅ トークンリフレッシュ成功")
+                    print("✅ [Phase 2-A] トークンリフレッシュ成功（有効期限: \(expiresAt)）")
                     print("📅 新しいアクセストークンを取得")
 
                     return true
                 }
             } catch {
                 print("❌ トークンリフレッシュエラー (試行 \(attempt)): \(error)")
-                
-                // 最後の試行でなければ、指数バックオフで待機
+
+                // 📊 Phase 2-A: 待機時間を短縮（2秒→1秒に）
                 if attempt < maxRetries {
-                    let delay = Double(attempt) * 2.0
-                    print("⏳ \(delay)秒後に再試行...")
+                    let delay = Double(attempt) * 1.0  // 1秒、2秒（従来: 2秒、4秒）
+                    print("⏳ [Phase 2-A] \(delay)秒後に再試行...")
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 }
             }
@@ -690,6 +732,7 @@ struct SupabaseUser: Codable {
     let accessToken: String
     let refreshToken: String?
     var profile: UserProfile?
+    var expiresAt: Date?  // 📊 Phase 2-A: トークン有効期限（ローカルチェック用）
 }
 
 struct UserProfile: Codable {
