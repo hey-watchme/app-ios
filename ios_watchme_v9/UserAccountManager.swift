@@ -12,11 +12,30 @@ import Supabase
 import UIKit
 #endif
 
-// Supabaseクライアントをグローバルに定義
-let supabase = SupabaseClient(
-    supabaseURL: URL(string: "https://qvtlwotzuzbavrzqhyvt.supabase.co")!,
-    supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
-)
+// Supabaseクライアントをシングルトンとして遅延初期化
+class SupabaseClientManager {
+    static let shared = SupabaseClientManager()
+
+    private(set) lazy var client: SupabaseClient = {
+        let startTime = Date()
+        print("⏱️ [SUPABASE-LAZY] Supabaseクライアント初期化開始: \(startTime)")
+
+        let client = SupabaseClient(
+            supabaseURL: URL(string: "https://qvtlwotzuzbavrzqhyvt.supabase.co")!,
+            supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
+        )
+
+        print("⏱️ [SUPABASE-LAZY] Supabaseクライアント初期化完了: \(Date().timeIntervalSince(startTime))秒")
+        return client
+    }()
+
+    private init() {}
+}
+
+// 後方互換性のため、グローバル変数として公開
+var supabase: SupabaseClient {
+    SupabaseClientManager.shared.client
+}
 
 // ユーザー認証状態
 enum UserAuthState {
@@ -47,10 +66,18 @@ class UserAccountManager: ObservableObject {
     private let tokenRefreshInterval: TimeInterval = 45 * 60 // 45分（1時間のトークンに対して15分前にリフレッシュ）
     
     init(deviceManager: DeviceManager) {
+        let startTime = Date()
+        print("⏱️ [UAM-INIT] UserAccountManager初期化開始")
+
         self.deviceManager = deviceManager
+        print("⏱️ [UAM-INIT] deviceManager設定完了: \(Date().timeIntervalSince(startTime))秒")
+
         // アプリがフォアグラウンドに戻った時の処理を設定
         setupNotificationObservers()
+        print("⏱️ [UAM-INIT] 通知オブザーバー設定完了: \(Date().timeIntervalSince(startTime))秒")
+
         // 認証チェックはMainAppViewの.taskで非同期に実行
+        print("⏱️ [UAM-INIT] UserAccountManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
     }
     
     // MARK: - アクセストークン取得
@@ -88,8 +115,18 @@ class UserAccountManager: ObservableObject {
     
     // MARK: - 認証状態確認
     func checkAuthStatus() {
+        let checkStartTime = Date()
+        print("⏱️ [AUTH-CHECK] 認証チェック開始")
+
         Task { @MainActor in
-            if let savedUser = loadUserFromDefaults() {
+            print("⏱️ [AUTH-CHECK] Task開始: \(Date().timeIntervalSince(checkStartTime))秒")
+
+            let loadStart = Date()
+            let savedUser = loadUserFromDefaults()
+            print("⏱️ [AUTH-CHECK] UserDefaults読み込み完了: \(Date().timeIntervalSince(loadStart))秒")
+
+            if let savedUser = savedUser {
+                print("⏱️ [AUTH-CHECK] 認証情報あり - ユーザー: \(savedUser.email)")
                 // 📊 Phase 2-A: トークン有効期限のローカルチェック
                 if let expiresAt = savedUser.expiresAt, expiresAt > Date().addingTimeInterval(7200) {
                     // まだ2時間以上有効 → リフレッシュ不要
@@ -192,17 +229,24 @@ class UserAccountManager: ObservableObject {
                     self.isCheckingAuthStatus = false  // 認証確認完了
                 }
             } else {
-                print("⚠️ 保存された認証状態なし - ゲストモードで初期化")
+                print("⏱️ [AUTH-CHECK] 認証情報なし - ゲストモードへ: \(Date().timeIntervalSince(checkStartTime))秒")
+                let guestStart = Date()
                 initializeGuestMode()
+                print("⏱️ [AUTH-CHECK] ゲストモード初期化完了: \(Date().timeIntervalSince(guestStart))秒")
                 self.isCheckingAuthStatus = false  // 認証確認完了
+                print("⏱️ [AUTH-CHECK] 認証チェック完了（ゲスト）: \(Date().timeIntervalSince(checkStartTime))秒")
             }
         }
     }
 
     // MARK: - ゲストモード管理
     func initializeGuestMode() {
+        let guestInitStart = Date()
+        print("⏱️ [GUEST-INIT] ゲストモード初期化開始")
+
         // DeviceManagerの状態をクリア
         deviceManager.clearState()
+        print("⏱️ [GUEST-INIT] DeviceManager状態クリア: \(Date().timeIntervalSince(guestInitStart))秒")
 
         // 既存のゲストIDを確認
         if let savedGuestId = UserDefaults.standard.string(forKey: "guest_id") {
@@ -214,6 +258,8 @@ class UserAccountManager: ObservableObject {
             // 新規ゲストIDを作成
             createGuestUser()
         }
+
+        print("⏱️ [GUEST-INIT] ゲストモード初期化完了: \(Date().timeIntervalSince(guestInitStart))秒")
 
         // サンプルデバイスの自動選択は行わない
         // ユーザーがガイド画面で「サンプルを見る」を選択したときのみデバイスを選択

@@ -8,20 +8,37 @@
 import SwiftUI
 import AVFoundation
 
+// アプリ起動の最初のログ
+fileprivate let appLaunchTime: Date = {
+    let time = Date()
+    print("⏱️ [SYSTEM] @main構造体がロードされました: \(time)")
+    return time
+}()
+
 @main
 struct ios_watchme_v9App: App {
     @StateObject private var deviceManager = DeviceManager()
     @StateObject private var userAccountManager: UserAccountManager
     @StateObject private var dataManager: SupabaseDataManager
-    
+
     init() {
+        let startTime = Date()
+        print("⏱️ [APP-INIT] アプリ初期化開始: \(startTime)")
+
         let deviceManager = DeviceManager()
+        print("⏱️ [APP-INIT] DeviceManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
+
         let userAccountManager = UserAccountManager(deviceManager: deviceManager)
+        print("⏱️ [APP-INIT] UserAccountManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
+
         let dataManager = SupabaseDataManager(userAccountManager: userAccountManager)
-        
+        print("⏱️ [APP-INIT] SupabaseDataManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
+
         _deviceManager = StateObject(wrappedValue: deviceManager)
         _userAccountManager = StateObject(wrappedValue: userAccountManager)
         _dataManager = StateObject(wrappedValue: dataManager)
+
+        print("⏱️ [APP-INIT] アプリ初期化完了: \(Date().timeIntervalSince(startTime))秒")
     }
     
     var body: some Scene {
@@ -60,6 +77,9 @@ struct MainAppView: View {
 
     // フッターナビゲーション用の選択状態
     @State private var selectedTab: FooterTab = .home
+
+    // パフォーマンス計測用
+    @State private var viewStartTime = Date()
     
     // フッタータブの定義
     enum FooterTab {
@@ -95,7 +115,7 @@ struct MainAppView: View {
                 }
                 .onAppear {
                     // 認証チェック完了後にオンボーディング表示判定
-                    print("📱 MainAppView: 認証状態確認中...")
+                    print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
                 }
             } else if userAccountManager.authState == .authenticated {
                 // ログイン済み：メイン機能画面（単一のNavigationStackでラップ）
@@ -202,7 +222,7 @@ struct MainAppView: View {
                         .padding(.bottom, 50)
                     }
                     .onAppear {
-                        print("📱 MainAppView: ゲストモード - 初期画面表示")
+                        print("⏱️ [VIEW] 初期画面表示（はじめる/ログイン）: \(Date().timeIntervalSince(viewStartTime))秒")
                     }
                 }
             }
@@ -223,7 +243,8 @@ struct MainAppView: View {
         }
         .task {
             // アプリ起動時に非同期で認証チェック
-            print("🚀 MainAppView: 認証チェック開始")
+            viewStartTime = Date()
+            print("⏱️ [VIEW] MainAppView表示開始 - 認証チェック呼び出し")
             userAccountManager.checkAuthStatus()
         }
         .onChange(of: userAccountManager.authState) { oldValue, newValue in

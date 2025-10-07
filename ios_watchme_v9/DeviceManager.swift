@@ -57,7 +57,13 @@ class DeviceManager: ObservableObject {
     private let selectedDeviceIDKey = "watchme_selected_device_id"  // 選択中のデバイスID永続化用
 
     init() {
+        let startTime = Date()
+        print("⏱️ [DM-INIT] DeviceManager初期化開始")
+
         restoreSelectedDevice()
+        print("⏱️ [DM-INIT] 選択デバイス復元完了: \(Date().timeIntervalSince(startTime))秒")
+
+        print("⏱️ [DM-INIT] DeviceManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
     }
     
     // MARK: - デバイス登録処理（ユーザーが明示的に登録する場合のみ使用）
@@ -260,7 +266,9 @@ class DeviceManager: ObservableObject {
 
     // MARK: - 状態クリア
     func clearState() {
-        print("🧹 DeviceManager: 状態をクリア")
+        let clearStart = Date()
+        print("⏱️ [DM-CLEAR] 状態クリア開始")
+
         userDevices = []
         selectedDeviceID = nil
         state = .ready  // デバイス未選択でもready状態にする（ガイド画面を表示するため）
@@ -270,7 +278,7 @@ class DeviceManager: ObservableObject {
         // UserDefaultsに保存されたデバイスIDもクリア
         UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
 
-        print("✅ DeviceManager: 状態クリア完了（state = .ready）")
+        print("⏱️ [DM-CLEAR] 状態クリア完了: \(Date().timeIntervalSince(clearStart))秒")
     }
     
     // 内部用のデバイス取得関数（エラーをthrowする）

@@ -69,8 +69,13 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Initialization
     init(userAccountManager: UserAccountManager? = nil) {
+        let startTime = Date()
+        print("⏱️ [SDM-INIT] SupabaseDataManager初期化開始")
+
         self.userAccountManager = userAccountManager
-        print("📊 SupabaseDataManager initialized")
+        print("⏱️ [SDM-INIT] userAccountManager設定完了: \(Date().timeIntervalSince(startTime))秒")
+
+        print("⏱️ [SDM-INIT] SupabaseDataManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
     }
     
     // 認証マネージャーを設定（後から注入する場合）
