@@ -43,8 +43,16 @@ class AudioRecorder: NSObject, ObservableObject {
     override init() {
         super.init()
         setupAudioSession()
-        loadRecordings()
+        // ファイル読み込みを非同期で実行（UIブロック防止）
+        Task.detached(priority: .background) { [weak self] in
+            await self?.loadRecordingsAsync()
+        }
         setupNotificationObserver()
+    }
+
+    // 非同期版のloadRecordings
+    private func loadRecordingsAsync() async {
+        loadRecordings()
     }
     
     // アップロード完了通知の監視を設定

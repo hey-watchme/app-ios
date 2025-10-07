@@ -24,22 +24,22 @@ struct ContentView: View {
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var networkManager: NetworkManager?
 
-    // TabView用の日付範囲（過去1年分）
-    // 📝 設計意図: iOS標準のTabViewによる滑らかなスワイプ体験を提供
-    // SwiftUIは表示中のページのみレンダリングするため、実際のメモリ影響は限定的
+    // TabView用の日付範囲（過去31日分）
+    // 📝 設計意図: 起動パフォーマンス最適化のため、スワイプ可能範囲を31日に限定
+    // カレンダーや前日/翌日ボタンからは全ての日付にアクセス可能
     private var dateRange: [Date] {
         let calendar = deviceManager.deviceCalendar
         let today = calendar.startOfDay(for: Date())
 
-        // 1年前の日付を取得
-        guard let oneYearAgo = calendar.date(byAdding: .year, value: -1, to: today) else {
+        // 30日前の日付を取得（今日を含めて31日分）
+        guard let oneMonthAgo = calendar.date(byAdding: .day, value: -30, to: today) else {
             return [today]
         }
 
         var dates: [Date] = []
-        var currentDate = oneYearAgo
+        var currentDate = oneMonthAgo
 
-        // 1年前から今日までの日付の配列を生成
+        // 30日前から今日までの日付の配列を生成
         while currentDate <= today {
             dates.append(currentDate)
             currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!

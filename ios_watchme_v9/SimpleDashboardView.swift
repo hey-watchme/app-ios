@@ -48,7 +48,7 @@ struct SimpleDashboardView: View {
     // 📊 パフォーマンス最適化: データキャッシュ（Phase 1-A）
     @State private var dataCache: [String: CachedDashboardData] = [:]
     @State private var cacheKeys: [String] = []  // LRU管理用
-    private let maxCacheSize = 5  // 最近5日分をキャッシュ
+    private let maxCacheSize = 15  // 最近15日分をキャッシュ（スワイプ体験向上）
 
     // 📊 パフォーマンス最適化: デバイス選択直後フラグ（Phase 5-A）
     @State private var isInitialLoad = false

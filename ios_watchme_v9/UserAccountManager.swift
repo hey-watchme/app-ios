@@ -121,29 +121,33 @@ class UserAccountManager: ObservableObject {
                 // トークンが期限切れまたは有効期限情報なし → リフレッシュ実行
                 print("⚠️ [Phase 2-A] トークンの有効期限切れまたは情報なし - リフレッシュ実行")
 
+                // リフレッシュトークンチェック（早期return）
+                guard let refreshToken = savedUser.refreshToken else {
+                    // リフレッシュトークンがない → 即座にゲストモードへ
+                    print("⚠️ リフレッシュトークンなし - ゲストモードに移行")
+                    clearLocalAuthData()
+                    initializeGuestMode()
+                    self.isCheckingAuthStatus = false
+                    return
+                }
+
                 // 保存されたトークンでセッションを復元
                 do {
-                    // リフレッシュトークンがある場合のみセッションを復元
-                    if let refreshToken = savedUser.refreshToken {
-                        // まずリフレッシュトークンでトークンを更新してみる
-                        let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 1)  // 📊 Phase 2-A: 2回→1回に削減
+                    // まずリフレッシュトークンでトークンを更新してみる
+                    let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 1)  // 📊 Phase 2-A: 2回→1回に削減
 
-                        if !success {
-                            // リフレッシュ失敗時は保存されたトークンで復元を試みる
-                            _ = try await supabase.auth.setSession(
-                                accessToken: savedUser.accessToken,
-                                refreshToken: refreshToken
-                            )
+                    if !success {
+                        // リフレッシュ失敗時は保存されたトークンで復元を試みる
+                        _ = try await supabase.auth.setSession(
+                            accessToken: savedUser.accessToken,
+                            refreshToken: refreshToken
+                        )
 
-                            self.currentUser = savedUser
-                            self.isAuthenticated = true
-                            self.authState = .authenticated
-                        }
-                        // refreshTokenWithRetryが成功した場合は、その中で既にcurrentUserとisAuthenticatedが設定済み
-                    } else {
-                        // リフレッシュトークンがない場合は再ログインが必要
-                        throw NSError(domain: "AuthError", code: 401, userInfo: [NSLocalizedDescriptionKey: "リフレッシュトークンがありません"])
+                        self.currentUser = savedUser
+                        self.isAuthenticated = true
+                        self.authState = .authenticated
                     }
+                    // refreshTokenWithRetryが成功した場合は、その中で既にcurrentUserとisAuthenticatedが設定済み
 
                     if self.isAuthenticated {
                         print("✅ 保存された認証状態を復元: \(savedUser.email)")
