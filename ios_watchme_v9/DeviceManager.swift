@@ -276,15 +276,10 @@ class DeviceManager: ObservableObject {
     // 内部用のデバイス取得関数（エラーをthrowする）
     private func fetchUserDevicesInternal(for userId: String) async throws -> [Device] {
         print("📡 Fetching user devices for userId: \(userId)")
-        
-        // デバッグ: 現在の認証状態を確認
-        if let currentUser = try? await supabase.auth.session.user {
-            print("✅ 認証済みユーザー: \(currentUser.id)")
-        } else {
-            print("❌ 認証されていません - supabase.auth.session.userがnil")
-            throw DeviceManagerError.notAuthenticated
-        }
-        
+
+        // 📊 Phase 2-B: セッション確認を削除（トークンリフレッシュ済みのため不要）
+        // 認証状態は UserAccountManager で既に確認済み
+
         // Step 1: user_devicesテーブルからデータを取得
         let userDevices: [UserDevice] = try await supabase
             .from("user_devices")

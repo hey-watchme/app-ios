@@ -91,8 +91,8 @@ class UserAccountManager: ObservableObject {
         Task { @MainActor in
             if let savedUser = loadUserFromDefaults() {
                 // 📊 Phase 2-A: トークン有効期限のローカルチェック
-                if let expiresAt = savedUser.expiresAt, expiresAt > Date().addingTimeInterval(300) {
-                    // まだ5分以上有効 → リフレッシュ不要
+                if let expiresAt = savedUser.expiresAt, expiresAt > Date().addingTimeInterval(7200) {
+                    // まだ2時間以上有効 → リフレッシュ不要
                     print("✅ [Phase 2-A] トークンは有効（有効期限: \(expiresAt)）- リフレッシュスキップ")
                     self.currentUser = savedUser
                     self.isAuthenticated = true
@@ -126,7 +126,7 @@ class UserAccountManager: ObservableObject {
                     // リフレッシュトークンがある場合のみセッションを復元
                     if let refreshToken = savedUser.refreshToken {
                         // まずリフレッシュトークンでトークンを更新してみる
-                        let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 2)  // 📊 Phase 2-A: 3回→2回に削減
+                        let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 1)  // 📊 Phase 2-A: 2回→1回に削減
 
                         if !success {
                             // リフレッシュ失敗時は保存されたトークンで復元を試みる
@@ -175,7 +175,7 @@ class UserAccountManager: ObservableObject {
 
                     // エラー時はリフレッシュトークンで再試行
                     if let refreshToken = savedUser.refreshToken {
-                        let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 2)  // 📊 Phase 2-A: 3回→2回に削減
+                        let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 1)  // 📊 Phase 2-A: 2回→1回に削減
                         if !success {
                             print("⚠️ 再ログインが必要です - ゲストモードに移行")
                             clearLocalAuthData()
@@ -651,7 +651,7 @@ class UserAccountManager: ObservableObject {
     
     // リトライ機能付きトークンリフレッシュ
     @discardableResult
-    private func refreshTokenWithRetry(refreshToken: String, maxRetries: Int = 2) async -> Bool {  // 📊 Phase 2-A: デフォルト3回→2回
+    private func refreshTokenWithRetry(refreshToken: String, maxRetries: Int = 1) async -> Bool {  // 📊 Phase 2-A: デフォルト2回→1回
         for attempt in 1...maxRetries {
             print("🔄 [Phase 2-A] トークンリフレッシュ試行 \(attempt)/\(maxRetries)")
 
@@ -686,15 +686,15 @@ class UserAccountManager: ObservableObject {
             } catch {
                 print("❌ トークンリフレッシュエラー (試行 \(attempt)): \(error)")
 
-                // 📊 Phase 2-A: 待機時間を短縮（2秒→1秒に）
+                // 📊 Phase 2-A: 待機時間を短縮（1秒→0.5秒に）
                 if attempt < maxRetries {
-                    let delay = Double(attempt) * 1.0  // 1秒、2秒（従来: 2秒、4秒）
+                    let delay = 0.5  // 0.5秒（従来: 1秒、2秒）
                     print("⏳ [Phase 2-A] \(delay)秒後に再試行...")
                     try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 }
             }
         }
-        
+
         print("❌ トークンリフレッシュが\(maxRetries)回失敗しました")
         return false
     }
