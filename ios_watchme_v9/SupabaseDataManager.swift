@@ -870,24 +870,27 @@ class SupabaseDataManager: ObservableObject {
         var allNotifications: [Notification] = []
         
         do {
+            // 📊 パフォーマンス最適化: 通知取得に件数制限を追加
             // 1. イベント通知とパーソナル通知を取得（user_idが一致するもの）
             let personalNotifications: [Notification] = try await supabase
                 .from("notifications")
                 .select()
                 .eq("user_id", value: userId)
                 .order("created_at", ascending: false)
+                .limit(50)  // 最大50件に制限
                 .execute()
                 .value
-            
+
             allNotifications.append(contentsOf: personalNotifications)
             print("✅ Found \(personalNotifications.count) personal/event notifications")
-            
+
             // 2. グローバル通知を取得（すべての通知を取得してからフィルタリング）
             let allDbNotifications: [Notification] = try await supabase
                 .from("notifications")
                 .select()
                 .eq("type", value: "global")
                 .order("created_at", ascending: false)
+                .limit(50)  // 最大50件に制限
                 .execute()
                 .value
             

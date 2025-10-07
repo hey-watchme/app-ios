@@ -19,35 +19,37 @@ struct ContentView: View {
     @State private var showQRScanner = false
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
-    
+
     // NetworkManagerの初期化（録音機能のため必要）
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var networkManager: NetworkManager?
-    
+
     // TabView用の日付範囲（過去1年分）
+    // 📝 設計意図: iOS標準のTabViewによる滑らかなスワイプ体験を提供
+    // SwiftUIは表示中のページのみレンダリングするため、実際のメモリ影響は限定的
     private var dateRange: [Date] {
         let calendar = deviceManager.deviceCalendar
         let today = calendar.startOfDay(for: Date())
-        
+
         // 1年前の日付を取得
         guard let oneYearAgo = calendar.date(byAdding: .year, value: -1, to: today) else {
             return [today]
         }
-        
+
         var dates: [Date] = []
         var currentDate = oneYearAgo
-        
+
         // 1年前から今日までの日付の配列を生成
         while currentDate <= today {
             dates.append(currentDate)
             currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
         }
-        
+
         // 最後の要素（今日）が確実に含まれるようにする
         if let lastDate = dates.last, !calendar.isDate(lastDate, inSameDayAs: today) {
             dates.append(today)
         }
-        
+
         return dates
     }
     
@@ -80,7 +82,7 @@ struct ContentView: View {
                     if deviceManager.selectedDeviceID != nil {
                         // デバイスが選択されている場合：ダッシュボード本体を表示
                         ZStack(alignment: .top) {
-                            // TabViewでラップしてスワイプ対応
+                            // TabViewでラップしてスワイプ対応（iOS標準の滑らかなスワイプ）
                             TabView(selection: $selectedDate) {
                                 ForEach(dateRange, id: \.self) { date in
                                     SimpleDashboardView(
@@ -100,8 +102,6 @@ struct ContentView: View {
                                     // TabViewを確実に更新するため、少し遅延を入れる
                                     Task { @MainActor in
                                         selectedDate = todayDate
-                                        print("📅 ContentView: Device changed, resetting date to last element (today): \(todayDate)")
-                                        print("📅 Index in dateRange: \(dateRange.firstIndex(of: todayDate) ?? -1) of \(dateRange.count)")
                                     }
                                 }
                             }
@@ -343,19 +343,10 @@ struct ContentView: View {
             // 日付を今日に設定（初期表示時）- 最後の要素を使用
             if let todayDate = dateRange.last {
                 selectedDate = todayDate
-                print("🔍 ContentView onAppear - selectedDate set to last element (today): \(todayDate)")
             } else {
                 let calendar = deviceManager.deviceCalendar
                 let today = calendar.startOfDay(for: Date())
                 selectedDate = today
-                print("🔍 ContentView onAppear - selectedDate set to today: \(selectedDate)")
-            }
-            
-            // デバッグログ
-            print("🔍 DateRange count: \(dateRange.count)")
-            if let first = dateRange.first, let last = dateRange.last {
-                print("🔍 DateRange: \(first) to \(last)")
-                print("🔍 Selected date index: \(dateRange.firstIndex(of: selectedDate) ?? -1)")
             }
         }
     }
