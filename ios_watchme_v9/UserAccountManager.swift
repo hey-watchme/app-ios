@@ -478,32 +478,61 @@ class UserAccountManager: ObservableObject {
     // MARK: - ログアウト機能
     func signOut() async {
         print("🚪 ログアウト開始")
-        
-        // トークンリフレッシュタイマーを停止
-        refreshTimer?.invalidate()
-        refreshTimer = nil
-        
-        // 即座にローカル状態をクリア（UIの即時更新のため）
-        self.clearLocalAuthData()
-        
-        // サーバー側のログアウトを実行
-        do {
-            // Supabase SDKの標準メソッドを使用
-            try await supabase.auth.signOut()
-            print("✅ サーバー側ログアウト成功")
-        } catch {
-            print("❌ サーバー側ログアウトエラー: \(error)")
-            // エラーが発生してもローカルは既にクリア済み
+
+        // 認証済みユーザーの場合のみサーバー側ログアウトを実行
+        if authState == .authenticated {
+            // トークンリフレッシュタイマーを停止
+            refreshTimer?.invalidate()
+            refreshTimer = nil
+
+            // 即座にローカル状態をクリア（UIの即時更新のため）
+            self.clearLocalAuthData()
+
+            // サーバー側のログアウトを実行
+            do {
+                // Supabase SDKの標準メソッドを使用
+                try await supabase.auth.signOut()
+                print("✅ サーバー側ログアウト成功")
+            } catch {
+                print("❌ サーバー側ログアウトエラー: \(error)")
+                // エラーが発生してもローカルは既にクリア済み
+            }
+        } else {
+            // ゲストユーザーの場合：内部的には「初期画面に戻る」処理
+            // ユーザーには「ログアウト」と表示されるが、実際にはリセット処理
+            print("🔄 ゲストユーザーのログアウト（初期画面へリセット）")
+            self.resetToWelcomeScreen()
+        }
+    }
+
+    // ゲストユーザー用：初期画面に戻る処理
+    // 注意：ユーザーには「ログアウト」と表示されるが、内部的にはリセット処理
+    @Published var shouldResetToWelcome: Bool = false
+
+    func resetToWelcomeScreen() {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            // MainAppViewでこのフラグを監視して、onboardingCompleted = falseにリセット
+            self.shouldResetToWelcome = true
+            print("✅ 初期画面へのリセットフラグを設定")
         }
     }
     
     // クライアント側認証データクリア
     private func clearLocalAuthData() {
         print("🧹 ローカル認証データクリア開始")
-        currentUser = nil
-        isAuthenticated = false
-        authState = .guest
-        authError = nil
+
+        // @Published プロパティの更新はメインスレッドで実行
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+
+            self.currentUser = nil
+            self.isAuthenticated = false
+            self.authState = .guest
+            self.authError = nil
+
+            print("👋 ログアウト完了: authState = guest")
+        }
 
         // トークンリフレッシュタイマーを停止
         refreshTimer?.invalidate()
@@ -514,8 +543,6 @@ class UserAccountManager: ObservableObject {
 
         // DeviceManagerの状態もクリア
         deviceManager.clearState()
-
-        print("👋 ログアウト完了: authState = guest")
     }
     
     // MARK: - ユーザープロファイル取得

@@ -75,7 +75,7 @@ struct UserInfoView: View {
                                             .fontWeight(.bold)
                                             .foregroundColor(.primary)
                                     } else {
-                                        Text("Guest")
+                                        Text("ゲストユーザー")
                                             .font(.title2)
                                             .fontWeight(.bold)
                                             .foregroundColor(.primary)

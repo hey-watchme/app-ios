@@ -126,17 +126,18 @@ struct AccountSettingsView: View {
     
     private func performLogout() async {
         isLoggingOut = true
-        
+
         // Supabaseからサインアウト
         await userAccountManager.signOut()
-        
-        // 少し待機（UX向上のため）
+
+        // authStateが.guestになるまで待機
+        // MainAppViewで自動的に初期画面に遷移する
         do {
-            try await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+            try await Task.sleep(nanoseconds: 300_000_000) // 0.3秒
         } catch {
             print("待機エラー: \(error)")
         }
-        
+
         isLoggingOut = false
         dismiss()
     }

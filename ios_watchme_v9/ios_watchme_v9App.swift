@@ -267,6 +267,17 @@ struct MainAppView: View {
                 print("🔄 ゲストモード - 初期状態にリセット")
             }
         }
+        .onChange(of: userAccountManager.shouldResetToWelcome) { oldValue, newValue in
+            // ゲストユーザーの「ログアウト」処理
+            // 注意：ユーザーには「ログアウト」と表示されるが、内部的には初期画面へのリセット
+            if newValue == true {
+                print("🔄 ゲストユーザーのログアウト - 初期画面に戻る")
+                selectedTab = .home
+                onboardingCompleted = false
+                // フラグをリセット
+                userAccountManager.shouldResetToWelcome = false
+            }
+        }
     }
     
     // checkAndRegisterDevice関数は削除されました（自動登録を行わないため）
