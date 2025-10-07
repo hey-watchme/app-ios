@@ -342,9 +342,18 @@ class DeviceManager: ObservableObject {
     func selectDevice(_ deviceId: String?) {
         // nilの場合は選択を解除
         guard let deviceId = deviceId else {
+            // 選択解除前に、サンプルデバイスだったかチェック
+            let wasSampleDevice = selectedDeviceID == DeviceManager.sampleDeviceID
+
             selectedDeviceID = nil
             UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
             print("📱 Device selection cleared")
+
+            // サンプルデバイスの場合、userDevicesからも削除
+            if wasSampleDevice {
+                userDevices.removeAll { $0.device_id == DeviceManager.sampleDeviceID }
+                print("📱 Sample device removed from userDevices")
+            }
 
             // デバイスなし状態に遷移
             if userDevices.isEmpty {
@@ -360,8 +369,23 @@ class DeviceManager: ObservableObject {
         let isUserDevice = userDevices.contains(where: { $0.device_id == deviceId })
 
         if isSampleDevice || isUserDevice {
-            // 一旦loadingに戻してから選択を更新
-            self.state = .loading
+            // サンプルデバイスの場合、userDevicesに追加（存在しない場合のみ）
+            if isSampleDevice && !userDevices.contains(where: { $0.device_id == deviceId }) {
+                print("📱 Sample device: Adding to userDevices")
+                var sampleDevice = Device(
+                    device_id: DeviceManager.sampleDeviceID,
+                    device_type: "observer",
+                    timezone: "Asia/Tokyo",
+                    owner_user_id: nil,
+                    subject_id: nil,
+                    created_at: nil,
+                    status: "active",
+                    role: nil
+                )
+                sampleDevice.role = "viewer"
+                userDevices.append(sampleDevice)
+            }
+
             selectedDeviceID = deviceId
             // 選択したデバイスIDを永続化
             UserDefaults.standard.set(deviceId, forKey: selectedDeviceIDKey)
@@ -370,13 +394,6 @@ class DeviceManager: ObservableObject {
                 print("📱 Sample device selected: \(deviceId)")
             } else {
                 print("📱 Selected device saved: \(deviceId)")
-            }
-
-            // 少し遅延を入れてからready状態に遷移（UIの更新を確実にするため）
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1秒
-                self.state = .ready
-                print("🎯 DeviceManager: State transitioned to READY after device selection")
             }
         }
     }

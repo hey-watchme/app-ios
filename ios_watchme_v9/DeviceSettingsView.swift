@@ -81,11 +81,8 @@ struct DeviceSettingsView: View {
         .task {
             await loadAllData()
         }
-        .onChange(of: deviceManager.state) { oldState, newState in
-            if newState == .ready && oldState != .ready {
-                Task { await loadAllData() }
-            }
-        }
+        // 📊 パフォーマンス最適化: デバイス選択時のstate変更による不要なリロードを防止
+        // デバイスデータは.taskで初回読み込み済み、SubjectUpdated時のみリロード
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SubjectUpdated"))) { _ in
             Task { await loadAllData() }
         }

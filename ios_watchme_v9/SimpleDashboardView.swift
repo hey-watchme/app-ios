@@ -50,6 +50,9 @@ struct SimpleDashboardView: View {
     @State private var cacheKeys: [String] = []  // LRU管理用
     private let maxCacheSize = 5  // 最近5日分をキャッシュ
 
+    // 📊 パフォーマンス最適化: デバイス選択直後フラグ（Phase 5-A）
+    @State private var isInitialLoad = false
+
     // コメント入力用
     @State private var newCommentText = ""
     @State private var isAddingComment = false
@@ -189,14 +192,31 @@ struct SimpleDashboardView: View {
                 }
             }
 
-            // ✅ キャッシュミス → デバウンス処理（スワイプ中の無駄なリクエスト防止）
-            print("⏳ [Debounce] Waiting 300ms before loading data for \(dateString)...")
-            try? await Task.sleep(for: .milliseconds(300))
+            // 📊 Phase 5-B: 即座にローディング表示を開始
+            await MainActor.run {
+                isLoading = true
+            }
 
-            // スワイプ継続中ならキャンセルされている
-            guard !Task.isCancelled else {
-                print("🚫 [Cancelled] Data loading cancelled for \(dateString)")
-                return
+            // ✅ キャッシュミス → デバウンス処理（Phase 5-A: デバイス選択直後はスキップ）
+            if !isInitialLoad {
+                // スワイプ操作時のみデバウンス適用（無駄なリクエスト防止）
+                print("⏳ [Debounce] Waiting 300ms before loading data for \(dateString)...")
+                try? await Task.sleep(for: .milliseconds(300))
+
+                // スワイプ継続中ならキャンセルされている
+                guard !Task.isCancelled else {
+                    print("🚫 [Cancelled] Data loading cancelled for \(dateString)")
+                    await MainActor.run {
+                        isLoading = false
+                    }
+                    return
+                }
+            } else {
+                print("⚡️ [Initial Load] Skipping debounce for immediate data loading")
+                // 初回フラグをリセット
+                await MainActor.run {
+                    isInitialLoad = false
+                }
             }
 
             // ✅ スワイプ停止後のみデータ取得
@@ -241,6 +261,10 @@ struct SimpleDashboardView: View {
                 dataCache.removeAll()
                 cacheKeys.removeAll()
                 print("🗑️ [Cache CLEARED] All cache cleared due to device change")
+
+                // 📊 Phase 5-A: 初回読み込みフラグを設定（デバウンススキップ）
+                isInitialLoad = true
+                print("⚡️ [Initial Load Flag] Set to true for immediate data loading")
             }
         }
         .sheet(isPresented: $showVibeSheet) {
@@ -528,33 +552,40 @@ struct SimpleDashboardView: View {
     }
     
     // 感情データの計算用のヘルパー関数
+    // 📊 パフォーマンス最適化: 1回のループで全感情の合計を計算（Phase 3-A）
     private func calculateEmotionPercentages(from activeTimePoints: [EmotionTimePoint]) -> [(String, Double, String, Color)] {
-        // 各感情の合計値を計算
-        let totalJoy = activeTimePoints.map { $0.joy }.reduce(0, +)
-        let totalTrust = activeTimePoints.map { $0.trust }.reduce(0, +)
-        let totalFear = activeTimePoints.map { $0.fear }.reduce(0, +)
-        let totalSurprise = activeTimePoints.map { $0.surprise }.reduce(0, +)
-        let totalSadness = activeTimePoints.map { $0.sadness }.reduce(0, +)
-        let totalDisgust = activeTimePoints.map { $0.disgust }.reduce(0, +)
-        let totalAnger = activeTimePoints.map { $0.anger }.reduce(0, +)
-        let totalAnticipation = activeTimePoints.map { $0.anticipation }.reduce(0, +)
-        
+        // 各感情の合計値を1回のループで計算
+        var totals: [String: Int] = [
+            "joy": 0, "trust": 0, "fear": 0, "surprise": 0,
+            "sadness": 0, "disgust": 0, "anger": 0, "anticipation": 0
+        ]
+
+        for point in activeTimePoints {
+            totals["joy"]! += point.joy
+            totals["trust"]! += point.trust
+            totals["fear"]! += point.fear
+            totals["surprise"]! += point.surprise
+            totals["sadness"]! += point.sadness
+            totals["disgust"]! += point.disgust
+            totals["anger"]! += point.anger
+            totals["anticipation"]! += point.anticipation
+        }
+
         // 全感情の総計
-        let grandTotal = totalJoy + totalTrust + totalFear + totalSurprise +
-                        totalSadness + totalDisgust + totalAnger + totalAnticipation
-        
+        let grandTotal = totals.values.reduce(0, +)
+
         guard grandTotal > 0 else { return [] }
-        
+
         // パーセンテージを計算
         return [
-            ("joy", Double(totalJoy) / Double(grandTotal) * 100, "😊", Color.safeColor("EmotionJoy")),
-            ("trust", Double(totalTrust) / Double(grandTotal) * 100, "🤝", Color.safeColor("EmotionTrust")),
-            ("fear", Double(totalFear) / Double(grandTotal) * 100, "😨", Color.safeColor("EmotionFear")),
-            ("surprise", Double(totalSurprise) / Double(grandTotal) * 100, "😲", Color.safeColor("EmotionSurprise")),
-            ("sadness", Double(totalSadness) / Double(grandTotal) * 100, "😢", Color.safeColor("EmotionSadness")),
-            ("disgust", Double(totalDisgust) / Double(grandTotal) * 100, "🤢", Color.safeColor("EmotionDisgust")),
-            ("anger", Double(totalAnger) / Double(grandTotal) * 100, "😠", Color.safeColor("EmotionAnger")),
-            ("anticipation", Double(totalAnticipation) / Double(grandTotal) * 100, "🎯", Color.safeColor("EmotionAnticipation"))
+            ("joy", Double(totals["joy"]!) / Double(grandTotal) * 100, "😊", Color.safeColor("EmotionJoy")),
+            ("trust", Double(totals["trust"]!) / Double(grandTotal) * 100, "🤝", Color.safeColor("EmotionTrust")),
+            ("fear", Double(totals["fear"]!) / Double(grandTotal) * 100, "😨", Color.safeColor("EmotionFear")),
+            ("surprise", Double(totals["surprise"]!) / Double(grandTotal) * 100, "😲", Color.safeColor("EmotionSurprise")),
+            ("sadness", Double(totals["sadness"]!) / Double(grandTotal) * 100, "😢", Color.safeColor("EmotionSadness")),
+            ("disgust", Double(totals["disgust"]!) / Double(grandTotal) * 100, "🤢", Color.safeColor("EmotionDisgust")),
+            ("anger", Double(totals["anger"]!) / Double(grandTotal) * 100, "😠", Color.safeColor("EmotionAnger")),
+            ("anticipation", Double(totals["anticipation"]!) / Double(grandTotal) * 100, "🎯", Color.safeColor("EmotionAnticipation"))
         ]
     }
     

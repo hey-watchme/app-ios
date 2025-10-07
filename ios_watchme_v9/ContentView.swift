@@ -62,10 +62,9 @@ struct ContentView: View {
                     showRecordingSheet: $showRecordingSheet
                 )
                 
-                // DeviceManagerの状態に応じた表示制御
-                switch deviceManager.state {
-                case .idle, .loading:
-                    // 状態が「初期状態」または「ロード中」ならスピナーを表示
+                // シンプルな表示制御: selectedDeviceIDの有無のみで判断
+                if deviceManager.state == .idle || deviceManager.state == .loading {
+                    // ロード中はスピナーを表示
                     Spacer()
                     VStack(spacing: 20) {
                         ProgressView()
@@ -76,149 +75,36 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     }
                     Spacer()
-                    
-                case .ready:
-                    // 準備完了！デバイスが選択されているかチェック
-                    if deviceManager.selectedDeviceID != nil {
-                        // デバイスが選択されている場合：ダッシュボード本体を表示
-                        ZStack(alignment: .top) {
-                            // TabViewでラップしてスワイプ対応（iOS標準の滑らかなスワイプ）
-                            TabView(selection: $selectedDate) {
-                                ForEach(dateRange, id: \.self) { date in
-                                    SimpleDashboardView(
-                                        selectedDate: $selectedDate
-                                    )
-                                    .tag(date) // 日付を各ページに紐付け
-                                }
-                            }
-                            .id(deviceManager.selectedDeviceID) // デバイスが変わったらTabViewを再構築
-                            .tabViewStyle(.page(indexDisplayMode: .never)) // 横スワイプのスタイル、ドットは非表示
-                        }
-                        .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
-                            // デバイスが切り替わったら日付を今日（配列の最後）にリセット
-                            if oldValue != newValue && newValue != nil {
-                                // dateRangeの最後の要素（今日）を取得
-                                if let todayDate = dateRange.last {
-                                    // TabViewを確実に更新するため、少し遅延を入れる
-                                    Task { @MainActor in
-                                        selectedDate = todayDate
-                                    }
-                                }
+                } else if deviceManager.selectedDeviceID != nil {
+                    // デバイスが選択されている → ダッシュボード表示
+                    ZStack(alignment: .top) {
+                        TabView(selection: $selectedDate) {
+                            ForEach(dateRange, id: \.self) { date in
+                                SimpleDashboardView(
+                                    selectedDate: $selectedDate
+                                )
+                                .tag(date)
                             }
                         }
-                    } else {
-                        // デバイスが選択されていない場合：デバイスなし画面を表示
-                        noDevicesView
+                        .tabViewStyle(.page(indexDisplayMode: .never))
                     }
-                    
-                case .noDevices:
-                    // デバイスがない時のUI
-                    VStack(alignment: .leading, spacing: 0) {
-                        // タイトル「ダッシュボード」
-                        Text("ダッシュボード")
-                            .font(.title)
-                            .fontWeight(.bold)
-                            .padding(.top, 40)
-                            .padding(.horizontal, 40)
-
-                        // 説明文
-                        Text("あなたの声から、気分・行動・感情を分析します。")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .padding(.top, 8)
-                            .padding(.horizontal, 40)
-
-                        // グラフアイコン（うっすらグレー、中央配置）
-                        Spacer()
-
-                        HStack {
-                            Spacer()
-                            Image(systemName: "chart.bar.fill")
-                                .font(.system(size: 100))
-                                .foregroundColor(.gray.opacity(0.15))
-                            Spacer()
-                        }
-
-                        Spacer()
-
-                        // ボタンエリア
-                        VStack(spacing: 16) {
-                            // 1. このデバイスで測定するボタン
-                            Button(action: {
-                                print("🔘 .noDevices: このデバイスで測定するボタン押下")
-                                print("🔍 authState: \(userAccountManager.authState)")
-
-                                // ゲストモードチェック
-                                if userAccountManager.requireAuthentication() {
-                                    print("❗️ ゲストモード検出 - 会員登録シート表示")
-                                    showSignUpPrompt = true
-                                    return
+                    .id(deviceManager.selectedDeviceID) // デバイスIDで再構築を制御
+                    .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
+                        if oldValue != newValue && newValue != nil {
+                            if let todayDate = dateRange.last {
+                                Task { @MainActor in
+                                    selectedDate = todayDate
                                 }
-                                print("✅ 認証済み - デバイス登録確認表示")
-                                showDeviceRegistrationConfirm = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "iphone")
-                                        .font(.title3)
-                                    Text("このデバイスで測定する")
-                                        .font(.headline)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(Color.safeColor("AppAccentColor"))
-                                .foregroundColor(.white)
-                                .cornerRadius(12)
-                            }
-
-                            // 2. サンプルを見るボタン
-                            Button(action: {
-                                // サンプルデバイスを選択
-                                deviceManager.selectDevice(DeviceManager.sampleDeviceID)
-                            }) {
-                                HStack {
-                                    Image(systemName: "eye")
-                                        .font(.title3)
-                                    Text("サンプルを見る")
-                                        .font(.headline)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(Color.gray.opacity(0.2))
-                                .foregroundColor(Color.safeColor("AppAccentColor"))
-                                .cornerRadius(12)
-                            }
-
-                            // 3. QRコードでデバイスを追加ボタン
-                            Button(action: {
-                                print("🔘 .noDevices: QRコードボタン押下")
-
-                                // ゲストモードチェック
-                                if userAccountManager.requireAuthentication() {
-                                    print("❗️ ゲストモード検出 - 会員登録シート表示")
-                                    showSignUpPrompt = true
-                                    return
-                                }
-                                print("✅ 認証済み - QRスキャナー表示")
-                                showQRScanner = true
-                            }) {
-                                HStack {
-                                    Image(systemName: "qrcode.viewfinder")
-                                        .font(.title3)
-                                    Text("QRコードでデバイスを追加")
-                                        .font(.headline)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 16)
-                                .background(Color.gray.opacity(0.2))
-                                .foregroundColor(Color.safeColor("AppAccentColor"))
-                                .cornerRadius(12)
                             }
                         }
-                        .padding(.horizontal, 40)
-                        .padding(.bottom, 40)
                     }
-                    
-                case .error(let errorMessage):
+                } else {
+                    // デバイスが選択されていない → ガイド画面表示
+                    noDevicesView
+                }
+
+                // エラー時の表示
+                if case .error(let errorMessage) = deviceManager.state {
                     // エラーが発生した
                     Spacer()
                     VStack(spacing: 20) {
