@@ -24,34 +24,14 @@ struct ContentView: View {
     @StateObject private var audioRecorder = AudioRecorder()
     @State private var networkManager: NetworkManager?
 
-    // TabView用の日付範囲（過去31日分）
-    // 📝 設計意図: 起動パフォーマンス最適化のため、スワイプ可能範囲を31日に限定
-    // カレンダーや前日/翌日ボタンからは全ての日付にアクセス可能
-    private var dateRange: [Date] {
-        let calendar = deviceManager.deviceCalendar
-        let today = calendar.startOfDay(for: Date())
+    // 動的な日付範囲管理（無限スクロール対応）
+    @State private var dateRange: [Date] = []
+    @State private var isLoadingMoreDates = false
 
-        // 30日前の日付を取得（今日を含めて31日分）
-        guard let oneMonthAgo = calendar.date(byAdding: .day, value: -30, to: today) else {
-            return [today]
-        }
-
-        var dates: [Date] = []
-        var currentDate = oneMonthAgo
-
-        // 30日前から今日までの日付の配列を生成
-        while currentDate <= today {
-            dates.append(currentDate)
-            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
-        }
-
-        // 最後の要素（今日）が確実に含まれるようにする
-        if let lastDate = dates.last, !calendar.isDate(lastDate, inSameDayAs: today) {
-            dates.append(today)
-        }
-
-        return dates
-    }
+    // 初期ロード日数（起動時のパフォーマンス最適化）
+    private let initialDaysToLoad = 7
+    // 追加ロード日数（スクロール時）
+    private let additionalDaysToLoad = 7
     
     var body: some View {
         ZStack {
@@ -87,15 +67,37 @@ struct ContentView: View {
                             }
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
+                        .onChange(of: selectedDate) { oldValue, newValue in
+                            // 端に到達したら追加データをロード
+                            checkAndLoadMoreDates(currentDate: newValue)
+                        }
+
+                        // ローディングインジケーター（左端で過去データ読み込み中）
+                        if isLoadingMoreDates, let firstDate = dateRange.first, selectedDate == firstDate {
+                            VStack {
+                                Spacer()
+                                HStack {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle())
+                                        .scaleEffect(0.8)
+                                    Text("過去のデータを読み込み中...")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .padding()
+                                .background(Color(.systemBackground).opacity(0.9))
+                                .cornerRadius(10)
+                                .shadow(radius: 5)
+                                Spacer()
+                                    .frame(height: 100)
+                            }
+                        }
                     }
                     .id(deviceManager.selectedDeviceID) // デバイスIDで再構築を制御
                     .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
                         if oldValue != newValue && newValue != nil {
-                            if let todayDate = dateRange.last {
-                                Task { @MainActor in
-                                    selectedDate = todayDate
-                                }
-                            }
+                            // デバイスが変更されたら日付範囲をリセット
+                            initializeDateRange()
                         }
                     }
                 } else {
@@ -224,16 +226,13 @@ struct ContentView: View {
         .onAppear {
             initializeNetworkManager()
 
+            // AudioRecorderの遅延初期化（パフォーマンス改善）
+            audioRecorder.startLazyInitialization()
+
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み
 
-            // 日付を今日に設定（初期表示時）- 最後の要素を使用
-            if let todayDate = dateRange.last {
-                selectedDate = todayDate
-            } else {
-                let calendar = deviceManager.deviceCalendar
-                let today = calendar.startOfDay(for: Date())
-                selectedDate = today
-            }
+            // 日付範囲の初期化
+            initializeDateRange()
         }
     }
     
@@ -395,5 +394,96 @@ struct ContentView: View {
         } catch {
             print("❌ デバイスの追加に失敗しました: \(error.localizedDescription)")
         }
+    }
+
+    // MARK: - 日付範囲管理（無限スクロール対応）
+
+    /// 日付範囲の初期化（起動時・デバイス変更時）
+    private func initializeDateRange() {
+        let calendar = deviceManager.deviceCalendar
+        let today = calendar.startOfDay(for: Date())
+
+        // 初期ロード日数分の日付を生成
+        guard let startDate = calendar.date(byAdding: .day, value: -(initialDaysToLoad - 1), to: today) else {
+            dateRange = [today]
+            selectedDate = today
+            return
+        }
+
+        var dates: [Date] = []
+        var currentDate = startDate
+
+        while currentDate <= today {
+            dates.append(currentDate)
+            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
+        }
+
+        dateRange = dates
+        selectedDate = today
+
+        print("📅 日付範囲初期化: \(dates.count)日分（\(formatDate(dates.first!)) 〜 \(formatDate(today))）")
+    }
+
+    /// 端に到達したら追加データを読み込む
+    private func checkAndLoadMoreDates(currentDate: Date) {
+        guard !isLoadingMoreDates else {
+            print("⏳ 既に読み込み中です")
+            return
+        }
+
+        guard let firstDate = dateRange.first else {
+            print("⚠️ dateRangeが空です")
+            return
+        }
+
+        let calendar = deviceManager.deviceCalendar
+
+        // 左端（過去方向）に到達したかチェック
+        if calendar.isDate(currentDate, inSameDayAs: firstDate) {
+            print("📍 左端に到達 - 過去のデータを読み込みます")
+            loadMorePastDates()
+        }
+
+        // 注意: 右端（未来方向）は今日が最大なので拡張不要
+    }
+
+    /// 過去の日付を追加読み込み
+    private func loadMorePastDates() {
+        guard let currentFirstDate = dateRange.first else { return }
+
+        isLoadingMoreDates = true
+        print("🔄 過去\(additionalDaysToLoad)日分のデータを読み込み開始...")
+
+        Task { @MainActor in
+            // 非同期で少し待機（UIの反応性向上）
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3秒
+
+            let calendar = deviceManager.deviceCalendar
+
+            // 追加日数分の日付を生成
+            var newDates: [Date] = []
+            for i in 1...additionalDaysToLoad {
+                if let pastDate = calendar.date(byAdding: .day, value: -i, to: currentFirstDate) {
+                    newDates.insert(pastDate, at: 0)
+                }
+            }
+
+            if !newDates.isEmpty {
+                // 新しい日付を先頭に追加
+                dateRange.insert(contentsOf: newDates, at: 0)
+                print("✅ \(newDates.count)日分追加: \(formatDate(newDates.first!)) 〜 \(formatDate(newDates.last!))")
+                print("📊 現在の範囲: \(dateRange.count)日分")
+            }
+
+            isLoadingMoreDates = false
+        }
+    }
+
+    /// 日付をフォーマット（デバッグ用）
+    private func formatDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = deviceManager.selectedDeviceTimezone
+        return formatter.string(from: date)
     }
 }

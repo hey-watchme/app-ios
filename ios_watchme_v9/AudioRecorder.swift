@@ -42,12 +42,22 @@ class AudioRecorder: NSObject, ObservableObject {
     
     override init() {
         super.init()
-        setupAudioSession()
-        // ファイル読み込みを非同期で実行（UIブロック防止）
-        Task.detached(priority: .background) { [weak self] in
-            await self?.loadRecordingsAsync()
-        }
         setupNotificationObserver()
+        // オーディオセッションとファイル読み込みは遅延初期化
+        // startLazyInitialization()を外部から呼ぶ
+    }
+
+    /// 遅延初期化（アプリ起動後に呼び出す）
+    func startLazyInitialization() {
+        Task.detached(priority: .background) { [weak self] in
+            await self?.performLazyInit()
+        }
+    }
+
+    private func performLazyInit() async {
+        setupAudioSession()
+        // 最新30日分のみ読み込む（パフォーマンス改善）
+        loadRecordings(daysToLoad: 30)
     }
 
     // 非同期版のloadRecordings
@@ -436,21 +446,32 @@ class AudioRecorder: NSObject, ObservableObject {
     }
     
     // 保存された録音ファイルを読み込み（アップロード状態を永続化から復元）
-    private func loadRecordings() {
+    private func loadRecordings(daysToLoad: Int? = nil) {
         let documentsPath = getDocumentsDirectory()
-        
+
         do {
             // 日付ディレクトリを取得
-            let dateDirectories = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.isDirectoryKey])
+            var dateDirectories = try FileManager.default.contentsOfDirectory(at: documentsPath, includingPropertiesForKeys: [.isDirectoryKey, .creationDateKey])
                 .filter { url in
                     // YYYY-MM-DD形式のディレクトリをフィルタ
                     let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
                     let dirName = url.lastPathComponent
                     return isDirectory && dirName.matches("^\\d{4}-\\d{2}-\\d{2}$")
                 }
-            
-            print("📂 日付ディレクトリ数: \(dateDirectories.count)")
-            
+
+            // 日付で降順ソート（新しい順）
+            dateDirectories.sort { dir1, dir2 in
+                dir1.lastPathComponent > dir2.lastPathComponent
+            }
+
+            // daysToLoadが指定されている場合は、その日数分のみ処理
+            if let days = daysToLoad, days > 0 {
+                dateDirectories = Array(dateDirectories.prefix(days))
+                print("📂 日付ディレクトリ数: \(dateDirectories.count) (最新\(days)日分)")
+            } else {
+                print("📂 日付ディレクトリ数: \(dateDirectories.count)")
+            }
+
             var newRecordings: [RecordingModel] = []
             var duplicateCount = 0
             

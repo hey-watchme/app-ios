@@ -21,8 +21,7 @@ struct SignUpView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationView {
-            ScrollView {
+        ScrollView {
                 VStack(spacing: 20) {
                     // アプリロゴ・タイトル
                     VStack(spacing: 15) {
@@ -50,29 +49,21 @@ struct SignUpView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
 
-                            ZStack(alignment: .leading) {
-                                if displayName.isEmpty {
-                                    Text("田中 太郎")
-                                        .foregroundColor(Color.safeColor("BorderLight").opacity(0.6))
-                                        .padding(.leading, 8)
-                                        .allowsHitTesting(false)
-                                }
-                                TextField("", text: $displayName)
-                                    .textContentType(.name)
-                                    .autocorrectionDisabled()
-                                    .foregroundColor(.primary)
-                                    .font(.body)
-                                    .padding()
-                                    .frame(height: 44)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .fill(Color(.systemBackground))
-                                            )
-                                    )
-                            }
+                            TextField("", text: $displayName)
+                                .textContentType(.name)
+                                .autocorrectionDisabled()
+                                .foregroundColor(.primary)
+                                .font(.body)
+                                .padding()
+                                .frame(height: 44)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color(.separator), lineWidth: 1)
+                                )
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(.systemBackground))
+                                )
                         }
 
                         // メールアドレス入力
@@ -81,31 +72,23 @@ struct SignUpView: View {
                                 .font(.caption)
                                 .foregroundColor(.secondary)
 
-                            ZStack(alignment: .leading) {
-                                if email.isEmpty {
-                                    Text("you@example.com")
-                                        .foregroundColor(Color.safeColor("BorderLight").opacity(0.6))
-                                        .padding(.leading, 8)
-                                        .allowsHitTesting(false)
-                                }
-                                TextField("", text: $email)
-                                    .keyboardType(.emailAddress)
-                                    .textContentType(.emailAddress)
-                                    .autocapitalization(.none)
-                                    .autocorrectionDisabled()
-                                    .foregroundColor(.primary)
-                                    .font(.body)
-                                    .padding()
-                                    .frame(height: 44)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .fill(Color(.systemBackground))
-                                            )
-                                    )
-                            }
+                            TextField("", text: $email)
+                                .keyboardType(.emailAddress)
+                                .textContentType(.emailAddress)
+                                .autocapitalization(.none)
+                                .autocorrectionDisabled()
+                                .foregroundColor(.primary)
+                                .font(.body)
+                                .padding()
+                                .frame(height: 44)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color(.separator), lineWidth: 1)
+                                )
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(.systemBackground))
+                                )
                         }
 
                         // パスワード入力
@@ -122,7 +105,7 @@ struct SignUpView: View {
                                 }) {
                                     Image(systemName: showPassword ? "eye.slash" : "eye")
                                         .font(.caption)
-                                        .foregroundColor(Color.safeColor("AppAccentColor"))
+                                        .foregroundColor(Color.primary)
                                 }
                             }
 
@@ -134,7 +117,7 @@ struct SignUpView: View {
                                         .frame(height: 44)
                                         .background(
                                             RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
+                                                .stroke(Color(.separator), lineWidth: 1)
                                                 .background(
                                                     RoundedRectangle(cornerRadius: 10)
                                                         .fill(Color(.systemBackground))
@@ -148,7 +131,7 @@ struct SignUpView: View {
                                         .frame(height: 44)
                                         .background(
                                             RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
+                                                .stroke(Color(.separator), lineWidth: 1)
                                                 .background(
                                                     RoundedRectangle(cornerRadius: 10)
                                                         .fill(Color(.systemBackground))
@@ -176,7 +159,7 @@ struct SignUpView: View {
                                 }) {
                                     Image(systemName: showPasswordConfirm ? "eye.slash" : "eye")
                                         .font(.caption)
-                                        .foregroundColor(Color.safeColor("AppAccentColor"))
+                                        .foregroundColor(Color.primary)
                                 }
                             }
 
@@ -188,7 +171,7 @@ struct SignUpView: View {
                                         .frame(height: 44)
                                         .background(
                                             RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
+                                                .stroke(Color(.separator), lineWidth: 1)
                                                 .background(
                                                     RoundedRectangle(cornerRadius: 10)
                                                         .fill(Color(.systemBackground))
@@ -202,7 +185,7 @@ struct SignUpView: View {
                                         .frame(height: 44)
                                         .background(
                                             RoundedRectangle(cornerRadius: 10)
-                                                .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
+                                                .stroke(Color(.separator), lineWidth: 1)
                                                 .background(
                                                     RoundedRectangle(cornerRadius: 10)
                                                         .fill(Color(.systemBackground))
@@ -218,7 +201,7 @@ struct SignUpView: View {
                                 agreeToTerms.toggle()
                             }) {
                                 Image(systemName: agreeToTerms ? "checkmark.square.fill" : "square")
-                                    .foregroundColor(agreeToTerms ? Color.safeColor("AppAccentColor") : Color.secondary)
+                                    .foregroundColor(agreeToTerms ? Color.primary : Color.secondary)
                                     .font(.title3)
                             }
 
@@ -231,7 +214,7 @@ struct SignUpView: View {
                                     }) {
                                         Text("利用規約")
                                             .font(.caption)
-                                            .foregroundColor(Color.safeColor("AppAccentColor"))
+                                            .foregroundColor(Color.primary)
                                             .underline()
                                     }
 
@@ -246,7 +229,7 @@ struct SignUpView: View {
                                     }) {
                                         Text("プライバシーポリシー")
                                             .font(.caption)
-                                            .foregroundColor(Color.safeColor("AppAccentColor"))
+                                            .foregroundColor(Color.primary)
                                             .underline()
                                     }
                                 }
@@ -267,7 +250,7 @@ struct SignUpView: View {
                                 subscribeNewsletter.toggle()
                             }) {
                                 Image(systemName: subscribeNewsletter ? "checkmark.square.fill" : "square")
-                                    .foregroundColor(subscribeNewsletter ? Color.safeColor("AppAccentColor") : Color.secondary)
+                                    .foregroundColor(subscribeNewsletter ? Color.primary : Color.secondary)
                                     .font(.title3)
                             }
 
@@ -283,7 +266,7 @@ struct SignUpView: View {
                         if let errorMessage = userAccountManager.authError {
                             Text(errorMessage)
                                 .font(.caption)
-                                .foregroundColor(Color.safeColor("ErrorColor"))
+                                .foregroundColor(Color.red)
                                 .multilineTextAlignment(.center)
                                 .padding(.top, 8)
                         }
@@ -306,7 +289,7 @@ struct SignUpView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
-                            .background(isFormValid() ? Color.safeColor("AppAccentColor") : Color.gray)
+                            .background(isFormValid() ? Color.primary : Color.gray)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                         }
@@ -326,7 +309,7 @@ struct SignUpView: View {
                         }) {
                             Text("ログイン")
                                 .font(.footnote)
-                                .foregroundColor(Color.safeColor("AppAccentColor"))
+                                .foregroundColor(Color.primary)
                         }
                     }
                     .padding(.top, 20)
@@ -334,8 +317,6 @@ struct SignUpView: View {
                     Spacer(minLength: 40)
                 }
             }
-            .navigationBarHidden(true)
-        }
         .fullScreenCover(isPresented: $showSuccessView) {
             SignUpSuccessView(userEmail: email)
                 .onDisappear {
@@ -389,11 +370,4 @@ struct SignUpView: View {
             newsletter: subscribeNewsletter
         )
     }
-}
-
-#Preview {
-    let deviceManager = DeviceManager()
-    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
-    return SignUpView()
-        .environmentObject(userAccountManager)
 }

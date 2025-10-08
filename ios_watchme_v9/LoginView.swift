@@ -16,8 +16,7 @@ struct LoginView: View {
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
-        NavigationView {
-            VStack(spacing: 20) {
+        VStack(spacing: 20) {
                 // アプリロゴ・タイトル
                 VStack(spacing: 15) {
                     // PNGロゴを表示
@@ -41,32 +40,24 @@ struct LoginView: View {
                         Text("メールアドレス")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                        
-                        ZStack(alignment: .leading) {
-                            if email.isEmpty {
-                                Text("example@example.com")
-                                    .foregroundColor(Color.safeColor("BorderLight").opacity(0.6))
-                                    .padding(.leading, 8)
-                                    .allowsHitTesting(false)
-                            }
-                            TextField("", text: $email)
-                                .keyboardType(.emailAddress)
-                                .textContentType(.emailAddress)
-                                .autocapitalization(.none)
-                                .autocorrectionDisabled()
-                                .foregroundColor(.primary)
-                                .font(.body)
-                                .padding()
-                                .frame(height: 44)
-                                .background(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
-                                        .background(
-                                            RoundedRectangle(cornerRadius: 10)
-                                                .fill(Color(.systemBackground))
-                                        )
-                                )
-                        }
+
+                        TextField("", text: $email)
+                            .keyboardType(.emailAddress)
+                            .textContentType(.emailAddress)
+                            .autocapitalization(.none)
+                            .autocorrectionDisabled()
+                            .foregroundColor(.primary)
+                            .font(.body)
+                            .padding()
+                            .frame(height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color(.separator), lineWidth: 1)
+                            )
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(Color(.systemBackground))
+                            )
                     }
                     
                     // パスワード入力
@@ -75,48 +66,38 @@ struct LoginView: View {
                             Text("パスワード")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
-                            
+
                             Spacer()
-                            
+
                             Button(action: {
                                 showPassword.toggle()
                             }) {
                                 Image(systemName: showPassword ? "eye.slash" : "eye")
                                     .font(.caption)
-                                    .foregroundColor(Color.safeColor("AppAccentColor"))
+                                    .foregroundColor(.primary)
                             }
                         }
-                        
-                        HStack {
+
+                        Group {
                             if showPassword {
-                                TextField("パスワードを入力", text: $password)
+                                TextField("8文字以上", text: $password)
                                     .font(.body)
-                                    .padding()
-                                    .frame(height: 44)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .fill(Color(.systemBackground))
-                                            )
-                                    )
                             } else {
-                                SecureField("パスワードを入力", text: $password)
+                                SecureField("8文字以上", text: $password)
                                     .textContentType(.password)
                                     .font(.body)
-                                    .padding()
-                                    .frame(height: 44)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.safeColor("BorderLight"), lineWidth: 1)
-                                            .background(
-                                                RoundedRectangle(cornerRadius: 10)
-                                                    .fill(Color(.systemBackground))
-                                            )
-                                    )
                             }
                         }
+                        .padding()
+                        .frame(height: 44)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color(.separator), lineWidth: 1)
+                        )
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(Color(.systemBackground))
+                        )
                     }
                     
                     // エラーメッセージ
@@ -124,31 +105,31 @@ struct LoginView: View {
                         VStack(spacing: 8) {
                             Text(errorMessage)
                                 .font(.caption)
-                                .foregroundColor(Color.safeColor("ErrorColor"))
+                                .foregroundColor(.red)
                                 .multilineTextAlignment(.center)
-                            
+
                             // メール確認エラーの場合の説明
                             if errorMessage.contains("Email not confirmed") || errorMessage.contains("email_not_confirmed") {
                                 VStack(spacing: 8) {
                                     Text("📧 メール確認が必要です")
                                         .font(.caption)
-                                        .foregroundColor(Color.safeColor("WarningColor"))
+                                        .foregroundColor(.orange)
                                         .fontWeight(.medium)
-                                    
+
                                     Text("Gmailの+1は、Supabaseでは別のメールアドレスとして認識されます。\n通常のメールアドレス（matsumotokaya@gmail.com）でサインアップしてください。")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .multilineTextAlignment(.center)
-                                    
+
                                     Button(action: {
                                         userAccountManager.resendConfirmationEmail(email: email)
                                     }) {
                                         Text("📬 確認メールを再送")
                                             .font(.caption)
-                                            .foregroundColor(Color.safeColor("AppAccentColor"))
+                                            .foregroundColor(.blue)
                                             .padding(.horizontal, 12)
                                             .padding(.vertical, 6)
-                                            .background(Color.safeColor("AppAccentColor").opacity(0.1))
+                                            .background(Color.blue.opacity(0.1))
                                             .cornerRadius(6)
                                     }
                                     .disabled(email.isEmpty || userAccountManager.isLoading)
@@ -168,34 +149,32 @@ struct LoginView: View {
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(0.8)
                             }
-                            
+
                             Text("ログイン")
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
                         .frame(height: 44)
-                        .background(Color.safeColor("AppAccentColor"))
-                        .foregroundColor(.white)
+                        .background(Color.primary)
+                        .foregroundColor(Color(.systemBackground))
                         .cornerRadius(10)
                     }
                     .disabled(email.isEmpty || password.isEmpty || userAccountManager.isLoading)
                 }
                 .padding(.horizontal, 40)
-                
+
                 // 新規登録リンク
                 Button(action: {
                     showSignUp = true
                 }) {
                     Text("新規ではじめる")
                         .font(.footnote)
-                        .foregroundColor(Color.safeColor("AppAccentColor"))
+                        .foregroundColor(.primary)
                 }
                 .padding(.top, 20)
-                
+
                 Spacer()
             }
-            .navigationBarHidden(true)
-        }
         .sheet(isPresented: $showSignUp) {
             SignUpView()
                 .environmentObject(userAccountManager)
@@ -211,12 +190,4 @@ struct LoginView: View {
             }
         }
     }
-}
-
-
-#Preview {
-    let deviceManager = DeviceManager()
-    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
-    return LoginView()
-        .environmentObject(userAccountManager)
 }
