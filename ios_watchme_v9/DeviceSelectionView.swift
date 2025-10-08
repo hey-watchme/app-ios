@@ -156,7 +156,7 @@ struct DeviceSelectionView: View {
                                 .padding(.vertical, 12)
                             }
                             .foregroundColor(.white)
-                            .background(Color.safeColor("PrimaryActionColor"))
+                            .background(Color.safeColor("AppAccentColor"))
                             .cornerRadius(10)
                         }
                         .listRowBackground(Color.clear)

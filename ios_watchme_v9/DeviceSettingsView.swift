@@ -277,28 +277,8 @@ struct DeviceSettingsView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.safeColor("PrimaryActionColor"))
+                        .background(Color.safeColor("AppAccentColor"))
                         .cornerRadius(12)
-                    }
-
-                    Button(action: {
-                        if let url = URL(string: "https://hey-watch.me/") {
-                            UIApplication.shared.open(url)
-                        }
-                    }) {
-                        HStack {
-                            Image(systemName: "cart.fill")
-                            Text("デバイスを購読する")
-                        }
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.safeColor("PrimaryActionColor"), lineWidth: 1)
-                        )
                     }
                 }
             }

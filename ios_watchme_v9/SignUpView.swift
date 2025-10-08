@@ -122,7 +122,7 @@ struct SignUpView: View {
                                 }) {
                                     Image(systemName: showPassword ? "eye.slash" : "eye")
                                         .font(.caption)
-                                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                        .foregroundColor(Color.safeColor("AppAccentColor"))
                                 }
                             }
 
@@ -176,7 +176,7 @@ struct SignUpView: View {
                                 }) {
                                     Image(systemName: showPasswordConfirm ? "eye.slash" : "eye")
                                         .font(.caption)
-                                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                        .foregroundColor(Color.safeColor("AppAccentColor"))
                                 }
                             }
 
@@ -218,7 +218,7 @@ struct SignUpView: View {
                                 agreeToTerms.toggle()
                             }) {
                                 Image(systemName: agreeToTerms ? "checkmark.square.fill" : "square")
-                                    .foregroundColor(agreeToTerms ? Color.safeColor("PrimaryActionColor") : Color.secondary)
+                                    .foregroundColor(agreeToTerms ? Color.safeColor("AppAccentColor") : Color.secondary)
                                     .font(.title3)
                             }
 
@@ -267,7 +267,7 @@ struct SignUpView: View {
                                 subscribeNewsletter.toggle()
                             }) {
                                 Image(systemName: subscribeNewsletter ? "checkmark.square.fill" : "square")
-                                    .foregroundColor(subscribeNewsletter ? Color.safeColor("PrimaryActionColor") : Color.secondary)
+                                    .foregroundColor(subscribeNewsletter ? Color.safeColor("AppAccentColor") : Color.secondary)
                                     .font(.title3)
                             }
 

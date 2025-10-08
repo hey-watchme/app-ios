@@ -83,7 +83,7 @@ struct LoginView: View {
                             }) {
                                 Image(systemName: showPassword ? "eye.slash" : "eye")
                                     .font(.caption)
-                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                    .foregroundColor(Color.safeColor("AppAccentColor"))
                             }
                         }
                         

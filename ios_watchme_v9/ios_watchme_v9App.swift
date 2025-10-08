@@ -121,21 +121,22 @@ struct MainAppView: View {
                 // ログイン済み：メイン機能画面（単一のNavigationStackでラップ）
                 NavigationStack {
                     VStack(spacing: 0) {
-                        // コンテンツエリア（フッターの選択に応じて切り替え）
+                        // コンテンツエリア（ビューを保持したまま表示/非表示を切り替え）
                         ZStack {
-                            switch selectedTab {
-                            case .home:
-                                ContentView()
-                                    .environmentObject(userAccountManager)
-                                    .environmentObject(deviceManager)
-                                    .environmentObject(dataManager)
-                            case .myPage:
-                                UserInfoView(userAccountManager: userAccountManager)
+                            ContentView()
+                                .environmentObject(userAccountManager)
                                 .environmentObject(deviceManager)
                                 .environmentObject(dataManager)
-                            }
+                                .opacity(selectedTab == .home ? 1 : 0)
+                                .zIndex(selectedTab == .home ? 1 : 0)
+
+                            UserInfoView(userAccountManager: userAccountManager)
+                                .environmentObject(deviceManager)
+                                .environmentObject(dataManager)
+                                .opacity(selectedTab == .myPage ? 1 : 0)
+                                .zIndex(selectedTab == .myPage ? 1 : 0)
                         }
-                        
+
                         // カスタムフッターナビゲーション
                         CustomFooterNavigation(selectedTab: $selectedTab)
                     }
@@ -151,19 +152,20 @@ struct MainAppView: View {
                     // オンボーディング完了後：ガイド画面（ダッシュボード）
                     NavigationStack {
                         VStack(spacing: 0) {
-                            // コンテンツエリア
+                            // コンテンツエリア（ビューを保持したまま表示/非表示を切り替え）
                             ZStack {
-                                switch selectedTab {
-                                case .home:
-                                    ContentView()
-                                        .environmentObject(userAccountManager)
-                                        .environmentObject(deviceManager)
-                                        .environmentObject(dataManager)
-                                case .myPage:
-                                    UserInfoView(userAccountManager: userAccountManager)
-                                        .environmentObject(deviceManager)
-                                        .environmentObject(dataManager)
-                                }
+                                ContentView()
+                                    .environmentObject(userAccountManager)
+                                    .environmentObject(deviceManager)
+                                    .environmentObject(dataManager)
+                                    .opacity(selectedTab == .home ? 1 : 0)
+                                    .zIndex(selectedTab == .home ? 1 : 0)
+
+                                UserInfoView(userAccountManager: userAccountManager)
+                                    .environmentObject(deviceManager)
+                                    .environmentObject(dataManager)
+                                    .opacity(selectedTab == .myPage ? 1 : 0)
+                                    .zIndex(selectedTab == .myPage ? 1 : 0)
                             }
 
                             // カスタムフッターナビゲーション

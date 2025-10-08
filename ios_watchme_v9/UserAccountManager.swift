@@ -138,18 +138,8 @@ class UserAccountManager: ObservableObject {
                     // トークンリフレッシュタイマーを開始
                     startTokenRefreshTimer()
 
-                    // 📊 Phase 2-A: プロファイル取得とデバイス一覧取得を並列化
-                    print("🚀 [Phase 2-A] プロファイルとデバイス一覧を並列取得開始...")
-                    async let profileTask = fetchUserProfile(userId: currentUser?.id ?? savedUser.id)
-
-                    // プロファイル取得完了を待ってからデバイス取得（user_idが必要なため）
-                    await profileTask
-
-                    if let userId = currentUser?.profile?.userId {
-                        await deviceManager.fetchUserDevices(for: userId)
-                    } else {
-                        print("⚠️ プロファイルのuser_idが取得できないため、デバイス一覧の取得をスキップ")
-                    }
+                    // 統一初期化フローを実行
+                    await initializeAuthenticatedUser(authUserId: savedUser.id)
 
                     self.isCheckingAuthStatus = false
                     return
@@ -194,18 +184,8 @@ class UserAccountManager: ObservableObject {
                         // トークンリフレッシュタイマーを開始
                         startTokenRefreshTimer()
 
-                        // 📊 Phase 2-A: プロファイル取得とデバイス一覧取得を並列化
-                        print("🚀 [Phase 2-A] プロファイルとデバイス一覧を並列取得開始...")
-                        async let profileTask = fetchUserProfile(userId: currentUser?.id ?? savedUser.id)
-
-                        // プロファイル取得完了を待ってからデバイス取得（user_idが必要なため）
-                        await profileTask
-
-                        if let userId = currentUser?.profile?.userId {
-                            await deviceManager.fetchUserDevices(for: userId)
-                        } else {
-                            print("⚠️ プロファイルのuser_idが取得できないため、デバイス一覧の取得をスキップ")
-                        }
+                        // 統一初期化フローを実行
+                        await initializeAuthenticatedUser(authUserId: currentUser?.id ?? savedUser.id)
                     }
 
                     self.isCheckingAuthStatus = false  // 認証確認完了
@@ -336,16 +316,8 @@ class UserAccountManager: ObservableObject {
                 self.isLoading = false
             }
 
-            // ユーザープロファイルを取得（auth.users.idを使用）
-            await self.fetchUserProfile(userId: user.id)
-
-            // プロファイル取得後、public.usersのuser_idでデバイス一覧を取得
-            // ✅ CLAUDE.md: public.usersのuser_idを使用
-            if let userId = currentUser?.profile?.userId {
-                await self.deviceManager.fetchUserDevices(for: userId)
-            } else {
-                print("⚠️ プロファイルのuser_idが取得できないため、デバイス一覧の取得をスキップ")
-            }
+            // 統一初期化フローを実行
+            await self.initializeAuthenticatedUser(authUserId: user.id)
 
         } catch {
             await MainActor.run {
@@ -545,6 +517,26 @@ class UserAccountManager: ObservableObject {
         deviceManager.clearState()
     }
     
+    // MARK: - 認証成功後の統一初期化フロー
+    /// 認証成功後にプロファイルとデバイスを取得する統一処理
+    /// - Parameter authUserId: auth.usersテーブルのユーザーID
+    private func initializeAuthenticatedUser(authUserId: String) async {
+        print("🚀 認証成功後の初期化フロー開始: \(authUserId)")
+
+        // 1. プロファイル取得
+        await fetchUserProfile(userId: authUserId)
+
+        // 2. プロファイルからpublic.usersのuser_idを取得してデバイス取得
+        if let userId = currentUser?.profile?.userId {
+            print("✅ プロファイル取得成功 - デバイス一覧を取得: \(userId)")
+            await deviceManager.initializeDeviceState(for: userId)
+        } else {
+            print("❌ プロファイル取得に失敗 - デバイス初期化をスキップ")
+        }
+
+        print("🎯 認証成功後の初期化フロー完了")
+    }
+
     // MARK: - ユーザープロファイル取得
     func fetchUserProfile(userId: String) async {
         print("👤 ユーザープロファイル取得開始: \(userId)")

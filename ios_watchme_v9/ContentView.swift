@@ -132,7 +132,7 @@ struct ContentView: View {
                             Text("リトライ")
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
-                                .background(Color.safeColor("PrimaryActionColor"))
+                                .background(Color.safeColor("AppAccentColor"))
                                 .foregroundColor(.white)
                                 .cornerRadius(8)
                         }
