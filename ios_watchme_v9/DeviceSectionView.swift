@@ -62,7 +62,7 @@ struct DeviceSectionView: View {
                     }
                     .buttonStyle(PlainButtonStyle())
                     .listRowBackground(
-                        device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor").opacity(0.1) : Color.clear
+                        device.device_id == selectedDeviceID ? Color.white : Color.gray.opacity(0.2)
                     )
                 } else {
                     // 静的な表示（UserInfoView用）
@@ -93,9 +93,9 @@ struct DeviceSectionView: View {
             // デバイスアイコン
             Image(systemName: getDeviceIcon(for: device))
                 .font(.system(size: isCompact ? 24 : 28))
-                .foregroundColor(device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor") : Color.safeColor("BorderLight"))
+                .foregroundColor(device.device_id == selectedDeviceID ? .primary : .secondary)
                 .frame(width: isCompact ? 35 : 40)
-            
+
             VStack(alignment: .leading, spacing: 4) {
                 // デバイスID（短縮表示）
                 Text("デバイス: \(device.device_id.prefix(8))...")
@@ -109,7 +109,7 @@ struct DeviceSectionView: View {
                     Text("タイムゾーン: \(device.timezone ?? "未設定")")
                         .font(.caption)
                 }
-                .foregroundColor(device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor").opacity(0.8) : .secondary)
+                .foregroundColor(device.device_id == selectedDeviceID ? .primary : .secondary)
                 
                 // 測定対象（簡易表示）
                 if let subject = subjectsByDevice[device.device_id] {
@@ -119,7 +119,7 @@ struct DeviceSectionView: View {
                         Text(subject.name ?? "名前未設定")
                             .font(.caption)
                     }
-                    .foregroundColor(device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor") : .secondary)
+                    .foregroundColor(device.device_id == selectedDeviceID ? .primary : .secondary)
                 } else {
                     HStack(spacing: 4) {
                         Image(systemName: "person.fill.questionmark")
@@ -138,7 +138,7 @@ struct DeviceSectionView: View {
                         Text(role == "owner" ? "オーナー" : "閲覧者")
                             .font(.caption2)
                     }
-                    .foregroundColor(device.device_id == selectedDeviceID ? Color.safeColor("PrimaryActionColor").opacity(0.7) : .secondary.opacity(0.7))
+                    .foregroundColor(device.device_id == selectedDeviceID ? .primary : .secondary.opacity(0.7))
                 }
                 
                 // 選択中の表示（UserInfoView用）
@@ -159,7 +159,7 @@ struct DeviceSectionView: View {
             if showSelectionUI && device.device_id == selectedDeviceID {
                 Image(systemName: "checkmark.circle.fill")
                     .font(.title2)
-                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                    .foregroundColor(Color.safeColor("AppAccentColor"))
             }
         }
     }
