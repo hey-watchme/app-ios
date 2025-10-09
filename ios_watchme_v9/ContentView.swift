@@ -160,11 +160,11 @@ struct ContentView: View {
 
                             // 書き込み権限チェック
                             if userAccountManager.requireWritePermission() {
-                                print("❗️ 書き込み権限なし - 会員登録シート表示")
+                                print("❗️ 閲覧専用モード - 権限アップグレードシート表示")
                                 showSignUpPrompt = true
                                 return
                             }
-                            print("✅ 書き込み権限あり - 録音シート表示")
+                            print("✅ 全権限モード - 録音シート表示")
                             showRecordingSheet = true
                         }) {
                             ZStack {
@@ -310,13 +310,13 @@ struct ContentView: View {
                     print("🔘 noDevicesView: このデバイスで測定するボタン押下")
                     print("🔍 authState: \(userAccountManager.authState)")
 
-                    // ゲストモードチェック
+                    // 権限チェック（書き込み権限が必要）
                     if userAccountManager.requireWritePermission() {
-                        print("❗️ Read-Only Mode検出 - 会員登録シート表示")
+                        print("❗️ 閲覧専用モード - 権限アップグレードシート表示")
                         showSignUpPrompt = true
                         return
                     }
-                    print("✅ Full Access Mode - デバイス登録確認表示")
+                    print("✅ 全権限モード - デバイス登録確認表示")
                     showDeviceRegistrationConfirm = true
                 }) {
                     HStack {

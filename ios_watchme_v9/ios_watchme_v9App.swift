@@ -117,8 +117,8 @@ struct MainAppView: View {
                     // 認証チェック完了後にオンボーディング表示判定
                     print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
                 }
-            } else if case .fullAccess = userAccountManager.authState {
-                // ログイン済み：メイン機能画面（単一のNavigationStackでラップ）
+            } else if userAccountManager.authState.isAuthenticated {
+                // 全権限モード：メイン機能画面（単一のNavigationStackでラップ）
                 NavigationStack {
                     VStack(spacing: 0) {
                         // コンテンツエリア（ビューを保持したまま表示/非表示を切り替え）
@@ -143,11 +143,11 @@ struct MainAppView: View {
                     .edgesIgnoringSafeArea(.bottom)
                 }
                 .onAppear {
-                    print("📱 MainAppView: 認証済み状態 - メイン画面表示")
+                    print("📱 MainAppView: 全権限モード - メイン画面表示")
                     // デバイス取得は認証成功時（onChange）で実行済み
                 }
             } else {
-                // ゲストモード
+                // 閲覧専用モード（Read-Only Mode）
                 if onboardingCompleted {
                     // オンボーディング完了後：ガイド画面（ダッシュボード）
                     NavigationStack {
@@ -174,7 +174,7 @@ struct MainAppView: View {
                         .edgesIgnoringSafeArea(.bottom)
                     }
                     .onAppear {
-                        print("📱 MainAppView: ゲストモード - ガイド画面表示")
+                        print("📱 MainAppView: 閲覧専用モード - ガイド画面表示")
                     }
                 } else {
                     // 初期画面（「はじめる」「ログイン」）
@@ -250,19 +250,19 @@ struct MainAppView: View {
             userAccountManager.checkAuthStatus()
         }
         .onChange(of: userAccountManager.authState) { oldValue, newValue in
-            print("🔄 MainAppView: 認証状態変化 \(oldValue) → \(newValue)")
-            if case .fullAccess = newValue {
-                // ログイン/サインアップ成功時
+            print("🔄 MainAppView: 権限レベル変化 \(oldValue) → \(newValue)")
+            if newValue.isAuthenticated {
+                // 全権限モードへ移行（ログイン/サインアップ成功時）
                 // シートを閉じる
                 showLogin = false
                 // ホーム画面にリセット
                 selectedTab = .home
-                print("✅ 認証成功 - ホーム画面に遷移")
+                print("✅ 全権限モード - ホーム画面に遷移")
 
                 // 📊 Phase 2-B: デバイス取得の重複を排除
                 // UserAccountManager内で既にfetchUserDevicesが実行されているため、ここでは不要
                 // L239-245を削除（重複処理）
-            } else if case .readOnly = newValue {
+            } else {
                 // 閲覧専用モードに移行（ログアウト時）
                 selectedTab = .home
                 onboardingCompleted = false  // オンボーディング完了フラグをリセット
@@ -270,10 +270,10 @@ struct MainAppView: View {
             }
         }
         .onChange(of: userAccountManager.shouldResetToWelcome) { oldValue, newValue in
-            // ゲストユーザーの「ログアウト」処理
+            // 閲覧専用モードの「ログアウト」処理
             // 注意：ユーザーには「ログアウト」と表示されるが、内部的には初期画面へのリセット
             if newValue == true {
-                print("🔄 ゲストユーザーのログアウト - 初期画面に戻る")
+                print("🔄 閲覧専用モード - 初期画面に戻る")
                 selectedTab = .home
                 onboardingCompleted = false
                 // フラグをリセット

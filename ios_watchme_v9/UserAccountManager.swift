@@ -53,6 +53,18 @@ enum UserAuthState: Equatable {
     var canWrite: Bool {
         return isAuthenticated
     }
+
+    // 権限チェック用プロパティ
+    var canEditAvatar: Bool {
+        return isAuthenticated
+    }
+
+    var canRegisterAccount: Bool {
+        if case .readOnly = self {
+            return true  // 閲覧専用モードからアップグレード可能
+        }
+        return false
+    }
 }
 
 // 閲覧専用モードの原因

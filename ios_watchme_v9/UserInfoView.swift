@@ -13,6 +13,7 @@ struct UserInfoView: View {
     let userAccountManager: UserAccountManager
     @State private var showAccountSettings = false  // アカウント設定画面
     @State private var showingAvatarPicker = false  // アバター選択画面
+    @State private var showSignUp = false  // 新規ユーザー登録画面
     @Environment(\.dismiss) private var dismiss
     
     // Avatar ViewModel
@@ -80,7 +81,16 @@ struct UserInfoView: View {
                                             .fontWeight(.bold)
                                             .foregroundColor(.primary)
                                     }
-                                    
+
+                                    // 閲覧専用モードの案内テキスト
+                                    if !userAccountManager.authState.isAuthenticated {
+                                        Text("ログインしていません。音声の分析や、デバイスの連携は、ログインすると利用可能になります。")
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                            .padding(.top, 8)
+                                            .fixedSize(horizontal: false, vertical: true)
+                                    }
+
                                     // ID（フルで表示）
                                     // ✅ CLAUDE.md: public.usersのuser_idを使用
                                     if let userId = userAccountManager.currentUser?.profile?.userId {
@@ -100,35 +110,52 @@ struct UserInfoView: View {
                         .background(Color(.systemBackground))
                     }
                     
-                    // アバターを最前面に配置（タップで編集可能）
-                    Button(action: {
-                        showingAvatarPicker = true
-                    }) {
-                        ZStack(alignment: .bottomTrailing) {
-                            // ✅ CLAUDE.md: public.usersのuser_idを使用
-                            AvatarView(userId: userAccountManager.currentUser?.profile?.userId, size: 100)
-                                .overlay(
+                    // アバターを最前面に配置（権限に応じて編集可否が変わる）
+                    Group {
+                        if userAccountManager.authState.canEditAvatar {
+                            // 全権限モード: タップでアバター編集可能
+                            Button(action: {
+                                showingAvatarPicker = true
+                            }) {
+                                ZStack(alignment: .bottomTrailing) {
+                                    // ✅ CLAUDE.md: public.usersのuser_idを使用
+                                    AvatarView(userId: userAccountManager.currentUser?.profile?.userId, size: 100)
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color(.systemBackground), lineWidth: 4)
+                                        )
+
+                                    // カメラアイコンを追加
                                     Circle()
-                                        .stroke(Color(.systemBackground), lineWidth: 4)
-                                )
-                            
-                            // カメラアイコンを追加
-                            Circle()
-                                .fill(Color.black)
-                                .frame(width: 32, height: 32)
-                                .overlay(
-                                    Image(systemName: "camera.fill")
-                                        .font(.system(size: 16))
-                                        .foregroundColor(.white)
-                                )
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color(.systemBackground), lineWidth: 2)
-                                )
+                                        .fill(Color.black)
+                                        .frame(width: 32, height: 32)
+                                        .overlay(
+                                            Image(systemName: "camera.fill")
+                                                .font(.system(size: 16))
+                                                .foregroundColor(.white)
+                                        )
+                                        .overlay(
+                                            Circle()
+                                                .stroke(Color(.systemBackground), lineWidth: 2)
+                                        )
+                                }
+                            }
+                            .padding(.leading, 20)
+                            .padding(.top, 130)  // バナーの下端付近に配置（180 - 50 = 130）
+                        } else {
+                            // 閲覧専用モード: アバター編集不可
+                            ZStack(alignment: .bottomTrailing) {
+                                AvatarView(userId: nil, size: 100)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color(.systemBackground), lineWidth: 4)
+                                    )
+                                // カメラアイコンは表示しない
+                            }
+                            .padding(.leading, 20)
+                            .padding(.top, 130)
                         }
                     }
-                    .padding(.leading, 20)
-                    .padding(.top, 130)  // バナーの下端付近に配置（180 - 50 = 130）
                 }
                 
                 // ユーザー情報セクション
@@ -136,6 +163,7 @@ struct UserInfoView: View {
                     // ユーザーアカウント情報（リストスタイル）
                     InfoListSection(title: "ユーザーアカウント情報") {
                         if let user = userAccountManager.currentUser {
+                            // ログインユーザー
                             // 名前
                             if let profile = user.profile, let name = profile.name {
                                 InfoListRow(label: "名前", value: name)
@@ -191,16 +219,59 @@ struct UserInfoView: View {
                             // ユーザーID（最後なので罫線なし）
                             InfoListRow(label: "ユーザーID", value: user.id, showDivider: false)
                         } else {
-                            InfoListRow(label: "状態", value: "ログインしていません", showDivider: false, valueColor: Color.safeColor("ErrorColor"))
+                            // ゲストユーザー: ログインユーザーと同じ項目を表示（すべて「未設定」）
+                            InfoListRow(label: "名前", value: "未設定", valueColor: .secondary)
+                            InfoListRow(label: "メールアドレス", value: "未設定", valueColor: .secondary)
+
+                            // ニュースレター配信（無効化されたトグル）
+                            VStack(spacing: 0) {
+                                HStack {
+                                    Text("ニュースレター配信")
+                                        .font(.subheadline)
+                                        .foregroundColor(.secondary)
+
+                                    Spacer()
+
+                                    Toggle("", isOn: .constant(false))
+                                        .labelsHidden()
+                                        .disabled(true)
+                                }
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 12)
+
+                                Divider()
+                                    .background(Color(.systemGray4))
+                            }
+
+                            InfoListRow(label: "会員登録日", value: "未設定", valueColor: .secondary)
+                            InfoListRow(label: "ユーザーID", value: "未設定", showDivider: false, valueColor: .secondary)
                         }
                     }
 
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
-                
+
+                // 閲覧専用モードの場合「権限アップグレード」ボタンを表示
+                if userAccountManager.authState.canRegisterAccount {
+                    Button(action: {
+                        showSignUp = true
+                    }) {
+                        Text("新規ユーザー登録")
+                            .fontWeight(.semibold)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.black)
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 30)
+                    .padding(.bottom, 20)
+                }
+
                 Spacer()
-                
+
             }
         }
         .edgesIgnoringSafeArea(.top)  // バナーを画面上部まで広げる
@@ -227,6 +298,10 @@ struct UserInfoView: View {
                     }
                 }
             }
+        }
+        .sheet(isPresented: $showSignUp) {
+            SignUpView()
+                .environmentObject(userAccountManager)
         }
         .onAppear {
             // ViewModelの初期化
