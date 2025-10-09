@@ -283,9 +283,9 @@ struct RecordingView: View {
                         } else {
                             // 録音開始ボタン
                             Button(action: {
-                                // ゲストモードチェック
-                                if userAccountManager.requireAuthentication() {
-                                    // ゲストモードの場合、会員登録を促す
+                                // 書き込み権限チェック
+                                if userAccountManager.requireWritePermission() {
+                                    // 書き込み権限がない場合、会員登録を促す
                                     showSignUpPrompt = true
                                     return
                                 }
@@ -438,7 +438,7 @@ struct RecordingView: View {
                 print("❌ デバイス登録エラー: \(error)")
                 alertMessage = "デバイス登録に失敗しました: \(error)"
                 showAlert = true
-            } else if !deviceManager.userDevices.isEmpty {
+            } else if !deviceManager.devices.isEmpty {
                 // 登録成功 - デバイスが追加されたのでUIが自動的に更新される
                 print("✅ デバイス登録成功")
                 // 登録成功後、録音を自動的に開始

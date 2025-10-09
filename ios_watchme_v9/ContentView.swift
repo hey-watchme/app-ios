@@ -42,8 +42,9 @@ struct ContentView: View {
                     showRecordingSheet: $showRecordingSheet
                 )
                 
-                // シンプルな表示制御: selectedDeviceIDの有無のみで判断
-                if deviceManager.state == .idle || deviceManager.state == .loading {
+                // ✅ 権限ベース設計: 状態チェックロジック更新
+                switch deviceManager.state {
+                case .loading:
                     // ロード中はスピナーを表示
                     Spacer()
                     VStack(spacing: 20) {
@@ -55,7 +56,10 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                     }
                     Spacer()
-                } else if deviceManager.selectedDeviceID != nil {
+
+                case .available:
+                    // デバイスが選択されているかチェック
+                    if deviceManager.selectedDeviceID != nil {
                     // デバイスが選択されている → ダッシュボード表示
                     ZStack(alignment: .top) {
                         TabView(selection: $selectedDate) {
@@ -100,13 +104,12 @@ struct ContentView: View {
                             initializeDateRange()
                         }
                     }
-                } else {
-                    // デバイスが選択されていない → ガイド画面表示
-                    noDevicesView
-                }
+                    } else {
+                        // デバイスが選択されていない → ガイド画面表示
+                        noDevicesView
+                    }
 
-                // エラー時の表示
-                if case .error(let errorMessage) = deviceManager.state {
+                case .error(let errorMessage):
                     // エラーが発生した
                     Spacer()
                     VStack(spacing: 20) {
@@ -121,13 +124,13 @@ struct ContentView: View {
                             .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
-                        
+
                         Button(action: {
                             // 再度初期化処理を呼び出す
                             Task {
                                 // ✅ CLAUDE.md: public.usersのuser_idを使用
                                 if let userId = userAccountManager.currentUser?.profile?.userId {
-                                    await deviceManager.initializeDeviceState(for: userId)
+                                    await deviceManager.initializeDevices(for: userId)
                                 }
                             }
                         }) {
@@ -155,13 +158,13 @@ struct ContentView: View {
                             print("🔘 FAB: 録音ボタン押下")
                             print("🔍 authState: \(userAccountManager.authState)")
 
-                            // ゲストモードチェック
-                            if userAccountManager.requireAuthentication() {
-                                print("❗️ ゲストモード検出 - 会員登録シート表示")
+                            // 書き込み権限チェック
+                            if userAccountManager.requireWritePermission() {
+                                print("❗️ 書き込み権限なし - 会員登録シート表示")
                                 showSignUpPrompt = true
                                 return
                             }
-                            print("✅ 認証済み - 録音シート表示")
+                            print("✅ 書き込み権限あり - 録音シート表示")
                             showRecordingSheet = true
                         }) {
                             ZStack {
@@ -260,7 +263,7 @@ struct ContentView: View {
                 // エラーチェック
                 if let error = deviceManager.registrationError {
                     print("❌ デバイス登録エラー: \(error)")
-                } else if !deviceManager.userDevices.isEmpty {
+                } else if !deviceManager.devices.isEmpty {
                     // 登録成功 - デバイスが追加されたのでUIが自動的に更新される
                     print("✅ デバイス登録成功")
                 } else {
@@ -308,12 +311,12 @@ struct ContentView: View {
                     print("🔍 authState: \(userAccountManager.authState)")
 
                     // ゲストモードチェック
-                    if userAccountManager.requireAuthentication() {
-                        print("❗️ ゲストモード検出 - 会員登録シート表示")
+                    if userAccountManager.requireWritePermission() {
+                        print("❗️ Read-Only Mode検出 - 会員登録シート表示")
                         showSignUpPrompt = true
                         return
                     }
-                    print("✅ 認証済み - デバイス登録確認表示")
+                    print("✅ Full Access Mode - デバイス登録確認表示")
                     showDeviceRegistrationConfirm = true
                 }) {
                     HStack {
@@ -349,8 +352,8 @@ struct ContentView: View {
 
                 // 3. QRコードでデバイスを追加ボタン
                 Button(action: {
-                    // ゲストモードチェック
-                    if userAccountManager.requireAuthentication() {
+                    // 権限チェック
+                    if userAccountManager.requireWritePermission() {
                         showSignUpPrompt = true
                         return
                     }
@@ -377,7 +380,7 @@ struct ContentView: View {
     // MARK: - QRコードスキャン処理
     private func handleQRCodeScanned(_ code: String) async {
         // 既に追加済みかチェック
-        if deviceManager.userDevices.contains(where: { $0.device_id == code }) {
+        if deviceManager.devices.contains(where: { $0.device_id == code }) {
             print("⚠️ このデバイスは既に追加されています")
             return
         }

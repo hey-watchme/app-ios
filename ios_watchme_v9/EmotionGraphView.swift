@@ -208,7 +208,7 @@ struct EmotionGraphView: View {
                         // エンプティステート表示（共通コンポーネント使用）
                         GraphEmptyStateView(
                             graphType: .emotion,
-                            isDeviceLinked: !deviceManager.userDevices.isEmpty
+                            isDeviceLinked: !deviceManager.devices.isEmpty
                         )
                         .padding(.top, 50)
                     }

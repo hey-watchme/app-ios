@@ -95,7 +95,7 @@ struct HomeView: View {
                     // エンプティステート表示（共通コンポーネント使用）
                     GraphEmptyStateView(
                         graphType: .vibe,
-                        isDeviceLinked: !deviceManager.userDevices.isEmpty
+                        isDeviceLinked: !deviceManager.devices.isEmpty
                     )
                 }
                 

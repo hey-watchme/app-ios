@@ -26,7 +26,7 @@ struct DeviceSelectionView: View {
                 if deviceManager.isLoading {
                     ProgressView("デバイス一覧を読み込み中...")
                         .padding()
-                } else if deviceManager.userDevices.isEmpty {
+                } else if deviceManager.devices.isEmpty {
                     // デバイスがない時のUI
                     VStack(spacing: 0) {
                         // 上部の余白（調整済み）
@@ -45,8 +45,8 @@ struct DeviceSelectionView: View {
                         VStack(spacing: 16) {
                             // 1. このデバイスで測定するボタン
                             Button(action: {
-                                // ゲストモードチェック
-                                if userAccountManager.requireAuthentication() {
+                                // 書き込み権限チェック
+                                if userAccountManager.requireWritePermission() {
                                     showSignUpPrompt = true
                                     return
                                 }
@@ -89,8 +89,8 @@ struct DeviceSelectionView: View {
 
                             // 3. QRコードでデバイスを追加ボタン
                             Button(action: {
-                                // ゲストモードチェック
-                                if userAccountManager.requireAuthentication() {
+                                // 書き込み権限チェック
+                                if userAccountManager.requireWritePermission() {
                                     showSignUpPrompt = true
                                     return
                                 }
@@ -118,7 +118,7 @@ struct DeviceSelectionView: View {
                     List {
                         Section(header: Text("利用可能なデバイス")) {
                             DeviceSectionView(
-                                devices: deviceManager.userDevices,
+                                devices: deviceManager.devices,
                                 selectedDeviceID: deviceManager.selectedDeviceID,
                                 subjectsByDevice: subjectsByDevice,
                                 showSelectionUI: true,
@@ -217,7 +217,7 @@ struct DeviceSelectionView: View {
                 if let error = deviceManager.registrationError {
                     addDeviceError = error
                     showAddDeviceAlert = true
-                } else if !deviceManager.userDevices.isEmpty {
+                } else if !deviceManager.devices.isEmpty {
                     // 登録成功 - デバイスが追加されたのでUIが自動的に更新される
                     print("✅ デバイス登録成功")
                 } else {
@@ -230,7 +230,7 @@ struct DeviceSelectionView: View {
 
     private func handleQRCodeScanned(_ code: String) async {
         // 既に追加済みかチェック
-        if deviceManager.userDevices.contains(where: { $0.device_id == code }) {
+        if deviceManager.devices.contains(where: { $0.device_id == code }) {
             addDeviceError = "このデバイスは既に追加されています。"
             showAddDeviceAlert = true
             return

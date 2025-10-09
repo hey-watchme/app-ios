@@ -155,7 +155,7 @@ struct SimpleDashboardView: View {
         }
         .task(id: LoadDataTrigger(date: selectedDate, deviceId: deviceManager.selectedDeviceID)) {
             // 📊 パフォーマンス最適化: データ取得を一元化（Phase 1-A: デバウンス + キャッシュ）
-            guard deviceManager.state == .ready else {
+            guard case .available = deviceManager.state else {
                 return
             }
 
@@ -340,7 +340,7 @@ struct SimpleDashboardView: View {
                 ) {
                     GraphEmptyStateView(
                         graphType: .vibe,
-                        isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                        isDeviceLinked: !deviceManager.devices.isEmpty,
                         isCompact: true
                     )
                 }
@@ -390,7 +390,7 @@ struct SimpleDashboardView: View {
             } else {
                 GraphEmptyStateView(
                     graphType: .behavior,
-                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isDeviceLinked: !deviceManager.devices.isEmpty,
                     isCompact: true
                 )
             }
@@ -412,7 +412,7 @@ struct SimpleDashboardView: View {
             } else {
                 GraphEmptyStateView(
                     graphType: .emotion,
-                    isDeviceLinked: !deviceManager.userDevices.isEmpty,
+                    isDeviceLinked: !deviceManager.devices.isEmpty,
                     isCompact: true
                 )
             }

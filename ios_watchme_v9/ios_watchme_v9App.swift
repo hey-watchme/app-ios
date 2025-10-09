@@ -117,7 +117,7 @@ struct MainAppView: View {
                     // 認証チェック完了後にオンボーディング表示判定
                     print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
                 }
-            } else if userAccountManager.authState == .authenticated {
+            } else if case .fullAccess = userAccountManager.authState {
                 // ログイン済み：メイン機能画面（単一のNavigationStackでラップ）
                 NavigationStack {
                     VStack(spacing: 0) {
@@ -251,7 +251,7 @@ struct MainAppView: View {
         }
         .onChange(of: userAccountManager.authState) { oldValue, newValue in
             print("🔄 MainAppView: 認証状態変化 \(oldValue) → \(newValue)")
-            if newValue == .authenticated {
+            if case .fullAccess = newValue {
                 // ログイン/サインアップ成功時
                 // シートを閉じる
                 showLogin = false
@@ -262,11 +262,11 @@ struct MainAppView: View {
                 // 📊 Phase 2-B: デバイス取得の重複を排除
                 // UserAccountManager内で既にfetchUserDevicesが実行されているため、ここでは不要
                 // L239-245を削除（重複処理）
-            } else if newValue == .guest {
-                // ゲストモードに移行（ログアウト時）
+            } else if case .readOnly = newValue {
+                // 閲覧専用モードに移行（ログアウト時）
                 selectedTab = .home
                 onboardingCompleted = false  // オンボーディング完了フラグをリセット
-                print("🔄 ゲストモード - 初期状態にリセット")
+                print("🔄 閲覧専用モード - 初期状態にリセット")
             }
         }
         .onChange(of: userAccountManager.shouldResetToWelcome) { oldValue, newValue in

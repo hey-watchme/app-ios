@@ -156,7 +156,7 @@ struct HeaderView: View {
                         .monospaced()
                 }
             }
-        } else if deviceManager.userDevices.isEmpty {
+        } else if deviceManager.devices.isEmpty {
             // デバイス未連携の場合
             HStack(spacing: 8) {
                 ZStack {

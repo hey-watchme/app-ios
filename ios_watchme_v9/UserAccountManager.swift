@@ -37,22 +37,40 @@ var supabase: SupabaseClient {
     SupabaseClientManager.shared.client
 }
 
-// ユーザー認証状態
-enum UserAuthState {
-    case guest           // ゲストユーザー（未認証）
-    case authenticated   // 認証済みユーザー
+// ユーザー認証状態（権限ベース設計）
+enum UserAuthState: Equatable {
+    case readOnly(source: ReadOnlySource)  // 閲覧専用モード（ゲスト、セッション期限切れ）
+    case fullAccess(userId: String)        // 全権限モード（認証済みユーザー）
+
+    // 後方互換性のため
+    var isAuthenticated: Bool {
+        if case .fullAccess = self {
+            return true
+        }
+        return false
+    }
+
+    var canWrite: Bool {
+        return isAuthenticated
+    }
+}
+
+// 閲覧専用モードの原因
+enum ReadOnlySource: Equatable {
+    case guest              // ゲストとして開始
+    case sessionExpired     // セッション期限切れ
 }
 
 // ユーザーアカウント管理クラス（認証とプロファイル）
 class UserAccountManager: ObservableObject {
-    @Published var authState: UserAuthState = .guest
+    @Published var authState: UserAuthState = .readOnly(source: .guest)
     @Published var isAuthenticated: Bool = false
     @Published var currentUser: SupabaseUser? = nil
     @Published var authError: String? = nil
     @Published var signUpSuccess: Bool = false
     @Published var isLoading: Bool = false
     @Published var isCheckingAuthStatus: Bool = true  // 認証状態確認中フラグ
-    @Published var guestId: String? = nil  // ゲストID
+    @Published var guestId: String? = nil  // ゲストID（分析用、必須ではない）
     
     // DeviceManagerへの参照
     private let deviceManager: DeviceManager
@@ -133,7 +151,7 @@ class UserAccountManager: ObservableObject {
                     print("✅ [Phase 2-A] トークンは有効（有効期限: \(expiresAt)）- リフレッシュスキップ")
                     self.currentUser = savedUser
                     self.isAuthenticated = true
-                    self.authState = .authenticated
+                    self.authState = .fullAccess(userId: savedUser.id)
 
                     // トークンリフレッシュタイマーを開始
                     startTokenRefreshTimer()
@@ -172,13 +190,13 @@ class UserAccountManager: ObservableObject {
 
                         self.currentUser = savedUser
                         self.isAuthenticated = true
-                        self.authState = .authenticated
+                        self.authState = .fullAccess(userId: savedUser.id)
                     }
                     // refreshTokenWithRetryが成功した場合は、その中で既にcurrentUserとisAuthenticatedが設定済み
 
                     if self.isAuthenticated {
                         print("✅ 保存された認証状態を復元: \(savedUser.email)")
-                        print("🔄 認証状態復元: authState = authenticated")
+                        print("🔄 認証状態復元: authState = fullAccess")
                         print("🔑 セッショントークンも復元しました")
 
                         // トークンリフレッシュタイマーを開始
@@ -219,27 +237,26 @@ class UserAccountManager: ObservableObject {
         }
     }
 
-    // MARK: - ゲストモード管理
+    // MARK: - ゲストモード管理（権限ベース設計）
     func initializeGuestMode() {
         let guestInitStart = Date()
-        print("⏱️ [GUEST-INIT] ゲストモード初期化開始")
+        print("⏱️ [GUEST-INIT] Read-Only Mode (Guest) 初期化開始")
+
+        // 状態を閲覧専用に設定
+        authState = .readOnly(source: .guest)
+        isAuthenticated = false
+        currentUser = nil
 
         // DeviceManagerの状態をクリア
         deviceManager.clearState()
         print("⏱️ [GUEST-INIT] DeviceManager状態クリア: \(Date().timeIntervalSince(guestInitStart))秒")
 
-        // 既存のゲストIDを確認
-        if let savedGuestId = UserDefaults.standard.string(forKey: "guest_id") {
-            print("👤 既存のゲストIDを読み込み: \(savedGuestId)")
-            guestId = savedGuestId
-            authState = .guest
-            isAuthenticated = false
-        } else {
-            // 新規ゲストIDを作成
+        // ゲストIDは分析用に生成（必須ではない）
+        if guestId == nil {
             createGuestUser()
         }
 
-        print("⏱️ [GUEST-INIT] ゲストモード初期化完了: \(Date().timeIntervalSince(guestInitStart))秒")
+        print("⏱️ [GUEST-INIT] Read-Only Mode初期化完了: \(Date().timeIntervalSince(guestInitStart))秒")
 
         // サンプルデバイスの自動選択は行わない
         // ユーザーがガイド画面で「サンプルを見る」を選択したときのみデバイスを選択
@@ -249,14 +266,18 @@ class UserAccountManager: ObservableObject {
         let newGuestId = UUID().uuidString
         UserDefaults.standard.set(newGuestId, forKey: "guest_id")
         guestId = newGuestId
-        authState = .guest
-        isAuthenticated = false
-        print("✨ 新規ゲストユーザーを作成: \(newGuestId)")
+        print("✨ 新規ゲストID生成（分析用）: \(newGuestId)")
     }
 
-    // 認証が必要かチェック
+    // 書き込み権限が必要かチェック（権限ベース設計）
+    func requireWritePermission() -> Bool {
+        return !authState.canWrite
+    }
+
+    // 後方互換性のため残す（非推奨）
+    @available(*, deprecated, message: "Use requireWritePermission() instead")
     func requireAuthentication() -> Bool {
-        return authState == .guest
+        return requireWritePermission()
     }
     
     // MARK: - ログイン機能
@@ -301,14 +322,21 @@ class UserAccountManager: ObservableObject {
             await MainActor.run {
                 self.currentUser = user
                 self.isAuthenticated = true
-                self.authState = .authenticated
+
+                // ✅ 権限ベース設計: 閲覧専用 → 全権限モードへアップグレード
+                self.authState = .fullAccess(userId: user.id)
                 self.saveUserToDefaults(user)
 
-                print("🔄 認証状態を更新: authState = authenticated")
+                print("🔄 認証状態を更新: authState = fullAccess")
+                print("✅ Read-Only Mode → Full Access Mode へアップグレード")
 
-                // ゲストIDをクリア（認証済みユーザーに移行）
+                // ゲストIDをクリア（もう不要）
                 UserDefaults.standard.removeObject(forKey: "guest_id")
                 self.guestId = nil
+
+                // ✅ DeviceManagerの状態を明示的にリセット
+                self.deviceManager.resetState()
+                print("🔄 DeviceManager状態リセット完了")
 
                 // トークンリフレッシュタイマーを開始
                 self.startTokenRefreshTimer()
@@ -452,7 +480,7 @@ class UserAccountManager: ObservableObject {
         print("🚪 ログアウト開始")
 
         // 認証済みユーザーの場合のみサーバー側ログアウトを実行
-        if authState == .authenticated {
+        if authState.isAuthenticated {
             // トークンリフレッシュタイマーを停止
             refreshTimer?.invalidate()
             refreshTimer = nil
@@ -500,10 +528,10 @@ class UserAccountManager: ObservableObject {
 
             self.currentUser = nil
             self.isAuthenticated = false
-            self.authState = .guest
+            self.authState = .readOnly(source: .sessionExpired)
             self.authError = nil
 
-            print("👋 ログアウト完了: authState = guest")
+            print("👋 ログアウト完了: authState = readOnly(sessionExpired)")
         }
 
         // トークンリフレッシュタイマーを停止
@@ -529,7 +557,7 @@ class UserAccountManager: ObservableObject {
         // 2. プロファイルからpublic.usersのuser_idを取得してデバイス取得
         if let userId = currentUser?.profile?.userId {
             print("✅ プロファイル取得成功 - デバイス一覧を取得: \(userId)")
-            await deviceManager.initializeDeviceState(for: userId)
+            await deviceManager.initializeDevices(for: userId)
         } else {
             print("❌ プロファイル取得に失敗 - デバイス初期化をスキップ")
         }
@@ -744,7 +772,7 @@ class UserAccountManager: ObservableObject {
 
                     self.currentUser = updatedUser
                     self.isAuthenticated = true
-                    self.authState = .authenticated
+                    self.authState = .fullAccess(userId: session.user.id.uuidString)
                     self.saveUserToDefaults(updatedUser)
 
                     print("✅ [Phase 2-A] トークンリフレッシュ成功（有効期限: \(expiresAt)）")

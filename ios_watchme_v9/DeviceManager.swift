@@ -15,36 +15,30 @@ class DeviceManager: ObservableObject {
     // MARK: - Constants
     static let sampleDeviceID = "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5d"  // サンプルデバイスID（全ユーザー共通）
 
-    // MARK: - State Management
-    enum State: Equatable {
-        case idle           // 初期状態
-        case loading        // デバイスリストを取得中
-        case ready          // 準備完了（データ取得可能）
-        case noDevices      // ユーザーに紐づくデバイスが存在しない
-        case error(String)  // エラーが発生
-        
-        static func == (lhs: State, rhs: State) -> Bool {
-            switch (lhs, rhs) {
-            case (.idle, .idle), (.loading, .loading), (.ready, .ready), (.noDevices, .noDevices):
-                return true
-            case (.error(let l), .error(let r)):
-                return l == r
-            default:
-                return false
-            }
-        }
+    // MARK: - State Management（権限ベース設計 - シンプル化）
+    enum DeviceState: Equatable {
+        case loading                    // デバイス情報取得中
+        case available([Device])        // デバイスあり（0個以上）
+        case error(String)              // エラー
     }
-    
-    @Published var state: State = .idle
-    @Published var userDevices: [Device] = []  // ユーザーの全デバイス
-    @Published var selectedDeviceID: String? = nil {  // 選択中のデバイスID
-        didSet {
-            print("✅ DeviceManager: selectedDeviceID changed to \(selectedDeviceID ?? "nil")")
-            // デバイスが選択されたら、準備完了状態に遷移
-            if selectedDeviceID != nil && !userDevices.isEmpty {
-                state = .ready
-            }
+
+    @Published var state: DeviceState = .available([])
+    @Published var selectedDeviceID: String? = nil
+
+    // デバイスリストを状態から取得
+    var devices: [Device] {
+        if case .available(let devices) = state {
+            return devices
         }
+        return []
+    }
+
+    var hasDevices: Bool {
+        !devices.isEmpty
+    }
+
+    var isViewingSample: Bool {
+        selectedDeviceID == DeviceManager.sampleDeviceID
     }
     @Published var registrationError: String? = nil
     @Published var isLoading: Bool = false
@@ -163,47 +157,43 @@ class DeviceManager: ObservableObject {
     }
     
     
-    // MARK: - 統合初期化処理（State管理版）
+    // MARK: - デバイス初期化処理（権限ベース設計 - 統一版）
     @MainActor
-    func initializeDeviceState(for userId: String) async {
-        // 既に処理中、または準備完了なら何もしない
-        switch state {
-        case .idle, .error:
-            // 処理を続行
-            break
-        case .loading, .ready, .noDevices:
-            print("⚠️ DeviceManager: Already in state \(state), skipping initialization")
+    func initializeDevices(for userId: String) async {
+        // 処理中なら何もしない（重複防止）
+        if case .loading = state {
+            print("⚠️ DeviceManager: Already loading, skipping")
             return
         }
-        
-        print("🚀 DeviceManager: Starting device initialization for user \(userId)")
+
+        print("🚀 DeviceManager: デバイス初期化開始: \(userId)")
         self.state = .loading
-        
+
         do {
-            // デバイスリストを取得
-            let devices = try await fetchUserDevicesInternal(for: userId)
-            
-            if devices.isEmpty {
-                print("📱 DeviceManager: No devices found for user")
-                self.userDevices = []
-                self.selectedDeviceID = nil
+            let fetchedDevices = try await fetchUserDevicesInternal(for: userId)
+
+            // デバイスリストをセット（空配列でも可）
+            self.state = .available(fetchedDevices)
+
+            if fetchedDevices.isEmpty {
+                print("📱 デバイスなし")
+                selectedDeviceID = nil
                 UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
-                self.state = .noDevices
             } else {
-                self.userDevices = devices
-                print("✅ DeviceManager: Found \(devices.count) devices")
-                
-                // selectedDeviceIDを決定
-                determineSelectedDevice(from: devices)
-                
-                // 準備完了状態に遷移
-                self.state = .ready
-                print("🎯 DeviceManager: State is now READY with selectedDeviceID: \(selectedDeviceID ?? "nil")")
+                print("✅ \(fetchedDevices.count)個のデバイスを取得")
+                // 選択デバイスを決定
+                determineSelectedDevice(from: fetchedDevices)
             }
         } catch {
-            print("❌ DeviceManager: Failed to initialize - \(error)")
+            print("❌ デバイス取得エラー: \(error)")
             self.state = .error(error.localizedDescription)
         }
+    }
+
+    // 後方互換性のため（非推奨）
+    @available(*, deprecated, message: "Use initializeDevices(for:) instead")
+    func initializeDeviceState(for userId: String) async {
+        await initializeDevices(for: userId)
     }
     
     // デバイス選択ロジック
@@ -239,12 +229,11 @@ class DeviceManager: ObservableObject {
         }
     }
 
-    // MARK: - ゲストモード対応
-    func selectSampleDeviceForGuest() {
-        print("👤 ゲストモード: サンプルデバイスを自動選択")
+    // MARK: - サンプルデバイス選択（Read-Only Mode用）
+    func selectSampleDevice() {
+        print("👤 Read-Only Mode: サンプルデバイスを選択")
 
-        // サンプルデバイスを作成（データベースから取得しない）
-        var sampleDevice = Device(
+        let sample = Device(
             device_id: DeviceManager.sampleDeviceID,
             device_type: "observer",
             timezone: "Asia/Tokyo",
@@ -252,26 +241,34 @@ class DeviceManager: ObservableObject {
             subject_id: nil,
             created_at: nil,
             status: "active",
-            role: nil
+            role: "viewer"
         )
-        sampleDevice.role = "viewer"
 
-        // userDevicesリストにサンプルデバイスのみを設定
-        userDevices = [sampleDevice]
-        selectedDeviceID = DeviceManager.sampleDeviceID
-        state = .ready
+        // 既存デバイスにサンプルを追加
+        var currentDevices = devices
+        if !currentDevices.contains(where: { $0.device_id == DeviceManager.sampleDeviceID }) {
+            currentDevices.append(sample)
+        }
 
-        print("✅ ゲストモード: サンプルデバイスを選択完了")
+        self.state = .available(currentDevices)
+        self.selectedDeviceID = DeviceManager.sampleDeviceID
+
+        print("✅ サンプルデバイス選択完了")
     }
 
-    // MARK: - 状態クリア
+    // 後方互換性のため（非推奨）
+    @available(*, deprecated, message: "Use selectSampleDevice() instead")
+    func selectSampleDeviceForGuest() {
+        selectSampleDevice()
+    }
+
+    // MARK: - 状態クリア（権限ベース設計）
     func clearState() {
         let clearStart = Date()
         print("⏱️ [DM-CLEAR] 状態クリア開始")
 
-        userDevices = []
+        state = .available([])
         selectedDeviceID = nil
-        state = .ready  // デバイス未選択でもready状態にする（ガイド画面を表示するため）
         registrationError = nil
         isLoading = false
 
@@ -279,6 +276,14 @@ class DeviceManager: ObservableObject {
         UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
 
         print("⏱️ [DM-CLEAR] 状態クリア完了: \(Date().timeIntervalSince(clearStart))秒")
+    }
+
+    // 状態リセット（ログイン時に使用）
+    func resetState() {
+        print("🔄 DeviceManager: 状態リセット（Full Access Mode用）")
+        self.state = .available([])
+        self.selectedDeviceID = nil
+        UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
     }
     
     // 内部用のデバイス取得関数（エラーをthrowする）
@@ -325,20 +330,17 @@ class DeviceManager: ObservableObject {
         return devices
     }
     
-    // MARK: - ユーザーのデバイスを取得（Phase 2-C: 重複処理を削除）
+    // MARK: - ユーザーのデバイスを取得（後方互換性）
     func fetchUserDevices(for userId: String) async {
-        print("🔄 [Phase 2-C] DeviceManager: fetchUserDevices called for user \(userId)")
+        print("🔄 DeviceManager: fetchUserDevices called for user \(userId)")
 
-        // 📊 Phase 2-C: 新しい初期化処理を呼び出すだけ（重複処理を削除）
-        // L337-423の重複処理を削除
-        await initializeDeviceState(for: userId)
+        await initializeDevices(for: userId)
 
-        // 旧コードとの互換性のため、isLoadingを更新
         await MainActor.run {
             self.isLoading = false
         }
 
-        print("✅ [Phase 2-C] fetchUserDevices completed (delegated to initializeDeviceState)")
+        print("✅ fetchUserDevices completed")
     }
     
     // MARK: - デバイス選択
@@ -354,28 +356,23 @@ class DeviceManager: ObservableObject {
 
             // サンプルデバイスの場合、userDevicesからも削除
             if wasSampleDevice {
-                userDevices.removeAll { $0.device_id == DeviceManager.sampleDeviceID }
-                print("📱 Sample device removed from userDevices")
-            }
-
-            // デバイスなし状態に遷移
-            if userDevices.isEmpty {
-                self.state = .noDevices
-            } else {
-                self.state = .ready
+                var updatedDevices = devices
+                updatedDevices.removeAll { $0.device_id == DeviceManager.sampleDeviceID }
+                self.state = .available(updatedDevices)
+                print("📱 Sample device removed from devices")
             }
             return
         }
 
-        // サンプルデバイスまたはuserDevicesに含まれるデバイスの場合のみ選択可能
+        // サンプルデバイスまたはdevicesに含まれるデバイスの場合のみ選択可能
         let isSampleDevice = deviceId == DeviceManager.sampleDeviceID
-        let isUserDevice = userDevices.contains(where: { $0.device_id == deviceId })
+        let isUserDevice = devices.contains(where: { $0.device_id == deviceId })
 
         if isSampleDevice || isUserDevice {
-            // サンプルデバイスの場合、userDevicesに追加（存在しない場合のみ）
-            if isSampleDevice && !userDevices.contains(where: { $0.device_id == deviceId }) {
-                print("📱 Sample device: Adding to userDevices")
-                var sampleDevice = Device(
+            // サンプルデバイスの場合、devicesに追加（存在しない場合のみ）
+            if isSampleDevice && !devices.contains(where: { $0.device_id == deviceId }) {
+                print("📱 Sample device: Adding to devices")
+                let sampleDevice = Device(
                     device_id: DeviceManager.sampleDeviceID,
                     device_type: "observer",
                     timezone: "Asia/Tokyo",
@@ -383,10 +380,11 @@ class DeviceManager: ObservableObject {
                     subject_id: nil,
                     created_at: nil,
                     status: "active",
-                    role: nil
+                    role: "viewer"
                 )
-                sampleDevice.role = "viewer"
-                userDevices.append(sampleDevice)
+                var updatedDevices = devices
+                updatedDevices.append(sampleDevice)
+                self.state = .available(updatedDevices)
             }
 
             selectedDeviceID = deviceId
@@ -401,10 +399,10 @@ class DeviceManager: ObservableObject {
         }
     }
     
-    // MARK: - デバイス切り替え時の状態リセット
+    // 後方互換性のため（非推奨）
+    @available(*, deprecated, message: "Use resetState() instead")
     func resetToIdleState() {
-        print("🔄 DeviceManager: Resetting to idle state")
-        self.state = .idle
+        resetState()
     }
     
     // MARK: - 選択中デバイスの復元
@@ -445,8 +443,8 @@ class DeviceManager: ObservableObject {
             return false  // observerなのでFABを非表示
         }
 
-        // userDevicesから選択中のデバイスを取得
-        guard let device = userDevices.first(where: { $0.device_id == deviceId }) else {
+        // devicesから選択中のデバイスを取得
+        guard let device = devices.first(where: { $0.device_id == deviceId }) else {
             return true  // デバイスが見つからない場合はデフォルトで表示
         }
 
@@ -460,26 +458,26 @@ class DeviceManager: ObservableObject {
     var selectedDeviceTimezone: TimeZone {
         // 選択されたデバイスIDがあればそのタイムゾーンを返す
         if let deviceId = selectedDeviceID,
-           let device = userDevices.first(where: { $0.device_id == deviceId }),
+           let device = devices.first(where: { $0.device_id == deviceId }),
            let timezoneString = device.timezone,
            let timezone = TimeZone(identifier: timezoneString) {
             return timezone
         }
-        
+
         // フォールバック：現在のデバイスのタイムゾーン
         return TimeZone.current
     }
-    
+
     /// デバイスのタイムゾーンを考慮したCalendarを取得
     var deviceCalendar: Calendar {
         var calendar = Calendar.current
         calendar.timeZone = selectedDeviceTimezone
         return calendar
     }
-    
+
     /// 指定したデバイスIDのタイムゾーンを取得
     func getTimezone(for deviceId: String) -> TimeZone {
-        if let device = userDevices.first(where: { $0.device_id == deviceId }),
+        if let device = devices.first(where: { $0.device_id == deviceId }),
            let timezoneString = device.timezone,
            let timezone = TimeZone(identifier: timezoneString) {
             return timezone
@@ -495,7 +493,7 @@ class DeviceManager: ObservableObject {
     // 3. デバイス追加時にタイムゾーンもDBに保存
     func addDeviceByQRCode(_ deviceId: String, for userId: String) async throws {
         // 既に追加済みかチェック
-        if userDevices.contains(where: { $0.device_id == deviceId }) {
+        if devices.contains(where: { $0.device_id == deviceId }) {
             throw DeviceAddError.alreadyAdded
         }
         
@@ -574,7 +572,7 @@ class DeviceManager: ObservableObject {
                 .eq("device_id", value: deviceId)
                 .execute()
             
-            print("🔧 Delete response status: \(deleteResponse.status ?? -1)")
+            print("🔧 Delete response status: \(deleteResponse.status)")
             
             // 削除後に確認
             let verifyRecords: [UserDevice] = try await supabase
@@ -626,7 +624,9 @@ class DeviceManager: ObservableObject {
 
             // ローカルのデバイスリストから削除
             await MainActor.run {
-                userDevices.removeAll { $0.device_id == deviceId }
+                var updatedDevices = devices
+                updatedDevices.removeAll { $0.device_id == deviceId }
+                self.state = .available(updatedDevices)
 
                 // 選択中のデバイスが削除された場合、選択をクリア
                 if selectedDeviceID == deviceId {
@@ -634,7 +634,7 @@ class DeviceManager: ObservableObject {
                     UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
 
                     // 別のデバイスがある場合は最初のデバイスを選択
-                    if let firstDevice = userDevices.first {
+                    if let firstDevice = updatedDevices.first {
                         selectDevice(firstDevice.device_id)
                     }
                 }
@@ -665,7 +665,7 @@ struct DeviceInsert: Codable {
 }
 
 // Supabase Response用データモデル
-struct Device: Codable {
+struct Device: Codable, Equatable {
     let device_id: String
     let device_type: String
     let timezone: String? // IANAタイムゾーン識別子（例: "Asia/Tokyo"）

@@ -55,7 +55,7 @@ struct DeviceSettingsView: View {
                 if isLoading {
                     ProgressView("デバイス一覧を読み込み中...")
                         .frame(maxWidth: .infinity, minHeight: 200)
-                } else if deviceManager.userDevices.isEmpty {
+                } else if deviceManager.devices.isEmpty {
                     EmptyDeviceState()
                 } else {
                     DeviceList()
@@ -168,7 +168,7 @@ struct DeviceSettingsView: View {
                 .padding(.horizontal)
 
             // サンプルデバイスを除外してデバイス一覧を表示
-            ForEach(Array(deviceManager.userDevices.filter { $0.device_id != DeviceManager.sampleDeviceID }.reversed().enumerated()), id: \.element.device_id) { index, device in
+            ForEach(Array(deviceManager.devices.filter { $0.device_id != DeviceManager.sampleDeviceID }.reversed().enumerated()), id: \.element.device_id) { index, device in
                 DeviceCard(
                     device: device,
                     isSelected: device.device_id == deviceManager.selectedDeviceID,
@@ -293,7 +293,7 @@ struct DeviceSettingsView: View {
         isLoading = true
 
         // 1. デバイスマネージャーが準備完了するまで待機
-        while deviceManager.state == .idle || deviceManager.state == .loading {
+        while case .loading = deviceManager.state {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
 
@@ -331,7 +331,7 @@ struct DeviceSettingsView: View {
         var newSubjects: [String: Subject] = [:]
 
         // 連携中のデバイスの観測対象を取得
-        for device in deviceManager.userDevices {
+        for device in deviceManager.devices {
             let result = await dataManager.fetchAllReports(
                 deviceId: device.device_id,
                 date: Date(),
@@ -361,7 +361,7 @@ struct DeviceSettingsView: View {
 
     /// QRコードをスキャンしてデバイスを追加
     private func handleQRCodeScanned(_ code: String) async {
-        if deviceManager.userDevices.contains(where: { $0.device_id == code }) {
+        if deviceManager.devices.contains(where: { $0.device_id == code }) {
             addDeviceError = "このデバイスは既に追加されています。"
             showAddDeviceAlert = true
             return

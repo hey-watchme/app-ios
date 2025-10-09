@@ -29,7 +29,7 @@ struct ReportTestView: View {
                 
                 // デバイス選択UI
                 VStack(spacing: 12) {
-                    if deviceManager.userDevices.count > 1 {
+                    if deviceManager.devices.count > 1 {
                         // 複数デバイスがある場合はPicker表示
                         VStack(alignment: .leading, spacing: 8) {
                             Text("デバイスを選択")
@@ -39,10 +39,10 @@ struct ReportTestView: View {
                                 get: { deviceManager.selectedDeviceID ?? "" },
                                 set: { deviceManager.selectDevice($0) }
                             )) {
-                                ForEach(deviceManager.userDevices, id: \.device_id) { device in
+                                ForEach(deviceManager.devices, id: \.device_id) { device in
                                     HStack {
                                         VStack(alignment: .leading) {
-                                            Text("デバイス \(deviceManager.userDevices.firstIndex(where: { $0.device_id == device.device_id })! + 1)")
+                                            Text("デバイス \(deviceManager.devices.firstIndex(where: { $0.device_id == device.device_id })! + 1)")
                                                 .font(.caption)
                                                 .fontWeight(.medium)
                                             Text(device.device_id)
@@ -60,7 +60,7 @@ struct ReportTestView: View {
                             .background(Color.safeColor("BorderLight").opacity(0.1))
                             .cornerRadius(10)
                         }
-                    } else if deviceManager.userDevices.isEmpty {
+                    } else if deviceManager.devices.isEmpty {
                         // デバイスが見つからない場合
                         HStack {
                             Image(systemName: "exclamationmark.triangle.fill")
@@ -279,11 +279,11 @@ struct ReportTestView: View {
         .onAppear {
             print("📊 ReportTestView onAppear")
             print("   - selectedDeviceID: \(deviceManager.selectedDeviceID ?? "nil")")
-            print("   - userDevices count: \(deviceManager.userDevices.count)")
-            
+            print("   - devices count: \(deviceManager.devices.count)")
+
             // もしデバイスが取得されていない場合は再取得
             // ✅ CLAUDE.md: public.usersのuser_idを使用
-            if deviceManager.userDevices.isEmpty, let userId = userAccountManager.currentUser?.profile?.userId {
+            if deviceManager.devices.isEmpty, let userId = userAccountManager.currentUser?.profile?.userId {
                 print("🔄 デバイスが未取得のため再取得を実行")
                 Task {
                     await deviceManager.fetchUserDevices(for: userId)
