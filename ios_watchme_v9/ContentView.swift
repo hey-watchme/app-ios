@@ -25,7 +25,8 @@ struct ContentView: View {
     @State private var networkManager: NetworkManager?
 
     // 動的な日付範囲管理（無限スクロール対応）
-    @State private var dateRange: [Date] = []
+    // 初期値として今日の日付を設定（TabViewが空にならないように）
+    @State private var dateRange: [Date] = [Date()]
     @State private var isLoadingMoreDates = false
 
     // 初期ロード日数（起動時のパフォーマンス最適化）
@@ -58,9 +59,7 @@ struct ContentView: View {
                     Spacer()
 
                 case .available:
-                    // デバイスが選択されているかチェック
-                    if deviceManager.selectedDeviceID != nil {
-                    // デバイスが選択されている → ダッシュボード表示
+                    // 常にダッシュボードを表示
                     ZStack(alignment: .top) {
                         TabView(selection: $selectedDate) {
                             ForEach(dateRange, id: \.self) { date in
@@ -96,6 +95,40 @@ struct ContentView: View {
                                     .frame(height: 100)
                             }
                         }
+
+                        // デバイス未登録時のガイドオーバーレイ
+                        // 条件: 実際のデバイス（デモ以外）がない かつ 何も選択されていない場合のみ表示
+                        if !deviceManager.hasRealDevices && deviceManager.selectedDeviceID == nil {
+                            DeviceSetupGuideOverlay(
+                                onSelectThisDevice: {
+                                    print("🔘 DeviceSetupGuideOverlay: このデバイスで測定するボタン押下")
+                                    print("🔍 authState: \(userAccountManager.authState)")
+
+                                    // 権限チェック（書き込み権限が必要）
+                                    if userAccountManager.requireWritePermission() {
+                                        print("❗️ 閲覧専用モード - 権限アップグレードシート表示")
+                                        showSignUpPrompt = true
+                                        return
+                                    }
+                                    print("✅ 全権限モード - デバイス登録確認表示")
+                                    showDeviceRegistrationConfirm = true
+                                },
+                                onViewSample: {
+                                    // サンプルデバイスを選択
+                                    deviceManager.selectDevice(DeviceManager.sampleDeviceID)
+                                },
+                                onScanQR: {
+                                    // 権限チェック
+                                    if userAccountManager.requireWritePermission() {
+                                        showSignUpPrompt = true
+                                        return
+                                    }
+                                    showQRScanner = true
+                                }
+                            )
+                            .transition(.opacity)
+                            .zIndex(1)
+                        }
                     }
                     .id(deviceManager.selectedDeviceID) // デバイスIDで再構築を制御
                     .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
@@ -103,10 +136,6 @@ struct ContentView: View {
                             // デバイスが変更されたら日付範囲をリセット
                             initializeDateRange()
                         }
-                    }
-                    } else {
-                        // デバイスが選択されていない → ガイド画面表示
-                        noDevicesView
                     }
 
                 case .error(let errorMessage):
@@ -273,109 +302,6 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - デバイスなし画面
-    private var noDevicesView: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            // タイトル「ダッシュボード」
-            Text("ダッシュボード")
-                .font(.title)
-                .fontWeight(.bold)
-                .padding(.top, 40)
-                .padding(.horizontal, 40)
-
-            // 説明文
-            Text("あなたの声から、気分・行動・感情を分析します。")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-                .padding(.top, 8)
-                .padding(.horizontal, 40)
-
-            // グラフアイコン（うっすらグレー、中央配置）
-            Spacer()
-
-            HStack {
-                Spacer()
-                Image(systemName: "chart.bar.fill")
-                    .font(.system(size: 100))
-                    .foregroundColor(.gray.opacity(0.15))
-                Spacer()
-            }
-
-            Spacer()
-
-            // ボタンエリア
-            VStack(spacing: 16) {
-                // 1. このデバイスで測定するボタン
-                Button(action: {
-                    print("🔘 noDevicesView: このデバイスで測定するボタン押下")
-                    print("🔍 authState: \(userAccountManager.authState)")
-
-                    // 権限チェック（書き込み権限が必要）
-                    if userAccountManager.requireWritePermission() {
-                        print("❗️ 閲覧専用モード - 権限アップグレードシート表示")
-                        showSignUpPrompt = true
-                        return
-                    }
-                    print("✅ 全権限モード - デバイス登録確認表示")
-                    showDeviceRegistrationConfirm = true
-                }) {
-                    HStack {
-                        Image(systemName: "iphone")
-                            .font(.title3)
-                        Text("このデバイスで測定する")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.safeColor("AppAccentColor"))
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-
-                // 2. サンプルを見るボタン
-                Button(action: {
-                    // サンプルデバイスを選択
-                    deviceManager.selectDevice(DeviceManager.sampleDeviceID)
-                }) {
-                    HStack {
-                        Image(systemName: "eye")
-                            .font(.title3)
-                        Text("サンプルを見る")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.gray.opacity(0.2))
-                    .foregroundColor(Color.safeColor("AppAccentColor"))
-                    .cornerRadius(12)
-                }
-
-                // 3. QRコードでデバイスを追加ボタン
-                Button(action: {
-                    // 権限チェック
-                    if userAccountManager.requireWritePermission() {
-                        showSignUpPrompt = true
-                        return
-                    }
-                    showQRScanner = true
-                }) {
-                    HStack {
-                        Image(systemName: "qrcode.viewfinder")
-                            .font(.title3)
-                        Text("QRコードでデバイスを追加")
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(Color.gray.opacity(0.2))
-                    .foregroundColor(Color.safeColor("AppAccentColor"))
-                    .cornerRadius(12)
-                }
-            }
-            .padding(.horizontal, 40)
-            .padding(.bottom, 40)
-        }
-    }
 
     // MARK: - QRコードスキャン処理
     private func handleQRCodeScanned(_ code: String) async {

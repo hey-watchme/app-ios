@@ -234,7 +234,10 @@ struct DeviceSettingsView: View {
                             editingSubject: nil
                         )
                     },
-                    onEditDevice: { }
+                    onEditDevice: {
+                        // サンプルデバイスも詳細表示（閲覧のみ）
+                        deviceEditingContext = DeviceEditingContext(device: sampleDevice)
+                    }
                 )
                 .padding(.horizontal)
             }

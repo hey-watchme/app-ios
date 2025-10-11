@@ -156,8 +156,8 @@ struct HeaderView: View {
                         .monospaced()
                 }
             }
-        } else if deviceManager.devices.isEmpty {
-            // デバイス未連携の場合
+        } else if !deviceManager.hasRealDevices {
+            // 実際のデバイス（デモ以外）が未連携の場合
             HStack(spacing: 8) {
                 ZStack {
                     Circle()

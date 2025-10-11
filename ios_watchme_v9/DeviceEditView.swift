@@ -103,7 +103,8 @@ struct DeviceEditView: View {
                         }
                     }
                     
-                    
+
+
                     // デバイス連携解除ボタン
                     Button(action: {
                         showUnlinkConfirmation = true

@@ -37,6 +37,16 @@ class DeviceManager: ObservableObject {
         !devices.isEmpty
     }
 
+    // デモデバイスを除外した実際のデバイスリスト
+    var realDevices: [Device] {
+        devices.filter { !$0.isDemo }
+    }
+
+    // 実際のデバイスが存在するかどうか
+    var hasRealDevices: Bool {
+        !realDevices.isEmpty
+    }
+
     var isViewingSample: Bool {
         selectedDeviceID == DeviceManager.sampleDeviceID
     }
@@ -675,6 +685,11 @@ struct Device: Codable, Equatable {
     let status: String? // デバイスステータス（active, inactive等）
     // user_devicesテーブルから取得した場合のrole情報を保持
     var role: String?
+
+    // デモデバイスかどうかを判定
+    var isDemo: Bool {
+        return device_type == "demo"
+    }
 }
 
 // user_devicesテーブル用のモデル
