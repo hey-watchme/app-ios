@@ -11,11 +11,12 @@ struct BehaviorGraphView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
-    
-    // オプショナルでデータを受け取る
-    var behaviorReport: BehaviorReport?
+
+    // 独自にデータを管理（完全分離型）
     var selectedDate: Date = Date()  // 日付を受け取る
-    
+    @State private var behaviorReport: BehaviorReport?
+    @State private var isLoading = false
+
     @State private var selectedTimeBlock: TimeBlock? = nil
     
     var body: some View {
@@ -24,10 +25,10 @@ struct BehaviorGraphView: View {
                     // 日付表示
                     DetailPageDateHeader(selectedDate: selectedDate)
                         .padding(.top, -8)  // ScrollViewのデフォルトパディングを調整
-                    if dataManager.isLoading {
+                    if isLoading {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
-                    } else if let report = behaviorReport ?? dataManager.dailyBehaviorReport {
+                    } else if let report = behaviorReport {
                         // 検出された生活音カード
                         UnifiedCard(title: "検出された生活音") {
                             VStack(spacing: 16) {
@@ -140,8 +141,32 @@ struct BehaviorGraphView: View {
             }
             .presentationDetents([.medium])
         }
+        .task(id: selectedDate) {
+            await loadBehaviorData()
+        }
     }
-    
+
+    // データ取得メソッド
+    private func loadBehaviorData() async {
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            print("❌ [BehaviorGraphView] No device selected")
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let timezone = deviceManager.getTimezone(for: deviceId)
+        let result = await dataManager.fetchAllReports(
+            deviceId: deviceId,
+            date: selectedDate,
+            timezone: timezone
+        )
+
+        behaviorReport = result.behaviorReport
+        print("✅ [BehaviorGraphView] Behavior data loaded for \(selectedDate)")
+    }
+
     private func rankColor(for index: Int) -> Color {
         switch index {
         case 0:

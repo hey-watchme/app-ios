@@ -286,7 +286,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showBehaviorSheet) {
             NavigationView {
-                BehaviorGraphView(behaviorReport: behaviorReport, selectedDate: selectedDate)
+                BehaviorGraphView(selectedDate: selectedDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
@@ -302,7 +302,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showEmotionSheet) {
             NavigationView {
-                EmotionGraphView(emotionReport: emotionReport, selectedDate: selectedDate)
+                EmotionGraphView(selectedDate: selectedDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)

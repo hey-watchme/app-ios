@@ -19,6 +19,8 @@ struct SignUpView: View {
     @State private var subscribeNewsletter: Bool = true
     @State private var showSuccessView: Bool = false
     @State private var isFormValidState: Bool = false
+    @State private var showLogin: Bool = false
+    @State private var showValidationErrors: Bool = false
     @Environment(\.dismiss) private var dismiss
 
     // フォーカス管理
@@ -45,7 +47,7 @@ struct SignUpView: View {
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 180, height: 63)
 
-                    Text("ユーザ登録")
+                    Text("アカウント登録")
                         .font(.title2)
                         .foregroundColor(.secondary)
                 }
@@ -67,6 +69,16 @@ struct SignUpView: View {
                             .onSubmit {
                                 focusedField = .email
                             }
+
+                        if showValidationErrors && displayName.isEmpty {
+                            Text("表示名を入力してください")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        } else if showValidationErrors && displayName.count < 2 {
+                            Text("表示名は2文字以上で入力してください")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        }
                     }
 
                     // メールアドレス入力
@@ -85,6 +97,16 @@ struct SignUpView: View {
                             .onSubmit {
                                 focusedField = .password
                             }
+
+                        if showValidationErrors && email.isEmpty {
+                            Text("メールアドレスを入力してください")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        } else if showValidationErrors && !isValidEmail(email) {
+                            Text("正しいメールアドレスの形式で入力してください")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        }
                     }
 
                     // パスワード入力
@@ -124,9 +146,19 @@ struct SignUpView: View {
                             }
                         }
 
-                        Text("8文字以上、英数字を含む")
-                            .font(.caption2)
-                            .foregroundColor(.secondary)
+                        if showValidationErrors && password.isEmpty {
+                            Text("パスワードを入力してください")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        } else if showValidationErrors && password.count < 8 {
+                            Text("パスワードは8文字以上で入力してください")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        } else {
+                            Text("8文字以上、英数字を含む")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
                     }
 
                     // パスワード確認入力
@@ -165,13 +197,18 @@ struct SignUpView: View {
                                     }
                             }
                         }
+
+                        if showValidationErrors && password != passwordConfirm {
+                            Text("パスワードが一致しません")
+                                .font(.caption2)
+                                .foregroundColor(.red)
+                        }
                     }
 
                     // 利用規約同意チェックボックス
                     HStack(alignment: .top, spacing: 12) {
                         Button(action: {
                             agreeToTerms.toggle()
-                            updateValidationState()
                         }) {
                             Image(systemName: agreeToTerms ? "checkmark.square.fill" : "square")
                                 .foregroundColor(agreeToTerms ? Color.primary : Color.secondary)
@@ -217,6 +254,13 @@ struct SignUpView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.top, 8)
 
+                    if showValidationErrors && !agreeToTerms {
+                        Text("利用規約とプライバシーポリシーに同意してください")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+
                     // ニュースレター購読チェックボックス
                     HStack(alignment: .top, spacing: 12) {
                         Button(action: {
@@ -248,9 +292,12 @@ struct SignUpView: View {
                     Button(action: {
                         updateValidationState()
                         if isFormValidState {
+                            showValidationErrors = false
                             Task {
                                 await handleSignUp()
                             }
+                        } else {
+                            showValidationErrors = true
                         }
                     }) {
                         HStack {
@@ -269,7 +316,7 @@ struct SignUpView: View {
                         .foregroundColor(.white)
                         .cornerRadius(10)
                     }
-                    .disabled(!isFormValidState || userAccountManager.isLoading)
+                    .disabled(userAccountManager.isLoading)
                     .padding(.top, 8)
                 }
                 .padding(.horizontal, 40)
@@ -281,7 +328,7 @@ struct SignUpView: View {
                         .foregroundColor(.secondary)
 
                     Button(action: {
-                        dismiss()
+                        showLogin = true
                     }) {
                         Text("ログイン")
                             .font(.footnote)
@@ -309,6 +356,10 @@ struct SignUpView: View {
             if newValue {
                 dismiss()
             }
+        }
+        .fullScreenCover(isPresented: $showLogin) {
+            LoginView()
+                .environmentObject(userAccountManager)
         }
     }
 

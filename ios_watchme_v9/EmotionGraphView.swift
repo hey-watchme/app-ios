@@ -12,11 +12,12 @@ struct EmotionGraphView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
-    
-    // オプショナルでデータを受け取る
-    var emotionReport: EmotionReport?
+
+    // 独自にデータを管理（完全分離型）
     var selectedDate: Date = Date()  // 日付を受け取る
-    
+    @State private var emotionReport: EmotionReport?
+    @State private var isLoading = false
+
     @State private var selectedEmotions: Set<EmotionType> = [.joy]  // デフォルトで喜びだけを選択
     
     var body: some View {
@@ -25,10 +26,10 @@ struct EmotionGraphView: View {
                     // 日付表示
                     DetailPageDateHeader(selectedDate: selectedDate)
                         .padding(.top, -8)  // ScrollViewのデフォルトパディングを調整
-                    if dataManager.isLoading {
+                    if isLoading {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
-                    } else if let report = emotionReport ?? dataManager.dailyEmotionReport {
+                    } else if let report = emotionReport {
                         // 感情ランキングカード
                         UnifiedCard(title: "感情ランキング") {
                             VStack(spacing: 12) {
@@ -218,8 +219,32 @@ struct EmotionGraphView: View {
         .background(Color.safeColor("BehaviorBackgroundPrimary"))
         .navigationTitle("感情グラフ")
         .navigationBarTitleDisplayMode(.inline)
+        .task(id: selectedDate) {
+            await loadEmotionData()
+        }
     }
-    
+
+    // データ取得メソッド
+    private func loadEmotionData() async {
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            print("❌ [EmotionGraphView] No device selected")
+            return
+        }
+
+        isLoading = true
+        defer { isLoading = false }
+
+        let timezone = deviceManager.getTimezone(for: deviceId)
+        let result = await dataManager.fetchAllReports(
+            deviceId: deviceId,
+            date: selectedDate,
+            timezone: timezone
+        )
+
+        emotionReport = result.emotionReport
+        print("✅ [EmotionGraphView] Emotion data loaded for \(selectedDate)")
+    }
+
     private func toggleEmotion(_ emotionType: EmotionType) {
         if selectedEmotions.contains(emotionType) {
             selectedEmotions.remove(emotionType)

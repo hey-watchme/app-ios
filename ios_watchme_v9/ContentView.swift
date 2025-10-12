@@ -102,16 +102,8 @@ struct ContentView: View {
                             DeviceSetupGuideOverlay(
                                 onSelectThisDevice: {
                                     print("🔘 DeviceSetupGuideOverlay: このデバイスで測定するボタン押下")
-                                    print("🔍 authState: \(userAccountManager.authState)")
-
-                                    // 権限チェック（書き込み権限が必要）
-                                    if userAccountManager.requireWritePermission() {
-                                        print("❗️ 閲覧専用モード - 権限アップグレードシート表示")
-                                        showSignUpPrompt = true
-                                        return
-                                    }
-                                    print("✅ 全権限モード - デバイス登録確認表示")
-                                    showDeviceRegistrationConfirm = true
+                                    print("✅ 録音シート表示（権限チェックは録音開始時に実行）")
+                                    showRecordingSheet = true
                                 },
                                 onViewSample: {
                                     // サンプルデバイスを選択
@@ -185,15 +177,7 @@ struct ContentView: View {
                         
                         Button(action: {
                             print("🔘 FAB: 録音ボタン押下")
-                            print("🔍 authState: \(userAccountManager.authState)")
-
-                            // 書き込み権限チェック
-                            if userAccountManager.requireWritePermission() {
-                                print("❗️ 閲覧専用モード - 権限アップグレードシート表示")
-                                showSignUpPrompt = true
-                                return
-                            }
-                            print("✅ 全権限モード - 録音シート表示")
+                            print("✅ 録音シート表示（権限チェックは録音開始時に実行）")
                             showRecordingSheet = true
                         }) {
                             ZStack {

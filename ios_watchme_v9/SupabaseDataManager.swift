@@ -45,8 +45,7 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Published Properties
     @Published var dailyReport: DailyVibeReport?
-    @Published var dailyBehaviorReport: BehaviorReport?
-    @Published var dailyEmotionReport: EmotionReport?
+    // dailyBehaviorReport, dailyEmotionReportは削除（各Viewがローカルで管理）
     @Published var weeklyReports: [DailyVibeReport] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -376,8 +375,7 @@ class SupabaseDataManager: ObservableObject {
     /// データをクリア
     func clearData() {
         dailyReport = nil
-        dailyBehaviorReport = nil
-        dailyEmotionReport = nil
+        // dailyBehaviorReport, dailyEmotionReportは削除（各Viewがローカルで管理）
         weeklyReports = []
         errorMessage = nil
     }
@@ -402,12 +400,9 @@ class SupabaseDataManager: ObservableObject {
         let dashboardData = await fetchAllReportsData(deviceId: deviceId, date: date, timezone: timezone)
         
         // @Publishedプロパティも更新（互換性のため）
-        // 注意: subjectは各Viewがローカルで管理するため、ここでは更新しない
         await MainActor.run {
             self.dailyReport = nil  // vibeReportは廃止
-            self.dailyBehaviorReport = dashboardData.behaviorReport
-            self.dailyEmotionReport = dashboardData.emotionReport
-            // self.subject = dashboardData.subject  // ❌ 削除: 各Viewがローカルで管理
+            // dailyBehaviorReport, dailyEmotionReportの更新は削除（各Viewがローカルで管理）
             self.isLoading = false
         }
         

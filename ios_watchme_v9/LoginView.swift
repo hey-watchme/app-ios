@@ -13,6 +13,7 @@ struct LoginView: View {
     @State private var password: String = ""
     @State private var showPassword: Bool = false
     @State private var showSignUp: Bool = false
+    @State private var showValidationErrors: Bool = false
     @Environment(\.dismiss) private var dismiss
 
     // フォーカス管理
@@ -22,6 +23,9 @@ struct LoginView: View {
         case email
         case password
     }
+
+    // 静的なEmailバリデーター（毎回作成しない）
+    private static let emailPredicate = NSPredicate(format: "SELF MATCHES %@", "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
 
     var body: some View {
         VStack(spacing: 20) {
@@ -49,7 +53,7 @@ struct LoginView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    TextField("example@email.com", text: $email)
+                    TextField("メールアドレスを入力", text: $email)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .keyboardType(.emailAddress)
                         .textContentType(.emailAddress)
@@ -59,6 +63,16 @@ struct LoginView: View {
                         .onSubmit {
                             focusedField = .password
                         }
+
+                    if showValidationErrors && email.isEmpty {
+                        Text("メールアドレスを入力してください")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                    } else if showValidationErrors && !isValidEmail(email) {
+                        Text("正しいメールアドレスの形式で入力してください")
+                            .font(.caption2)
+                            .foregroundColor(.red)
+                    }
                 }
 
                 // パスワード入力
@@ -81,23 +95,29 @@ struct LoginView: View {
 
                     Group {
                         if showPassword {
-                            TextField("8文字以上", text: $password)
+                            TextField("パスワードを入力", text: $password)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .focused($focusedField, equals: .password)
                                 .onSubmit {
                                     focusedField = nil
-                                    userAccountManager.signIn(email: email, password: password)
+                                    handleLogin()
                                 }
                         } else {
-                            SecureField("8文字以上", text: $password)
+                            SecureField("パスワードを入力", text: $password)
                                 .textFieldStyle(RoundedBorderTextFieldStyle())
                                 .textContentType(.password)
                                 .focused($focusedField, equals: .password)
                                 .onSubmit {
                                     focusedField = nil
-                                    userAccountManager.signIn(email: email, password: password)
+                                    handleLogin()
                                 }
                         }
+                    }
+
+                    if showValidationErrors && password.isEmpty {
+                        Text("パスワードを入力してください")
+                            .font(.caption2)
+                            .foregroundColor(.red)
                     }
                 }
 
@@ -143,7 +163,7 @@ struct LoginView: View {
                 // ログインボタン
                 Button(action: {
                     focusedField = nil
-                    userAccountManager.signIn(email: email, password: password)
+                    handleLogin()
                 }) {
                     HStack {
                         if userAccountManager.isLoading {
@@ -161,7 +181,7 @@ struct LoginView: View {
                     .foregroundColor(Color(.systemBackground))
                     .cornerRadius(10)
                 }
-                .disabled(email.isEmpty || password.isEmpty || userAccountManager.isLoading)
+                .disabled(userAccountManager.isLoading)
             }
             .padding(.horizontal, 40)
 
@@ -191,5 +211,23 @@ struct LoginView: View {
                 dismiss()
             }
         }
+    }
+
+    // メールアドレスバリデーション
+    private func isValidEmail(_ email: String) -> Bool {
+        return Self.emailPredicate.evaluate(with: email)
+    }
+
+    // ログイン処理
+    private func handleLogin() {
+        // バリデーションチェック
+        if email.isEmpty || !isValidEmail(email) || password.isEmpty {
+            showValidationErrors = true
+            return
+        }
+
+        // バリデーション成功
+        showValidationErrors = false
+        userAccountManager.signIn(email: email, password: password)
     }
 }

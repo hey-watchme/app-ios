@@ -49,12 +49,62 @@ struct ios_watchme_v9App: App {
 }
 ```
 
-#### データ取得の簡素化
+#### ダッシュボードアーキテクチャ：完全分離型設計
 
-- SwiftUIの`.task(id:)`モディファイアで日付変更を検知
-- 日付が変更されると自動的にデータを再取得
-- ViewModelやキャッシュシステムを使用しない
-- 各ビューが独立してデータを取得
+**設計思想**: ダッシュボードと詳細画面で異なる最適化戦略を採用
+
+##### ダッシュボード（SimpleDashboardView）
+- **目的**: 頻繁なアクセスに対応、スワイプ体験の最適化
+- **データ管理**: ローカル@Stateで管理
+- **キャッシュ**: 5分間有効、最大15日分保持（LRU方式）
+- **デバウンス**: スワイプ時300ms待機（連続スワイプ時の無駄なリクエスト防止）
+- **トリガー**: `.task(id: LoadDataTrigger(date:deviceId:))`で日付/デバイス変更を検知
+
+```swift
+// ダッシュボードのデータ管理例
+@State private var behaviorReport: BehaviorReport?
+@State private var emotionReport: EmotionReport?
+@State private var dashboardSummary: DashboardSummary?
+
+// キャッシュヒット時は即座に表示、ミス時のみAPI呼び出し
+if let cached = dataCache[cacheKey], Date().timeIntervalSince(cached.timestamp) < 300 {
+    // キャッシュから表示（5分以内）
+} else {
+    // API呼び出し
+}
+```
+
+##### 詳細画面（HomeView, BehaviorGraphView, EmotionGraphView）
+- **目的**: 常に最新データを表示
+- **データ管理**: 各画面が独自に@Stateで管理
+- **キャッシュ**: なし（毎回取得）
+- **トリガー**: `.task(id: selectedDate)`で画面表示時・日付変更時に取得
+
+```swift
+// 詳細画面のデータ取得例
+.task(id: selectedDate) {
+    await loadBehaviorData()  // 毎回最新データを取得
+}
+
+private func loadBehaviorData() async {
+    let result = await dataManager.fetchAllReports(
+        deviceId: deviceId,
+        date: selectedDate,
+        timezone: timezone
+    )
+    behaviorReport = result.behaviorReport
+}
+```
+
+##### データソースの分離
+- **SupabaseDataManager**: データ取得APIのみ提供（@Published削除）
+- **各View**: 独自にデータを管理、お互いに依存しない
+- **責任の明確化**: ダッシュボード=パフォーマンス、詳細=最新性
+
+**メリット**:
+1. ダッシュボードのキャッシュが詳細画面に影響しない
+2. 詳細画面は常に最新データを表示
+3. シンプルで保守しやすい設計
 
 ### 主要コンポーネント
 
@@ -75,6 +125,8 @@ struct ios_watchme_v9App: App {
 4. **SupabaseDataManager**
    - RPC関数を使用した効率的なデータ取得
    - `get_dashboard_data`で全グラフデータを一括取得
+   - **データ取得APIのみ提供**（グローバル状態管理は各Viewに委譲）
+   - `@Published var dailyBehaviorReport`等は削除（完全分離型設計）
 
 #### UI/ナビゲーション
 
@@ -85,9 +137,13 @@ struct ios_watchme_v9App: App {
 2. **SimpleDashboardView**
    - ダッシュボード概要（カード形式）
    - 各グラフカードをタップでモーダル詳細表示
+   - ローカル@Stateで高速キャッシュ管理
+   - スワイプ体験の最適化（デバウンス + LRUキャッシュ）
 
 3. **HomeView / BehaviorGraphView / EmotionGraphView**
    - 各種グラフの詳細表示
+   - 独自にデータ取得（ダッシュボードから独立）
+   - 画面表示時に常に最新データを取得
 
 #### 音声録音
 
