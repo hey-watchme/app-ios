@@ -75,9 +75,6 @@ struct MainAppView: View {
     @State private var showOnboarding = false
     @State private var onboardingCompleted = false  // オンボーディング完了フラグ
 
-    // Supabase初期化用の状態
-    @State private var isInitializingForLogin = false
-    @State private var isInitializingForSignUp = false
 
     // フッターナビゲーション用の選択状態
     @State private var selectedTab: FooterTab = .home
@@ -197,76 +194,32 @@ struct MainAppView: View {
                         VStack(spacing: 16) {
                             // はじめるボタン → オンボーディング表示
                             Button(action: {
-                                isInitializingForSignUp = true
-                                Task {
-                                    // Supabaseクライアントを初期化（初回のみ実行される）
-                                    print("⏱️ [INIT] 新規登録のためSupabase初期化開始")
-                                    _ = await Task.detached(priority: .userInitiated) {
-                                        return SupabaseClientManager.shared.client
-                                    }.value
-                                    print("⏱️ [INIT] Supabase初期化完了")
-
-                                    // メインスレッドでUI更新
-                                    await MainActor.run {
-                                        isInitializingForSignUp = false
-                                        showOnboarding = true
-                                    }
-                                }
+                                showOnboarding = true
                             }) {
-                                HStack {
-                                    if isInitializingForSignUp {
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                            .scaleEffect(0.8)
-                                    }
-                                    Text(isInitializingForSignUp ? "準備中..." : "はじめる")
-                                        .fontWeight(.semibold)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
-                                .background(Color.safeColor("AppAccentColor"))
-                                .foregroundColor(.white)
-                                .cornerRadius(10)
+                                Text("はじめる")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44)
+                                    .background(Color.safeColor("AppAccentColor"))
+                                    .foregroundColor(.white)
+                                    .cornerRadius(10)
                             }
-                            .disabled(isInitializingForSignUp || isInitializingForLogin)
 
                             // ログインボタン
                             Button(action: {
-                                isInitializingForLogin = true
-                                Task {
-                                    // Supabaseクライアントを初期化（初回のみ実行される）
-                                    print("⏱️ [INIT] ログインのためSupabase初期化開始")
-                                    _ = await Task.detached(priority: .userInitiated) {
-                                        return SupabaseClientManager.shared.client
-                                    }.value
-                                    print("⏱️ [INIT] Supabase初期化完了")
-
-                                    // メインスレッドでUI更新
-                                    await MainActor.run {
-                                        isInitializingForLogin = false
-                                        showLogin = true
-                                    }
-                                }
+                                showLogin = true
                             }) {
-                                HStack {
-                                    if isInitializingForLogin {
-                                        ProgressView()
-                                            .progressViewStyle(CircularProgressViewStyle(tint: Color.safeColor("AppAccentColor")))
-                                            .scaleEffect(0.8)
-                                    }
-                                    Text(isInitializingForLogin ? "準備中..." : "ログイン")
-                                        .fontWeight(.semibold)
-                                }
-                                .frame(maxWidth: .infinity)
-                                .frame(height: 44)
-                                .background(Color.clear)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color.safeColor("AppAccentColor"), lineWidth: 1.5)
-                                )
-                                .foregroundColor(Color.safeColor("AppAccentColor"))
+                                Text("ログイン")
+                                    .fontWeight(.semibold)
+                                    .frame(maxWidth: .infinity)
+                                    .frame(height: 44)
+                                    .background(Color.clear)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .stroke(Color.safeColor("AppAccentColor"), lineWidth: 1.5)
+                                    )
+                                    .foregroundColor(Color.safeColor("AppAccentColor"))
                             }
-                            .disabled(isInitializingForSignUp || isInitializingForLogin)
                         }
                         .padding(.horizontal, 40)
                         .padding(.bottom, 50)
