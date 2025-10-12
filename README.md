@@ -117,8 +117,46 @@ ios_watchme_v9/
 
 - **Swift 5.9+** / **SwiftUI**
 - **AVFoundation** - 音声録音
-- **Supabase** - 認証・データベース
+- **Supabase** - 認証・データベース・**Realtime**
 - **Combine** - リアクティブプログラミング
+
+---
+
+## 🚧 開発中の機能（2025-10-12現在）
+
+### Supabase Realtimeによるリアルタイム更新
+
+**目的:**
+Lambda処理完了後、iOSアプリに自動的にデータ更新を通知し、5分キャッシュ問題を解決
+
+**ステータス:** 🔧 実装中（デバッグ待ち）
+
+**アーキテクチャ:**
+```
+録音完了 → Lambda処理（1-3分） → dashboard_summary更新
+  ↓ (Supabase Realtime)
+iOS App → キャッシュクリア → 最新データ取得
+```
+
+**完了した作業:**
+- ✅ iOS側のRealtime購読実装（SimpleDashboardView.swift）
+- ✅ Supabase Database側のReplication設定（4テーブル）
+- ✅ TabViewの実装ミス修正
+
+**未解決の課題:**
+- ❌ 実際の通知が届かない（原因調査中）
+
+**関連ドキュメント:**
+- [REALTIME_QUICK_START.md](./docs/REALTIME_QUICK_START.md) - 次のセッション開始ガイド
+- [REALTIME_DEBUG_CHECKLIST.md](./docs/REALTIME_DEBUG_CHECKLIST.md) - 詳細な調査手順
+- [REALTIME_HANDOFF.md](./docs/REALTIME_HANDOFF.md) - 実装全体の引き継ぎ
+
+**次のステップ:**
+1. 手動UPDATE SQLでテスト（Supabase側の設定確認）
+2. iOSログで通知受信を確認
+3. 原因特定と修正
+4. Row Level Security (RLS)の追加
+5. 他のテーブルへの横展開
 
 ---
 
@@ -198,9 +236,15 @@ ios_watchme_v9/
 
 ## 関連ドキュメント
 
+### 一般ドキュメント
 - [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計・API仕様
 - [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - [CHANGELOG.md](./CHANGELOG.md) - 更新履歴
+
+### Realtime機能関連（開発中）
+- [REALTIME_QUICK_START.md](./docs/REALTIME_QUICK_START.md) - 🚀 次のセッション開始ガイド（最初に読む）
+- [REALTIME_DEBUG_CHECKLIST.md](./docs/REALTIME_DEBUG_CHECKLIST.md) - 詳細な調査手順
+- [REALTIME_HANDOFF.md](./docs/REALTIME_HANDOFF.md) - 実装全体の引き継ぎ
 
 ---
 

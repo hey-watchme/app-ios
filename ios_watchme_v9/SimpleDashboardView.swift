@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import Realtime
 
 // データ取得のトリガーを管理する構造体
 struct LoadDataTrigger: Equatable {
@@ -25,7 +26,8 @@ struct CachedDashboardData {
 }
 
 struct SimpleDashboardView: View {
-    @Binding var selectedDate: Date
+    let date: Date  // このビューが表示する固有の日付
+    @Binding var selectedDate: Date  // TabViewの選択状態（ナビゲーション用）
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var userAccountManager: UserAccountManager
@@ -62,6 +64,9 @@ struct SimpleDashboardView: View {
     @State private var showVibeSheet = false
     @State private var showBehaviorSheet = false
     @State private var showEmotionSheet = false
+
+    // 📡 Realtime購読チャネル
+    @State private var realtimeChannel: RealtimeChannelV2?
     
     var body: some View {
         ZStack(alignment: .top) {
@@ -153,7 +158,7 @@ struct SimpleDashboardView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .task(id: LoadDataTrigger(date: selectedDate, deviceId: deviceManager.selectedDeviceID)) {
+        .task(id: LoadDataTrigger(date: date, deviceId: deviceManager.selectedDeviceID)) {
             // 📊 パフォーマンス最適化: データ取得を一元化（Phase 1-A: デバウンス + キャッシュ）
             guard case .available = deviceManager.state else {
                 return
@@ -170,7 +175,7 @@ struct SimpleDashboardView: View {
             let formatter = DateFormatter()
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.timeZone = deviceManager.getTimezone(for: deviceId)
-            let dateString = formatter.string(from: selectedDate)
+            let dateString = formatter.string(from: date)
             let cacheKey = "\(deviceId)_\(dateString)"
 
             // ✅ キャッシュヒット → 即座に表示（スワイプ超高速）
@@ -265,11 +270,22 @@ struct SimpleDashboardView: View {
                 // 📊 Phase 5-A: 初回読み込みフラグを設定（デバウンススキップ）
                 isInitialLoad = true
                 print("⚡️ [Initial Load Flag] Set to true for immediate data loading")
+
+                // 📡 Realtimeチャネルを再購読
+                subscribeToRealtimeUpdates()
             }
+        }
+        .onAppear {
+            // 📡 Realtime購読を開始
+            subscribeToRealtimeUpdates()
+        }
+        .onDisappear {
+            // 📡 Realtimeチャネルをクリーンアップ
+            unsubscribeFromRealtimeUpdates()
         }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
-                HomeView(subject: subject, dashboardSummary: dashboardSummary, selectedDate: selectedDate)
+                HomeView(subject: subject, dashboardSummary: dashboardSummary, selectedDate: date)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .environmentObject(userAccountManager)
@@ -286,7 +302,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showBehaviorSheet) {
             NavigationView {
-                BehaviorGraphView(selectedDate: selectedDate)
+                BehaviorGraphView(selectedDate: date)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
@@ -302,7 +318,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showEmotionSheet) {
             NavigationView {
-                EmotionGraphView(selectedDate: selectedDate)
+                EmotionGraphView(selectedDate: date)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
@@ -694,23 +710,23 @@ struct SimpleDashboardView: View {
             }
             return
         }
-        
+
         // ローディング開始
         await MainActor.run {
             isLoading = true
         }
-        
+
         defer {
             Task { @MainActor in
                 isLoading = false
             }
         }
-        
+
         // データ取得
         let timezone = deviceManager.getTimezone(for: deviceId)
         let result = await dataManager.fetchAllReports(
             deviceId: deviceId,
-            date: selectedDate,
+            date: date,
             timezone: timezone
         )
         
@@ -896,14 +912,14 @@ struct SimpleDashboardView: View {
                 subjectId: subjectId,
                 userId: userId,
                 commentText: newCommentText.trimmingCharacters(in: .whitespacesAndNewlines),
-                date: selectedDate  // 選択中の日付を追加
+                date: date  // このビューの日付を使用
             )
-            
+
             // コメント追加成功後
             newCommentText = ""
-            
+
             // コメントリストを再取得（同じ日付のコメントのみ）
-            let comments = await dataManager.fetchComments(subjectId: subjectId, date: selectedDate)
+            let comments = await dataManager.fetchComments(subjectId: subjectId, date: date)
             await MainActor.run {
                 self.subjectComments = comments
             }
@@ -916,13 +932,103 @@ struct SimpleDashboardView: View {
     private func deleteComment(commentId: String) async {
         do {
             try await dataManager.deleteComment(commentId: commentId)
-            
+
             // 削除成功後、コメントリストから削除
             await MainActor.run {
                 self.subjectComments.removeAll { $0.id == commentId }
             }
         } catch {
             print("❌ Failed to delete comment: \(error)")
+        }
+    }
+
+    // MARK: - Realtime購読管理
+
+    /// Supabase Realtimeチャネルを購読
+    /// dashboard_summaryテーブルの更新を監視し、更新があったらキャッシュをクリアして最新データを取得
+    private func subscribeToRealtimeUpdates() {
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            print("⚠️ [Realtime] デバイスIDが未選択のため購読をスキップ")
+            return
+        }
+
+        // 既存のチャネルがあればアンサブスクライブ
+        unsubscribeFromRealtimeUpdates()
+
+        print("📡 [Realtime] dashboard_summaryの更新を購読開始: device_id=\(deviceId)")
+
+        // Supabaseクライアントを取得
+        let supabaseClient = SupabaseClientManager.shared.client
+
+        // チャネルを作成（RealtimeV2 API）
+        let channel = supabaseClient
+            .channel("dashboard-updates-\(deviceId)")
+
+        // PostgresChangesの購読を追加（subscribeの前に設定）
+        _ = channel.onPostgresChange(
+            AnyAction.self,
+            schema: "public",
+            table: "dashboard_summary",
+            filter: "device_id=eq.\(deviceId)"
+        ) { payload in
+            Task { @MainActor in
+                self.handleDashboardUpdate(payload)
+            }
+        }
+
+        // チャネルを保存
+        realtimeChannel = channel
+
+        // 購読を開始（onPostgresChangeの後に実行）
+        Task {
+            await channel.subscribe()
+            print("✅ [Realtime] 購読完了")
+        }
+    }
+
+    /// Realtimeチャネルをアンサブスクライブ
+    private func unsubscribeFromRealtimeUpdates() {
+        if let channel = realtimeChannel {
+            print("📡 [Realtime] チャネルをアンサブスクライブ")
+            Task {
+                await channel.unsubscribe()
+            }
+            realtimeChannel = nil
+        }
+    }
+
+    /// dashboard_summaryテーブルの更新を処理
+    /// - Parameter payload: Realtimeからのペイロード
+    private func handleDashboardUpdate(_ payload: AnyAction) {
+        print("✅ [Realtime] dashboard_summaryが更新されました")
+
+        Task { @MainActor in
+            // キャッシュをクリア（今日のデータのみクリア）
+            let calendar = deviceManager.deviceCalendar
+            let today = calendar.startOfDay(for: Date())
+
+            if let deviceId = deviceManager.selectedDeviceID {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.timeZone = deviceManager.getTimezone(for: deviceId)
+                let todayString = formatter.string(from: today)
+                let todayCacheKey = "\(deviceId)_\(todayString)"
+
+                // 今日のキャッシュのみクリア
+                if dataCache[todayCacheKey] != nil {
+                    dataCache.removeValue(forKey: todayCacheKey)
+                    cacheKeys.removeAll { $0 == todayCacheKey }
+                    print("🗑️ [Realtime] 今日のキャッシュをクリア: \(todayString)")
+                }
+            }
+
+            // 現在表示中が今日の日付の場合のみ再取得
+            if calendar.isDateInToday(date) {
+                print("🔄 [Realtime] 今日のデータを再取得")
+                await loadAllData()
+            } else {
+                print("ℹ️ [Realtime] 表示中は過去の日付のため再取得をスキップ")
+            }
         }
     }
 }

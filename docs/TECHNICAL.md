@@ -617,3 +617,115 @@ while true {
 // URLSessionUploadTaskでアップロード
 let uploadTask = URLSession.shared.uploadTask(with: request, fromFile: tempFileURL)
 ```
+
+---
+
+## 📡 リアルタイム更新システム（2025-10-12実装）
+
+### 概要
+
+Supabase Realtimeを使用して、Lambda処理完了後にiOSアプリへ自動的にデータ更新を通知します。
+
+### アーキテクチャ
+
+```
+録音完了 → S3 → Lambda(processor) → SQS → Lambda(worker)
+  ↓
+ASR/SED/SER → Aggregators → Vibe Scorer
+  ↓
+dashboard_summary テーブル更新
+  ↓ (Supabase Realtime)
+iOS App → キャッシュクリア → 最新データ取得
+```
+
+### 実装詳細
+
+#### SimpleDashboardView.swift
+
+**Realtimeチャネル購読**
+```swift
+@State private var realtimeChannel: RealtimeChannelV2?
+
+func subscribeToRealtimeUpdates() {
+    guard let deviceId = deviceManager.selectedDeviceID else { return }
+
+    let supabaseClient = SupabaseClientManager.shared.client
+    let channel = supabaseClient.channel("dashboard-updates-\(deviceId)")
+
+    _ = channel.onPostgresChange(
+        AnyAction.self,
+        schema: "public",
+        table: "dashboard_summary",
+        filter: "device_id=eq.\(deviceId)"
+    ) { payload in
+        Task { @MainActor in
+            self.handleDashboardUpdate(payload)
+        }
+    }
+
+    realtimeChannel = channel
+    Task { await channel.subscribe() }
+}
+```
+
+**更新処理**
+```swift
+func handleDashboardUpdate(_ payload: AnyAction) {
+    Task { @MainActor in
+        // 今日のキャッシュのみクリア
+        let calendar = deviceManager.deviceCalendar
+        let today = calendar.startOfDay(for: Date())
+
+        if let deviceId = deviceManager.selectedDeviceID {
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            formatter.timeZone = deviceManager.getTimezone(for: deviceId)
+            let todayString = formatter.string(from: today)
+            let todayCacheKey = "\(deviceId)_\(todayString)"
+
+            dataCache.removeValue(forKey: todayCacheKey)
+            cacheKeys.removeAll { $0 == todayCacheKey }
+        }
+
+        // 表示中が今日なら最新データを再取得
+        if calendar.isDateInToday(date) {
+            await loadAllData()
+        }
+    }
+}
+```
+
+**ライフサイクル管理**
+```swift
+.onAppear {
+    subscribeToRealtimeUpdates()
+}
+
+.onDisappear {
+    unsubscribeFromRealtimeUpdates()
+}
+
+.onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
+    if oldDeviceId != newDeviceId {
+        subscribeToRealtimeUpdates()  // デバイス切り替え時に再購読
+    }
+}
+```
+
+### メリット
+
+1. **リアルタイム性**: Lambda処理完了から数秒以内にiOSアプリ更新
+2. **信頼性**: データベース更新が確実に完了してから通知
+3. **実装コスト**: Lambda側の変更不要、iOS側のみ約80行追加
+4. **スケーラビリティ**: Supabaseが自動的にスケーリング
+
+### コスト
+
+- Supabase Realtime無料枠：2 million database changes/月
+- 現在の使用量：48回/日 × 30日 = 1,440回/月（無料枠内）
+
+### 注意点
+
+- アプリがバックグラウンド時は通知を受信しない
+- 次回起動時はキャッシュ期限切れで自動的に最新データ取得
+- デバイスごとに独立したチャネルを購読

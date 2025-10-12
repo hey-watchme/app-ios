@@ -64,6 +64,7 @@ struct ContentView: View {
                         TabView(selection: $selectedDate) {
                             ForEach(dateRange, id: \.self) { date in
                                 SimpleDashboardView(
+                                    date: date,
                                     selectedDate: $selectedDate
                                 )
                                 .tag(date)
