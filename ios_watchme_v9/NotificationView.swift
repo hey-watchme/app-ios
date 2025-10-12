@@ -120,7 +120,8 @@ struct NotificationView: View {
 
         // ✅ CLAUDE.md: public.usersのuser_idを使用
         guard let userId = userAccountManager.currentUser?.profile?.userId else {
-            errorMessage = "ユーザー情報が取得できません"
+            // ゲストモードの場合はエラーではなく空の通知リストとして扱う
+            notifications = []
             isLoading = false
             return
         }

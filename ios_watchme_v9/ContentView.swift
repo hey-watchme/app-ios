@@ -220,6 +220,13 @@ struct ContentView: View {
                     }
                 }
             }
+
+            // デモモードバナー（device_type == "demo"のデバイス選択時に表示）
+            if deviceManager.isDemoDeviceSelected || deviceManager.isSampleDeviceSelected {
+                DemoModeBanner()
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                    .animation(.easeInOut(duration: 0.3), value: deviceManager.isDemoDeviceSelected)
+            }
         }
         .sheet(isPresented: $showRecordingSheet) {
             if let networkManager = networkManager {

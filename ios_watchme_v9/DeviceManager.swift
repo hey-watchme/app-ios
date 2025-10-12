@@ -441,6 +441,15 @@ class DeviceManager: ObservableObject {
         selectedDeviceID == DeviceManager.sampleDeviceID
     }
 
+    /// 選択中のデバイスがデモデバイス（device_type == "demo"）かどうか
+    var isDemoDeviceSelected: Bool {
+        guard let deviceId = selectedDeviceID,
+              let device = devices.first(where: { $0.device_id == deviceId }) else {
+            return false
+        }
+        return device.isDemo
+    }
+
     // MARK: - FAB表示判定
     /// 選択中のデバイスタイプがobserverの場合はFABを非表示
     var shouldShowFAB: Bool {
