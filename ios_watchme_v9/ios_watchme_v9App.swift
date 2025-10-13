@@ -7,6 +7,7 @@
 
 import SwiftUI
 import AVFoundation
+import UserNotifications
 
 // アプリ起動の最初のログ
 fileprivate let appLaunchTime: Date = {
@@ -17,6 +18,7 @@ fileprivate let appLaunchTime: Date = {
 
 @main
 struct ios_watchme_v9App: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     @StateObject private var deviceManager = DeviceManager()
     @StateObject private var userAccountManager: UserAccountManager
     @StateObject private var dataManager: SupabaseDataManager
@@ -289,7 +291,7 @@ struct MainAppView: View {
 // カスタムフッターナビゲーション
 struct CustomFooterNavigation: View {
     @Binding var selectedTab: MainAppView.FooterTab
-    
+
     var body: some View {
         HStack(spacing: 0) {
             // ホームタブ
@@ -305,7 +307,7 @@ struct CustomFooterNavigation: View {
                 .frame(maxWidth: .infinity)
                 .foregroundColor(selectedTab == .home ? Color.primary : Color.secondary)
             }
-            
+
             // マイページタブ
             Button(action: {
                 selectedTab = .myPage
@@ -325,6 +327,95 @@ struct CustomFooterNavigation: View {
         .background(
             Color(.systemBackground)
                 .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: -1)
+        )
+    }
+}
+
+// MARK: - AppDelegate for Push Notifications
+
+class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+
+    func application(_ application: UIApplication,
+                    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
+
+        print("🚀 [PUSH] AppDelegate起動")
+
+        // サイレント通知のみ使用（権限リクエスト不要）
+        // 将来的にユーザー向け通知が必要になったら、ここで権限リクエストを追加
+        application.registerForRemoteNotifications()
+        print("📱 [PUSH] デバイストークン登録リクエスト送信（サイレント通知モード）")
+
+        return true
+    }
+
+    // MARK: - デバイストークン取得成功
+
+    func application(_ application: UIApplication,
+                    didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+        let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+        print("📱 [PUSH] APNsデバイストークン取得成功: \(token)")
+
+        // TODO: SupabaseのdevicesテーブルにAPNsトークンを保存
+        saveDeviceToken(token)
+    }
+
+    // MARK: - デバイストークン取得失敗
+
+    func application(_ application: UIApplication,
+                    didFailToRegisterForRemoteNotificationsWithError error: Error) {
+        print("❌ [PUSH] APNsデバイストークン取得失敗: \(error.localizedDescription)")
+    }
+
+    // MARK: - サイレント通知受信（フォアグラウンド/バックグラウンド両対応）
+
+    func application(_ application: UIApplication,
+                    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
+                    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
+
+        print("📬 [PUSH] サイレント通知受信: \(userInfo)")
+        print("📱 [PUSH] アプリ状態: \(application.applicationState == .active ? "フォアグラウンド" : "バックグラウンド")")
+
+        // dashboard_summary更新通知の場合
+        if let action = userInfo["action"] as? String, action == "refresh_dashboard" {
+            handleDashboardUpdate(userInfo)
+            completionHandler(.newData)
+        } else {
+            print("⚠️ [PUSH] 未知のアクション")
+            completionHandler(.noData)
+        }
+    }
+
+    // MARK: - ダッシュボード更新処理
+
+    private func handleDashboardUpdate(_ userInfo: [AnyHashable: Any]) {
+        guard let deviceId = userInfo["device_id"] as? String,
+              let date = userInfo["date"] as? String else {
+            print("⚠️ [PUSH] 無効な通知ペイロード")
+            return
+        }
+
+        print("🔄 [PUSH] ダッシュボード更新通知: deviceId=\(deviceId), date=\(date)")
+
+        // NotificationCenterで通知を送信（SimpleDashboardViewで監視）
+        NotificationCenter.default.post(
+            name: NSNotification.Name("RefreshDashboard"),
+            object: nil,
+            userInfo: ["device_id": deviceId, "date": date]
+        )
+    }
+
+    // MARK: - デバイストークン保存
+
+    private func saveDeviceToken(_ token: String) {
+        // UserDefaultsにトークンを保存（後でデバイス選択時にSupabaseに保存）
+        UserDefaults.standard.set(token, forKey: "apns_device_token")
+        print("💾 [PUSH] デバイストークンをUserDefaultsに保存: \(token)")
+
+        // NotificationCenterで通知（DeviceManagerで受信してSupabaseに保存）
+        NotificationCenter.default.post(
+            name: NSNotification.Name("APNsTokenReceived"),
+            object: nil,
+            userInfo: ["token": token]
         )
     }
 }

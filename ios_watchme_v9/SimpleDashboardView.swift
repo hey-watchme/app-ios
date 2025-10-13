@@ -268,6 +268,57 @@ struct SimpleDashboardView: View {
                 print("⚡️ [Initial Load Flag] Set to true for immediate data loading")
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshDashboard"))) { notification in
+            // プッシュ通知からのダッシュボード更新指示
+            guard let userInfo = notification.userInfo,
+                  let deviceId = userInfo["device_id"] as? String,
+                  let dateStr = userInfo["date"] as? String else {
+                print("⚠️ [PUSH] Invalid notification payload in SimpleDashboardView")
+                return
+            }
+
+            print("🔄 [PUSH] RefreshDashboard notification received: deviceId=\(deviceId), date=\(dateStr)")
+
+            // 現在表示中のデバイスと一致する場合のみ処理
+            guard deviceId == deviceManager.selectedDeviceID else {
+                print("⏭️ [PUSH] Skipping refresh (different device)")
+                return
+            }
+
+            // 通知の日付を解析
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            formatter.timeZone = deviceManager.getTimezone(for: deviceId)
+            guard let notificationDate = formatter.date(from: dateStr) else {
+                print("⚠️ [PUSH] Invalid date format: \(dateStr)")
+                return
+            }
+
+            // 今日のデータのみキャッシュクリア（通知対象日のみ）
+            let calendar = deviceManager.deviceCalendar
+            let today = calendar.startOfDay(for: Date())
+            let notificationDay = calendar.startOfDay(for: notificationDate)
+
+            if calendar.isDate(today, inSameDayAs: notificationDay) {
+                let todayString = formatter.string(from: today)
+                let todayCacheKey = "\(deviceId)_\(todayString)"
+
+                dataCache.removeValue(forKey: todayCacheKey)
+                cacheKeys.removeAll { $0 == todayCacheKey }
+
+                print("🗑️ [PUSH] Today's cache cleared: \(todayCacheKey)")
+
+                // このビューが今日を表示中なら再読み込み
+                if calendar.isDate(date, inSameDayAs: today) {
+                    print("🔄 [PUSH] Reloading today's data...")
+                    Task {
+                        await loadAllData()
+                    }
+                }
+            } else {
+                print("⏭️ [PUSH] Skipping refresh (notification is not for today)")
+            }
+        }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
                 HomeView(subject: subject, dashboardSummary: dashboardSummary, selectedDate: date)

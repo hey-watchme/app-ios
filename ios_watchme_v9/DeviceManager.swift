@@ -67,6 +67,17 @@ class DeviceManager: ObservableObject {
         restoreSelectedDevice()
         print("⏱️ [DM-INIT] 選択デバイス復元完了: \(Date().timeIntervalSince(startTime))秒")
 
+        // APNsトークン受信の監視
+        NotificationCenter.default.addObserver(
+            forName: NSNotification.Name("APNsTokenReceived"),
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            guard let token = notification.userInfo?["token"] as? String else { return }
+            self?.saveAPNsTokenToSupabase(token)
+        }
+        print("⏱️ [DM-INIT] APNsトークン監視開始")
+
         print("⏱️ [DM-INIT] DeviceManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
     }
     
@@ -666,7 +677,32 @@ class DeviceManager: ObservableObject {
             throw DeviceUnlinkError.unlinkFailed(error.localizedDescription)
         }
     }
-    
+
+    // MARK: - APNsトークン保存
+
+    private func saveAPNsTokenToSupabase(_ token: String) {
+        guard let deviceId = selectedDeviceID else {
+            print("⚠️ [PUSH] デバイスが選択されていないため、APNsトークンを保存できません")
+            return
+        }
+
+        Task {
+            do {
+                let supabase = SupabaseClientManager.shared.client
+
+                try await supabase
+                    .from("devices")
+                    .update(["apns_token": token])
+                    .eq("device_id", value: deviceId)
+                    .execute()
+
+                print("✅ [PUSH] APNsトークン保存成功: deviceId=\(deviceId)")
+            } catch {
+                print("❌ [PUSH] APNsトークン保存失敗: \(error)")
+            }
+        }
+    }
+
 }
 
 // MARK: - データモデル
