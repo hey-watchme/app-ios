@@ -117,46 +117,47 @@ ios_watchme_v9/
 
 - **Swift 5.9+** / **SwiftUI**
 - **AVFoundation** - 音声録音
-- **Supabase** - 認証・データベース・**Realtime**
+- **Supabase** - 認証・データベース・ストレージ
+- **AWS SNS + APNs** - プッシュ通知（リアルタイム更新）
 - **Combine** - リアクティブプログラミング
 
 ---
 
-## 🚧 開発中の機能（2025-10-12現在）
+## ✅ リアルタイム更新機能（2025-10-14現在）
 
-### Supabase Realtimeによるリアルタイム更新
+### AWS SNS + APNsによるプッシュ通知
 
 **目的:**
-Lambda処理完了後、iOSアプリに自動的にデータ更新を通知し、5分キャッシュ問題を解決
+Lambda処理完了後、iOSアプリに自動的にデータ更新を通知し、最短時間でダッシュボードを更新
 
-**ステータス:** 🔧 実装中（デバッグ待ち）
+**ステータス:** ✅ 実装完了・動作確認済み
 
 **アーキテクチャ:**
 ```
 録音完了 → Lambda処理（1-3分） → dashboard_summary更新
-  ↓ (Supabase Realtime)
-iOS App → キャッシュクリア → 最新データ取得
+  ↓ (AWS SNS → APNs)
+iOS App (フォアグラウンド) → キャッシュクリア → 最新データ取得
 ```
 
-**完了した作業:**
-- ✅ iOS側のRealtime購読実装（SimpleDashboardView.swift）
-- ✅ Supabase Database側のReplication設定（4テーブル）
-- ✅ TabViewの実装ミス修正
+**動作環境:**
+- **開発環境**: Sandbox APNs（Xcodeビルド）
+- **本番環境**: Production APNs（TestFlight/App Store）※切り替え可能
 
-**未解決の課題:**
-- ❌ 実際の通知が届かない（原因調査中）
+**完了した作業:**
+- ✅ AWS SNS Platform Application設定（Sandbox/Production）
+- ✅ Lambda関数のプッシュ通知送信機能
+- ✅ iOS側のAPNsデバイストークン取得・保存
+- ✅ iOS側のサイレント通知受信処理
+- ✅ フォアグラウンド時の自動データ更新
+- ✅ TabView内の重複通知受信問題の修正
+
+**通知の動作:**
+- **フォアグラウンド**: キャッシュクリア + 自動データ再取得
+- **バックグラウンド**: 処理は走るが実質的に効果なし（意図通り）
+- **完全終了**: 何も起きない（サイレント通知はアプリ起動不可）
 
 **関連ドキュメント:**
-- [REALTIME_QUICK_START.md](./docs/REALTIME_QUICK_START.md) - 次のセッション開始ガイド
-- [REALTIME_DEBUG_CHECKLIST.md](./docs/REALTIME_DEBUG_CHECKLIST.md) - 詳細な調査手順
-- [REALTIME_HANDOFF.md](./docs/REALTIME_HANDOFF.md) - 実装全体の引き継ぎ
-
-**次のステップ:**
-1. 手動UPDATE SQLでテスト（Supabase側の設定確認）
-2. iOSログで通知受信を確認
-3. 原因特定と修正
-4. Row Level Security (RLS)の追加
-5. 他のテーブルへの横展開
+- [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - 詳細な実装・設定・トラブルシューティング
 
 ---
 
@@ -236,15 +237,10 @@ iOS App → キャッシュクリア → 最新データ取得
 
 ## 関連ドキュメント
 
-### 一般ドキュメント
 - [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計・API仕様
+- [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知の詳細実装・設定・トラブルシューティング
 - [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - よくある問題と解決策
 - [CHANGELOG.md](./CHANGELOG.md) - 更新履歴
-
-### Realtime機能関連（開発中）
-- [REALTIME_QUICK_START.md](./docs/REALTIME_QUICK_START.md) - 🚀 次のセッション開始ガイド（最初に読む）
-- [REALTIME_DEBUG_CHECKLIST.md](./docs/REALTIME_DEBUG_CHECKLIST.md) - 詳細な調査手順
-- [REALTIME_HANDOFF.md](./docs/REALTIME_HANDOFF.md) - 実装全体の引き継ぎ
 
 ---
 

@@ -64,8 +64,15 @@ struct SimpleDashboardView: View {
     @State private var showBehaviorSheet = false
     @State private var showEmotionSheet = false
 
+    // トーストバナー表示管理
+    @State private var showToastBanner = false
+
     var body: some View {
         ZStack(alignment: .top) {
+            // トーストバナー（最前面に表示）
+            ToastBannerView(message: "新しい分析結果が届きました", isShowing: $showToastBanner)
+                .zIndex(1000)
+
             ScrollView {
                 VStack(spacing: 0) {
                     // 大きい日付セクション（スクロール可能）
@@ -273,15 +280,11 @@ struct SimpleDashboardView: View {
             guard let userInfo = notification.userInfo,
                   let deviceId = userInfo["device_id"] as? String,
                   let dateStr = userInfo["date"] as? String else {
-                print("⚠️ [PUSH] Invalid notification payload in SimpleDashboardView")
                 return
             }
 
-            print("🔄 [PUSH] RefreshDashboard notification received: deviceId=\(deviceId), date=\(dateStr)")
-
             // 現在表示中のデバイスと一致する場合のみ処理
             guard deviceId == deviceManager.selectedDeviceID else {
-                print("⏭️ [PUSH] Skipping refresh (different device)")
                 return
             }
 
@@ -290,33 +293,46 @@ struct SimpleDashboardView: View {
             formatter.dateFormat = "yyyy-MM-dd"
             formatter.timeZone = deviceManager.getTimezone(for: deviceId)
             guard let notificationDate = formatter.date(from: dateStr) else {
-                print("⚠️ [PUSH] Invalid date format: \(dateStr)")
                 return
             }
 
-            // 今日のデータのみキャッシュクリア（通知対象日のみ）
+            // 今日のデータのみ処理
             let calendar = deviceManager.deviceCalendar
             let today = calendar.startOfDay(for: Date())
             let notificationDay = calendar.startOfDay(for: notificationDate)
 
-            if calendar.isDate(today, inSameDayAs: notificationDay) {
-                let todayString = formatter.string(from: today)
-                let todayCacheKey = "\(deviceId)_\(todayString)"
+            // 通知が今日のものか確認
+            guard calendar.isDate(today, inSameDayAs: notificationDay) else {
+                return
+            }
 
-                dataCache.removeValue(forKey: todayCacheKey)
-                cacheKeys.removeAll { $0 == todayCacheKey }
+            // このビューが今日を表示中の場合のみ処理
+            guard calendar.isDate(date, inSameDayAs: today) else {
+                return
+            }
 
-                print("🗑️ [PUSH] Today's cache cleared: \(todayCacheKey)")
+            print("🔄 [PUSH] RefreshDashboard notification received: deviceId=\(deviceId), date=\(dateStr)")
 
-                // このビューが今日を表示中なら再読み込み
-                if calendar.isDate(date, inSameDayAs: today) {
-                    print("🔄 [PUSH] Reloading today's data...")
-                    Task {
-                        await loadAllData()
-                    }
+            // フォアグラウンド時のみトーストバナーを表示
+            if UIApplication.shared.applicationState == .active {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showToastBanner = true
                 }
-            } else {
-                print("⏭️ [PUSH] Skipping refresh (notification is not for today)")
+            }
+
+            // キャッシュクリア
+            let todayString = formatter.string(from: today)
+            let todayCacheKey = "\(deviceId)_\(todayString)"
+
+            dataCache.removeValue(forKey: todayCacheKey)
+            cacheKeys.removeAll { $0 == todayCacheKey }
+
+            print("🗑️ [PUSH] Today's cache cleared: \(todayCacheKey)")
+
+            // データ再読み込み
+            print("🔄 [PUSH] Reloading today's data...")
+            Task {
+                await loadAllData()
             }
         }
         .sheet(isPresented: $showVibeSheet) {

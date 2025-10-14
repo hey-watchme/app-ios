@@ -60,6 +60,7 @@ class DeviceManager: ObservableObject {
     // UserDefaults キー
     private let selectedDeviceIDKey = "watchme_selected_device_id"  // 選択中のデバイスID永続化用
 
+
     init() {
         let startTime = Date()
         print("⏱️ [DM-INIT] DeviceManager初期化開始")
@@ -681,8 +682,11 @@ class DeviceManager: ObservableObject {
     // MARK: - APNsトークン保存
 
     private func saveAPNsTokenToSupabase(_ token: String) {
-        guard let deviceId = selectedDeviceID else {
-            print("⚠️ [PUSH] デバイスが選択されていないため、APNsトークンを保存できません")
+        // ユーザーIDを取得
+        guard let userId = UserDefaults.standard.string(forKey: "current_user_id") else {
+            print("⚠️ [PUSH] ユーザーIDが見つかりません")
+            print("   トークンを一時保存します。ログイン後に自動保存されます")
+            UserDefaults.standard.set(token, forKey: "pending_apns_token")
             return
         }
 
@@ -691,12 +695,15 @@ class DeviceManager: ObservableObject {
                 let supabase = SupabaseClientManager.shared.client
 
                 try await supabase
-                    .from("devices")
+                    .from("users")
                     .update(["apns_token": token])
-                    .eq("device_id", value: deviceId)
+                    .eq("user_id", value: userId)
                     .execute()
 
-                print("✅ [PUSH] APNsトークン保存成功: deviceId=\(deviceId)")
+                print("✅ [PUSH] APNsトークン保存成功: userId=\(userId), token=\(token.prefix(20))...")
+
+                // 一時保存を削除
+                UserDefaults.standard.removeObject(forKey: "pending_apns_token")
             } catch {
                 print("❌ [PUSH] APNsトークン保存失敗: \(error)")
             }

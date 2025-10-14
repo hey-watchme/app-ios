@@ -569,6 +569,21 @@ class UserAccountManager: ObservableObject {
         // 2. プロファイルからpublic.usersのuser_idを取得してデバイス取得
         if let userId = currentUser?.profile?.userId {
             print("✅ プロファイル取得成功 - デバイス一覧を取得: \(userId)")
+
+            // ユーザーIDをUserDefaultsに保存（APNsトークン保存で使用）
+            UserDefaults.standard.set(userId, forKey: "current_user_id")
+            print("💾 current_user_id を保存: \(userId)")
+
+            // 保留中のAPNsトークンがあれば保存
+            if let pendingToken = UserDefaults.standard.string(forKey: "pending_apns_token") {
+                print("🔔 [PUSH] ログイン後、保留中のAPNsトークンを保存します")
+                await saveAPNsTokenToUsers(token: pendingToken, userId: userId)
+            } else {
+                // 保留トークンがない場合は新規にAPNs登録を要求
+                print("🔔 [PUSH] APNs通知の登録を要求します")
+                await requestAPNsRegistration()
+            }
+
             await deviceManager.initializeDevices(for: userId)
         } else {
             print("❌ プロファイル取得に失敗 - デバイス初期化をスキップ")
@@ -830,6 +845,48 @@ class UserAccountManager: ObservableObject {
         }
         
         return success
+    }
+
+    // MARK: - APNs通知関連
+
+    /// APNs通知の登録を要求（ログイン後に実行）
+    private func requestAPNsRegistration() async {
+        #if os(iOS)
+        await MainActor.run {
+            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                if granted {
+                    print("✅ [PUSH] 通知権限が許可されました")
+                    DispatchQueue.main.async {
+                        UIApplication.shared.registerForRemoteNotifications()
+                    }
+                } else {
+                    print("⚠️ [PUSH] 通知権限が拒否されました: \(error?.localizedDescription ?? "不明")")
+                }
+            }
+        }
+        #endif
+    }
+
+    /// APNsトークンをusersテーブルに保存
+    private func saveAPNsTokenToUsers(token: String, userId: String) async {
+        do {
+            let supabase = SupabaseClientManager.shared.client
+
+            try await supabase
+                .from("users")
+                .update(["apns_token": token])
+                .eq("user_id", value: userId)
+                .execute()
+
+            print("✅ [PUSH] APNsトークン保存成功: userId=\(userId)")
+
+            // 一時保存を削除
+            await MainActor.run {
+                UserDefaults.standard.removeObject(forKey: "pending_apns_token")
+            }
+        } catch {
+            print("❌ [PUSH] APNsトークン保存失敗: \(error)")
+        }
     }
 }
 

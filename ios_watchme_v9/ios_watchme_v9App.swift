@@ -340,6 +340,10 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
 
         print("🚀 [PUSH] AppDelegate起動")
 
+        // UNUserNotificationCenterのデリゲートを設定
+        UNUserNotificationCenter.current().delegate = self
+        print("📱 [PUSH] UNUserNotificationCenterデリゲート設定完了")
+
         // サイレント通知のみ使用（権限リクエスト不要）
         // 将来的にユーザー向け通知が必要になったら、ここで権限リクエストを追加
         application.registerForRemoteNotifications()
