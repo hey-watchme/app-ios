@@ -71,29 +71,6 @@ struct InteractiveTimelineView: View {
             .frame(height: 200) // グラフの高さを固定
         }
         .onAppear {
-            // デバッグ: データソースの確認
-            print("🔍 [DEBUG] InteractiveTimelineView データ確認:")
-            print("   - vibeScores.count: \(vibeScores.count)")
-            print("   - burstEvents?.count: \(burstEvents?.count ?? 0)")
-            
-            // 最初の10個のデータを表示
-            for i in 0..<min(10, vibeScores.count) {
-                let time = String(format: "%02d:%02d", i/2, (i%2)*30)
-                if let score = vibeScores[i] {
-                    print("   [\(i)] \(time): score=\(score)")
-                } else {
-                    print("   [\(i)] \(time): nil")
-                }
-            }
-            
-            // バーストイベントの確認
-            if let events = burstEvents {
-                print("   バーストイベント:")
-                for event in events {
-                    print("     - \(event.time): from \(event.fromScore) to \(event.toScore)")
-                }
-            }
-            
             // 自動ループ再生を開始
             resetAndStartPlayback()
         }
@@ -102,7 +79,6 @@ struct InteractiveTimelineView: View {
         }
         // データが変更されたらリセット
         .onChange(of: vibeScores) { _, newScores in
-            print("🔄 InteractiveTimelineView: vibeScoresが変更されました")
             resetAndStartPlayback()
         }
         // インジケーターが移動したときに、イベントから離れたら吹き出しを消す
@@ -467,7 +443,6 @@ struct InteractiveTimelineView: View {
         
         // 有効なデータがない場合は再生しない
         guard !validIndices.isEmpty else {
-            print("⚠️ InteractiveTimelineView: 有効なデータがないため再生をスキップ")
             return
         }
         
@@ -484,7 +459,6 @@ struct InteractiveTimelineView: View {
                 } else {
                     // 有効なデータの最後まで到達したら停止
                     self.stopPlayback()
-                    print("✅ InteractiveTimelineView: 有効データの最後（インデックス: \(validIndices[currentValidIndex])）に到達、再生停止")
                 }
             }
         }
@@ -504,10 +478,8 @@ struct InteractiveTimelineView: View {
         let validIndices = findValidDataIndices()
         if !validIndices.isEmpty {
             currentTimeIndex = validIndices[0]
-            print("🎆 InteractiveTimelineView: 最初の有効データ（インデックス: \(validIndices[0])）から再生開始")
         } else {
             currentTimeIndex = 0
-            print("⚠️ InteractiveTimelineView: 有効データなし、インデックス0で待機")
         }
         
         // 少し遅延してから再生開始（アニメーションのため）

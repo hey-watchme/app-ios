@@ -27,6 +27,13 @@ struct ios_watchme_v9App: App {
         let startTime = Date()
         print("⏱️ [APP-INIT] アプリ初期化開始: \(startTime)")
 
+        // ✅ Supabaseクライアントを非同期で事前初期化（UIをブロックしない）
+        Task.detached(priority: .high) {
+            let initStart = Date()
+            _ = SupabaseClientManager.shared.client
+            print("✅ [SUPABASE-PRELOAD] Supabaseクライアント事前初期化完了: \(Date().timeIntervalSince(initStart))秒")
+        }
+
         let deviceManager = DeviceManager()
         print("⏱️ [APP-INIT] DeviceManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
 

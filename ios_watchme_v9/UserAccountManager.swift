@@ -18,14 +18,14 @@ class SupabaseClientManager {
 
     private(set) lazy var client: SupabaseClient = {
         let startTime = Date()
-        print("⏱️ [SUPABASE-LAZY] Supabaseクライアント初期化開始: \(startTime)")
+        print("⏱️ [SUPABASE-LAZY] Supabaseクライアント遅延初期化開始（事前初期化されていない場合）: \(startTime)")
 
         let client = SupabaseClient(
             supabaseURL: URL(string: "https://qvtlwotzuzbavrzqhyvt.supabase.co")!,
             supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
         )
 
-        print("⏱️ [SUPABASE-LAZY] Supabaseクライアント初期化完了: \(Date().timeIntervalSince(startTime))秒")
+        print("⏱️ [SUPABASE-LAZY] Supabaseクライアント遅延初期化完了: \(Date().timeIntervalSince(startTime))秒")
         return client
     }()
 
@@ -522,8 +522,8 @@ class UserAccountManager: ObservableObject {
     @Published var shouldResetToWelcome: Bool = false
 
     func resetToWelcomeScreen() {
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
+        // ✅ @Published プロパティの更新は @MainActor で実行
+        Task { @MainActor in
             // MainAppViewでこのフラグを監視して、onboardingCompleted = falseにリセット
             self.shouldResetToWelcome = true
             print("✅ 初期画面へのリセットフラグを設定")
@@ -534,10 +534,8 @@ class UserAccountManager: ObservableObject {
     private func clearLocalAuthData() {
         print("🧹 ローカル認証データクリア開始")
 
-        // @Published プロパティの更新はメインスレッドで実行
-        DispatchQueue.main.async { [weak self] in
-            guard let self = self else { return }
-
+        // ✅ @Published プロパティの更新は @MainActor で実行
+        Task { @MainActor in
             self.currentUser = nil
             self.isAuthenticated = false
             self.authState = .readOnly(source: .sessionExpired)
@@ -797,10 +795,13 @@ class UserAccountManager: ObservableObject {
                         expiresAt: expiresAt  // 📊 Phase 2-A: 有効期限を設定
                     )
 
-                    self.currentUser = updatedUser
-                    self.isAuthenticated = true
-                    self.authState = .fullAccess(userId: session.user.id.uuidString)
-                    self.saveUserToDefaults(updatedUser)
+                    // ✅ @Published プロパティの更新は @MainActor で実行
+                    await MainActor.run {
+                        self.currentUser = updatedUser
+                        self.isAuthenticated = true
+                        self.authState = .fullAccess(userId: session.user.id.uuidString)
+                        self.saveUserToDefaults(updatedUser)
+                    }
 
                     print("✅ [Phase 2-A] トークンリフレッシュ成功（有効期限: \(expiresAt)）")
                     print("📅 新しいアクセストークンを取得")
