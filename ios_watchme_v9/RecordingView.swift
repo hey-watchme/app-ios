@@ -23,6 +23,11 @@ struct RecordingView: View {
     @State private var timer: Timer?
     @State private var showDeviceRegistrationConfirm = false  // デバイス連携確認ポップアップ
     @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
+
+    // 自動アップロード用のモーダル表示状態
+    @State private var showAutoUploadModal = false
+    @State private var autoUploadProgress: Double = 0.0
+    @State private var autoUploadStatus: AutoUploadStatus = .uploading
     
     var body: some View {
         NavigationView {
@@ -30,7 +35,7 @@ struct RecordingView: View {
                 // 背景色
                 Color(.systemGray6)
                     .ignoresSafeArea()
-                
+
                 // メインコンテンツ
                 VStack(spacing: 0) {
             
@@ -58,42 +63,7 @@ struct RecordingView: View {
                     // スクロール可能なコンテンツエリア
                     ScrollView {
                         VStack(spacing: 16) {
-            
-            // アップロード進捗表示
-            if networkManager.connectionStatus == .uploading {
-                VStack(spacing: 8) {
-                    HStack {
-                        if uploadingTotalCount > 0 {
-                            Text("📤 アップロード中 (\(uploadingCurrentIndex)/\(uploadingTotalCount)件)")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        } else {
-                            Text("📤 アップロード中...")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                        }
-                        
-                        Spacer()
-                        
-                        Text("\(Int(networkManager.uploadProgress * 100))%")
-                            .font(.caption)
-                            .fontWeight(.bold)
-                    }
-                    
-                    ProgressView(value: networkManager.uploadProgress, total: 1.0)
-                        .progressViewStyle(LinearProgressViewStyle(tint: Color.safeColor("UploadActive")))
-                    
-                    if let fileName = networkManager.currentUploadingFile {
-                        Text("ファイル: \(fileName)")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-                .padding()
-                .background(Color.safeColor("UploadActive").opacity(0.1))
-                .cornerRadius(12)
-            }
-            
+
             // 録音データセクション
             VStack(alignment: .leading, spacing: 12) {
                 // タイトル
@@ -318,6 +288,14 @@ struct RecordingView: View {
                     }
                     .background(Color(.systemBackground))
                 }
+
+                // 自動アップロードモーダルオーバーレイ
+                if showAutoUploadModal {
+                    AutoUploadModalView(
+                        status: $autoUploadStatus,
+                        progress: $autoUploadProgress
+                    )
+                }
             }
             .navigationTitle("録音")
         .navigationBarTitleDisplayMode(.inline)
@@ -351,10 +329,26 @@ struct RecordingView: View {
         .onAppear {
             // AudioRecorderにDeviceManagerの参照を設定
             audioRecorder.deviceManager = deviceManager
-            
+
+            // 録音完了コールバックを設定（自動アップロード）
+            audioRecorder.onRecordingCompleted = { recording in
+                print("📲 録音完了コールバック受信: \(recording.fileName)")
+
+                // バックグラウンドスレッドで非同期実行（メインスレッドをブロックしない）
+                DispatchQueue.global(qos: .utility).async {
+                    // 0.5秒待機してファイルが確実に書き込まれるのを待つ
+                    Thread.sleep(forTimeInterval: 0.5)
+
+                    // メインスレッドでアップロード処理を呼び出す
+                    DispatchQueue.main.async {
+                        attemptAutoUpload(recording: recording)
+                    }
+                }
+            }
+
             // 初期値を設定
             updateTimeInfo()
-            
+
             // タイマーを開始して時間スロットとデバイス時刻を更新
             timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
                 updateTimeInfo()
@@ -486,21 +480,21 @@ struct RecordingView: View {
             }
             return
         }
-        
+
         // リストの残りを次の処理のために準備
         var remainingRecordings = recordings
         remainingRecordings.removeFirst()
-        
+
         // 現在のアップロード番号を更新
         uploadingCurrentIndex = uploadingTotalCount - recordings.count + 1
-        
+
         print("📤 アップロード中: \(recording.fileName) (\(uploadingCurrentIndex)/\(uploadingTotalCount))")
-        
+
         // 1つのファイルをアップロード
         networkManager.uploadRecording(recording) { success in
             if success {
                 print("✅ 一括アップロード成功: \(recording.fileName)")
-                
+
                 // アップロードが成功したので、このファイルを削除する
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     print("🗑️ 送信済みファイルを削除します:\(recording.fileName)")
@@ -509,9 +503,77 @@ struct RecordingView: View {
             } else {
                 print("❌ 一括アップロード失敗: \(recording.fileName)")
             }
-            
+
             // 成功・失敗にかかわらず、次のファイルのアップロードを再帰的に呼び出す
             self.uploadSequentially(recordings: remainingRecordings)
+        }
+    }
+
+    // MARK: - 自動アップロード処理
+    /// 録音完了後に自動的にアップロードを試みる
+    private func attemptAutoUpload(recording: RecordingModel) {
+        print("🚀 自動アップロード開始: \(recording.fileName)")
+
+        // 既にアップロード中の場合はスキップ
+        guard networkManager.connectionStatus != .uploading else {
+            print("⚠️ 既にアップロード中のため、自動アップロードをスキップします")
+            return
+        }
+
+        // アップロード可能かチェック
+        guard recording.canUpload else {
+            print("⚠️ アップロード不可のため、スキップします")
+            return
+        }
+
+        // モーダルを表示
+        showAutoUploadModal = true
+        autoUploadStatus = .uploading
+        autoUploadProgress = 0.0
+
+        // 即座にアップロード実行（待機はコールバック内で実施済み）
+        print("📤 自動アップロード実行: \(recording.fileName)")
+
+        // プログレスの監視（NetworkManagerのuploadProgressを監視）
+        let progressTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { timer in
+            self.autoUploadProgress = self.networkManager.uploadProgress
+        }
+
+        self.networkManager.uploadRecording(recording) { success in
+            // プログレスタイマーを停止
+            progressTimer.invalidate()
+
+            DispatchQueue.main.async {
+                if success {
+                    print("✅ 自動アップロード成功: \(recording.fileName)")
+
+                    // 完了状態に変更
+                    self.autoUploadStatus = .completed
+                    self.autoUploadProgress = 1.0
+
+                    // 1.5秒後にモーダルを閉じる
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        self.showAutoUploadModal = false
+
+                        // アップロード成功時はファイルを削除
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                            print("🗑️ 送信済みファイルを自動削除: \(recording.fileName)")
+                            self.audioRecorder.deleteRecording(recording)
+                        }
+                    }
+                } else {
+                    print("❌ 自動アップロード失敗: \(recording.fileName)")
+                    print("   → ファイルはリストに残り、手動で「分析開始」ボタンから送信可能です")
+
+                    // 失敗状態に変更
+                    self.autoUploadStatus = .failed
+
+                    // 2秒後にモーダルを閉じる
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        self.showAutoUploadModal = false
+                    }
+                }
+            }
         }
     }
 }
@@ -684,6 +746,86 @@ struct RecordingRowView: View {
         .cornerRadius(8)
         .onTapGesture {
             onSelect()
+        }
+    }
+}
+
+// MARK: - 自動アップロードステータス
+enum AutoUploadStatus {
+    case uploading
+    case completed
+    case failed
+}
+
+// MARK: - 自動アップロードモーダルビュー
+struct AutoUploadModalView: View {
+    @Binding var status: AutoUploadStatus
+    @Binding var progress: Double
+
+    var body: some View {
+        ZStack {
+            // 半透明白背景
+            Color.white.opacity(0.95)
+                .ignoresSafeArea()
+
+            // 中央コンテンツ
+            VStack(spacing: 24) {
+                // アイコンとメッセージ
+                VStack(spacing: 16) {
+                    switch status {
+                    case .uploading:
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .tint(Color.safeColor("AppAccentColor"))
+
+                        Text("送信中...")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+
+                    case .completed:
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.green)
+
+                        Text("送信完了")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.green)
+
+                    case .failed:
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.red)
+
+                        Text("送信失敗")
+                            .font(.title2)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.red)
+
+                        Text("ファイルはリストに残ります")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                // プログレスバー（アップロード中のみ）
+                if status == .uploading {
+                    VStack(spacing: 8) {
+                        ProgressView(value: progress, total: 1.0)
+                            .progressViewStyle(LinearProgressViewStyle(tint: Color.safeColor("AppAccentColor")))
+                            .frame(width: 200)
+
+                        Text("\(Int(progress * 100))%")
+                            .font(.caption)
+                            .fontWeight(.medium)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .padding(40)
+            .background(Color(.systemBackground))
+            .cornerRadius(20)
+            .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
         }
     }
 }

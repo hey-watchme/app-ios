@@ -18,6 +18,9 @@ class AudioRecorder: NSObject, ObservableObject {
     @Published var audioLevels: [CGFloat] = Array(repeating: 0.0, count: 20) // 音声レベル配列（波形表示用）
     @Published var currentAudioLevel: Float = 0.0 // 現在の音声レベル
     @Published var recordingError: String? = nil // 録音エラーメッセージ
+
+    // 録音完了コールバック（手動停止時のみ）
+    var onRecordingCompleted: ((RecordingModel) -> Void)?
     
     private var audioRecorder: AVAudioRecorder?
     private var recordingTimer: Timer?
@@ -136,17 +139,17 @@ class AudioRecorder: NSObject, ObservableObject {
     // オーディオセッションの設定
     private func setupAudioSession() {
         let audioSession = AVAudioSession.sharedInstance()
-        
+
         do {
             // 録音のみのカテゴリーに変更し、音声記録モードを使用
             try audioSession.setCategory(.record, mode: .spokenAudio, options: [])
-            
+
             // 優先入力ゲインを設定（マイク感度向上）
             if audioSession.isInputGainSettable {
                 try audioSession.setInputGain(1.0)  // 最大ゲイン
                 print("✅ マイクゲイン設定: 1.0")
             }
-            
+
             try audioSession.setActive(true)
             print("✅ オーディオセッション設定成功: record/spokenAudio with max gain")
         } catch {
@@ -741,31 +744,31 @@ extension AudioRecorder: AVAudioRecorderDelegate {
             cleanup()
             return
         }
-        
+
         let recordingURL = recorder.url
         let fileName = recordingURL.lastPathComponent
         let dateString = SlotTimeUtility.getDateString(from: currentSlotStartTime, timezone: getDeviceTimezone())
         let fullFileName = "\(dateString)/\(fileName)"
-        
+
         print("💾 録音完了処理: \(fullFileName)")
         print("   - 録音URL: \(recordingURL.path)")
         print("   - スロット継続時間: \(Date().timeIntervalSince(currentSlotStartTime))秒")
-        
+
         // ファイル存在確認
         let fileExists = FileManager.default.fileExists(atPath: recordingURL.path)
         print("   - ファイル存在確認: \(fileExists)")
-        
+
         if fileExists {
             // ファイルサイズ確認
             do {
                 let attributes = try FileManager.default.attributesOfItem(atPath: recordingURL.path)
                 let fileSize = attributes[.size] as? Int64 ?? 0
                 print("   - ファイルサイズ: \(fileSize) bytes")
-                
+
                 if fileSize > 0 {
                     // RecordingModelを作成・追加
                     let recording = RecordingModel(fileName: fullFileName, date: currentSlotStartTime)
-                    
+
                     // メインスレッドで配列を更新
                     DispatchQueue.main.async {
                         // 重複チェック
@@ -773,14 +776,20 @@ extension AudioRecorder: AVAudioRecorderDelegate {
                             self.recordings.remove(at: existingIndex)
                             print("🔄 既存の同名録音を置換")
                         }
-                        
+
                         self.recordings.insert(recording, at: 0)
                         print("✅ 録音完了: \(fullFileName)")
                         print("📊 総録音ファイル数: \(self.recordings.count)")
+
+                        // 手動停止の場合のみコールバックを呼び出す（スロット切り替えの場合は呼ばない）
+                        if self.pendingSlotSwitch == nil {
+                            print("📞 録音完了コールバック呼び出し: \(fullFileName)")
+                            self.onRecordingCompleted?(recording)
+                        }
                     }
                 } else {
                     print("❌ ファイルサイズが0bytes - 録音に失敗しました")
-                    
+
                     // 0KBファイルを削除
                     do {
                         try FileManager.default.removeItem(at: recordingURL)
@@ -788,7 +797,7 @@ extension AudioRecorder: AVAudioRecorderDelegate {
                     } catch {
                         print("⚠️ 0KBファイル削除エラー: \(error)")
                     }
-                    
+
                     // メインスレッドでエラーメッセージを設定
                     DispatchQueue.main.async {
                         self.recordingError = "録音に失敗しました。もう一度お試しください。"
@@ -801,7 +810,7 @@ extension AudioRecorder: AVAudioRecorderDelegate {
         } else {
             print("❌ 録音ファイルが存在しません")
         }
-        
+
         // クリーンアップは呼び出し元で決定する（責務の分離）
         print("📁 録音保存処理完了 - 後処理は呼び出し元で決定")
     }
