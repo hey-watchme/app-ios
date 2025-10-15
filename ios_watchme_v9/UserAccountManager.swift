@@ -254,21 +254,23 @@ class UserAccountManager: ObservableObject {
         let guestInitStart = Date()
         print("⏱️ [GUEST-INIT] Read-Only Mode (Guest) 初期化開始")
 
-        // 状態を閲覧専用に設定
-        authState = .readOnly(source: .guest)
-        isAuthenticated = false
-        currentUser = nil
+        // 状態を閲覧専用に設定（@MainActorで実行）
+        Task { @MainActor in
+            self.authState = .readOnly(source: .guest)
+            self.isAuthenticated = false
+            self.currentUser = nil
 
-        // DeviceManagerの状態をクリア
-        deviceManager.clearState()
-        print("⏱️ [GUEST-INIT] DeviceManager状態クリア: \(Date().timeIntervalSince(guestInitStart))秒")
+            // DeviceManagerの状態をクリア
+            self.deviceManager.clearState()
+            print("⏱️ [GUEST-INIT] DeviceManager状態クリア: \(Date().timeIntervalSince(guestInitStart))秒")
+
+            print("⏱️ [GUEST-INIT] Read-Only Mode初期化完了: \(Date().timeIntervalSince(guestInitStart))秒")
+        }
 
         // ゲストIDは分析用に生成（必須ではない）
         if guestId == nil {
             createGuestUser()
         }
-
-        print("⏱️ [GUEST-INIT] Read-Only Mode初期化完了: \(Date().timeIntervalSince(guestInitStart))秒")
 
         // サンプルデバイスの自動選択は行わない
         // ユーザーがガイド画面で「サンプルを見る」を選択したときのみデバイスを選択
@@ -534,6 +536,13 @@ class UserAccountManager: ObservableObject {
     private func clearLocalAuthData() {
         print("🧹 ローカル認証データクリア開始")
 
+        // ✅ DBのAPNsトークンをNULLに設定（ログアウト後は通知を受け取らない）
+        if let userId = currentUser?.profile?.userId {
+            Task {
+                await removeAPNsToken(userId: userId)
+            }
+        }
+
         // ✅ @Published プロパティの更新は @MainActor で実行
         Task { @MainActor in
             self.currentUser = nil
@@ -542,6 +551,9 @@ class UserAccountManager: ObservableObject {
             self.authError = nil
 
             print("👋 ログアウト完了: authState = readOnly(sessionExpired)")
+
+            // DeviceManagerの状態もクリア
+            self.deviceManager.clearState()
         }
 
         // トークンリフレッシュタイマーを停止
@@ -550,9 +562,6 @@ class UserAccountManager: ObservableObject {
 
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
-
-        // DeviceManagerの状態もクリア
-        deviceManager.clearState()
     }
     
     // MARK: - 認証成功後の統一初期化フロー
@@ -873,6 +882,25 @@ class UserAccountManager: ObservableObject {
         do {
             let supabase = SupabaseClientManager.shared.client
 
+            print("🔍 [PUSH-DEBUG] APNsトークン保存開始")
+            print("🔍 [PUSH-DEBUG] userId = '\(userId)'")
+            print("🔍 [PUSH-DEBUG] token = '\(token.prefix(20))...'")
+
+            // ✅ Step 1: 他のユーザーから同じAPNsトークンを削除（1台のiPhoneで複数アカウント対策）
+            struct APNsTokenUpdate: Encodable {
+                let apns_token: String?
+            }
+
+            let cleanupResponse = try await supabase
+                .from("users")
+                .update(APNsTokenUpdate(apns_token: nil))
+                .neq("user_id", value: userId)  // 自分以外
+                .eq("apns_token", value: token)  // 同じトークン
+                .execute()
+
+            print("✅ [PUSH] 他のユーザーから同じAPNsトークンを削除: \(cleanupResponse.count ?? 0)件")
+
+            // ✅ Step 2: 自分のユーザーにAPNsトークンを保存
             try await supabase
                 .from("users")
                 .update(["apns_token": token])
@@ -881,12 +909,83 @@ class UserAccountManager: ObservableObject {
 
             print("✅ [PUSH] APNsトークン保存成功: userId=\(userId)")
 
+            // 🔍 デバッグ: 保存後のデータを確認
+            struct UserAPNsCheck: Decodable {
+                let user_id: String
+                let apns_token: String?
+            }
+
+            let verifyResponse: [UserAPNsCheck] = try await supabase
+                .from("users")
+                .select("user_id, apns_token")
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+
+            if let user = verifyResponse.first {
+                print("🔍 [PUSH-DEBUG] 保存後の確認: apns_token = \(user.apns_token?.prefix(20) ?? "NULL")...")
+            } else {
+                print("⚠️ [PUSH-DEBUG] 保存後の確認: ユーザーが見つかりません")
+            }
+
             // 一時保存を削除
             await MainActor.run {
                 UserDefaults.standard.removeObject(forKey: "pending_apns_token")
             }
         } catch {
             print("❌ [PUSH] APNsトークン保存失敗: \(error)")
+        }
+    }
+
+    /// APNsトークンをusersテーブルから削除（ログアウト時）
+    private func removeAPNsToken(userId: String) async {
+        do {
+            let supabase = SupabaseClientManager.shared.client
+
+            print("🔍 [PUSH-DEBUG] APNsトークン削除開始")
+            print("🔍 [PUSH-DEBUG] userId = '\(userId)'")
+            print("🔍 [PUSH-DEBUG] userId length = \(userId.count)")
+
+            struct APNsTokenRemove: Encodable {
+                let apns_token: String?
+            }
+
+            // UPDATE文を実行
+            try await supabase
+                .from("users")
+                .update(APNsTokenRemove(apns_token: nil))
+                .eq("user_id", value: userId)
+                .execute()
+
+            print("✅ [PUSH] APNsトークン削除実行完了: userId=\(userId)")
+
+            // 🔍 デバッグ: 削除後のデータを確認
+            struct UserAPNsCheck: Decodable {
+                let user_id: String
+                let apns_token: String?
+            }
+
+            let verifyResponse: [UserAPNsCheck] = try await supabase
+                .from("users")
+                .select("user_id, apns_token")
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+
+            if let user = verifyResponse.first {
+                if user.apns_token == nil {
+                    print("✅ [PUSH-DEBUG] 削除確認: apns_token = NULL")
+                } else {
+                    print("⚠️ [PUSH-DEBUG] 削除失敗: apns_token = \(user.apns_token?.prefix(20) ?? "")... (削除されていない)")
+                }
+            } else {
+                print("⚠️ [PUSH-DEBUG] 削除確認: ユーザーが見つかりません (user_id=\(userId))")
+            }
+        } catch {
+            print("❌ [PUSH] APNsトークン削除失敗: \(error)")
+            if let postgrestError = error as? PostgrestError {
+                print("❌ [PUSH-DEBUG] PostgrestError message: \(postgrestError.message)")
+            }
         }
     }
 }

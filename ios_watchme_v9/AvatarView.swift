@@ -95,7 +95,7 @@ struct AvatarView: View {
     private func loadAvatar() {
         Task {
             guard let id = id else {
-                print("⚠️ IDが指定されていません（type: \(type)）")
+                print("ℹ️ ゲストモード - アバター読み込みスキップ（type: \(type)）")
                 isLoadingAvatar = false
                 return
             }

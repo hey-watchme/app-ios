@@ -285,6 +285,7 @@ class DeviceManager: ObservableObject {
     }
 
     // MARK: - 状態クリア（権限ベース設計）
+    @MainActor
     func clearState() {
         let clearStart = Date()
         print("⏱️ [DM-CLEAR] 状態クリア開始")
@@ -301,6 +302,7 @@ class DeviceManager: ObservableObject {
     }
 
     // 状態リセット（ログイン時に使用）
+    @MainActor
     func resetState() {
         print("🔄 DeviceManager: 状態リセット（Full Access Mode用）")
         self.state = .available([])
@@ -423,6 +425,7 @@ class DeviceManager: ObservableObject {
     
     // 後方互換性のため（非推奨）
     @available(*, deprecated, message: "Use resetState() instead")
+    @MainActor
     func resetToIdleState() {
         resetState()
     }
