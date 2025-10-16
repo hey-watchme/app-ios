@@ -111,4 +111,4 @@ config.plist
 
 # Simulator recordings
 *.mov
-*.mp4
+*.mp4*-CSR/

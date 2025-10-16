@@ -551,8 +551,8 @@ struct RecordingView: View {
                     self.autoUploadStatus = .completed
                     self.autoUploadProgress = 1.0
 
-                    // 1.5秒後にモーダルを閉じる
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                    // 2秒後にモーダルを閉じる
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                         self.showAutoUploadModal = false
 
                         // アップロード成功時はファイルを削除
@@ -768,35 +768,22 @@ struct AutoUploadModalView: View {
             Color.white.opacity(0.95)
                 .ignoresSafeArea()
 
-            // 中央コンテンツ
+            // 中央コンテンツ（固定サイズ）
             VStack(spacing: 24) {
-                // アイコンとメッセージ
+                // ステータステキスト（固定高さエリア）
                 VStack(spacing: 16) {
                     switch status {
                     case .uploading:
-                        ProgressView()
-                            .scaleEffect(1.5)
-                            .tint(Color.safeColor("AppAccentColor"))
-
                         Text("送信中...")
                             .font(.title2)
                             .fontWeight(.semibold)
 
                     case .completed:
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.green)
-
                         Text("送信完了")
                             .font(.title2)
                             .fontWeight(.semibold)
-                            .foregroundColor(.green)
 
                     case .failed:
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.red)
-
                         Text("送信失敗")
                             .font(.title2)
                             .fontWeight(.semibold)
@@ -807,24 +794,25 @@ struct AutoUploadModalView: View {
                             .foregroundColor(.secondary)
                     }
                 }
+                .frame(height: 80) // 上部エリアの高さを固定（アイコンなしで縮小）
 
-                // プログレスバー（アップロード中のみ）
-                if status == .uploading {
-                    VStack(spacing: 8) {
-                        ProgressView(value: progress, total: 1.0)
-                            .progressViewStyle(LinearProgressViewStyle(tint: Color.safeColor("AppAccentColor")))
-                            .frame(width: 200)
+                // プログレスバー（常に表示）
+                VStack(spacing: 8) {
+                    ProgressView(value: progress, total: 1.0)
+                        .progressViewStyle(LinearProgressViewStyle(tint: Color.accentPurple))
+                        .frame(width: 240)
 
-                        Text("\(Int(progress * 100))%")
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
-                    }
+                    Text("\(Int(progress * 100))%")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                        .foregroundColor(.secondary)
                 }
+                .frame(height: 40) // プログレスバーエリアの高さを固定
             }
-            .padding(40)
+            .frame(width: 320) // 横幅を固定（ダッシュボードカードと統一感）
+            .padding(16) // ダッシュボードカードと統一（40 → 16）
             .background(Color(.systemBackground))
-            .cornerRadius(20)
+            .cornerRadius(24) // ダッシュボードカードと統一（20 → 24）
             .shadow(color: Color.black.opacity(0.2), radius: 20, x: 0, y: 10)
         }
     }
