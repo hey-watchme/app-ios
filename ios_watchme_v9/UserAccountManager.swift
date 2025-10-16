@@ -495,12 +495,22 @@ class UserAccountManager: ObservableObject {
 
         // 認証済みユーザーの場合のみサーバー側ログアウトを実行
         if authState.isAuthenticated {
+            // ✅ レイヤー1: OSレベルでプッシュ通知の登録を解除
+            #if os(iOS)
+            await MainActor.run {
+                UIApplication.shared.unregisterForRemoteNotifications()
+                print("✅ [PUSH] APNs通知の登録を解除しました")
+            }
+            #endif
+
+            // ✅ レイヤー2: DBからAPNsトークンを削除（セッション有効中に実行）
+            if let userId = currentUser?.profile?.userId {
+                await removeAPNsToken(userId: userId)
+            }
+
             // トークンリフレッシュタイマーを停止
             refreshTimer?.invalidate()
             refreshTimer = nil
-
-            // 即座にローカル状態をクリア（UIの即時更新のため）
-            self.clearLocalAuthData()
 
             // サーバー側のログアウトを実行
             do {
@@ -511,6 +521,24 @@ class UserAccountManager: ObservableObject {
                 print("❌ サーバー側ログアウトエラー: \(error)")
                 // エラーが発生してもローカルは既にクリア済み
             }
+
+            // ローカル状態をクリア
+            await MainActor.run {
+                self.currentUser = nil
+                self.isAuthenticated = false
+                self.authState = .readOnly(source: .sessionExpired)
+                self.authError = nil
+
+                print("👋 ログアウト完了: authState = readOnly(sessionExpired)")
+
+                // DeviceManagerの状態もクリア
+                self.deviceManager.clearState()
+            }
+
+            // 保存された認証情報を削除
+            UserDefaults.standard.removeObject(forKey: "supabase_user")
+            UserDefaults.standard.removeObject(forKey: "current_user_id")
+            print("💾 UserDefaultsクリア完了（supabase_user, current_user_id）")
         } else {
             // ゲストユーザーの場合：内部的には「初期画面に戻る」処理
             // ユーザーには「ログアウト」と表示されるが、実際にはリセット処理
@@ -532,16 +560,9 @@ class UserAccountManager: ObservableObject {
         }
     }
     
-    // クライアント側認証データクリア
+    // クライアント側認証データクリア（セッション期限切れ時に使用）
     private func clearLocalAuthData() {
         print("🧹 ローカル認証データクリア開始")
-
-        // ✅ DBのAPNsトークンをNULLに設定（ログアウト後は通知を受け取らない）
-        if let userId = currentUser?.profile?.userId {
-            Task {
-                await removeAPNsToken(userId: userId)
-            }
-        }
 
         // ✅ @Published プロパティの更新は @MainActor で実行
         Task { @MainActor in
@@ -550,7 +571,7 @@ class UserAccountManager: ObservableObject {
             self.authState = .readOnly(source: .sessionExpired)
             self.authError = nil
 
-            print("👋 ログアウト完了: authState = readOnly(sessionExpired)")
+            print("👋 ローカル認証データクリア完了: authState = readOnly(sessionExpired)")
 
             // DeviceManagerの状態もクリア
             self.deviceManager.clearState()

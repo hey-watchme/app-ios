@@ -66,11 +66,12 @@ struct SimpleDashboardView: View {
 
     // トーストバナー表示管理
     @State private var showToastBanner = false
+    @State private var toastMessage = ""  // プッシュ通知から動的に設定される
 
     var body: some View {
         ZStack(alignment: .top) {
             // トーストバナー（最前面に表示）
-            ToastBannerView(message: "新しい分析結果が届きました", isShowing: $showToastBanner)
+            ToastBannerView(message: toastMessage, isShowing: $showToastBanner)
                 .zIndex(1000)
 
             ScrollView {
@@ -313,10 +314,30 @@ struct SimpleDashboardView: View {
 
             print("🔄 [PUSH] RefreshDashboard notification received: deviceId=\(deviceId), date=\(dateStr)")
 
-            // フォアグラウンド時のみトーストバナーを表示
-            if UIApplication.shared.applicationState == .active {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showToastBanner = true
+            // プッシュ通知のメッセージ本文を取得
+            if let message = userInfo["message"] as? String {
+                toastMessage = message
+                print("📝 [PUSH] トーストメッセージを更新: \(message)")
+
+                // フォアグラウンド時のみトーストバナーを表示
+                if UIApplication.shared.applicationState == .active {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        showToastBanner = true
+                    }
+                }
+            } else {
+                // メッセージがない場合はエラーログを出力
+                print("❌ [PUSH] エラー: プッシュ通知にメッセージが含まれていません")
+                print("❌ [PUSH] userInfo: \(userInfo)")
+
+                // エラーメッセージを表示
+                toastMessage = "⚠️ データがありません"
+
+                // エラーの場合もトーストバナーを表示（開発者が問題に気づけるように）
+                if UIApplication.shared.applicationState == .active {
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        showToastBanner = true
+                    }
                 }
             }
 

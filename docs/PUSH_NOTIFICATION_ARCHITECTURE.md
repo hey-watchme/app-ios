@@ -113,12 +113,21 @@ graph LR
 ```python
 SNS_PLATFORM_APP_ARN = 'arn:aws:sns:ap-southeast-2:754724220380:app/APNS_SANDBOX/watchme-ios-app-sandbox'
 
+# 観測対象名（Subject名）を取得
+subject_name = get_subject_name_for_device(device_id)
+
+# メッセージを動的に生成
+if subject_name:
+    body_text = f"{subject_name}さんの最新データが届きました✨"
+else:
+    device_id_short = device_id[:8]
+    body_text = f"デバイス {device_id_short} の最新データが届きました✨"
+
 message = {
     'APNS_SANDBOX': json.dumps({
         'aps': {
             'alert': {
-                'title': 'データ更新完了',
-                'body': '新しい分析結果が利用可能です'
+                'body': body_text
             },
             'sound': 'default',
             'content-available': 1
@@ -435,16 +444,32 @@ user_devices:
 
 ---
 
-### 2. テスト完了後の作業
+### 2. 本番環境への切り替え
 
-#### サイレント通知に戻す
-現在はテスト用に通常の通知（バナー表示）を使用。本番運用時はサイレント通知に変更：
+#### TestFlightまたはApp Store公開時
 
 ```python
+# 本番環境用のSNS Platform Application ARN
+SNS_PLATFORM_APP_ARN = 'arn:aws:sns:ap-southeast-2:754724220380:app/APNS/watchme-ios-app'
+
+# 観測対象名（Subject名）を取得
+subject_name = get_subject_name_for_device(device_id)
+
+# メッセージを動的に生成
+if subject_name:
+    body_text = f"{subject_name}さんの最新データが届きました✨"
+else:
+    device_id_short = device_id[:8]
+    body_text = f"デバイス {device_id_short} の最新データが届きました✨"
+
 message = {
-    'APNS_SANDBOX': json.dumps({
+    'APNS': json.dumps({  # APNS_SANDBOX → APNS
         'aps': {
-            'content-available': 1  # サイレント通知のみ
+            'alert': {
+                'body': body_text
+            },
+            'sound': 'default',
+            'content-available': 1
         },
         'device_id': device_id,
         'date': date,
@@ -453,16 +478,9 @@ message = {
 }
 ```
 
-#### 本番環境への切り替え
-TestFlightまたはApp Store公開時：
-```python
-SNS_PLATFORM_APP_ARN = 'arn:aws:sns:ap-southeast-2:754724220380:app/APNS/watchme-ios-app'  # Production
-message = {'APNS': json.dumps({...})}  # APNS_SANDBOX → APNS
-```
-
 ---
 
-### 2. 環境自動切り替え（推奨）
+### 3. 環境自動切り替え（推奨）
 
 環境変数で自動切り替え：
 
@@ -701,7 +719,137 @@ curl -s 'https://qvtlwotzuzbavrzqhyvt.supabase.co/rest/v1/dashboard?device_id=eq
 
 ---
 
+## 🎯 通知フィルタリング動作（重要）
+
+### マルチデバイス環境での通知表示
+
+**前提**：
+- 1人のユーザーが**複数の観測対象デバイス**（録音デバイス）を管理
+- 例：デバイスA（9f7d6e27...）、デバイスB（d067d407...）
+- iOSアプリでは**1つのデバイスを選択**して表示中
+
+---
+
+### フォアグラウンド（アプリ起動中）の動作
+
+**実装箇所**: `ios_watchme_v9App.swift` の `userNotificationCenter(_:willPresent:)`
+
+```swift
+// ✅ 通知の対象デバイスが現在選択中のデバイスか確認
+if let targetDeviceId = userInfo["device_id"] as? String {
+    let selectedDeviceId = UserDefaults.standard.string(forKey: "selected_device_id")
+    guard targetDeviceId == selectedDeviceId else {
+        print("⚠️ [PUSH] 別デバイスの通知のため無視")
+        return []  // ← 通知を表示しない
+    }
+}
+```
+
+**結果**：
+- ✅ **選択中のデバイス**の通知 → トーストバナーで表示
+- ❌ **選択外のデバイス**の通知 → 無視される（表示されない）
+
+**例**：
+- デバイスAを選択中
+- デバイスBから通知が来る → **表示されない**
+- デバイスAから通知が来る → **トーストバナーで表示**
+
+---
+
+### バックグラウンド（アプリ閉じている時）の動作
+
+**iOS標準の動作**：
+- iOSが自動で通知センターに表示
+- **フィルタリングは適用されない**
+
+**結果**：
+- ✅ **選択中のデバイス**の通知 → 通知センターに表示
+- ✅ **選択外のデバイス**の通知 → **通知センターに表示**
+
+**例**：
+- デバイスAを選択中
+- アプリを閉じている
+- デバイスBから通知が来る → **通知センターに表示される**
+- デバイスAから通知が来る → **通知センターに表示される**
+
+---
+
+### フォアグラウンドとバックグラウンドの関係
+
+**通知は排他的（どちらか一方のみ）**：
+
+```
+通知送信（Lambda）
+    ↓
+APNs経由でiPhoneに届く
+    ↓
+┌─────────────────────────────────┐
+│ アプリの状態をiOSが判定          │
+└─────────────────────────────────┘
+    ↓                    ↓
+フォアグラウンド      バックグラウンド
+    ↓                    ↓
+userNotificationCenter   iOSが自動表示
+(_:willPresent:)         （通知センター）
+    ↓
+フィルタリング処理
+    ↓
+選択中デバイスのみ表示
+```
+
+**重要**：
+- **アプリ起動中** → トーストバナーで表示（選択デバイスのみ）
+- **アプリ閉じている** → 通知センターに表示（全デバイス）
+- **同時には出ない**（iOSが自動判断）
+
+---
+
+### まとめ表
+
+| 状態 | 選択中デバイスの通知 | 選択外デバイスの通知 |
+|------|---------------------|-------------------|
+| **フォアグラウンド（アプリ起動中）** | ✅ トーストバナーで表示 | ❌ 表示されない（フィルタリング済み） |
+| **バックグラウンド（アプリ閉じている）** | ✅ 通知センターに表示 | ✅ 通知センターに表示（フィルタリングなし） |
+
+---
+
+### 設計の理由
+
+**バックグラウンド時にフィルタリングしない理由**：
+1. ユーザーが重要な通知を見逃す可能性を減らす
+2. 通知センターで全デバイスの状態を確認できる
+3. 実装がシンプル（iOS標準動作を利用）
+
+**フォアグラウンド時にフィルタリングする理由**：
+1. 現在見ているデバイスの通知のみ表示する方が直感的
+2. 不要なトーストバナーで画面が邪魔されない
+3. ユーザー体験の向上
+
+---
+
 ## 📝 修正履歴
+
+### 2025-10-15（22:57 JST）
+- ✅ **観測対象名の表示機能を追加**
+  - Lambda関数に`get_subject_name_for_device()`関数を追加
+  - devicesテーブルからsubject_idを取得 → subjectsテーブルから名前を取得
+  - 通知メッセージを動的生成：「山田太郎さんの最新データが届きました✨」
+  - 観測対象未登録時のフォールバック：「デバイス a1b2c3d4 の最新データが届きました✨」
+- ✅ **ログアウト時のAPNs通知解除機能を実装**
+  - `UIApplication.shared.unregisterForRemoteNotifications()`をログアウト時に実行
+  - OSレベルでプッシュ通知の登録を解除（最も確実な方法）
+  - セッション有効中に`removeAPNsToken()`を実行（RLS問題を解決）
+  - `current_user_id`のUserDefaultsをクリア
+- ✅ **フォアグラウンド通知受信時の権限チェック機能を追加**
+  - 認証状態をチェック：`current_user_id`がない場合は通知を無視
+  - デバイスIDをチェック：現在選択中のデバイスの通知のみ表示
+  - 選択外のデバイスの通知は無視（フォアグラウンド時のみ）
+- ✅ **軽い振動フィードバックを追加**
+  - `UIImpactFeedbackGenerator(style: .light)`を使用
+  - トーストバナー表示時に最も軽い振動を発生
+- ✅ **通知フィルタリング動作のドキュメント化**
+  - フォアグラウンド/バックグラウンドでの動作の違いを明文化
+  - マルチデバイス環境での通知表示ルールを詳細に記載
 
 ### 2025-10-15（00:43 JST）
 - ✅ **完全解決**: プッシュ通知が正常に動作
@@ -721,4 +869,4 @@ curl -s 'https://qvtlwotzuzbavrzqhyvt.supabase.co/rest/v1/dashboard?device_id=eq
 
 ---
 
-*最終更新: 2025-10-15 00:43 JST*
+*最終更新: 2025-10-15 22:57 JST*

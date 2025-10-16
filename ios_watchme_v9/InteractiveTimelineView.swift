@@ -197,9 +197,11 @@ struct InteractiveTimelineView: View {
             if let events = burstEvents {
                 // 新しいburst_eventsデータを使用
                 ForEach(Array(events.enumerated()), id: \.offset) { _, event in
-                    if let slot = timeSlotToIndexForBurst(event.time) {
+                    if let slot = timeSlotToIndexForBurst(event.time), slot < vibeScores.count {
                         let x = geometry.size.width * CGFloat(slot) / CGFloat(vibeScores.count - 1)
-                        let normalizedScore = (Double(event.toScore) + 100) / 200
+                        // グラフ上の実際のスコアを使用（vibeScores配列から取得）
+                        let actualScore = vibeScores[slot] ?? 0
+                        let normalizedScore = (actualScore + 100) / 200
                         let y = geometry.size.height * (1 - normalizedScore)
 
                         Circle()
@@ -210,7 +212,8 @@ struct InteractiveTimelineView: View {
                             .onTapGesture {
                                 withAnimation(.spring()) {
                                     // BurstEventをVibeChangeに変換して表示（互換性のため）
-                                    let vibeChange = VibeChange(time: event.time, event: event.event, score: Double(event.toScore))
+                                    // スコアは実際のグラフ上のスコアを使用
+                                    let vibeChange = VibeChange(time: event.time, event: event.event, score: actualScore)
                                     selectedEvent = vibeChange
                                     showEventDetail = true
                                     currentTimeIndex = slot
@@ -497,27 +500,30 @@ struct InteractiveTimelineView: View {
         // burstEventsを優先、なければvibeChangesを使用
         if let events = burstEvents {
             for event in events {
-                if let slot = timeSlotToIndexForBurst(event.time), slot == currentTimeIndex {
+                if let slot = timeSlotToIndexForBurst(event.time), slot == currentTimeIndex, slot < vibeScores.count {
+                    // グラフ上の実際のスコアを使用
+                    let actualScore = vibeScores[slot] ?? 0
+
                     // イベントに到達したら一時的に表示
                     withAnimation(.spring()) {
-                        // BurstEventをVibeChangeに変換
-                        let vibeChange = VibeChange(time: event.time, event: event.event, score: Double(event.toScore))
+                        // BurstEventをVibeChangeに変換（実際のスコアを使用）
+                        let vibeChange = VibeChange(time: event.time, event: event.event, score: actualScore)
                         selectedEvent = vibeChange
                         showEventDetail = true
                         // バーストエフェクトをトリガー
                         triggerBurst = true
-                        // 親ビューにバーストイベントを通知
-                        onEventBurst?(Double(event.toScore))
+                        // 親ビューにバーストイベントを通知（実際のスコアを使用）
+                        onEventBurst?(actualScore)
                     }
-                    
+
                     // イベント時の軽い振動フィードバック
                     hapticManager.playEventBurst()
-                    
+
                     // バーストエフェクトを少し後にリセット
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
                         triggerBurst = false
                     }
-                    
+
                     // 自動再生時のみ3秒後に非表示
                     if !isDragging {
                         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
@@ -568,20 +574,23 @@ struct InteractiveTimelineView: View {
         // burstEventsを優先、なければvibeChangesを使用
         if let events = burstEvents {
             for event in events {
-                if let slot = timeSlotToIndexForBurst(event.time), slot == currentTimeIndex {
+                if let slot = timeSlotToIndexForBurst(event.time), slot == currentTimeIndex, slot < vibeScores.count {
+                    // グラフ上の実際のスコアを使用
+                    let actualScore = vibeScores[slot] ?? 0
+
                     // ドラッグ中にイベントに触れた場合
                     withAnimation(.spring()) {
-                        // BurstEventをVibeChangeに変換
-                        let vibeChange = VibeChange(time: event.time, event: event.event, score: Double(event.toScore))
+                        // BurstEventをVibeChangeに変換（実際のスコアを使用）
+                        let vibeChange = VibeChange(time: event.time, event: event.event, score: actualScore)
                         selectedEvent = vibeChange
                         showEventDetail = true
-                        // 親ビューにバーストイベントを通知
-                        onEventBurst?(Double(event.toScore))
+                        // 親ビューにバーストイベントを通知（実際のスコアを使用）
+                        onEventBurst?(actualScore)
                     }
-                    
+
                     // イベント時の軽い振動フィードバック
                     hapticManager.playEventBurst()
-                    
+
                     // インジケーターがある間は表示を維持（自動で消さない）
                     break
                 }

@@ -19,9 +19,9 @@ struct DeviceCard: View {
     
     var body: some View {
         ZStack {
-            // 背景 - 選択時はパープル、通常時は白
+            // 背景 - 選択時は白、非選択時はうっすらグレー
             RoundedRectangle(cornerRadius: 24)
-                .fill(isSelected ? Color.safeColor("AppAccentColor") : Color.white) // パープル #6200ff
+                .fill(isSelected ? Color.white : Color.gray.opacity(0.1))
                 .shadow(color: .black.opacity(isSelected ? 0.15 : 0.1), radius: 10, x: 0, y: 5)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
@@ -38,16 +38,20 @@ struct DeviceCard: View {
                         Text(isSelected ? "選択中のデバイス" : "このデバイスを選択する")
                             .font(.body)
                             .fontWeight(isSelected ? .semibold : .regular)
-                            .foregroundColor(isSelected ? .white : .primary)
+                            .foregroundColor(.primary)
 
                         Spacer()
 
-                        // カスタムトグルスタイル - 紫色背景時は専用デザイン
-                        Toggle("", isOn: .constant(isSelected))
-                            .labelsHidden()
-                            .toggleStyle(PurpleBackgroundToggleStyle(isOnPurpleBackground: isSelected))
-                            .disabled(true)
-                            .allowsHitTesting(false)
+                        // トグルボタン：選択中は緑のチェック、非選択はグレーの丸
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(Color.safeColor("SuccessColor"))
+                        } else {
+                            Image(systemName: "circle")
+                                .font(.title2)
+                                .foregroundColor(Color.gray.opacity(0.3))
+                        }
                     }
                     .contentShape(Rectangle())
                 }
@@ -55,7 +59,7 @@ struct DeviceCard: View {
                     
                     // 区切り線（トグルボタンの下）
                     Divider()
-                        .background(isSelected ? Color.white.opacity(0.5) : Color.gray.opacity(0.3))
+                        .background(Color.gray.opacity(0.3))
 
                     // デバイスID情報（右端に>カーソル）- 行全体をクリック可能に
                     if let onEditDevice = onEditDevice {
@@ -64,30 +68,30 @@ struct DeviceCard: View {
                                 // デバイスタイプに応じたアイコン
                                 ZStack {
                                     Circle()
-                                        .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                        .fill(Color.gray.opacity(0.1))
                                         .frame(width: 40, height: 40)
 
                                     Image(systemName: getDeviceIcon())
                                         .font(.system(size: 20))
-                                        .foregroundColor(isSelected ? .white : .black)
+                                        .foregroundColor(.black)
                                 }
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("デバイスID")
                                         .font(.caption)
-                                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                                        .foregroundColor(.secondary)
 
                                     Text(getShortDeviceId())
                                         .font(.system(.footnote, design: .monospaced))
                                         .fontWeight(.medium)
-                                        .foregroundColor(isSelected ? .white : .primary)
+                                        .foregroundColor(.primary)
                                 }
 
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
+                                    .foregroundColor(.secondary)
                             }
                             .contentShape(Rectangle())
                         }
@@ -96,7 +100,7 @@ struct DeviceCard: View {
                         HStack(spacing: 12) {
                             ZStack {
                                 Circle()
-                                    .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                    .fill(Color.gray.opacity(0.1))
                                     .frame(width: 40, height: 40)
 
                                 Image(systemName: getDeviceIcon())
@@ -121,7 +125,7 @@ struct DeviceCard: View {
 
                     // 区切り線
                     Divider()
-                        .background(isSelected ? Color.white.opacity(0.3) : Color.gray.opacity(0.3))
+                        .background(Color.gray.opacity(0.3))
 
                     // 観測対象情報（右端に>カーソル）- 行全体をクリック可能に
                     if let subject = subject, let onEditSubject = onEditSubject {
@@ -131,26 +135,26 @@ struct DeviceCard: View {
                                     AvatarView(type: .subject, id: subject.subjectId, size: 40)
 
                                     Circle()
-                                        .stroke(isSelected ? Color.white.opacity(0.3) : Color.safeColor("BorderLight").opacity(0.2), lineWidth: 2)
+                                        .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 2)
                                         .frame(width: 40, height: 40)
                                 }
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("観測対象")
                                         .font(.caption)
-                                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                                        .foregroundColor(.secondary)
 
                                     Text(subject.name ?? "未設定")
                                         .font(.footnote)
                                         .fontWeight(.medium)
-                                        .foregroundColor(isSelected ? .white : .primary)
+                                        .foregroundColor(.primary)
                                 }
 
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
+                                    .foregroundColor(.secondary)
                             }
                             .contentShape(Rectangle())
                         }
@@ -159,30 +163,30 @@ struct DeviceCard: View {
                         Button(action: onAddSubject) {
                             HStack(spacing: 12) {
                                 Circle()
-                                    .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                    .fill(Color.gray.opacity(0.1))
                                     .frame(width: 40, height: 40)
                                     .overlay(
                                         Image(systemName: "person.fill.questionmark")
                                             .font(.system(size: 18))
-                                            .foregroundColor(isSelected ? .white.opacity(0.6) : .black)
+                                            .foregroundColor(.black)
                                     )
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("観測対象")
                                         .font(.caption)
-                                        .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                                        .foregroundColor(.secondary)
 
                                     Text("未設定")
                                         .font(.footnote)
                                         .fontWeight(.medium)
-                                        .foregroundColor(isSelected ? .white : .primary)
+                                        .foregroundColor(.primary)
                                 }
 
                                 Spacer()
 
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 14, weight: .semibold))
-                                    .foregroundColor(isSelected ? .white.opacity(0.6) : .secondary)
+                                    .foregroundColor(.secondary)
                             }
                             .contentShape(Rectangle())
                         }
