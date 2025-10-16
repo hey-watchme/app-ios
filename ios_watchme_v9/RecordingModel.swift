@@ -186,14 +186,14 @@ extension RecordingModel {
         return nil
     }
     
-    // アップロード可能かチェック
+    // アップロード可能かチェック（試行回数制限なし）
     var canUpload: Bool {
-        return !isUploaded && fileExists() && uploadAttempts < 3 && fileSize > 0
+        return !isUploaded && fileExists() && fileSize > 0
     }
     
-    // 強制アップロード可能かチェック（既にアップロード済みでも可能）
+    // 強制アップロード可能かチェック（既にアップロード済みでも可能、試行回数制限なし）
     var canForceUpload: Bool {
-        return fileExists() && uploadAttempts < 3
+        return fileExists() && fileSize > 0
     }
     
     // 表示用のファイルサイズ

@@ -766,22 +766,15 @@ extension AudioRecorder: AVAudioRecorderDelegate {
                 print("   - ファイルサイズ: \(fileSize) bytes")
 
                 if fileSize > 0 {
-                    // RecordingModelを作成・追加
+                    // RecordingModelを作成（一覧には追加しない）
                     let recording = RecordingModel(fileName: fullFileName, date: currentSlotStartTime)
 
-                    // メインスレッドで配列を更新
+                    // メインスレッドで処理
                     DispatchQueue.main.async {
-                        // 重複チェック
-                        if let existingIndex = self.recordings.firstIndex(where: { $0.fileName == fullFileName }) {
-                            self.recordings.remove(at: existingIndex)
-                            print("🔄 既存の同名録音を置換")
-                        }
-
-                        self.recordings.insert(recording, at: 0)
                         print("✅ 録音完了: \(fullFileName)")
-                        print("📊 総録音ファイル数: \(self.recordings.count)")
 
                         // 手動停止の場合のみコールバックを呼び出す（スロット切り替えの場合は呼ばない）
+                        // コールバック内で自動アップロードが試行され、失敗時のみ一覧に追加される
                         if self.pendingSlotSwitch == nil {
                             print("📞 録音完了コールバック呼び出し: \(fullFileName)")
                             self.onRecordingCompleted?(recording)

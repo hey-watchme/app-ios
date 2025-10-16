@@ -80,16 +80,8 @@ class NetworkManager: ObservableObject {
             completion(false)
             return
         }
-        
-        guard recording.uploadAttempts < 3 else {
-            print("⚠️ アップロード不可: 最大試行回数超過 - \(recording.fileName)")
-            DispatchQueue.main.async {
-                self.connectionStatus = .failed
-                self.currentUploadingFile = nil
-            }
-            return
-        }
-        
+
+        // 試行回数制限は撤廃（何度でもリトライ可能）
         // アップロード済みでも実行可能（サーバー側で上書き処理される）
         if recording.isUploaded {
             print("ℹ️ アップロード済みファイルの再送信: \(recording.fileName)")
@@ -117,13 +109,14 @@ class NetworkManager: ObservableObject {
         guard FileManager.default.fileExists(atPath: fileURL.path) else {
             let errorMsg = "ファイルが見つかりません: \(fileURL.path)"
             print("❌ \(errorMsg)")
-            
+
             recording.markAsUploadFailed(error: errorMsg)
-            
+
             DispatchQueue.main.async {
                 self.connectionStatus = .failed
                 self.currentUploadingFile = nil
             }
+            completion(false)
             return
         }
         
@@ -140,13 +133,14 @@ class NetworkManager: ObservableObject {
         guard let uploadURL = URL(string: "\(serverURL)/upload") else {
             let errorMsg = "無効なアップロードURL: \(serverURL)/upload"
             print("❌ \(errorMsg)")
-            
+
             recording.markAsUploadFailed(error: errorMsg)
-            
+
             DispatchQueue.main.async {
                 self.connectionStatus = .failed
                 self.currentUploadingFile = nil
             }
+            completion(false)
             return
         }
         

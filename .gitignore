@@ -112,3 +112,4 @@ config.plist
 # Simulator recordings
 *.mov
 *.mp4*-CSR/
+docs/*証明書*/

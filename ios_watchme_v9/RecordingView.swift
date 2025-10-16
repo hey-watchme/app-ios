@@ -195,14 +195,15 @@ struct RecordingView: View {
                     }
                     
                     // 一括アップロードボタン
-                    if audioRecorder.recordings.filter({ !$0.isRecordingFailed && !$0.isUploaded && $0.canUpload }).count > 0 {
+                    // 未アップロードのファイルがあれば表示（シンプルな条件）
+                    if audioRecorder.recordings.filter({ !$0.isRecordingFailed && !$0.isUploaded && $0.fileSize > 0 }).count > 0 {
                         Button(action: {
                             manualBatchUpload()
                         }) {
                             HStack {
                                 Image(systemName: "waveform.badge.magnifyingglass")
                                     .font(.title3)
-                                Text("分析開始")
+                                Text("アップロード")
                                     .font(.headline)
                                     .fontWeight(.semibold)
                             }
@@ -245,7 +246,7 @@ struct RecordingView: View {
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding()
-                                .background(Color.red)
+                                .background(Color.black)
                                 .foregroundColor(.white)
                                 .cornerRadius(12)
                             }
@@ -447,21 +448,26 @@ struct RecordingView: View {
 
     // シンプルな一括アップロード（NetworkManagerを直接使用）- 逐次実行版
     private func manualBatchUpload() {
-        // アップロード対象のリストを取得（録音失敗ファイルを除外）
-        let recordingsToUpload = audioRecorder.recordings.filter { !$0.isRecordingFailed && $0.canUpload }
-        
+        // アップロード対象のリストを取得
+        // - 録音失敗ファイル（0KB）を除外
+        // - 未アップロードのファイルのみ
+        // - シンプルな条件のみ
+        let recordingsToUpload = audioRecorder.recordings.filter {
+            !$0.isRecordingFailed && !$0.isUploaded && $0.fileExists() && $0.fileSize > 0
+        }
+
         guard !recordingsToUpload.isEmpty else {
             alertMessage = "アップロード対象のファイルがありません。"
             showAlert = true
             return
         }
-        
+
         print("📤 一括アップロード開始: \(recordingsToUpload.count)件")
-        
+
         // アップロード件数を設定
         uploadingTotalCount = recordingsToUpload.count
         uploadingCurrentIndex = 0
-        
+
         // 最初のファイルからアップロードを開始する
         uploadSequentially(recordings: recordingsToUpload)
     }
@@ -517,12 +523,16 @@ struct RecordingView: View {
         // 既にアップロード中の場合はスキップ
         guard networkManager.connectionStatus != .uploading else {
             print("⚠️ 既にアップロード中のため、自動アップロードをスキップします")
+            // アップロード中の場合は一覧に追加（後で手動アップロード可能にする）
+            addRecordingToList(recording)
             return
         }
 
         // アップロード可能かチェック
         guard recording.canUpload else {
             print("⚠️ アップロード不可のため、スキップします")
+            // アップロード不可の場合は一覧に追加
+            addRecordingToList(recording)
             return
         }
 
@@ -555,18 +565,21 @@ struct RecordingView: View {
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                         self.showAutoUploadModal = false
 
-                        // アップロード成功時はファイルを削除
+                        // アップロード成功時はファイルを削除（一覧には追加しない）
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                             print("🗑️ 送信済みファイルを自動削除: \(recording.fileName)")
-                            self.audioRecorder.deleteRecording(recording)
+                            self.deleteRecordingFile(recording)
                         }
                     }
                 } else {
                     print("❌ 自動アップロード失敗: \(recording.fileName)")
-                    print("   → ファイルはリストに残り、手動で「分析開始」ボタンから送信可能です")
+                    print("   → ファイルをリストに追加し、手動で「分析開始」ボタンから送信可能にします")
 
                     // 失敗状態に変更
                     self.autoUploadStatus = .failed
+
+                    // 失敗時のみ一覧に追加
+                    self.addRecordingToList(recording)
 
                     // 2秒後にモーダルを閉じる
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
@@ -574,6 +587,40 @@ struct RecordingView: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - ヘルパーメソッド
+    /// 録音ファイルを一覧に追加
+    private func addRecordingToList(_ recording: RecordingModel) {
+        // 重複チェック
+        if let existingIndex = audioRecorder.recordings.firstIndex(where: { $0.fileName == recording.fileName }) {
+            audioRecorder.recordings.remove(at: existingIndex)
+            print("🔄 既存の同名録音を置換")
+        }
+
+        audioRecorder.recordings.insert(recording, at: 0)
+        print("📋 一覧に追加: \(recording.fileName)")
+        print("📊 総録音ファイル数: \(audioRecorder.recordings.count)")
+    }
+
+    /// 録音ファイルを物理削除（一覧には追加しない）
+    private func deleteRecordingFile(_ recording: RecordingModel) {
+        let fileURL = recording.getFileURL()
+
+        print("🗑️ ファイル削除開始: \(recording.fileName)")
+        print("   - ファイルパス: \(fileURL.path)")
+
+        do {
+            // ファイル削除
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                try FileManager.default.removeItem(at: fileURL)
+                print("✅ ファイル削除成功")
+            } else {
+                print("⚠️ ファイルが存在しません")
+            }
+        } catch {
+            print("❌ ファイル削除エラー: \(error)")
         }
     }
 }
@@ -702,14 +749,14 @@ struct RecordingRowView: View {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.caption)
                             .foregroundColor(Color.safeColor("WarningColor"))
-                        
-                        Text("アップロード失敗 (試行: \(recording.uploadAttempts)/3)")
+
+                        Text("アップロード失敗")
                             .font(.caption)
                             .foregroundColor(Color.safeColor("WarningColor"))
-                        
+
                         Spacer()
                     }
-                    
+
                     // 詳細なエラー情報
                     if let error = recording.lastUploadError {
                         Text(error)
@@ -721,19 +768,8 @@ struct RecordingRowView: View {
             }
             
             Spacer()
-            
+
             HStack(spacing: 8) {
-                // 最大試行回数に達した場合はリセットボタンを表示
-                if recording.uploadAttempts >= 3 {
-                    Button(action: {
-                        recording.resetUploadStatus()
-                        print("🔄 アップロード状態リセット: \(recording.fileName)")
-                    }) {
-                        Image(systemName: "arrow.clockwise")
-                            .foregroundColor(Color.safeColor("WarningColor"))
-                    }
-                }
-                
                 // 削除ボタン
                 Button(action: { onDelete(recording) }) {
                     Image(systemName: "trash")
