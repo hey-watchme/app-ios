@@ -8,6 +8,8 @@
 	<string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleName</key>
 	<string>ios_watchme_v9</string>
+	<key>CFBundleDisplayName</key>
+	<string>WatchMe</string>
 	<key>NSCameraUsageDescription</key>
 	<string>QRコードをスキャンしてデバイスを追加するため、およびアバター写真を撮影するためにカメラを使用します</string>
 	<key>NSMicrophoneUsageDescription</key>
