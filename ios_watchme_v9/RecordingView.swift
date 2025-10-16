@@ -28,6 +28,10 @@ struct RecordingView: View {
     @State private var showAutoUploadModal = false
     @State private var autoUploadProgress: Double = 0.0
     @State private var autoUploadStatus: AutoUploadStatus = .uploading
+
+    // トーストバナー表示管理
+    @State private var showToastBanner = false
+    @State private var toastMessage = ""
     
     var body: some View {
         NavigationView {
@@ -35,6 +39,10 @@ struct RecordingView: View {
                 // 背景色
                 Color(.systemGray6)
                     .ignoresSafeArea()
+
+                // トーストバナー（最前面に表示）
+                ToastBannerView(message: toastMessage, isShowing: $showToastBanner)
+                    .zIndex(1000)
 
                 // メインコンテンツ
                 VStack(spacing: 0) {
@@ -195,8 +203,8 @@ struct RecordingView: View {
                     }
                     
                     // 一括アップロードボタン
-                    // 未アップロードのファイルがあれば表示（シンプルな条件）
-                    if audioRecorder.recordings.filter({ !$0.isRecordingFailed && !$0.isUploaded && $0.fileSize > 0 }).count > 0 {
+                    // リストにファイルがあれば表示
+                    if !audioRecorder.recordings.isEmpty {
                         Button(action: {
                             manualBatchUpload()
                         }) {
@@ -448,13 +456,8 @@ struct RecordingView: View {
 
     // シンプルな一括アップロード（NetworkManagerを直接使用）- 逐次実行版
     private func manualBatchUpload() {
-        // アップロード対象のリストを取得
-        // - 録音失敗ファイル（0KB）を除外
-        // - 未アップロードのファイルのみ
-        // - シンプルな条件のみ
-        let recordingsToUpload = audioRecorder.recordings.filter {
-            !$0.isRecordingFailed && !$0.isUploaded && $0.fileExists() && $0.fileSize > 0
-        }
+        // リストにあるファイル = すべてアップロード対象
+        let recordingsToUpload = audioRecorder.recordings
 
         guard !recordingsToUpload.isEmpty else {
             alertMessage = "アップロード対象のファイルがありません。"
@@ -476,9 +479,9 @@ struct RecordingView: View {
     private func uploadSequentially(recordings: [RecordingModel]) {
         // アップロードするリストが空になったら処理を終了
         guard let recording = recordings.first else {
-            print("✅ 全ての一括アップロードが完了しました。")
+            print("✅ アップロードが完了しました。")
             DispatchQueue.main.async {
-                self.alertMessage = "すべての一括アップロードが完了しました。"
+                self.alertMessage = "アップロードが完了しました。"
                 self.showAlert = true
                 // カウンターをリセット
                 self.uploadingTotalCount = 0
@@ -500,12 +503,8 @@ struct RecordingView: View {
         networkManager.uploadRecording(recording) { success in
             if success {
                 print("✅ 一括アップロード成功: \(recording.fileName)")
-
-                // アップロードが成功したので、このファイルを削除する
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                    print("🗑️ 送信済みファイルを削除します:\(recording.fileName)")
-                    self.audioRecorder.deleteRecording(recording)
-                }
+                print("🗑️ 送信済みファイルを削除します:\(recording.fileName)")
+                self.audioRecorder.deleteRecording(recording)
             } else {
                 print("❌ 一括アップロード失敗: \(recording.fileName)")
             }
@@ -524,14 +523,6 @@ struct RecordingView: View {
         guard networkManager.connectionStatus != .uploading else {
             print("⚠️ 既にアップロード中のため、自動アップロードをスキップします")
             // アップロード中の場合は一覧に追加（後で手動アップロード可能にする）
-            addRecordingToList(recording)
-            return
-        }
-
-        // アップロード可能かチェック
-        guard recording.canUpload else {
-            print("⚠️ アップロード不可のため、スキップします")
-            // アップロード不可の場合は一覧に追加
             addRecordingToList(recording)
             return
         }
@@ -564,6 +555,14 @@ struct RecordingView: View {
                     // 2秒後にモーダルを閉じる
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
                         self.showAutoUploadModal = false
+
+                        // モーダルが閉じた直後にトーストを表示
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                            self.toastMessage = "ただいま音声を分析中です。しばらくお待ち下さい☕"
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                self.showToastBanner = true
+                            }
+                        }
 
                         // アップロード成功時はファイルを削除（一覧には追加しない）
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {

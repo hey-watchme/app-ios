@@ -14,13 +14,10 @@ class RecordingModel: ObservableObject, Codable {
     @Published var fileSize: Int64 = 0
     @Published var uploadAttempts: Int = 0
     @Published var lastUploadError: String?
-    
-    private static let uploadStatusKey = "recordingUploadStatus"
-    
+
     init(fileName: String, date: Date) {
         self.fileName = fileName
         self.date = date
-        self.loadUploadStatus()
         self.updateFileSize()
     }
     
@@ -49,40 +46,6 @@ class RecordingModel: ObservableObject, Codable {
         try container.encodeIfPresent(lastUploadError, forKey: .lastUploadError)
     }
     
-    // MARK: - 永続化メソッド
-    private func loadUploadStatus() {
-        if let data = UserDefaults.standard.data(forKey: Self.uploadStatusKey),
-           let statusDict = try? JSONDecoder().decode([String: RecordingStatus].self, from: data),
-           let status = statusDict[fileName] {
-            self.isUploaded = status.isUploaded
-            self.uploadAttempts = status.uploadAttempts
-            self.lastUploadError = status.lastUploadError
-            print("📋 アップロード状態復元: \(fileName) - アップロード済み: \(isUploaded)")
-        }
-    }
-    
-    func saveUploadStatus() {
-        var statusDict: [String: RecordingStatus] = [:]
-        
-        // 既存のデータを読み込み
-        if let data = UserDefaults.standard.data(forKey: Self.uploadStatusKey),
-           let existingDict = try? JSONDecoder().decode([String: RecordingStatus].self, from: data) {
-            statusDict = existingDict
-        }
-        
-        // 現在の状態を保存
-        statusDict[fileName] = RecordingStatus(
-            isUploaded: isUploaded,
-            uploadAttempts: uploadAttempts,
-            lastUploadError: lastUploadError
-        )
-        
-        if let data = try? JSONEncoder().encode(statusDict) {
-            UserDefaults.standard.set(data, forKey: Self.uploadStatusKey)
-            print("💾 アップロード状態保存: \(fileName) - アップロード済み: \(isUploaded)")
-        }
-    }
-    
     // MARK: - ファイル管理
     private func updateFileSize() {
         let fileURL = getDocumentsDirectory().appendingPathComponent(fileName)
@@ -95,52 +58,23 @@ class RecordingModel: ObservableObject, Codable {
     }
     
     func markAsUploaded() {
-        print("📌 [RecordingModel] markAsUploaded呼び出し開始")
-        print("📌 [RecordingModel] ObjectIdentifier: \(ObjectIdentifier(self))")
-        print("📌 [RecordingModel] ファイル名: \(fileName)")
-        print("📌 [RecordingModel] 変更前のisUploaded: \(isUploaded)")
-        
-        // メインスレッドで実行されているか確認
-        if Thread.isMainThread {
-            print("📌 [RecordingModel] メインスレッドで実行中")
-        } else {
-            print("📌 [RecordingModel] バックグラウンドスレッドで実行中")
-        }
-        
         isUploaded = true
-        print("📌 [RecordingModel] 変更後のisUploaded: \(isUploaded)")
         lastUploadError = nil
-        saveUploadStatus()
-        print("📌 [RecordingModel] markAsUploaded完了 - 永続化済み")
-        
-        // @Published属性が正しく動作しているか確認
-        DispatchQueue.main.async {
-            print("📌 [RecordingModel] メインスレッドでのisUploaded: \(self.isUploaded)")
-            print("📌 [RecordingModel] メインスレッドでのObjectIdentifier: \(ObjectIdentifier(self))")
-        }
+        print("✅ [RecordingModel] アップロード完了マーク: \(fileName)")
     }
     
     func markAsUploadFailed(error: String) {
         isUploaded = false
         uploadAttempts += 1
         lastUploadError = error
-        saveUploadStatus()
+        print("❌ [RecordingModel] アップロード失敗マーク: \(fileName) - \(error)")
     }
-    
+
     func resetUploadStatus() {
         isUploaded = false
         uploadAttempts = 0
         lastUploadError = nil
-        saveUploadStatus()
-    }
-    
-    // 強制再アップロード用（アップロード済み状態をリセット）
-    func prepareForceUpload() {
-        print("🔄 強制再アップロード準備: \(fileName)")
-        isUploaded = false
-        uploadAttempts = 0
-        lastUploadError = "強制再アップロード"
-        saveUploadStatus()
+        print("🔄 [RecordingModel] アップロード状態リセット: \(fileName)")
     }
     
     // ファイルの存在確認
@@ -153,13 +87,6 @@ class RecordingModel: ObservableObject, Codable {
     func getFileURL() -> URL {
         return getDocumentsDirectory().appendingPathComponent(fileName)
     }
-}
-
-// MARK: - 補助構造体
-private struct RecordingStatus: Codable {
-    let isUploaded: Bool
-    let uploadAttempts: Int
-    let lastUploadError: String?
 }
 
 // MARK: - 拡張メソッド
@@ -186,14 +113,9 @@ extension RecordingModel {
         return nil
     }
     
-    // アップロード可能かチェック（試行回数制限なし）
+    // アップロード可能かチェック
     var canUpload: Bool {
         return !isUploaded && fileExists() && fileSize > 0
-    }
-    
-    // 強制アップロード可能かチェック（既にアップロード済みでも可能、試行回数制限なし）
-    var canForceUpload: Bool {
-        return fileExists() && fileSize > 0
     }
     
     // 表示用のファイルサイズ
