@@ -159,6 +159,15 @@ final class RecordingStore: ObservableObject {
             return
         }
 
+        // マイクパーミッションチェック（初回録音時に要求）
+        let permissionGranted = await requestMicrophonePermissionIfNeeded()
+        guard permissionGranted else {
+            state.errorMessage = "マイクへのアクセスが許可されていません。設定アプリから許可してください。"
+            state.showError = true
+            print("❌ RecordingStore: マイクパーミッション拒否")
+            return
+        }
+
         // オーディオセッション準備ができていない場合はリトライ
         if !state.isAudioSessionPrepared {
             print("⚠️ RecordingStore: オーディオセッション未準備、リトライ中...")
@@ -275,6 +284,41 @@ final class RecordingStore: ObservableObject {
     }
 
     // MARK: - Private Methods
+
+    /// マイクパーミッションを必要に応じて要求
+    private func requestMicrophonePermissionIfNeeded() async -> Bool {
+        let audioSession = AVAudioSession.sharedInstance()
+
+        switch audioSession.recordPermission {
+        case .granted:
+            // 既に許可済み
+            print("✅ RecordingStore: マイクパーミッション既に許可済み")
+            return true
+
+        case .denied:
+            // ユーザーが以前に拒否済み
+            print("❌ RecordingStore: マイクパーミッション拒否済み")
+            return false
+
+        case .undetermined:
+            // 初回：パーミッション要求
+            print("🔔 RecordingStore: マイクパーミッション要求中...")
+            return await withCheckedContinuation { continuation in
+                audioSession.requestRecordPermission { granted in
+                    if granted {
+                        print("✅ RecordingStore: マイクパーミッション許可")
+                    } else {
+                        print("❌ RecordingStore: マイクパーミッション拒否")
+                    }
+                    continuation.resume(returning: granted)
+                }
+            }
+
+        @unknown default:
+            print("⚠️ RecordingStore: 未知のパーミッション状態")
+            return false
+        }
+    }
 
     private func getCurrentSlot() -> String {
         return SlotTimeUtility.getCurrentSlot(timezone: deviceManager.selectedDeviceTimezone)

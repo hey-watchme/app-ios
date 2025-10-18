@@ -56,21 +56,6 @@ struct ios_watchme_v9App: App {
                 .environmentObject(userAccountManager)
                 .environmentObject(deviceManager)
                 .environmentObject(dataManager)
-                .onAppear {
-                    requestMicrophonePermission()
-                }
-        }
-    }
-    
-    private func requestMicrophonePermission() {
-        AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            DispatchQueue.main.async {
-                if granted {
-                    print("マイクアクセスが許可されました")
-                } else {
-                    print("マイクアクセスが拒否されました")
-                }
-            }
         }
     }
 }
