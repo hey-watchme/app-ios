@@ -35,7 +35,7 @@ struct PrivacyPolicyView: View {
                             • プロフィール画像（任意）
                             
                             【利用データ】
-                            • 音声録音データ（30分ごとの自動録音）
+                            • 音声録音データ（手動録音、および外部デバイスからのアップロード）
                             • 録音日時とタイムゾーン情報
                             • デバイス識別情報
                             • アプリの利用履歴
@@ -163,10 +163,11 @@ struct PrivacyPolicyView: View {
                             title: "10. お問い合わせ",
                             content: """
                             本ポリシーに関するお問い合わせは、以下の窓口までお願いします。
-                            
+
                             WatchMe Team
                             メール: privacy@watchme.app
-                            
+                            Web: https://hey-watch.me/privacy
+
                             お問い合わせフォーム: アプリ内設定画面より
                             """
                         )

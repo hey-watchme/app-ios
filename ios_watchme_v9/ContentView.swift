@@ -20,9 +20,7 @@ struct ContentView: View {
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
 
-    // NetworkManagerの初期化（録音機能のため必要）
-    @StateObject private var audioRecorder = AudioRecorder()
-    @State private var networkManager: NetworkManager?
+    // 録音機能は新しいRecordingStoreが内部で管理
 
     // 動的な日付範囲管理（無限スクロール対応）
     // 初期値として今日の日付を設定（TabViewが空にならないように）
@@ -214,9 +212,12 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showRecordingSheet) {
-            if let networkManager = networkManager {
-                RecordingView(audioRecorder: audioRecorder, networkManager: networkManager)
-            }
+            RecordingView(
+                deviceManager: deviceManager,
+                userAccountManager: userAccountManager
+            )
+            .environmentObject(deviceManager)
+            .environmentObject(userAccountManager)
         }
         .sheet(isPresented: $showQRScanner) {
             QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in
@@ -248,24 +249,9 @@ struct ContentView: View {
                 .environmentObject(userAccountManager)
         }
         .onAppear {
-            initializeNetworkManager()
-
-            // AudioRecorderの遅延初期化（パフォーマンス改善）
-            audioRecorder.startLazyInitialization()
-
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み
-
             // 日付範囲の初期化
             initializeDateRange()
-        }
-    }
-    
-    private func initializeNetworkManager() {
-        audioRecorder.deviceManager = deviceManager
-        networkManager = NetworkManager(userAccountManager: userAccountManager, deviceManager: deviceManager)
-
-        if let authUser = userAccountManager.currentUser {
-            networkManager?.updateToAuthenticatedUserID(authUser.id)
         }
     }
 

@@ -15,6 +15,7 @@ struct AccountSettingsView: View {
     @State private var showAboutApp = false
     @State private var showTermsOfService = false
     @State private var showPrivacyPolicy = false
+    @State private var showDeleteAccountConfirmation = false
     
     var body: some View {
         NavigationView {
@@ -61,13 +62,24 @@ struct AccountSettingsView: View {
                     }
                 }
                 
-                // ログアウト
+                // アカウント管理
                 Section {
                     Button(action: {
                         showLogoutConfirmation = true
                     }) {
                         HStack {
                             Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
+                                .foregroundColor(.red)
+                            Spacer()
+                        }
+                    }
+
+                    // アカウント削除（プレースホルダー）
+                    Button(action: {
+                        showDeleteAccountConfirmation = true
+                    }) {
+                        HStack {
+                            Label("アカウントを削除", systemImage: "trash")
                                 .foregroundColor(.red)
                             Spacer()
                         }
@@ -92,6 +104,15 @@ struct AccountSettingsView: View {
                 }
             } message: {
                 Text("ログアウトすると、再度ログインが必要になります。")
+            }
+            .alert("アカウントを削除しますか？", isPresented: $showDeleteAccountConfirmation) {
+                Button("キャンセル", role: .cancel) { }
+                Button("削除", role: .destructive) {
+                    // TODO: アカウント削除機能の実装
+                    print("⚠️ アカウント削除機能は未実装です")
+                }
+            } message: {
+                Text("アカウントを削除すると、すべてのデータが完全に削除されます。この操作は取り消せません。")
             }
             .overlay {
                 if isLoggingOut {

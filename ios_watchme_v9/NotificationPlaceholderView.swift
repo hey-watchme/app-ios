@@ -15,7 +15,7 @@ struct NotificationPlaceholderView: View {
     // 現在はデモ用のダミーデータ
     @State private var demoNotifications = [
         DemoNotification(id: "1", title: "分析完了", message: "本日の感情分析が完了しました", time: "5分前", isRead: false),
-        DemoNotification(id: "2", title: "録音リマインダー", message: "30分間の自動録音が開始されました", time: "1時間前", isRead: false),
+        DemoNotification(id: "2", title: "データ更新", message: "新しい分析データが利用可能です", time: "1時間前", isRead: false),
         DemoNotification(id: "3", title: "週次レポート", message: "今週の活動サマリーが利用可能です", time: "昨日", isRead: true),
         DemoNotification(id: "4", title: "デバイス接続", message: "新しいデバイスが正常に接続されました", time: "2日前", isRead: true)
     ]

@@ -80,7 +80,7 @@ struct DemoModeInfoSheet: View {
                             .font(.system(size: 30))
                             .fontWeight(.bold)
 
-                        Text("このデモでは、架空の観測対象の分析結果を見ることができます。「オブザーバー」と呼ばれる音声分析デバイスから30分ごとにデータが送られてくるので、リアルタイムで状態をチェックすることが可能です。WatchMeを通じて何が分かるのか、体験してみてください。")
+                        Text("このデモでは、架空の観測対象の分析結果を見ることができます。「オブザーバー」と呼ばれる音声分析デバイスから定期的にデータが送られてくるので、リアルタイムで状態をチェックすることが可能です。WatchMeを通じて何が分かるのか、体験してみてください。")
                             .font(.system(size: 16))
                             .foregroundColor(.primary)
                             .fixedSize(horizontal: false, vertical: true)
