@@ -175,7 +175,6 @@ class AWSManager: ObservableObject {
         let lowercaseId = id.lowercased()
         // S3の実際のURL形式（ap-southeast-2リージョン、watchme-avatarsバケット）
         let s3URL = "https://watchme-avatars.s3.ap-southeast-2.amazonaws.com/\(type)/\(lowercaseId)/avatar.jpg"
-        print("🔗 Avatar URL: \(s3URL)")
         return URL(string: s3URL)!
     }
     

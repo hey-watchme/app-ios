@@ -95,30 +95,27 @@ struct AvatarView: View {
     private func loadAvatar() {
         Task {
             guard let id = id else {
-                print("ℹ️ ゲストモード - アバター読み込みスキップ（type: \(type)）")
                 isLoadingAvatar = false
                 return
             }
-            
+
             isLoadingAvatar = true
-            
+
             if useS3 {
                 // S3のURLを設定（Avatar Uploader API経由でアップロード済み）
                 let baseURL = AWSManager.shared.getAvatarURL(type: type.s3Type, id: id)
                 let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
                 self.avatarUrl = URL(string: "\(baseURL.absoluteString)?t=\(timestamp)")
-                print("🌐 Loading \(type.s3Type) avatar from S3: \(self.avatarUrl?.absoluteString ?? "nil")")
             } else {
                 // Supabaseから取得（既存の実装、userのみ対応）
                 if type == .user {
                     self.avatarUrl = await dataManager.fetchAvatarUrl(for: id)
                 } else {
                     // subjectの場合はS3のみ対応
-                    print("⚠️ Subject avatars are only supported via S3")
                     self.avatarUrl = nil
                 }
             }
-            
+
             self.isLoadingAvatar = false
         }
     }

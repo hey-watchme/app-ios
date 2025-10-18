@@ -59,6 +59,10 @@ struct SimpleDashboardView: View {
     @State private var isAddingComment = false
     @FocusState private var isCommentFieldFocused: Bool  // キーボード制御用
 
+    // コメント通報用
+    @State private var showReportCommentSheet = false
+    @State private var reportTargetComment: SubjectComment?
+
     // モーダル表示管理
     @State private var showVibeSheet = false
     @State private var showBehaviorSheet = false
@@ -256,10 +260,7 @@ struct SimpleDashboardView: View {
                 if cacheKeys.count > maxCacheSize {
                     let oldKey = cacheKeys.removeFirst()
                     dataCache.removeValue(forKey: oldKey)
-                    print("🗑️ [Cache LRU] Removed old cache for key: \(oldKey)")
                 }
-
-                print("💾 [Cache SAVED] Data cached for \(dateString) (total: \(cacheKeys.count)/\(maxCacheSize))")
             }
         }
         .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
@@ -269,11 +270,9 @@ struct SimpleDashboardView: View {
                 // キャッシュもクリア
                 dataCache.removeAll()
                 cacheKeys.removeAll()
-                print("🗑️ [Cache CLEARED] All cache cleared due to device change")
 
                 // 📊 Phase 5-A: 初回読み込みフラグを設定（デバウンススキップ）
                 isInitialLoad = true
-                print("⚡️ [Initial Load Flag] Set to true for immediate data loading")
             }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshDashboard"))) { notification in
@@ -403,6 +402,15 @@ struct SimpleDashboardView: View {
                             }
                         }
                     }
+            }
+        }
+        .sheet(isPresented: $showReportCommentSheet) {
+            if let comment = reportTargetComment {
+                FeedbackFormView(context: .reportComment(
+                    commentId: comment.id,
+                    commentText: comment.commentText
+                ))
+                .environmentObject(userAccountManager)
             }
         }
     }
@@ -943,22 +951,41 @@ struct SimpleDashboardView: View {
                     .font(.system(size: 15))
                     .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
                     .fixedSize(horizontal: false, vertical: true)
-                
-                // 自分のコメントの場合のみ削除ボタン表示（右下に配置）
-                if let currentUserId = userAccountManager.currentUser?.profile?.userId,
-                   comment.userId == currentUserId {
+
+                // アクションボタン（削除・通報）
+                if let currentUserId = userAccountManager.currentUser?.profile?.userId {
                     HStack {
                         Spacer()
-                        Button {
-                            Task {
-                                await deleteComment(commentId: comment.id)
+
+                        // 自分のコメントの場合は削除ボタン
+                        if comment.userId == currentUserId {
+                            Button {
+                                Task {
+                                    await deleteComment(commentId: comment.id)
+                                }
+                            } label: {
+                                Image(systemName: "trash")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Color.safeColor("BehaviorTextTertiary").opacity(0.5))
                             }
-                        } label: {
-                            Image(systemName: "trash")
-                                .font(.system(size: 10))
-                                .foregroundStyle(Color.safeColor("BehaviorTextTertiary").opacity(0.5))
+                            .buttonStyle(PlainButtonStyle())
                         }
-                        .buttonStyle(PlainButtonStyle())
+                        // 他人のコメントの場合は通報ボタン
+                        else {
+                            Button {
+                                reportTargetComment = comment
+                                showReportCommentSheet = true
+                            } label: {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "exclamationmark.bubble")
+                                        .font(.system(size: 10))
+                                    Text("通報")
+                                        .font(.system(size: 10))
+                                }
+                                .foregroundStyle(Color.safeColor("BehaviorTextTertiary").opacity(0.5))
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                     }
                     .padding(.top, 4)
                 }

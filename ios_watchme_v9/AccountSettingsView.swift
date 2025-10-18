@@ -16,6 +16,7 @@ struct AccountSettingsView: View {
     @State private var showTermsOfService = false
     @State private var showPrivacyPolicy = false
     @State private var showDeleteAccountConfirmation = false
+    @State private var showFeedbackForm = false
     
     var body: some View {
         NavigationView {
@@ -48,7 +49,7 @@ struct AccountSettingsView: View {
                     .onTapGesture {
                         showTermsOfService = true
                     }
-                    
+
                     HStack {
                         Label("プライバシーポリシー", systemImage: "lock.shield")
                         Spacer()
@@ -59,6 +60,21 @@ struct AccountSettingsView: View {
                     .contentShape(Rectangle())
                     .onTapGesture {
                         showPrivacyPolicy = true
+                    }
+                }
+
+                // サポート
+                Section {
+                    HStack {
+                        Label("お問い合わせ", systemImage: "envelope")
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .foregroundColor(.gray)
+                            .font(.system(size: 14))
+                    }
+                    .contentShape(Rectangle())
+                    .onTapGesture {
+                        showFeedbackForm = true
                     }
                 }
                 
@@ -141,6 +157,10 @@ struct AccountSettingsView: View {
             }
             .sheet(isPresented: $showPrivacyPolicy) {
                 PrivacyPolicyView()
+            }
+            .sheet(isPresented: $showFeedbackForm) {
+                FeedbackFormView(context: .general)
+                    .environmentObject(userAccountManager)
             }
         }
     }

@@ -1098,50 +1098,40 @@ class SupabaseDataManager: ObservableObject {
     
     /// コメントを追加
     func addComment(subjectId: String, userId: String, commentText: String, date: Date) async throws {
-        print("💬 Adding comment for subject: \(subjectId) on date: \(date)")
-        
         // 日付をYYYY-MM-DD形式に変換
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         let dateString = dateFormatter.string(from: date)
-        
+
         let comment = [
             "subject_id": subjectId,
             "user_id": userId,
             "comment_text": commentText,
             "date": dateString  // 日付を追加
         ]
-        
+
         try await supabase
             .from("subject_comments")
             .insert(comment)
             .execute()
-        
-        print("✅ Comment added successfully for date: \(dateString)")
     }
     
     /// コメントを削除
     func deleteComment(commentId: String) async throws {
-        print("🗑️ Deleting comment: \(commentId)")
-        
         try await supabase
             .from("subject_comments")
             .delete()
             .eq("comment_id", value: commentId)
             .execute()
-        
-        print("✅ Comment deleted successfully")
     }
     
     /// コメントを再取得（リフレッシュ用）
     func fetchComments(subjectId: String, date: Date) async -> [SubjectComment] {
-        print("💬 Fetching comments for subject: \(subjectId) on date: \(date)")
-        
         // 日付をYYYY-MM-DD形式に変換
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         let dateString = dateFormatter.string(from: date)
-        
+
         do {
             // まずコメントを取得
             let comments: [SubjectComment] = try await supabase
@@ -1153,10 +1143,10 @@ class SupabaseDataManager: ObservableObject {
                 .limit(50)
                 .execute()
                 .value
-            
+
             // ユーザーIDのリストを作成
             let userIds = Array(Set(comments.map { $0.userId }))
-            
+
             if !userIds.isEmpty {
                 // ユーザー情報を一括取得
                 struct UserInfo: Codable {
@@ -1164,17 +1154,17 @@ class SupabaseDataManager: ObservableObject {
                     let name: String?
                     let avatar_url: String?
                 }
-                
+
                 let users: [UserInfo] = try await supabase
                     .from("users")
                     .select("user_id, name, avatar_url")
                     .in("user_id", values: userIds)
                     .execute()
                     .value
-                
+
                 // ユーザー情報を辞書化
                 let userDict = Dictionary(uniqueKeysWithValues: users.map { ($0.user_id, $0) })
-                
+
                 // コメントにユーザー情報を結合
                 let enrichedComments = comments.map { comment in
                     let userInfo = userDict[comment.userId]
@@ -1189,16 +1179,29 @@ class SupabaseDataManager: ObservableObject {
                         userAvatarUrl: userInfo?.avatar_url
                     )
                 }
-                
-                print("✅ Fetched \(enrichedComments.count) comments with user info for date: \(dateString)")
+
                 return enrichedComments
             }
-            
-            print("✅ Fetched \(comments.count) comments for date: \(dateString)")
+
             return comments
         } catch {
             print("❌ Failed to fetch comments: \(error)")
             return []
+        }
+    }
+
+    // MARK: - Feedback / Report
+
+    /// フィードバック・通報を送信
+    static func submitFeedback(request: FeedbackRequest) async throws {
+        do {
+            try await supabase
+                .from("messages")
+                .insert(request)
+                .execute()
+        } catch {
+            print("❌ Failed to submit feedback: \(error)")
+            throw error
         }
     }
 }
