@@ -10,6 +10,7 @@ import SwiftUI
 struct AccountSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var userAccountManager: UserAccountManager
+    @EnvironmentObject var deviceManager: DeviceManager
     @State private var showLogoutConfirmation = false
     @State private var isLoggingOut = false
     @State private var showAboutApp = false
@@ -17,6 +18,9 @@ struct AccountSettingsView: View {
     @State private var showPrivacyPolicy = false
     @State private var showDeleteAccountConfirmation = false
     @State private var showFeedbackForm = false
+    @State private var isDeletingAccount = false
+    @State private var deleteAccountError: String?
+    @State private var showDeleteAccountError = false
     
     var body: some View {
         NavigationView {
@@ -124,14 +128,20 @@ struct AccountSettingsView: View {
             .alert("アカウントを削除しますか？", isPresented: $showDeleteAccountConfirmation) {
                 Button("キャンセル", role: .cancel) { }
                 Button("削除", role: .destructive) {
-                    // TODO: アカウント削除機能の実装
-                    print("⚠️ アカウント削除機能は未実装です")
+                    Task {
+                        await performDeleteAccount()
+                    }
                 }
             } message: {
                 Text("アカウントを削除すると、すべてのデータが完全に削除されます。この操作は取り消せません。")
             }
+            .alert("削除エラー", isPresented: $showDeleteAccountError) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text(deleteAccountError ?? "アカウント削除に失敗しました")
+            }
             .overlay {
-                if isLoggingOut {
+                if isLoggingOut || isDeletingAccount {
                     Color.black.opacity(0.4)
                         .ignoresSafeArea()
                         .overlay {
@@ -139,7 +149,7 @@ struct AccountSettingsView: View {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                     .scaleEffect(1.2)
-                                Text("ログアウト中...")
+                                Text(isDeletingAccount ? "アカウント削除中..." : "ログアウト中...")
                                     .foregroundColor(.white)
                                     .font(.system(size: 16))
                             }
@@ -182,12 +192,48 @@ struct AccountSettingsView: View {
         isLoggingOut = false
         dismiss()
     }
+
+    private func performDeleteAccount() async {
+        isDeletingAccount = true
+
+        guard let userId = userAccountManager.currentUser?.profile?.userId else {
+            print("❌ ユーザーIDが取得できません")
+            deleteAccountError = "ユーザー情報が見つかりません"
+            isDeletingAccount = false
+            showDeleteAccountError = true
+            return
+        }
+
+        do {
+            // NetworkManagerを必要な時にだけ作成（軽量化）
+            let networkManager = NetworkManager(userAccountManager: userAccountManager, deviceManager: deviceManager)
+
+            // 管理画面APIでアカウント削除
+            try await networkManager.deleteAccount(userId: userId)
+
+            print("✅ アカウント削除完了 - ログアウト処理を開始")
+
+            // Supabaseからサインアウト
+            await userAccountManager.signOut()
+
+            // 画面を閉じる
+            isDeletingAccount = false
+            dismiss()
+
+        } catch {
+            print("❌ アカウント削除エラー: \(error)")
+            deleteAccountError = error.localizedDescription
+            isDeletingAccount = false
+            showDeleteAccountError = true
+        }
+    }
 }
 
 #Preview {
     let deviceManager = DeviceManager()
     let userAccountManager = UserAccountManager(deviceManager: deviceManager)
-    
+
     return AccountSettingsView()
         .environmentObject(userAccountManager)
+        .environmentObject(deviceManager)
 }

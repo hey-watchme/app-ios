@@ -522,26 +522,133 @@ def delete_s3_files(user_id: str):
 
 ---
 
-## 🔄 次のステップ
+## 🔄 実装状況
 
-### Phase 1（App Storeリリース前）
-1. ✅ データベースインデックスの確認・作成
-2. バックエンドAPI実装の着手
-3. データベース削除スクリプトの作成
-4. S3削除機能の実装（完全削除）
-5. テスト環境での削除フロー検証
-6. 本番環境へのデプロイ
+### ✅ Phase 1-A（実装完了 - 2025-10-19）
 
-### Phase 2（サービス成熟後）
-1. 法務専門家による機械学習データ保持のレビュー
-2. プライバシーポリシーの更新
-3. 同意取得フローの設計・実装
-4. 音響特徴量抽出・匿名化処理の実装
-5. フィードバックループの構築
+**管理画面API経由での削除機能**
+
+1. ✅ **管理画面API実装済み**
+   - エンドポイント: `DELETE https://admin.hey-watch.me/api/users/{user_id}`
+   - 削除対象:
+     - `user_devices` テーブル
+     - `auth.users` テーブル（Supabase Admin API使用）
+     - `public.users` テーブル（ON DELETE CASCADE）
+
+2. ✅ **iOSアプリ統合完了**
+   - `NetworkManager.swift`: `deleteAccount(userId:)` メソッド追加（655-689行目）
+   - `AccountSettingsView.swift`: 削除フロー実装（196-229行目）
+   - パフォーマンス最適化: NetworkManagerを遅延初期化（削除時のみインスタンス化）
+   - 実機テスト: 成功
+   - ビルド検証: 成功
+
+3. ✅ **音声データ自動削除**
+   - Janitor APIにより6時間ごとに自動削除
+   - アカウント削除時の手動削除は**不要**
+
+### 🚧 Phase 1-B（残タスク）
+
+**管理画面APIの拡張**
+
+1. [ ] **通知データの削除**
+   - `notifications` テーブルから該当ユーザーの通知を削除
+   - 実装場所: `/Users/kaya.matsumoto/projects/watchme/admin/main.py`
+
+2. [ ] **S3アバター画像の削除**
+   - `avatars/users/{user_id}/avatar.jpg` を削除
+   - boto3を使用（requirements.txtに追加済み）
+   - 実装場所: `/Users/kaya.matsumoto/projects/watchme/admin/main.py`
+
+3. [ ] **関連データの削除**
+   - `dashboard_summary` テーブル（device_id経由）
+   - `subject_comments` テーブル
+   - `subjects` テーブル（created_by_user_id）
+
+4. [ ] **本番環境への反映**
+   - GitHub ActionsでCI/CD自動デプロイ（既存システム）
+   - mainブランチにプッシュすると自動デプロイされる
+
+### 📝 Phase 1-B 実装例
+
+```python
+# /Users/kaya.matsumoto/projects/watchme/admin/main.py
+
+@app.delete("/api/users/{user_id}")
+async def delete_user(user_id: str):
+    try:
+        # 1. デバイスID取得
+        devices = await supabase_client.select('user_devices', filters={'user_id': user_id})
+        device_ids = [d['device_id'] for d in devices]
+
+        # 2. dashboard_summary削除（デバイスごと）
+        for device_id in device_ids:
+            await supabase_client.delete('dashboard_summary', {'device_id': device_id})
+
+        # 3. subject_comments削除
+        await supabase_client.delete('subject_comments', {'user_id': user_id})
+
+        # 4. notifications削除
+        await supabase_client.delete('notifications', {'user_id': user_id})
+
+        # 5. subjects削除
+        await supabase_client.delete('subjects', {'created_by_user_id': user_id})
+
+        # 6. S3アバター画像削除
+        delete_avatar_image(user_id)
+
+        # 7. user_devices削除（既存）
+        await supabase_client.delete('user_devices', {'user_id': user_id})
+
+        # 8. auth.users削除（既存）
+        await supabase_client.delete_auth_user(user_id)
+
+        return {"success": True, "message": "完全削除しました"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+def delete_avatar_image(user_id: str):
+    """S3からアバター画像を削除"""
+    import boto3
+    import os
+
+    s3_client = boto3.client('s3')
+    bucket = os.getenv('S3_BUCKET_NAME')  # 環境変数に追加必要
+    avatar_key = f'avatars/users/{user_id}/avatar.jpg'
+
+    try:
+        s3_client.delete_object(Bucket=bucket, Key=avatar_key)
+        print(f"✅ S3アバター削除: {avatar_key}")
+    except Exception as e:
+        print(f"⚠️ S3アバター削除エラー（存在しない可能性）: {e}")
+```
+
+### 🟢 Phase 2（将来対応）
+
+1. [ ] 法務専門家による機械学習データ保持のレビュー
+2. [ ] プライバシーポリシーの更新
+3. [ ] 同意取得フローの設計・実装
+4. [ ] 音響特徴量抽出・匿名化処理の実装
+5. [ ] フィードバックループの構築
 
 ---
 
-**最終更新日**: 2025-10-18
+## 📌 重要な補足情報
+
+### 音声データについて
+- ❌ **手動削除は不要**: Janitor APIが6時間ごとに自動削除
+- ✅ **保存期間**: 分析完了後、最長24時間以内
+- ✅ **削除条件**: 文字起こし・行動分析・感情分析がすべて完了
+
+### S3バケット名の環境変数
+管理画面の`.env`に以下を追加する必要があります:
+```bash
+S3_BUCKET_NAME=watchme-vault
+AWS_REGION=ap-southeast-2
+```
+
+---
+
+**最終更新日**: 2025-10-19
 **担当者**: 開発チーム
-**ステータス**: Phase 1仕様策定完了 / Phase 2検討中
-**リリース方針**: Phase 1（完全削除）で審査申請 → Phase 2は将来実装
+**ステータス**: Phase 1-A完了 / Phase 1-B残タスクあり / Phase 2検討中
+**リリース方針**: Phase 1-A（基本削除）で審査申請可能 → Phase 1-B（完全削除）でリリース → Phase 2は将来実装

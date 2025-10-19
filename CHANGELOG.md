@@ -1,5 +1,19 @@
 # 更新履歴
 
+## 2025年10月
+
+### v9.29.0 (2025-10-19)
+- **アカウント削除機能の実装（App Store審査対応）**:
+  - App Store Guidelines 5.1.1に準拠したアカウント削除機能を追加
+  - `NetworkManager.swift`に`deleteAccount(userId:)`メソッドを実装（655-689行目）
+  - `AccountSettingsView.swift`に削除フローを実装（196-229行目）
+  - 管理画面API経由でユーザーデータを完全削除（`DELETE https://admin.hey-watch.me/api/users/{user_id}`）
+  - 削除対象: `user_devices`, `auth.users`（Supabase Admin API）, `public.users`（CASCADE）
+  - パフォーマンス最適化: NetworkManagerを遅延初期化（削除時のみインスタンス化）
+  - 実機テスト完了・ビルド検証完了
+- **関連ドキュメント**:
+  - [ACCOUNT_DELETION.md](./docs/ACCOUNT_DELETION.md) - 実装仕様とPhase 1-B残タスク
+
 ## 2025年9月
 
 ### v9.28.0 (2025-09-22)

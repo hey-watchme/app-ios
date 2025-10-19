@@ -614,41 +614,76 @@ class NetworkManager: ObservableObject {
     // 同一ファイル名での上書きテスト
     func testDuplicateFileUpload(_ recording: RecordingModel, completion: @escaping (Bool, String) -> Void) {
         print("🧪 同一ファイル名アップロードテスト: \(recording.fileName)")
-        
+
         // 通常のアップロード処理を実行し、結果を監視
         var statusObserver: AnyCancellable?
-        
+
         statusObserver = $connectionStatus
             .combineLatest($currentUploadingFile)
             .sink { status, uploadingFile in
-                
+
                 if uploadingFile == recording.fileName {
                     switch status {
                     case .connected:
                         print("✅ 同一ファイル名アップロード成功")
                         statusObserver?.cancel()
                         completion(true, "同一ファイル名でのアップロード成功（サーバー側で上書き処理された可能性）")
-                        
+
                     case .failed:
                         print("❌ 同一ファイル名アップロード失敗")
                         statusObserver?.cancel()
                         completion(false, "同一ファイル名でのアップロード失敗（サーバー側で重複拒否された可能性）")
-                        
+
                     default:
                         break
                     }
                 }
             }
-        
+
         // 実際のアップロードを実行
         uploadRecording(recording) { _ in
             // completion handler is handled by statusObserver
         }
-        
+
         // タイムアウト処理
         DispatchQueue.main.asyncAfter(deadline: .now() + 30) {
             statusObserver?.cancel()
             completion(false, "テストタイムアウト")
         }
+    }
+
+    // アカウント削除（管理画面API経由）
+    func deleteAccount(userId: String) async throws {
+        let adminURL = "https://admin.hey-watch.me/api/users/\(userId)"
+
+        guard let url = URL(string: adminURL) else {
+            throw NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "無効なURL"])
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 30.0
+
+        print("🗑️ アカウント削除リクエスト送信: \(adminURL)")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "NetworkManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "無効なレスポンス"])
+        }
+
+        print("📡 アカウント削除レスポンス: \(httpResponse.statusCode)")
+
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("📡 レスポンスボディ: \(responseString)")
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let errorMessage = "アカウント削除失敗: ステータスコード \(httpResponse.statusCode)"
+            print("❌ \(errorMessage)")
+            throw NSError(domain: "NetworkManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+        }
+
+        print("✅ アカウント削除成功")
     }
 } 

@@ -49,7 +49,7 @@ struct ios_watchme_v9App: App {
 
         print("⏱️ [APP-INIT] アプリ初期化完了: \(Date().timeIntervalSince(startTime))秒")
     }
-    
+
     var body: some Scene {
         WindowGroup {
             MainAppView()
