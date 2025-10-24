@@ -22,6 +22,8 @@ struct ios_watchme_v9App: App {
     @StateObject private var deviceManager = DeviceManager()
     @StateObject private var userAccountManager: UserAccountManager
     @StateObject private var dataManager: SupabaseDataManager
+    @StateObject private var toastManager = ToastManager.shared
+    @StateObject private var recordingStore: RecordingStore
 
     init() {
         let startTime = Date()
@@ -43,9 +45,16 @@ struct ios_watchme_v9App: App {
         let dataManager = SupabaseDataManager(userAccountManager: userAccountManager)
         print("⏱️ [APP-INIT] SupabaseDataManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
 
+        let recordingStore = RecordingStore(
+            deviceManager: deviceManager,
+            userAccountManager: userAccountManager
+        )
+        print("⏱️ [APP-INIT] RecordingStore初期化完了: \(Date().timeIntervalSince(startTime))秒")
+
         _deviceManager = StateObject(wrappedValue: deviceManager)
         _userAccountManager = StateObject(wrappedValue: userAccountManager)
         _dataManager = StateObject(wrappedValue: dataManager)
+        _recordingStore = StateObject(wrappedValue: recordingStore)
 
         print("⏱️ [APP-INIT] アプリ初期化完了: \(Date().timeIntervalSince(startTime))秒")
     }
@@ -56,6 +65,8 @@ struct ios_watchme_v9App: App {
                 .environmentObject(userAccountManager)
                 .environmentObject(deviceManager)
                 .environmentObject(dataManager)
+                .environmentObject(toastManager)
+                .environmentObject(recordingStore)
         }
     }
 }
@@ -65,6 +76,7 @@ struct MainAppView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
+    @EnvironmentObject var toastManager: ToastManager
     @State private var showLogin = false
     @State private var showOnboarding = false
     @State private var onboardingCompleted = false  // オンボーディング完了フラグ
@@ -75,14 +87,24 @@ struct MainAppView: View {
 
     // パフォーマンス計測用
     @State private var viewStartTime = Date()
-    
+
     // フッタータブの定義
     enum FooterTab {
         case home
         case myPage
     }
-    
+
     var body: some View {
+        ZStack {
+            // メインコンテンツ
+            mainContent
+
+            // グローバルトーストオーバーレイ（最前面）
+            ToastOverlay(toastManager: toastManager)
+        }
+    }
+
+    private var mainContent: some View {
         Group {
             if userAccountManager.isCheckingAuthStatus {
                 // 認証状態確認中：ローディング画面
@@ -261,6 +283,8 @@ struct MainAppView: View {
                 // 閲覧専用モードに移行（ログアウト時）
                 selectedTab = .home
                 onboardingCompleted = false  // オンボーディング完了フラグをリセット
+                // 📊 パフォーマンス最適化: ログアウト時にSubjectキャッシュをクリア
+                dataManager.clearAllSubjectCache()
                 print("🔄 閲覧専用モード - 初期状態にリセット")
             }
         }

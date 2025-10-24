@@ -47,6 +47,7 @@ enum BannerType: Equatable {
     case uploading(fileName: String)  // 送信中
     case uploadSuccess                // 送信完了
     case uploadFailure                // 送信失敗
+    case pushNotification(message: String)  // プッシュ通知
 }
 
 // MARK: - RecordingStore（司令塔）
@@ -379,49 +380,47 @@ final class RecordingStore: ObservableObject {
     private func attemptAutoUpload(_ recording: RecordingModel) async {
         print("🚀 RecordingStore: 自動アップロード開始 - \(recording.fileName)")
 
-        // バナー表示
-        state.bannerType = .uploading(fileName: recording.fileName)
-        state.bannerProgress = 0.0
+        // トースト表示（送信中）
+        ToastManager.shared.showUploading(
+            title: "送信中...",
+            subtitle: recording.fileName,
+            progress: 0.0
+        )
 
         do {
             // Store層がUploadRequestを構築
             let uploadRequest = createUploadRequest(for: recording)
 
             // プログレス更新
-            state.bannerProgress = 0.5
+            ToastManager.shared.showUploading(
+                title: "送信中...",
+                subtitle: recording.fileName,
+                progress: 0.5
+            )
 
             // アップロード実行
             try await uploaderService.upload(uploadRequest)
 
             // 成功
-            state.bannerProgress = 1.0
             try await audioService.deleteRecordingFile(url: recording.getFileURL())
             print("✅ RecordingStore: 自動アップロード成功、ファイル削除済み")
 
-            // 成功バナー表示
-            state.bannerType = .uploadSuccess
-
-            // 3秒後に自動で消す
-            Task {
-                try? await Task.sleep(nanoseconds: 3_000_000_000)
-                state.bannerType = nil
-                state.bannerProgress = nil
-            }
+            // 成功トースト表示
+            ToastManager.shared.showSuccess(
+                title: "送信完了",
+                subtitle: "分析結果をお待ちください"
+            )
 
         } catch {
             // 失敗：リストに追加
             state.recordings.insert(recording, at: 0)
             print("❌ RecordingStore: 自動アップロード失敗、リストに追加 - \(error)")
 
-            // 失敗バナー表示
-            state.bannerType = .uploadFailure
-
-            // 5秒後に自動で消す
-            Task {
-                try? await Task.sleep(nanoseconds: 5_000_000_000)
-                state.bannerType = nil
-                state.bannerProgress = nil
-            }
+            // 失敗トースト表示
+            ToastManager.shared.showError(
+                title: "送信失敗",
+                subtitle: "ネットワークのある環境でもう一度送信してください"
+            )
         }
     }
 
@@ -436,10 +435,13 @@ final class RecordingStore: ObservableObject {
             let total = state.uploadStats.success + state.uploadStats.failure + state.uploadQueue.count + 1
             let progress = Double(state.uploadStats.success + state.uploadStats.failure) / Double(total)
 
-            // バナー更新
-            state.bannerType = .uploading(fileName: recording.fileName)
-            state.bannerProgress = progress
+            // トースト更新（送信中）
             state.currentUploadingFile = recording.fileName
+            ToastManager.shared.showUploading(
+                title: "送信中...",
+                subtitle: recording.fileName,
+                progress: progress
+            )
 
             do {
                 // Store層がUploadRequestを構築
@@ -468,41 +470,29 @@ final class RecordingStore: ObservableObject {
 
         // 完了処理
         state.isUploading = false
-        state.bannerProgress = 1.0
         state.currentUploadingFile = nil
 
-        // 結果バナー表示
+        // 結果トースト表示
         if state.uploadStats.failure == 0 {
-            state.bannerType = .uploadSuccess
+            ToastManager.shared.showSuccess(
+                title: "送信完了",
+                subtitle: "すべてアップロードしました（\(state.uploadStats.success)件）"
+            )
+        } else if state.uploadStats.success > 0 {
+            ToastManager.shared.showError(
+                title: "一部失敗",
+                subtitle: "成功: \(state.uploadStats.success)件、失敗: \(state.uploadStats.failure)件"
+            )
         } else {
-            state.bannerType = .uploadFailure
+            ToastManager.shared.showError(
+                title: "送信失敗",
+                subtitle: "アップロードに失敗しました"
+            )
         }
 
-        // 自動で消す
-        Task {
-            try? await Task.sleep(nanoseconds: 3_000_000_000)
-            state.bannerType = nil
-            state.bannerProgress = nil
-        }
-
-        // 結果メッセージ
-        showUploadResult()
+        print("📊 RecordingStore: アップロード結果 - 成功: \(state.uploadStats.success), 失敗: \(state.uploadStats.failure)")
     }
 
-    private func showUploadResult() {
-        let stats = state.uploadStats
-
-        if stats.failure == 0 {
-            state.errorMessage = "すべてアップロードしました（\(stats.success)件）"
-        } else if stats.success > 0 {
-            state.errorMessage = "アップロード完了\n成功: \(stats.success)件、失敗: \(stats.failure)件"
-        } else {
-            state.errorMessage = "アップロードに失敗しました"
-        }
-
-        state.showError = true
-        print("📊 RecordingStore: アップロード結果 - 成功: \(stats.success), 失敗: \(stats.failure)")
-    }
 
     private func loadRecordings() async {
         do {

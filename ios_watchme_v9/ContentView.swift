@@ -212,12 +212,9 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showRecordingSheet) {
-            RecordingView(
-                deviceManager: deviceManager,
-                userAccountManager: userAccountManager
-            )
-            .environmentObject(deviceManager)
-            .environmentObject(userAccountManager)
+            RecordingView()
+                .environmentObject(deviceManager)
+                .environmentObject(userAccountManager)
         }
         .sheet(isPresented: $showQRScanner) {
             QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in

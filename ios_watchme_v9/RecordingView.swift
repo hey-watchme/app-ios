@@ -10,7 +10,7 @@ import SwiftUI
 
 struct RecordingView: View {
     // MARK: - Properties
-    @StateObject private var store: RecordingStore
+    @EnvironmentObject var store: RecordingStore
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var userAccountManager: UserAccountManager
@@ -18,15 +18,6 @@ struct RecordingView: View {
     // UI状態
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false
-
-    // MARK: - Initialization
-    init(deviceManager: DeviceManager, userAccountManager: UserAccountManager) {
-        // RecordingStoreを初期化（依存性注入）
-        _store = StateObject(wrappedValue: RecordingStore(
-            deviceManager: deviceManager,
-            userAccountManager: userAccountManager
-        ))
-    }
 
     // MARK: - Body
     var body: some View {
@@ -67,20 +58,6 @@ struct RecordingView: View {
                         handleRecordingButtonTapped()
                     }
                 }
-
-                // バナー通知（上部）
-                VStack {
-                    if let bannerType = store.state.bannerType {
-                        NotificationBanner(
-                            type: bannerType,
-                            progress: store.state.bannerProgress
-                        )
-                        .padding(.top, 8)
-                        .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                    Spacer()
-                }
-                .animation(.spring(response: 0.3), value: store.state.bannerType)
             }
             .navigationTitle("録音")
             .navigationBarTitleDisplayMode(.inline)
@@ -118,9 +95,11 @@ struct RecordingView: View {
 
     private func handleRecordingButtonTapped() {
         if store.state.isRecording {
-            // 録音停止
+            // 録音停止 → シートを閉じる
             Task {
                 await store.stopRecording()
+                // 録音停止後、シートを閉じる
+                dismiss()
             }
         } else {
             // 権限チェック
@@ -438,81 +417,48 @@ struct RecordingControlButton: View {
     }
 }
 
-/// 通知バナー（iOSネイティブスタイル）
-struct NotificationBanner: View {
-    let type: BannerType
-    let progress: Double?
-
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 12) {
-                icon
-                    .font(.title3)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-
-                    if let subtitle = subtitle {
-                        Text(subtitle)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-
-                Spacer()
-            }
-
-            // プログレスバー（送信中のみ）
-            if case .uploading = type, let progress = progress {
-                ProgressView(value: progress, total: 1.0)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .blue))
-            }
-        }
-        .padding()
-        .background(Color(.secondarySystemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.1), radius: 8, x: 0, y: 4)
-        .padding(.horizontal)
-    }
-
-    private var icon: some View {
-        Group {
-            switch type {
-            case .uploading:
-                Image(systemName: "arrow.up.circle.fill")
-                    .foregroundColor(.blue)
-            case .uploadSuccess:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundColor(.green)
-            case .uploadFailure:
-                Image(systemName: "exclamationmark.triangle.fill")
-                    .foregroundColor(.orange)
-            }
-        }
-    }
-
-    private var title: String {
-        switch type {
-        case .uploading:
-            return "送信中..."
-        case .uploadSuccess:
-            return "送信完了"
-        case .uploadFailure:
-            return "送信失敗"
-        }
-    }
-
-    private var subtitle: String? {
-        switch type {
+// MARK: - BannerType Extension（UnifiedBanner連携）
+extension BannerType {
+    func toUnifiedStyle() -> BannerStyle {
+        switch self {
         case .uploading(let fileName):
-            return fileName
+            return .detailed(
+                title: "送信中...",
+                subtitle: fileName,
+                icon: "arrow.up.circle.fill",
+                iconColor: .blue,
+                progress: 0.0  // RecordingStoreから実際の進捗を受け取る
+            )
         case .uploadSuccess:
-            return "分析結果をお待ちください"
+            return .detailed(
+                title: "送信完了",
+                subtitle: "分析結果をお待ちください",
+                icon: "checkmark.circle.fill",
+                iconColor: .green,
+                progress: nil
+            )
         case .uploadFailure:
-            return "ネットワークのある環境でもう一度送信してください"
+            return .detailed(
+                title: "送信失敗",
+                subtitle: "ネットワークのある環境でもう一度送信してください",
+                icon: "exclamationmark.triangle.fill",
+                iconColor: .orange,
+                progress: nil
+            )
+        case .pushNotification(let message):
+            return .simple(
+                message: message,
+                icon: "sparkles"
+            )
+        }
+    }
+
+    func shouldAutoDismiss() -> Bool {
+        switch self {
+        case .uploading:
+            return false  // 送信中は自動非表示しない
+        case .uploadSuccess, .uploadFailure, .pushNotification:
+            return true  // 完了/失敗/プッシュ通知は8秒後に自動非表示
         }
     }
 }
@@ -532,11 +478,10 @@ extension RecordingStore {
 #Preview {
     let deviceManager = DeviceManager()
     let userAccountManager = UserAccountManager(deviceManager: deviceManager)
+    let recordingStore = RecordingStore(deviceManager: deviceManager, userAccountManager: userAccountManager)
 
-    RecordingView(
-        deviceManager: deviceManager,
-        userAccountManager: userAccountManager
-    )
-    .environmentObject(deviceManager)
-    .environmentObject(userAccountManager)
+    RecordingView()
+        .environmentObject(deviceManager)
+        .environmentObject(userAccountManager)
+        .environmentObject(recordingStore)
 }

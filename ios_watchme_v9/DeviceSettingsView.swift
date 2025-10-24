@@ -92,7 +92,12 @@ struct DeviceSettingsView: View {
             }
         }
         .sheet(item: $editingContext, onDismiss: {
-            Task { await loadAllData() }
+            // 📊 パフォーマンス最適化: Subject更新時は該当デバイスのみ再取得
+            // ⚠️ 旧: loadAllData() → 全データ再読み込み（重い）
+            // ✅ 新: 該当デバイスのSubjectのみ再取得（軽い）
+            if let deviceId = editingContext?.deviceID {
+                Task { await reloadSubject(for: deviceId) }
+            }
         }) { context in
             SubjectRegistrationView(
                 deviceID: context.deviceID,
@@ -104,12 +109,10 @@ struct DeviceSettingsView: View {
             .environmentObject(userAccountManager)
         }
         .sheet(item: $deviceEditingContext, onDismiss: {
-            Task {
-                if let userId = userAccountManager.currentUser?.profile?.userId {
-                    await deviceManager.fetchUserDevices(for: userId)
-                    await loadAllData()
-                }
-            }
+            // 📊 パフォーマンス最適化: デバイス編集後の不要な再読み込みを削除
+            // ⚠️ 旧: fetchUserDevices() + loadAllData() → 全データ再読み込み（重い、チラつきの原因）
+            // ✅ 新: 何もしない（デバイス情報は既に取得済み、変更があればdeviceManagerが自動で反映）
+            // 注意: デバイス削除時はDeviceManager側で自動的にリストが更新される
         }) { context in
             DeviceEditView(
                 device: context.device,
@@ -168,7 +171,7 @@ struct DeviceSettingsView: View {
                 .padding(.horizontal)
 
             // サンプルデバイスを除外してデバイス一覧を表示
-            ForEach(Array(deviceManager.devices.filter { $0.device_id != DeviceManager.sampleDeviceID }.reversed().enumerated()), id: \.element.device_id) { index, device in
+            ForEach(deviceManager.devices.filter { $0.device_id != DeviceManager.sampleDeviceID }.reversed(), id: \.device_id) { device in
                 DeviceCard(
                     device: device,
                     isSelected: device.device_id == deviceManager.selectedDeviceID,
@@ -196,6 +199,7 @@ struct DeviceSettingsView: View {
                         deviceEditingContext = DeviceEditingContext(device: device)
                     }
                 )
+                .id(device.device_id)  // 📊 パフォーマンス最適化: 安定したIDで再描画を最小化
                 .padding(.horizontal)
             }
         }
@@ -239,6 +243,7 @@ struct DeviceSettingsView: View {
                         deviceEditingContext = DeviceEditingContext(device: sampleDevice)
                     }
                 )
+                .id(sampleDevice.device_id)  // 📊 パフォーマンス最適化: 安定したIDで再描画を最小化
                 .padding(.horizontal)
             }
         }
@@ -329,31 +334,47 @@ struct DeviceSettingsView: View {
         }
     }
 
-    /// 全デバイスの観測対象を取得
+    /// 特定デバイスのSubject情報のみを再取得（Subject更新時）
+    private func reloadSubject(for deviceId: String) async {
+        print("🔄 Reloading subject for device: \(deviceId)")
+
+        // 📊 パフォーマンス最適化: Subject更新時はキャッシュを強制更新
+        if let subject = await dataManager.fetchSubjectInfo(deviceId: deviceId, forceRefresh: true) {
+            await MainActor.run {
+                self.subjectsByDevice[deviceId] = subject
+            }
+            print("✅ Subject reloaded for device: \(deviceId)")
+        } else {
+            await MainActor.run {
+                self.subjectsByDevice[deviceId] = nil
+            }
+            print("ℹ️ No subject found for device: \(deviceId)")
+        }
+    }
+
+    /// 全デバイスの観測対象を取得（軽量版 - Subject情報のみ）
     private func loadSubjects() async {
         var newSubjects: [String: Subject] = [:]
 
         // 連携中のデバイスの観測対象を取得
         for device in deviceManager.devices {
-            let result = await dataManager.fetchAllReports(
-                deviceId: device.device_id,
-                date: Date(),
-                timezone: deviceManager.getTimezone(for: device.device_id)
-            )
-            if let subject = result.subject {
+            // 📊 パフォーマンス最適化: fetchSubjectInfo（軽量RPC）を使用
+            // ⚠️ 旧: fetchAllReports → 全データ取得（重い）
+            // ✅ 新: fetchSubjectInfo → Subject情報のみ取得（軽い）
+            if let subject = await dataManager.fetchSubjectInfo(deviceId: device.device_id) {
                 newSubjects[device.device_id] = subject
             }
         }
 
         // サンプルデバイスの観測対象も取得
         if let sampleDevice = sampleDevice {
-            let result = await dataManager.fetchAllReports(
-                deviceId: sampleDevice.device_id,
-                date: Date(),
-                timezone: deviceManager.getTimezone(for: sampleDevice.device_id)
-            )
-            if let subject = result.subject {
-                newSubjects[sampleDevice.device_id] = subject
+            // 📊 パフォーマンス最適化: 既にdevicesに含まれている場合は重複取得をスキップ
+            if !deviceManager.devices.contains(where: { $0.device_id == sampleDevice.device_id }) {
+                if let subject = await dataManager.fetchSubjectInfo(deviceId: sampleDevice.device_id) {
+                    newSubjects[sampleDevice.device_id] = subject
+                }
+            } else {
+                print("ℹ️ Sample device already included in devices, skipping duplicate fetch")
             }
         }
 

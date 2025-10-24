@@ -50,6 +50,11 @@ class SupabaseDataManager: ObservableObject {
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var subject: Subject?
+
+    // 📊 パフォーマンス最適化: Subjectキャッシュ
+    private var subjectCache: [String: Subject] = [:]  // deviceId: Subject
+    private var subjectCacheTimestamps: [String: Date] = [:]  // キャッシュ更新時刻
+    private let subjectCacheValidDuration: TimeInterval = 300  // 5分間有効
     
     // MARK: - Private Properties
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
@@ -610,45 +615,88 @@ class SupabaseDataManager: ObservableObject {
     /// HeaderViewなど、Subject情報のみが必要な場合に使用
     /// - Parameter deviceId: デバイスID
     /// - Returns: Subject情報（存在しない場合はnil）
-    func fetchSubjectInfo(deviceId: String) async -> Subject? {
+    func fetchSubjectInfo(deviceId: String, forceRefresh: Bool = false) async -> Subject? {
+        // 📊 パフォーマンス最適化: キャッシュチェック
+        if !forceRefresh, let cachedSubject = getCachedSubject(for: deviceId) {
+            print("✅ [Cache HIT] Subject loaded from cache for device: \(deviceId)")
+            return cachedSubject
+        }
+
         print("👤 [RPC] Fetching subject info only for device: \(deviceId)")
-        
+
         do {
             // RPC関数のパラメータを準備
             let params = ["p_device_id": deviceId]
-            
+
             print("📤 [RPC] Calling get_subject_info with device_id: \(deviceId)")
-            
+
             // 軽量なRPC関数を呼び出し（Subject情報のみ）
             struct SubjectResponse: Codable {
                 let subject_info: Subject?
             }
-            
+
             let response: [SubjectResponse] = try await supabase
                 .rpc("get_subject_info", params: params)
                 .execute()
                 .value
-            
+
             print("📥 [RPC] Subject info response received")
-            
+
             // 最初の結果を取得
             guard let rpcData = response.first else {
                 print("⚠️ [RPC] No subject info returned")
+                // キャッシュからも削除（存在しない）
+                clearSubjectCache(for: deviceId)
                 return nil
             }
-            
+
             if let subject = rpcData.subject_info {
                 print("✅ [RPC] Subject found: \(subject.name ?? "Unknown")")
+                // キャッシュに保存
+                cacheSubject(subject, for: deviceId)
                 return subject
             } else {
                 print("ℹ️ [RPC] No subject assigned to this device")
+                // キャッシュからも削除（未設定）
+                clearSubjectCache(for: deviceId)
                 return nil
             }
-            
+
         } catch {
             print("❌ [RPC] Failed to fetch subject info: \(error)")
             return nil
         }
+    }
+
+    // MARK: - Subject Cache Management
+
+    /// キャッシュからSubjectを取得（有効期限内のみ）
+    private func getCachedSubject(for deviceId: String) -> Subject? {
+        guard let timestamp = subjectCacheTimestamps[deviceId],
+              Date().timeIntervalSince(timestamp) < subjectCacheValidDuration,
+              let subject = subjectCache[deviceId] else {
+            return nil
+        }
+        return subject
+    }
+
+    /// Subjectをキャッシュに保存
+    private func cacheSubject(_ subject: Subject, for deviceId: String) {
+        subjectCache[deviceId] = subject
+        subjectCacheTimestamps[deviceId] = Date()
+    }
+
+    /// 特定デバイスのSubjectキャッシュをクリア
+    private func clearSubjectCache(for deviceId: String) {
+        subjectCache.removeValue(forKey: deviceId)
+        subjectCacheTimestamps.removeValue(forKey: deviceId)
+    }
+
+    /// 全Subjectキャッシュをクリア（ログアウト時などに使用）
+    func clearAllSubjectCache() {
+        subjectCache.removeAll()
+        subjectCacheTimestamps.removeAll()
+        print("🗑️ All subject cache cleared")
     }
     
     /// デバイスIDのみでSubject情報を取得する専用メソッド（日付非依存）
