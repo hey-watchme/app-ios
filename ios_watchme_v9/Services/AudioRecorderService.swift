@@ -42,36 +42,41 @@ final class AudioRecorderService: NSObject {
 
     /// オーディオセッションの事前準備（重い処理を先に実行）
     func prepareAudioSession() async throws {
-        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            do {
-                // iOS 17対応: カテゴリーを先に設定してからアクティブ化
-                try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+        // バックグラウンドスレッドで実行してメインスレッドをブロックしない
+        try await Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return }
 
-                // セッションをアクティブ化
-                try audioSession.setActive(true, options: [])
-
-                // マイクゲイン設定（設定可能な場合のみ）
-                if audioSession.isInputGainSettable {
-                    // 1.0は最大値すぎる可能性があるので0.8に
-                    try? audioSession.setInputGain(0.8)
-                }
-
-                print("✅ AudioRecorderService: オーディオセッション準備完了")
-                continuation.resume()
-            } catch {
-                print("❌ AudioRecorderService: オーディオセッション準備失敗 - \(error)")
-
-                // エラー時は代替設定を試す
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                 do {
-                    try audioSession.setCategory(.record, mode: .default)
-                    try audioSession.setActive(true)
-                    print("⚠️ AudioRecorderService: 代替設定で成功")
+                    // iOS 17対応: カテゴリーを先に設定してからアクティブ化
+                    try self.audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+
+                    // セッションをアクティブ化
+                    try self.audioSession.setActive(true, options: [])
+
+                    // マイクゲイン設定（設定可能な場合のみ）
+                    if self.audioSession.isInputGainSettable {
+                        // 1.0は最大値すぎる可能性があるので0.8に
+                        try? self.audioSession.setInputGain(0.8)
+                    }
+
+                    print("✅ AudioRecorderService: オーディオセッション準備完了")
                     continuation.resume()
                 } catch {
-                    continuation.resume(throwing: error)
+                    print("❌ AudioRecorderService: オーディオセッション準備失敗 - \(error)")
+
+                    // エラー時は代替設定を試す
+                    do {
+                        try self.audioSession.setCategory(.record, mode: .default)
+                        try self.audioSession.setActive(true)
+                        print("⚠️ AudioRecorderService: 代替設定で成功")
+                        continuation.resume()
+                    } catch {
+                        continuation.resume(throwing: error)
+                    }
                 }
             }
-        }
+        }.value
     }
 
     /// 録音開始
