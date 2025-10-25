@@ -19,6 +19,7 @@ struct ContentView: View {
     @State private var showQRScanner = false
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
+    @State private var showMyPage = false  // マイページ表示制御
 
     // 録音機能は新しいRecordingStoreが内部で管理
 
@@ -38,7 +39,8 @@ struct ContentView: View {
                 // ヘッダー（既存のHeaderViewを使用）
                 HeaderView(
                     showLogoutConfirmation: $showLogoutConfirmation,
-                    showRecordingSheet: $showRecordingSheet
+                    showRecordingSheet: $showRecordingSheet,
+                    showMyPage: $showMyPage
                 )
                 
                 // ✅ 権限ベース設計: 状態チェックロジック更新
@@ -244,6 +246,11 @@ struct ContentView: View {
         .sheet(isPresented: $showSignUpPrompt) {
             SignUpView()
                 .environmentObject(userAccountManager)
+        }
+        .sheet(isPresented: $showMyPage) {
+            UserInfoView(userAccountManager: userAccountManager)
+                .environmentObject(deviceManager)
+                .environmentObject(dataManager)
         }
         .onAppear {
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み

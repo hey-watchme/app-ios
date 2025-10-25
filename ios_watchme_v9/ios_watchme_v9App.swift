@@ -83,15 +83,16 @@ struct MainAppView: View {
 
 
     // フッターナビゲーション用の選択状態
-    @State private var selectedTab: FooterTab = .home
+    @State private var selectedTab: FooterTab = .report
 
     // パフォーマンス計測用
     @State private var viewStartTime = Date()
 
     // フッタータブの定義
     enum FooterTab {
-        case home
-        case myPage
+        case report  // レポート
+        case analysis  // 分析
+        case subject  // 観測対象
     }
 
     var body: some View {
@@ -144,14 +145,22 @@ struct MainAppView: View {
                                 .environmentObject(userAccountManager)
                                 .environmentObject(deviceManager)
                                 .environmentObject(dataManager)
-                                .opacity(selectedTab == .home ? 1 : 0)
-                                .zIndex(selectedTab == .home ? 1 : 0)
+                                .opacity(selectedTab == .report ? 1 : 0)
+                                .zIndex(selectedTab == .report ? 1 : 0)
 
-                            UserInfoView(userAccountManager: userAccountManager)
+                            AnalysisView()
+                                .environmentObject(userAccountManager)
                                 .environmentObject(deviceManager)
                                 .environmentObject(dataManager)
-                                .opacity(selectedTab == .myPage ? 1 : 0)
-                                .zIndex(selectedTab == .myPage ? 1 : 0)
+                                .opacity(selectedTab == .analysis ? 1 : 0)
+                                .zIndex(selectedTab == .analysis ? 1 : 0)
+
+                            SubjectTabView()
+                                .environmentObject(userAccountManager)
+                                .environmentObject(deviceManager)
+                                .environmentObject(dataManager)
+                                .opacity(selectedTab == .subject ? 1 : 0)
+                                .zIndex(selectedTab == .subject ? 1 : 0)
                         }
 
                         // カスタムフッターナビゲーション
@@ -175,14 +184,22 @@ struct MainAppView: View {
                                     .environmentObject(userAccountManager)
                                     .environmentObject(deviceManager)
                                     .environmentObject(dataManager)
-                                    .opacity(selectedTab == .home ? 1 : 0)
-                                    .zIndex(selectedTab == .home ? 1 : 0)
+                                    .opacity(selectedTab == .report ? 1 : 0)
+                                    .zIndex(selectedTab == .report ? 1 : 0)
 
-                                UserInfoView(userAccountManager: userAccountManager)
+                                AnalysisView()
+                                    .environmentObject(userAccountManager)
                                     .environmentObject(deviceManager)
                                     .environmentObject(dataManager)
-                                    .opacity(selectedTab == .myPage ? 1 : 0)
-                                    .zIndex(selectedTab == .myPage ? 1 : 0)
+                                    .opacity(selectedTab == .analysis ? 1 : 0)
+                                    .zIndex(selectedTab == .analysis ? 1 : 0)
+
+                                SubjectTabView()
+                                    .environmentObject(userAccountManager)
+                                    .environmentObject(deviceManager)
+                                    .environmentObject(dataManager)
+                                    .opacity(selectedTab == .subject ? 1 : 0)
+                                    .zIndex(selectedTab == .subject ? 1 : 0)
                             }
 
                             // カスタムフッターナビゲーション
@@ -272,16 +289,16 @@ struct MainAppView: View {
                 // 全権限モードへ移行（ログイン/サインアップ成功時）
                 // シートを閉じる
                 showLogin = false
-                // ホーム画面にリセット
-                selectedTab = .home
-                print("✅ 全権限モード - ホーム画面に遷移")
+                // レポート画面にリセット
+                selectedTab = .report
+                print("✅ 全権限モード - レポート画面に遷移")
 
                 // 📊 Phase 2-B: デバイス取得の重複を排除
                 // UserAccountManager内で既にfetchUserDevicesが実行されているため、ここでは不要
                 // L239-245を削除（重複処理）
             } else {
                 // 閲覧専用モードに移行（ログアウト時）
-                selectedTab = .home
+                selectedTab = .report
                 onboardingCompleted = false  // オンボーディング完了フラグをリセット
                 // 📊 パフォーマンス最適化: ログアウト時にSubjectキャッシュをクリア
                 dataManager.clearAllSubjectCache()
@@ -293,7 +310,7 @@ struct MainAppView: View {
             // 注意：ユーザーには「ログアウト」と表示されるが、内部的には初期画面へのリセット
             if newValue == true {
                 print("🔄 閲覧専用モード - 初期画面に戻る")
-                selectedTab = .home
+                selectedTab = .report
                 onboardingCompleted = false
                 // フラグをリセット
                 userAccountManager.shouldResetToWelcome = false
@@ -310,32 +327,46 @@ struct CustomFooterNavigation: View {
 
     var body: some View {
         HStack(spacing: 0) {
-            // ホームタブ
+            // レポートタブ
             Button(action: {
-                selectedTab = .home
+                selectedTab = .report
             }) {
                 VStack(spacing: 4) {
-                    Image(systemName: selectedTab == .home ? "house.fill" : "house")
+                    Image(systemName: "heart.text.square.fill")
                         .font(.system(size: 24))
-                    Text("ホーム")
+                    Text("レポート")
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(selectedTab == .home ? Color.primary : Color.secondary)
+                .foregroundColor(selectedTab == .report ? Color.primary : Color.secondary)
             }
 
-            // マイページタブ
+            // 分析タブ
             Button(action: {
-                selectedTab = .myPage
+                selectedTab = .analysis
             }) {
                 VStack(spacing: 4) {
-                    Image(systemName: selectedTab == .myPage ? "person.circle.fill" : "person.circle")
+                    Image(systemName: selectedTab == .analysis ? "chart.bar.fill" : "chart.bar")
                         .font(.system(size: 24))
-                    Text("マイページ")
+                    Text("分析")
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(selectedTab == .myPage ? Color.primary : Color.secondary)
+                .foregroundColor(selectedTab == .analysis ? Color.primary : Color.secondary)
+            }
+
+            // 観測対象タブ
+            Button(action: {
+                selectedTab = .subject
+            }) {
+                VStack(spacing: 4) {
+                    Image(systemName: selectedTab == .subject ? "person.fill" : "person")
+                        .font(.system(size: 24))
+                    Text("観測対象")
+                        .font(.caption)
+                }
+                .frame(maxWidth: .infinity)
+                .foregroundColor(selectedTab == .subject ? Color.primary : Color.secondary)
             }
         }
         .padding(.top, 8)

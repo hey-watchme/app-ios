@@ -13,8 +13,9 @@ struct HeaderView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @Binding var showLogoutConfirmation: Bool
     @Binding var showRecordingSheet: Bool
+    @Binding var showMyPage: Bool  // マイページ表示制御
     @State private var subject: Subject? = nil  // ローカル状態として管理
-    
+
     // 通知関連
     @State private var showNotificationSheet = false
     @State private var unreadNotificationCount = 0
@@ -32,23 +33,33 @@ struct HeaderView: View {
             }
             
             Spacer()
-            
-            // 通知アイコン（プレースホルダー）
+
+            // マイページアイコン
+            Button(action: {
+                showMyPage = true
+            }) {
+                Image(systemName: "person.circle")
+                    .font(.title2)
+                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+            }
+            .padding(.trailing, 12)
+
+            // 通知アイコン
             Button(action: {
                 showNotificationSheet = true
             }) {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "bell")
                         .font(.title2)
-                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))  // 黒に変更
-                    
+                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+
                     // 未読通知がある場合の赤い丸（バッジ）と数
                     if unreadNotificationCount > 0 {
                         ZStack {
                             Circle()
                                 .fill(Color.red)
                                 .frame(width: 18, height: 18)
-                            
+
                             Text("\(min(unreadNotificationCount, 99))")
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.white)
