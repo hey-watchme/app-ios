@@ -18,7 +18,7 @@ struct EmotionGraphView: View {
     @State private var emotionReport: EmotionReport?
     @State private var isLoading = false
 
-    @State private var selectedEmotions: Set<EmotionType> = [.joy]  // デフォルトで喜びだけを選択
+    @State private var selectedEmotions: Set<EmotionType> = [.joy]  // デフォルトで喜びのみ選択
     
     var body: some View {
         ScrollView {
@@ -30,11 +30,11 @@ struct EmotionGraphView: View {
                         ProgressView("データを読み込み中...")
                             .padding(.top, 50)
                     } else if let report = emotionReport {
-                        // 感情ランキングカード
-                        UnifiedCard(title: "感情ランキング") {
-                            VStack(spacing: 12) {
-                                ForEach(Array(report.emotionRanking.prefix(8).enumerated()), id: \.offset) { index, emotion in
-                                    if emotion.value > 0 {
+                        // 感情ランキングカード（全部0の場合は非表示）
+                        if report.emotionTotals.neutral > 0 || report.emotionTotals.joy > 0 || report.emotionTotals.anger > 0 || report.emotionTotals.sadness > 0 {
+                            UnifiedCard(title: "感情ランキング") {
+                                VStack(spacing: 12) {
+                                    ForEach(Array(report.emotionRanking.prefix(4).enumerated()), id: \.offset) { index, emotion in
                                         HStack(spacing: 16) {
                                             // ランク表示
                                             ZStack {
@@ -46,20 +46,20 @@ struct EmotionGraphView: View {
                                                     .fontWeight(.bold)
                                                     .foregroundColor(.white)
                                             }
-                                            
+
                                             // 感情インジケーター
                                             Circle()
                                                 .fill(emotion.color)
                                                 .frame(width: 16, height: 16)
-                                            
+
                                             Text(emotion.name)
                                                 .font(.body)
                                                 .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
-                                            
+
                                             Spacer()
-                                            
-                                            // スコア表示
-                                            Text("\(emotion.value)")
+
+                                            // スコア表示（小数点1桁）
+                                            Text(String(format: "%.1f", emotion.value))
                                                 .font(.callout)
                                                 .fontWeight(.semibold)
                                                 .foregroundColor(Color.safeColor("BehaviorTextPrimary").opacity(0.8))
@@ -70,37 +70,45 @@ struct EmotionGraphView: View {
                                                         .fill(emotion.color.opacity(0.1))
                                                 )
                                         }
-                                        
-                                        if index < min(7, report.emotionRanking.filter { $0.value > 0 }.count - 1) {
+
+                                        if index < 3 {
                                             Divider()
                                                 .background(Color.gray.opacity(0.2))
                                         }
                                     }
                                 }
                             }
+                            .padding(.horizontal)
                         }
-                        .padding(.horizontal)
                         
                         // 感情推移グラフカード
                         UnifiedCard(title: "時間帯別推移") {
                             VStack(spacing: 16) {
-                                if report.activeTimePoints.count > 0 {
+                                if report.emotionGraph.count > 0 {
                                     Chart {
                                         ForEach(EmotionType.allCases, id: \.self) { emotionType in
                                             if selectedEmotions.contains(emotionType) {
                                                 ForEach(report.emotionGraph, id: \.time) { point in
+                                                    let value = getValue(for: emotionType, from: point)
                                                     LineMark(
                                                         x: .value("時間", point.timeValue),
-                                                        y: .value("値", getValue(for: emotionType, from: point))
+                                                        y: .value("値", value),
+                                                        series: .value("感情", emotionType.rawValue)
                                                     )
-                                                    .foregroundStyle(emotionType.color)  // 各感情タイプの色を直接指定
+                                                    .foregroundStyle(emotionType.color)
                                                     .lineStyle(StrokeStyle(lineWidth: 2))
                                                     .symbol {
                                                         Circle()
-                                                            .strokeBorder(emotionType.color, lineWidth: 2)
+                                                            .fill(emotionType.color)
                                                             .frame(width: 6, height: 6)
                                                     }
-                                                    .interpolationMethod(.catmullRom)
+
+                                                    PointMark(
+                                                        x: .value("時間", point.timeValue),
+                                                        y: .value("値", value)
+                                                    )
+                                                    .foregroundStyle(emotionType.color)
+                                                    .symbolSize(30)
                                                 }
                                             }
                                         }
@@ -126,8 +134,8 @@ struct EmotionGraphView: View {
                                             AxisGridLine()
                                             AxisTick()
                                             AxisValueLabel {
-                                                if let val = value.as(Int.self) {
-                                                    Text("\(val)")
+                                                if let val = value.as(Double.self) {
+                                                    Text(String(format: "%.1f", val))
                                                         .font(.caption2)
                                                         .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
                                                 }
@@ -149,9 +157,9 @@ struct EmotionGraphView: View {
                             }
                         }
                         .padding(.horizontal)
-                        
+
                         // 凡例カード（常に表示）
-                        if report.activeTimePoints.count > 0 {
+                        if report.emotionGraph.count > 0 {
                             UnifiedCard(title: "感情の種類") {
                                 LazyVGrid(columns: [
                                     GridItem(.flexible()),
@@ -253,16 +261,12 @@ struct EmotionGraphView: View {
         }
     }
     
-    private func getValue(for emotionType: EmotionType, from point: EmotionTimePoint) -> Int {
+    private func getValue(for emotionType: EmotionType, from point: EmotionTimePoint) -> Double {
         switch emotionType {
+        case .neutral: return point.neutral
         case .joy: return point.joy
-        case .fear: return point.fear
         case .anger: return point.anger
-        case .trust: return point.trust
-        case .disgust: return point.disgust
         case .sadness: return point.sadness
-        case .surprise: return point.surprise
-        case .anticipation: return point.anticipation
         }
     }
     

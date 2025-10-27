@@ -11,20 +11,16 @@ import SwiftUI
 // MARK: - Emotion Time Point Model
 struct EmotionTimePoint: Codable {
     let time: String
-    let joy: Int
-    let fear: Int
-    let anger: Int
-    let trust: Int
-    let disgust: Int
-    let sadness: Int
-    let surprise: Int
-    let anticipation: Int
-    
+    let neutral: Double
+    let joy: Double
+    let anger: Double
+    let sadness: Double
+
     // 時刻を表示用にフォーマット
     var displayTime: String {
         time // "00:00" format already
     }
-    
+
     // 時刻を数値に変換（グラフ描画用）
     var timeValue: Double {
         let components = time.split(separator: ":")
@@ -35,23 +31,19 @@ struct EmotionTimePoint: Codable {
         }
         return hour + (minute / 60.0)
     }
-    
+
     // 全感情の合計値
-    var totalEmotions: Int {
-        joy + fear + anger + trust + disgust + sadness + surprise + anticipation
+    var totalEmotions: Double {
+        neutral + joy + anger + sadness
     }
-    
+
     // 最も強い感情を取得
-    var dominantEmotion: (name: String, value: Int)? {
+    var dominantEmotion: (name: String, value: Double)? {
         let emotions = [
+            ("Neutral", neutral),
             ("Joy", joy),
-            ("Fear", fear),
             ("Anger", anger),
-            ("Trust", trust),
-            ("Disgust", disgust),
-            ("Sadness", sadness),
-            ("Surprise", surprise),
-            ("Anticipation", anticipation)
+            ("Sadness", sadness)
         ]
         return emotions.max(by: { $0.1 < $1.1 })
     }
@@ -89,30 +81,22 @@ struct EmotionReport: Codable {
     var emotionTotals: EmotionTotals {
         var totals = EmotionTotals()
         for point in emotionGraph {
+            totals.neutral += point.neutral
             totals.joy += point.joy
-            totals.fear += point.fear
             totals.anger += point.anger
-            totals.trust += point.trust
-            totals.disgust += point.disgust
             totals.sadness += point.sadness
-            totals.surprise += point.surprise
-            totals.anticipation += point.anticipation
         }
         return totals
     }
-    
+
     // ランキング形式で感情を取得
-    var emotionRanking: [(name: String, value: Int, color: Color)] {
+    var emotionRanking: [(name: String, value: Double, color: Color)] {
         let totals = emotionTotals
-        let emotions: [(String, Int, Color)] = [
+        let emotions: [(String, Double, Color)] = [
+            ("中立", totals.neutral, Color.safeColor("EmotionNeutral")),
             ("喜び", totals.joy, Color.safeColor("EmotionJoy")),
-            ("信頼", totals.trust, Color.safeColor("SuccessColor")),
-            ("期待", totals.anticipation, Color.safeColor("WarningColor")),
-            ("驚き", totals.surprise, Color.safeColor("EmotionSurprise")),
-            ("恐れ", totals.fear, Color.safeColor("AppAccentColor")),
-            ("悲しみ", totals.sadness, Color.safeColor("PrimaryActionColor")),
-            ("嫌悪", totals.disgust, Color.safeColor("EmotionDisgust")),
-            ("怒り", totals.anger, Color.safeColor("ErrorColor"))
+            ("怒り", totals.anger, Color.safeColor("ErrorColor")),
+            ("悲しみ", totals.sadness, Color.safeColor("PrimaryActionColor"))
         ]
         return emotions.sorted(by: { $0.1 > $1.1 })
     }
@@ -125,54 +109,38 @@ struct EmotionReport: Codable {
 
 // MARK: - Emotion Totals
 struct EmotionTotals {
-    var joy: Int = 0
-    var fear: Int = 0
-    var anger: Int = 0
-    var trust: Int = 0
-    var disgust: Int = 0
-    var sadness: Int = 0
-    var surprise: Int = 0
-    var anticipation: Int = 0
+    var neutral: Double = 0.0
+    var joy: Double = 0.0
+    var anger: Double = 0.0
+    var sadness: Double = 0.0
 }
 
 // MARK: - Emotion Type Enum
 enum EmotionType: String, CaseIterable {
     case joy = "Joy"
-    case fear = "Fear"
+    case neutral = "Neutral"
     case anger = "Anger"
-    case trust = "Trust"
-    case disgust = "Disgust"
     case sadness = "Sadness"
-    case surprise = "Surprise"
-    case anticipation = "Anticipation"
-    
+
     // 日本語表示名
     var displayName: String {
         switch self {
+        case .neutral: return "中立"
         case .joy: return "喜び"
-        case .fear: return "恐れ"
         case .anger: return "怒り"
-        case .trust: return "信頼"
-        case .disgust: return "嫌悪"
         case .sadness: return "悲しみ"
-        case .surprise: return "驚き"
-        case .anticipation: return "期待"
         }
     }
-    
+
     var color: Color {
         switch self {
+        case .neutral: return Color.safeColor("EmotionNeutral")
         case .joy: return Color.safeColor("EmotionJoy")
-        case .fear: return Color.safeColor("AppAccentColor")
         case .anger: return Color.safeColor("ErrorColor")
-        case .trust: return Color.safeColor("SuccessColor")
-        case .disgust: return Color.safeColor("EmotionDisgust")
         case .sadness: return Color.safeColor("PrimaryActionColor")
-        case .surprise: return Color.safeColor("EmotionSurprise")
-        case .anticipation: return Color.safeColor("WarningColor")
         }
     }
-    
+
     // グラフ表示用の薄い色
     var lightColor: Color {
         color.opacity(0.3)

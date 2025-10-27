@@ -110,18 +110,7 @@ struct SimpleDashboardView: View {
                                     .padding(.horizontal, 20)
                                     .padding(.top, 20)
                             }
-                            
-                            // 観測対象カード（最下部に移動）
-                            Group {
-                                if let subject = subject {
-                                    observationTargetCard(subject)
-                                } else {
-                                    noObservationTargetCard()
-                                }
-                            }
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
-                            
+
                             Spacer(minLength: 100)
                         }
                     }
@@ -502,98 +491,6 @@ struct SimpleDashboardView: View {
         }
     }
     
-    private func observationTargetCard(_ subject: Subject) -> some View {
-        ObservationTargetCard(
-            title: "観測対象"
-        ) {
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 16) {
-                    // アバター
-                    if let avatarURL = subject.avatarUrl, !avatarURL.isEmpty {
-                        AsyncImage(url: URL(string: avatarURL)) { image in
-                            image
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: 60, height: 60)
-                                .clipShape(Circle())
-                                .overlay(
-                                    Circle()
-                                        .stroke(Color.white.opacity(0.3), lineWidth: 2)
-                                )
-                        } placeholder: {
-                            Circle()
-                                .fill(Color.white.opacity(0.2))
-                                .frame(width: 60, height: 60)
-                                .overlay(
-                                    Image(systemName: "person.fill")
-                                        .foregroundColor(.white.opacity(0.6))
-                                )
-                        }
-                    } else {
-                        Circle()
-                            .fill(Color.white.opacity(0.2))
-                            .frame(width: 60, height: 60)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .foregroundColor(.white.opacity(0.6))
-                            )
-                    }
-                    
-                    // 情報
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text(subject.name ?? "名前未設定")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                        
-                        HStack(spacing: 12) {
-                            if let age = subject.age {
-                                Label("\(age)歳", systemImage: "calendar")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                            
-                            if let gender = subject.gender {
-                                Label(gender, systemImage: "person")
-                                    .font(.caption)
-                                    .foregroundColor(.white.opacity(0.8))
-                            }
-                        }
-                    }
-                    
-                    Spacer()
-                }
-                
-                // プロフィール（notes）を表示
-                if let notes = subject.notes, !notes.isEmpty {
-                    Text(notes)
-                        .font(.system(size: 14))
-                        .foregroundColor(.white.opacity(0.85))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .padding(.top, 8)
-                }
-            }
-            .padding(.vertical, 4)
-        }
-    }
-    
-    private func noObservationTargetCard() -> some View {
-        ObservationTargetCard(
-            title: "観測対象"
-        ) {
-            VStack(spacing: 12) {
-                Image(systemName: "person.crop.circle.badge.questionmark")
-                    .font(.system(size: 48))
-                    .foregroundColor(.white.opacity(0.7))
-                
-                Text("観測対象が未設定です")
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.9))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 8)
-        }
-    }
-    
     private func behaviorReportContent(_ report: BehaviorReport) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             let filteredRanking = report.summaryRanking.filter {
@@ -634,37 +531,28 @@ struct SimpleDashboardView: View {
     // 📊 パフォーマンス最適化: 1回のループで全感情の合計を計算（Phase 3-A）
     private func calculateEmotionPercentages(from activeTimePoints: [EmotionTimePoint]) -> [(String, Double, String, Color)] {
         // 各感情の合計値を1回のループで計算
-        var totals: [String: Int] = [
-            "joy": 0, "trust": 0, "fear": 0, "surprise": 0,
-            "sadness": 0, "disgust": 0, "anger": 0, "anticipation": 0
+        var totals: [String: Double] = [
+            "neutral": 0.0, "joy": 0.0, "anger": 0.0, "sadness": 0.0
         ]
 
         for point in activeTimePoints {
+            totals["neutral"]! += point.neutral
             totals["joy"]! += point.joy
-            totals["trust"]! += point.trust
-            totals["fear"]! += point.fear
-            totals["surprise"]! += point.surprise
-            totals["sadness"]! += point.sadness
-            totals["disgust"]! += point.disgust
             totals["anger"]! += point.anger
-            totals["anticipation"]! += point.anticipation
+            totals["sadness"]! += point.sadness
         }
 
         // 全感情の総計
-        let grandTotal = totals.values.reduce(0, +)
+        let grandTotal = totals.values.reduce(0.0, +)
 
         guard grandTotal > 0 else { return [] }
 
         // パーセンテージを計算
         return [
-            ("joy", Double(totals["joy"]!) / Double(grandTotal) * 100, "😊", Color.safeColor("EmotionJoy")),
-            ("trust", Double(totals["trust"]!) / Double(grandTotal) * 100, "🤝", Color.safeColor("EmotionTrust")),
-            ("fear", Double(totals["fear"]!) / Double(grandTotal) * 100, "😨", Color.safeColor("EmotionFear")),
-            ("surprise", Double(totals["surprise"]!) / Double(grandTotal) * 100, "😲", Color.safeColor("EmotionSurprise")),
-            ("sadness", Double(totals["sadness"]!) / Double(grandTotal) * 100, "😢", Color.safeColor("EmotionSadness")),
-            ("disgust", Double(totals["disgust"]!) / Double(grandTotal) * 100, "🤢", Color.safeColor("EmotionDisgust")),
-            ("anger", Double(totals["anger"]!) / Double(grandTotal) * 100, "😠", Color.safeColor("EmotionAnger")),
-            ("anticipation", Double(totals["anticipation"]!) / Double(grandTotal) * 100, "🎯", Color.safeColor("EmotionAnticipation"))
+            ("neutral", totals["neutral"]! / grandTotal * 100, "😐", Color.safeColor("EmotionNeutral")),
+            ("joy", totals["joy"]! / grandTotal * 100, "😊", Color.safeColor("EmotionJoy")),
+            ("anger", totals["anger"]! / grandTotal * 100, "😠", Color.safeColor("ErrorColor")),
+            ("sadness", totals["sadness"]! / grandTotal * 100, "😢", Color.safeColor("PrimaryActionColor"))
         ]
     }
     
@@ -675,38 +563,45 @@ struct SimpleDashboardView: View {
 
                 if !activeTimePoints.isEmpty {
                     // 📊 パフォーマンス最適化: キャッシュされた結果を使用
-                    let topEmotions = cachedEmotionPercentages.prefix(3)
-                
-                // トップ感情を絵文字で表示
-                HStack(spacing: 16) {
-                    ForEach(Array(topEmotions.enumerated()), id: \.element.0) { index, emotion in
-                        VStack(spacing: 4) {
-                            Text(emotion.2)
-                                .font(.system(size: 54))  // 36 * 1.5 = 54
+                    let allEmotions = cachedEmotionPercentages
 
-                            Text("\(Int(emotion.1.rounded()))%")
+                // トップ感情（1位のみ）を絵文字で表示
+                if let topEmotion = allEmotions.first {
+                    VStack(spacing: 8) {
+                        Text(topEmotion.2)
+                            .font(.system(size: 108))  // 1.5倍に拡大
+
+                        HStack(spacing: 8) {
+                            Text(emotionLabel(for: topEmotion.0))
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                                .textCase(.uppercase)
+                                .tracking(1.0)
+
+                            Text("\(Int(topEmotion.1.rounded()))%")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
                         }
                     }
+                    .padding(.bottom, 30)  // 下に30px余白
                 }
-                .padding(.vertical, 30)  // 上下に30px余白
-                
-                // 感情バー
+
+                // 感情バー（4つすべて表示）
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(topEmotions.enumerated()), id: \.element.0) { index, emotion in
+                    ForEach(Array(allEmotions.enumerated()), id: \.element.0) { index, emotion in
                         HStack {
                             Text(emotionLabel(for: emotion.0))
                                 .font(.body)  // caption → body
                                 .frame(width: 80, alignment: .leading)
-                            
+
                             GeometryReader { geometry in
                                 ZStack(alignment: .leading) {
                                     Rectangle()
                                         .fill(Color.safeColor("BorderLight").opacity(0.2))
                                         .frame(height: 6)
                                         .cornerRadius(3)
-                                    
+
                                     Rectangle()
                                         .fill(Color.safeColor("AppAccentColor"))  // 統一感のため紫色に変更
                                         .frame(width: geometry.size.width * CGFloat(emotion.1) / 100, height: 6)
@@ -741,6 +636,7 @@ struct SimpleDashboardView: View {
     
     private func emotionLabel(for key: String) -> String {
         switch key.lowercased() {
+        case "neutral": return "中立"
         case "joy": return "喜び"
         case "trust": return "信頼"
         case "fear": return "恐れ"
