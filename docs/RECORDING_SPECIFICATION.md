@@ -1,7 +1,7 @@
 # 録音機能 仕様書
 
-**最終更新**: 2025-10-18
-**ステータス**: ✅ **リファクタリング完了・安定稼働**
+**最終更新**: 2025-10-30
+**ステータス**: ✅ **UI刷新完了・安定稼働**
 
 ---
 
@@ -9,7 +9,55 @@
 
 WatchMeアプリの録音機能は、30分間隔でユーザーの音声を録音し、AI分析用にクラウドへアップロードする中核機能です。
 
-2025-10-18に**View-Store-Service**アーキテクチャへの全面的なリファクタリングとバグ修正を完了し、以前のバージョンで確認されていた以下の重要課題をすべて解決しました。
+### 主要な改修履歴
+
+- **2025-10-18**: View-Store-Serviceアーキテクチャへの全面リファクタリング完了
+- **2025-10-30**: 全画面録音UI（`FullScreenRecordingView`）への刷新、音声ビジュアライザーの実装
+
+---
+
+## 🎨 現在のUI構成 (2025-10-30)
+
+### FullScreenRecordingView.swift
+全画面表示の録音インターフェース（ChatGPT音声モード風）
+
+**特徴:**
+- 半透明の黒背景（opacity: 0.8）
+- リアルタイム音声ビジュアライザー（`BlobVisualizerView`）
+- 録音ボタン（赤い円、完全な白の外周リング）
+- 録音時間表示（録音中のみ）
+- エラーメッセージ表示
+- 右上に閉じるボタン（×）
+
+**状態管理:**
+- `RecordingStore`を使用（既存のView-Store-Serviceアーキテクチャを維持）
+- `AudioMonitorService`で音声レベルをリアルタイムモニタリング
+
+### BlobVisualizerView.swift
+音声に反応する有機的なBlob形状ビジュアライザー
+
+**仕様:**
+- サイズ: 160×160
+- 色: シアン〜ブルーのグラデーション
+- 中心アイコン: `waveform`
+- アニメーション: 8つのスパイクが常時回転（phase速度: 0.025）
+- 音声反応:
+  - 待機中（audioLevel=0）: ほぼ円形（amplitude: 0.01）
+  - 音声検知時: スパイクが伸びる（amplitude最大: 0.36）
+  - 半径変化: 1.0〜1.22倍
+- スパイクのランダム性: 擬似ランダム（0.6〜1.4倍）で有機的な動き
+
+### AudioMonitorService.swift
+録音とは独立した音声レベルモニタリング
+
+**役割:**
+- `AVAudioEngine`を使用してリアルタイムで音声レベルを取得
+- 録音の有無に関わらず動作（ビジュアライザー専用）
+- RMS計算で正規化された音声レベル（0.0〜1.0）を提供
+
+**ライフサイクル:**
+- `FullScreenRecordingView.onAppear`: モニタリング開始
+- `FullScreenRecordingView.onDisappear`: モニタリング停止
 
 ---
 
@@ -57,17 +105,22 @@ WatchMeアプリの録音機能は、30分間隔でユーザーの音声を録�
 
 ### コンポーネントの役割
 
-#### 1. View層 (`RecordingView.swift`) - 表示装置
+#### 1. View層 (`FullScreenRecordingView.swift`) - 表示装置
 - **責務:** UIの表示と、ユーザー操作の受付のみ。
 - **役割:** `RecordingStore`から最新の`State`を受け取り、画面を忠実に描画します。ビジネスロジックは一切持ちません。
+- **補助View:**
+  - `BlobVisualizerView`: 音声ビジュアライザー
+  - `RecordingButton`: 録音制御ボタン
+  - `ErrorMessageView`: エラー表示
 
 #### 2. Store層 (`RecordingStore.swift`) - 司令塔・頭脳
 - **責務:** 状態管理とビジネスロジックのすべて。
 - **役割:** 唯一の状態である`RecordingState`を保持・公開し、UIからの指示に基づき`Service`層を呼び出して、その結果に応じて`State`を更新します。
 
-#### 3. Service層 (`AudioRecorderService.swift`, `UploaderService.swift`) - 実行部隊
-- **責務:** 特定の技術的タスク（録音、アップロード）の実行。
+#### 3. Service層 (`AudioRecorderService.swift`, `UploaderService.swift`, `AudioMonitorService.swift`) - 実行部隊
+- **責務:** 特定の技術的タスク（録音、アップロード、音声モニタリング）の実行。
 - **役割:** `AVFoundation`やネットワーク通信など、具体的な処理に特化します。状態を持たず、`Store`や`View`の存在を知りません。
+- **AudioMonitorService**: 録音とは独立して音声レベルをモニタリング（ビジュアライザー用）
 
 ### このアーキテクチャの価値
 
@@ -79,12 +132,13 @@ WatchMeアプリの録音機能は、30分間隔でユーザーの音声を録�
 
 ### コード品質の改善
 
-| 項目 | Before | After |
-|------|--------|-------|
-| RecordingView.swift | 879行（UI+ロジック混在） | 501行（UI層のみ） |
-| AudioRecorder.swift | 928行（複数責務） | → AudioRecorderService (295行) |
-| 責務 | 混在・密結合 | 分離・疎結合 |
-| テスタビリティ | 困難 | 容易（Store/Service層） |
+| 項目 | 旧実装 (2025-10-17以前) | リファクタリング後 (2025-10-18) | UI刷新後 (2025-10-30) |
+|------|--------|-------|-------|
+| View | RecordingView.swift (879行、混在) | RecordingView.swift (501行、UI層のみ) | FullScreenRecordingView.swift (236行、シンプル) |
+| Recorder | AudioRecorder.swift (928行、複雑) | AudioRecorderService (295行) | 変更なし（既存Service使用） |
+| ビジュアライザー | なし | なし | BlobVisualizerView (132行) + AudioMonitorService (99行) |
+| 責務 | 混在・密結合 | 分離・疎結合 | 分離・疎結合（維持） |
+| UX | 標準UI | 標準UI | 全画面・モダンUI |
 
 ### パフォーマンスと信頼性
 
