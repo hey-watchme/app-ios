@@ -11,7 +11,8 @@ struct ContentView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
-    
+    @EnvironmentObject var recordingStore: RecordingStore
+
     // シンプルな状態管理
     @State private var selectedDate: Date = Date()  // 初期値は現在時刻（後でonAppearで調整）
     @State private var showLogoutConfirmation = false
@@ -213,10 +214,12 @@ struct ContentView: View {
                     .animation(.easeInOut(duration: 0.3), value: deviceManager.isDemoDeviceSelected)
             }
         }
-        .sheet(isPresented: $showRecordingSheet) {
-            RecordingView()
+        .fullScreenCover(isPresented: $showRecordingSheet) {
+            FullScreenRecordingView()
                 .environmentObject(deviceManager)
                 .environmentObject(userAccountManager)
+                .environmentObject(recordingStore)
+                .background(Color.clear)  // 背景を透明に
         }
         .sheet(isPresented: $showQRScanner) {
             QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in

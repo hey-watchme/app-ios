@@ -66,7 +66,7 @@ final class UploaderService {
         uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
         // アップロード実行（Dataを直接送信、二重ラップ解消）
-        let (_, response) = try await URLSession.shared.upload(for: uploadRequest, from: multipartBody)
+        let (data, response) = try await URLSession.shared.upload(for: uploadRequest, from: multipartBody)
 
         // レスポンス確認
         guard let httpResponse = response as? HTTPURLResponse else {
@@ -74,7 +74,13 @@ final class UploaderService {
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            throw UploadError.serverError(statusCode: httpResponse.statusCode)
+            // サーバーからのエラーメッセージを取得
+            var serverMessage: String? = nil
+            if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let detail = json["detail"] as? String {
+                serverMessage = detail
+            }
+            throw UploadError.serverError(statusCode: httpResponse.statusCode, message: serverMessage)
         }
 
         print("✅ UploaderService: アップロード成功 - \(request.fileName)")
@@ -146,7 +152,7 @@ enum UploadError: LocalizedError {
     case emptyFile
     case invalidURL
     case invalidResponse
-    case serverError(statusCode: Int)
+    case serverError(statusCode: Int, message: String?)
     case networkError(Error)
 
     var errorDescription: String? {
@@ -159,8 +165,12 @@ enum UploadError: LocalizedError {
             return "無効なURLです"
         case .invalidResponse:
             return "サーバーからの応答が無効です"
-        case .serverError(let code):
-            return "サーバーエラー（\(code)）"
+        case .serverError(let code, let message):
+            if let message = message {
+                return "サーバーエラー: \(message)"
+            } else {
+                return "サーバーエラー（\(code)）"
+            }
         case .networkError(let error):
             return "ネットワークエラー: \(error.localizedDescription)"
         }

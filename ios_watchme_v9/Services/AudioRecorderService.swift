@@ -125,7 +125,7 @@ final class AudioRecorderService: NSObject {
             throw RecordingError.startFailed
         }
 
-        // メータリング開始（0.1秒間隔に変更 - パフォーマンス改善）
+        // メータリング開始（0.1秒間隔）
         startMetering()
 
         print("🎙️ AudioRecorderService: 録音開始 - \(fileName)")
@@ -208,8 +208,12 @@ final class AudioRecorderService: NSObject {
 
     private func startMetering() {
         meterTimer?.invalidate()
-        meterTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-            self?.updateMeters()
+
+        // メインスレッドでTimerを作成（RunLoop必須）
+        DispatchQueue.main.async { [weak self] in
+            self?.meterTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
+                self?.updateMeters()
+            }
         }
     }
 

@@ -77,6 +77,7 @@ struct MainAppView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var toastManager: ToastManager
+    @EnvironmentObject var recordingStore: RecordingStore
     @State private var showLogin = false
     @State private var showOnboarding = false
     @State private var onboardingCompleted = false  // オンボーディング完了フラグ
@@ -145,6 +146,7 @@ struct MainAppView: View {
                                 .environmentObject(userAccountManager)
                                 .environmentObject(deviceManager)
                                 .environmentObject(dataManager)
+                                .environmentObject(recordingStore)
                                 .opacity(selectedTab == .report ? 1 : 0)
                                 .zIndex(selectedTab == .report ? 1 : 0)
 
@@ -184,6 +186,7 @@ struct MainAppView: View {
                                     .environmentObject(userAccountManager)
                                     .environmentObject(deviceManager)
                                     .environmentObject(dataManager)
+                                    .environmentObject(recordingStore)
                                     .opacity(selectedTab == .report ? 1 : 0)
                                     .zIndex(selectedTab == .report ? 1 : 0)
 

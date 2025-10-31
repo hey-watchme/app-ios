@@ -416,10 +416,13 @@ final class RecordingStore: ObservableObject {
             state.recordings.insert(recording, at: 0)
             print("❌ RecordingStore: 自動アップロード失敗、リストに追加 - \(error)")
 
-            // 失敗トースト表示
+            // エラーメッセージを取得（サーバーからの詳細メッセージを優先）
+            let errorMessage = error.localizedDescription
+
+            // 失敗トースト表示（サーバーからのエラーメッセージを表示）
             ToastManager.shared.showError(
                 title: "送信失敗",
-                subtitle: "ネットワークのある環境でもう一度送信してください"
+                subtitle: errorMessage
             )
         }
     }
