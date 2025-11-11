@@ -101,11 +101,11 @@ final class UploaderService {
     ) throws -> Data {
         var body = Data()
 
-        // メタデータ追加
-        // デバイスのタイムゾーンでフォーマット
+        // Metadata: Send recorded_at in UTC
+        // All timestamps are stored in UTC on the server
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        formatter.timeZone = request.timezone
+        formatter.timeZone = TimeZone(identifier: "UTC")
 
         let metadata: [String: Any] = [
             "device_id": request.deviceID,
