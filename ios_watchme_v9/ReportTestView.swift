@@ -185,73 +185,38 @@ struct ReportTestView: View {
                         // 基本情報
                         GroupBox("基本情報") {
                             VStack(alignment: .leading, spacing: 10) {
-                                LabeledContent("デバイスID", value: report.deviceId)
+                                LabeledContent("デバイスID", value: report.deviceId.uuidString)
                                 LabeledContent("日付", value: report.date)
-                                LabeledContent("平均スコア", value: String(format: "%.2f", report.averageScore))
+                                LabeledContent("平均スコア", value: String(format: "%.2f", report.averageVibe ?? 0))
                             }
                             .font(.system(.body, design: .monospaced))
                         }
                         
-                        // 感情の時間分布
-                        GroupBox("感情の時間分布") {
-                            VStack(alignment: .leading, spacing: 10) {
-                                HStack {
-                                    Label("ポジティブ", systemImage: "face.smiling")
-                                        .foregroundColor(Color.safeColor("SuccessColor"))
-                                    Spacer()
-                                    Text("\(String(format: "%.1f", report.positiveHours))時間 (\(String(format: "%.1f", report.positivePercentage))%)")
-                                }
-                                
-                                HStack {
-                                    Label("ネガティブ", systemImage: "face.dashed")
-                                        .foregroundColor(Color.safeColor("ErrorColor"))
-                                    Spacer()
-                                    Text("\(String(format: "%.1f", report.negativeHours))時間 (\(String(format: "%.1f", report.negativePercentage))%)")
-                                }
-                                
-                                HStack {
-                                    Label("ニュートラル", systemImage: "face.smiling.inverse")
-                                        .foregroundColor(Color.safeColor("BorderLight"))
-                                    Spacer()
-                                    Text("\(String(format: "%.1f", report.neutralHours))時間 (\(String(format: "%.1f", report.neutralPercentage))%)")
-                                }
-                            }
-                        }
-                        
-                        // インサイト
-                        if !report.insights.isEmpty {
+                        // インサイト（サマリー）
+                        if let insights = report.insights, !insights.isEmpty {
                             GroupBox("インサイト") {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(Array(report.insights.enumerated()), id: \.offset) { index, insight in
-                                        HStack(alignment: .top) {
-                                            Text("•")
-                                                .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                            Text(insight)
-                                                .font(.callout)
-                                        }
-                                    }
-                                }
+                                Text(insights)
+                                    .font(.callout)
                             }
                         }
                         
                         // Vibeスコア詳細（存在する場合）
-                        if let vibeScores = report.vibeScores {
+                        if let vibeScores = report.vibeScores, !vibeScores.isEmpty {
                             GroupBox("時間帯別スコア") {
                                 ScrollView(.horizontal, showsIndicators: false) {
                                     HStack(spacing: 8) {
-                                        ForEach(Array(vibeScores.enumerated()), id: \.offset) { index, score in
-                                            if let scoreValue = score {
-                                                VStack {
-                                                    Text("\(index/2):\(index%2 == 0 ? "00" : "30")")
-                                                        .font(.caption2)
-                                                    Text(String(format: "%.0f", scoreValue))
-                                                        .font(.caption)
-                                                        .fontWeight(.bold)
-                                                }
-                                                .padding(8)
-                                                .background(scoreColor(for: scoreValue))
-                                                .cornerRadius(8)
+                                        ForEach(vibeScores.indices, id: \.self) { index in
+                                            let dataPoint = vibeScores[index]
+                                            VStack {
+                                                Text(dataPoint.time)
+                                                    .font(.caption2)
+                                                Text(String(format: "%.0f", dataPoint.score))
+                                                    .font(.caption)
+                                                    .fontWeight(.bold)
                                             }
+                                            .padding(8)
+                                            .background(scoreColor(for: dataPoint.score))
+                                            .cornerRadius(8)
                                         }
                                     }
                                 }
@@ -259,8 +224,8 @@ struct ReportTestView: View {
                         }
                         
                         // 処理情報
-                        if let processedAt = report.processedAt {
-                            Text("処理日時: \(processedAt)")
+                        if let updatedAt = report.updatedAt {
+                            Text("更新日時: \(updatedAt)")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
                         }

@@ -44,9 +44,9 @@ struct RPCDashboardResponse: Codable {
 class SupabaseDataManager: ObservableObject {
     
     // MARK: - Published Properties
-    @Published var dailyReport: DailyVibeReport?
+    @Published var dailyReport: DashboardSummary?
     // dailyBehaviorReport, dailyEmotionReportは削除（各Viewがローカルで管理）
-    @Published var weeklyReports: [DailyVibeReport] = []
+    @Published var weeklyReports: [DashboardSummary] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
     @Published var subject: Subject?
@@ -115,14 +115,14 @@ class SupabaseDataManager: ObservableObject {
         
         print("📅 月間データ取得: \(startDateString) 〜 \(endDateString)")
         
-        // Supabaseから月間データを取得（dashboard_summaryテーブルを使用）
+        // Supabaseから月間データを取得（daily_resultsテーブルを使用）
         do {
             let dashboardReports: [DashboardSummary] = try await supabase
-                .from("dashboard_summary")
+                .from("daily_results")
                 .select()
                 .eq("device_id", value: deviceId)
-                .gte("date", value: startDateString)
-                .lte("date", value: endDateString)
+                .gte("local_date", value: startDateString)
+                .lte("local_date", value: endDateString)
                 .execute()
                 .value
 
@@ -202,19 +202,19 @@ class SupabaseDataManager: ObservableObject {
     func fetchDailyReport(for deviceId: String, date: Date) async {
         let dateString = dateFormatter.string(from: date)
         print("📅 Fetching daily report for device: \(deviceId), date: \(dateString)")
-        
-        // URLの構築
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/vibe_whisper_summary") else {
+
+        // URLの構築（daily_resultsテーブルを使用）
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/daily_results") else {
             errorMessage = "無効なURL"
             isLoading = false
             return
         }
-        
-        // クエリパラメータの構築
+
+        // クエリパラメータの構築（local_dateカラムを使用）
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
-            URLQueryItem(name: "date", value: "eq.\(dateString)"),
+            URLQueryItem(name: "local_date", value: "eq.\(dateString)"),
             URLQueryItem(name: "select", value: "*")
         ]
         
@@ -248,19 +248,18 @@ class SupabaseDataManager: ObservableObject {
                     print("📄 Raw response: \(rawResponse)")
                 }
                 
-                // レスポンスをデコード
+                // レスポンスをデコード（DashboardSummaryモデルを使用）
                 let decoder = JSONDecoder()
-                // processed_atはStringで受け取るため、特別な日付デコード戦略は不要
-                
+
                 do {
-                    let reports = try decoder.decode([DailyVibeReport].self, from: data)
+                    let reports = try decoder.decode([DashboardSummary].self, from: data)
                     print("📊 Decoded reports count: \(reports.count)")
-                    
+
                     if let report = reports.first {
                         self.dailyReport = report
                         print("✅ Daily report fetched successfully")
-                        print("   Average score: \(report.averageScore)")
-                        print("   Insights count: \(report.insights.count)")
+                        print("   Average score: \(report.averageVibe ?? 0)")
+                        print("   Insights: \(report.insights ?? "No insights")")
                     } else {
                         print("⚠️ No report found for the specified date")
                         self.dailyReport = nil
@@ -304,28 +303,28 @@ class SupabaseDataManager: ObservableObject {
         isLoading = true
         errorMessage = nil
         weeklyReports = []
-        
+
         let startDateString = dateFormatter.string(from: startDate)
         let endDateString = dateFormatter.string(from: endDate)
-        
+
         print("📅 Fetching weekly reports for device: \(deviceId)")
         print("   From: \(startDateString) To: \(endDateString)")
-        
-        // URLの構築
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/vibe_whisper_summary") else {
+
+        // URLの構築（daily_resultsテーブルを使用）
+        guard let url = URL(string: "\(supabaseURL)/rest/v1/daily_results") else {
             errorMessage = "無効なURL"
             isLoading = false
             return
         }
-        
-        // クエリパラメータの構築
+
+        // クエリパラメータの構築（local_dateカラムを使用）
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.queryItems = [
             URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
-            URLQueryItem(name: "date", value: "gte.\(startDateString)"),
-            URLQueryItem(name: "date", value: "lte.\(endDateString)"),
+            URLQueryItem(name: "local_date", value: "gte.\(startDateString)"),
+            URLQueryItem(name: "local_date", value: "lte.\(endDateString)"),
             URLQueryItem(name: "select", value: "*"),
-            URLQueryItem(name: "order", value: "date.asc")
+            URLQueryItem(name: "order", value: "local_date.asc")
         ]
         
         guard let requestURL = components?.url else {
@@ -353,13 +352,12 @@ class SupabaseDataManager: ObservableObject {
             print("📡 Response status: \(httpResponse.statusCode)")
             
             if httpResponse.statusCode == 200 {
-                // レスポンスをデコード
+                // レスポンスをデコード（DashboardSummaryモデルを使用）
                 let decoder = JSONDecoder()
-                // processed_atはStringで受け取るため、特別な日付デコード戦略は不要
-                
-                let reports = try decoder.decode([DailyVibeReport].self, from: data)
+
+                let reports = try decoder.decode([DashboardSummary].self, from: data)
                 self.weeklyReports = reports
-                
+
                 print("✅ Weekly reports fetched successfully")
                 print("   Reports count: \(reports.count)")
             } else {
@@ -833,38 +831,38 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Dashboard Time Blocks Methods
     
-    /// dashboardテーブルから指定日の時間ブロックごとの詳細データを取得
+    /// spot_resultsテーブルから指定日の詳細データを取得
     /// - Parameters:
     ///   - deviceId: デバイスID
     ///   - date: 対象日付
-    /// - Returns: 時間ブロックごとのデータ配列（時間順でソート済み）
+    /// - Returns: 録音ごとのデータ配列（時間順でソート済み）
     func fetchDashboardTimeBlocks(deviceId: String, date: Date) async -> [DashboardTimeBlock] {
-        print("📊 Fetching dashboard time blocks for device: \(deviceId)")
-        
+        print("📊 Fetching spot results for device: \(deviceId)")
+
         // 日付フォーマッタの設定
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
         formatter.timeZone = TimeZone.current
         let dateString = formatter.string(from: date)
-        
+
         print("   Date: \(dateString)")
-        
+
         do {
-            // dashboardテーブルから指定デバイス・日付のデータを取得
+            // spot_resultsテーブルから指定デバイス・日付のデータを取得
             let timeBlocks: [DashboardTimeBlock] = try await supabase
-                .from("dashboard")
+                .from("spot_results")
                 .select()
                 .eq("device_id", value: deviceId)
-                .eq("date", value: dateString)
-                .order("time_block", ascending: true)
+                .eq("local_date", value: dateString)
+                .order("local_time", ascending: true)
                 .execute()
                 .value
-            
-            print("✅ Successfully fetched \(timeBlocks.count) time blocks")
+
+            print("✅ Successfully fetched \(timeBlocks.count) spot results")
             return timeBlocks
-            
+
         } catch {
-            print("❌ Failed to fetch dashboard time blocks: \(error)")
+            print("❌ Failed to fetch spot results: \(error)")
             print("   Error details: \(error.localizedDescription)")
             return []
         }
