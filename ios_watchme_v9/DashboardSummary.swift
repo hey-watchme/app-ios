@@ -83,38 +83,41 @@ struct BurstEvent: Codable {
 }
 
 // MARK: - Analysis Result
-// analysis_result JSONBフィールドの構造
+// profile_result JSONBフィールドの構造（2-layer nested structure）
 struct AnalysisResult: Codable {
-    let cumulativeEvaluation: [String]?
-    
+    let summary: String?
+    let behavior: String?
+    let vibeScore: Int?
+    let profileResult: ProfileResultDetails?
+
     enum CodingKeys: String, CodingKey {
-        case cumulativeEvaluation = "cumulative_evaluation"
+        case summary
+        case behavior
+        case vibeScore = "vibe_score"
+        case profileResult = "profile_result"
     }
-    
-    // カスタムデコーダーで柔軟に処理
+
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        
-        // cumulative_evaluationが文字列、配列、nullのいずれかに対応
-        if let stringValue = try? container.decode(String.self, forKey: .cumulativeEvaluation) {
-            // 文字列の場合、改行で分割または単一要素の配列として扱う
-            if stringValue.contains("\n") {
-                self.cumulativeEvaluation = stringValue.components(separatedBy: "\n").filter { !$0.isEmpty }
-            } else {
-                self.cumulativeEvaluation = [stringValue]
-            }
-        } else if let arrayValue = try? container.decode([String].self, forKey: .cumulativeEvaluation) {
-            // 配列の場合はそのまま使用
-            self.cumulativeEvaluation = arrayValue
-        } else {
-            // nullまたはデコードできない場合
-            self.cumulativeEvaluation = nil
-        }
+
+        summary = try? container.decodeIfPresent(String.self, forKey: .summary)
+        behavior = try? container.decodeIfPresent(String.self, forKey: .behavior)
+        vibeScore = try? container.decodeIfPresent(Int.self, forKey: .vibeScore)
+        profileResult = try? container.decodeIfPresent(ProfileResultDetails.self, forKey: .profileResult)
     }
-    
-    func encode(to encoder: Encoder) throws {
-        var container = encoder.container(keyedBy: CodingKeys.self)
-        try container.encodeIfPresent(cumulativeEvaluation, forKey: .cumulativeEvaluation)
+}
+
+// MARK: - Profile Result Details
+// Nested profile_result details structure
+struct ProfileResultDetails: Codable {
+    let dailyTrend: String?
+    let keyMoments: [String]?
+    let emotionalStability: String?
+
+    enum CodingKeys: String, CodingKey {
+        case dailyTrend = "daily_trend"
+        case keyMoments = "key_moments"
+        case emotionalStability = "emotional_stability"
     }
 }
 

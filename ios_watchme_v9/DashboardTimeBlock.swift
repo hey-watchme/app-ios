@@ -2,7 +2,7 @@
 //  DashboardTimeBlock.swift
 //  ios_watchme_v9
 //
-//  dashboardテーブルの時間ブロックごとのデータモデル
+//  spot_resultsテーブルの録音ごとのデータモデル
 //
 
 import Foundation
@@ -10,37 +10,60 @@ import SwiftUI
 
 struct DashboardTimeBlock: Codable {
     let deviceId: String
-    let date: String
-    let timeBlock: String  // "10-00", "10-30" など
-    let summary: String?    // その時間帯の詳細説明
-    let behavior: String?   // その時間帯の行動
+    let date: String?  // local_dateをdateにマッピング（nullの可能性あり）
+    let recordedAt: String?  // recorded_at (UTC)（nullの可能性あり）
+    let localTime: String?  // local_time (YYYY-MM-DD HH:MM:SS)
+    let summary: String?    // その録音の詳細説明
+    let behavior: String?   // その録音の行動
     let vibeScore: Double?
     let createdAt: String?
     let updatedAt: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case deviceId = "device_id"
-        case date
-        case timeBlock = "time_block"
+        case date = "local_date"
+        case recordedAt = "recorded_at"
+        case localTime = "local_time"
         case summary
         case behavior
         case vibeScore = "vibe_score"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
     }
-    
+
     // 表示用の時刻文字列を生成（例: "10:00"）
     var displayTime: String {
-        timeBlock.replacingOccurrences(of: "-", with: ":")
+        // local_timeから時刻部分を抽出 (YYYY-MM-DD HH:MM:SS -> HH:MM)
+        if let localTime = localTime {
+            let components = localTime.split(separator: " ")
+            if components.count >= 2 {
+                let timeComponents = components[1].split(separator: ":")
+                if timeComponents.count >= 2 {
+                    return "\(timeComponents[0]):\(timeComponents[1])"
+                }
+            }
+        }
+        // フォールバック: recorded_atから時刻抽出
+        if let recordedAt = recordedAt {
+            let components = recordedAt.split(separator: "T")
+            if components.count >= 2 {
+                let timeComponents = components[1].split(separator: ":")
+                if timeComponents.count >= 2 {
+                    return "\(timeComponents[0]):\(timeComponents[1])"
+                }
+            }
+        }
+        return "00:00"
     }
-    
+
     // 時間ブロックのインデックス（0-47）を計算
     var timeIndex: Int {
-        let components = timeBlock.split(separator: "-")
-        guard components.count == 2,
-              let hour = Int(components[0]),
-              let minute = Int(components[1]) else { return 0 }
-        
+        // displayTimeから計算 (HH:MM)
+        let timeComponents = displayTime.split(separator: ":")
+        guard timeComponents.count == 2,
+              let hour = Int(timeComponents[0]),
+              let minute = Int(timeComponents[1]) else { return 0 }
+
         return hour * 2 + (minute >= 30 ? 1 : 0)
     }
     
