@@ -7,34 +7,46 @@
 
 import Foundation
 
+// MARK: - Vibe Score Data Point
+// vibe_scores配列の各要素の構造
+struct VibeScoreDataPoint: Codable, Equatable {
+    let time: String  // HH:MM format
+    let score: Double  // Vibe score
+
+    enum CodingKeys: String, CodingKey {
+        case time
+        case score
+    }
+}
+
 // MARK: - Dashboard Summary Data Model
-// dashboard_summaryテーブルの構造に対応したデータモデル
+// daily_resultsテーブルの構造に対応したデータモデル
 struct DashboardSummary: Codable {
     let deviceId: UUID
-    let date: String
+    let date: String  // local_dateをdateとしてマッピング（既存コードとの互換性のため）
     // JSONB型は様々な形式を取る可能性があるため、デコードを試みるがエラーは無視
     let processedCount: Int?
     let lastTimeBlock: String?
     let createdAt: String?
     let updatedAt: String?
-    let averageVibe: Float?  // 新しい平均スコアカラム（今回使用する主要フィールド）
-    let vibeScores: [Double?]?
-    let analysisResult: AnalysisResult?  // cumulative_evaluationを含むJSONBフィールド
-    let insights: String?  // 新規追加：1日のサマリーインサイト
-    let burstEvents: [BurstEvent]?  // 新規追加：バーストイベント配列
-    
+    let averageVibe: Float?  // vibe_scoreカラム（平均スコア）
+    let vibeScores: [VibeScoreDataPoint]?  // Time-based vibe scores (not 48-block based)
+    let analysisResult: AnalysisResult?  // profile_resultを含むJSONBフィールド
+    let insights: String?  // summaryカラム: 1日のサマリーインサイト
+    let burstEvents: [BurstEvent]?  // burst_eventsカラム: バーストイベント配列
+
     // CodingKeysでSnake caseとCamel caseを変換
     enum CodingKeys: String, CodingKey {
         case deviceId = "device_id"
-        case date
+        case date = "local_date"  // daily_resultsのlocal_dateカラムをdateにマッピング
         case processedCount = "processed_count"
         case lastTimeBlock = "last_time_block"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
-        case averageVibe = "average_vibe"
+        case averageVibe = "vibe_score"  // daily_resultsのvibe_scoreカラム
         case vibeScores = "vibe_scores"
-        case analysisResult = "analysis_result"
-        case insights
+        case analysisResult = "profile_result"  // daily_resultsのprofile_resultカラム
+        case insights = "summary"  // daily_resultsのsummaryカラム
         case burstEvents = "burst_events"
     }
     
@@ -49,7 +61,7 @@ struct DashboardSummary: Codable {
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
         averageVibe = try container.decodeIfPresent(Float.self, forKey: .averageVibe)
-        vibeScores = try container.decodeIfPresent([Double?].self, forKey: .vibeScores)
+        vibeScores = try container.decodeIfPresent([VibeScoreDataPoint].self, forKey: .vibeScores)
         analysisResult = try container.decodeIfPresent(AnalysisResult.self, forKey: .analysisResult)
         insights = try container.decodeIfPresent(String.self, forKey: .insights)
         burstEvents = try container.decodeIfPresent([BurstEvent].self, forKey: .burstEvents)
@@ -59,18 +71,14 @@ struct DashboardSummary: Codable {
 // MARK: - Burst Event
 // burst_events JSONBフィールドの構造
 struct BurstEvent: Codable {
-    let time: String
-    let event: String
-    let scoreChange: Int
-    let fromScore: Int
-    let toScore: Int
-    
+    let time: String  // HH:MM format
+    let score: Double  // Current vibe score
+    let change: Double  // Score change from previous recording
+
     enum CodingKeys: String, CodingKey {
         case time
-        case event
-        case scoreChange = "score_change"
-        case fromScore = "from_score"
-        case toScore = "to_score"
+        case score
+        case change
     }
 }
 
