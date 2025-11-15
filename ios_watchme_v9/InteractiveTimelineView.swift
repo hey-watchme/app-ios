@@ -141,6 +141,7 @@ struct InteractiveTimelineView: View {
             
             // グラフライン（現在位置まで）- 黒い太線
             Path { path in
+                guard vibeScores.count > 0 else { return }
                 var firstPoint = true
 
                 for index in 0...min(currentTimeIndex, vibeScores.count - 1) {
@@ -148,7 +149,7 @@ struct InteractiveTimelineView: View {
                     let score = vibeScores[index].score
                     let normalizedScore = (score + 100) / 200
                     let y = geometry.size.height * (1 - normalizedScore)
-                    
+
                     if firstPoint {
                         path.move(to: CGPoint(x: x, y: y))
                         firstPoint = false
@@ -169,14 +170,20 @@ struct InteractiveTimelineView: View {
             
             // 未来のグラフライン（グレーの細線）
             Path { path in
+                guard vibeScores.count > 0 else { return }
                 var firstPoint = true
 
-                for index in max(0, currentTimeIndex)...(vibeScores.count - 1) {
+                let startIndex = max(0, currentTimeIndex)
+                let endIndex = vibeScores.count - 1
+
+                guard startIndex <= endIndex else { return }
+
+                for index in startIndex...endIndex {
                     let x = geometry.size.width * CGFloat(index) / CGFloat(max(vibeScores.count - 1, 1))
                     let score = vibeScores[index].score
                     let normalizedScore = (score + 100) / 200
                     let y = geometry.size.height * (1 - normalizedScore)
-                    
+
                     if firstPoint {
                         path.move(to: CGPoint(x: x, y: y))
                         firstPoint = false
