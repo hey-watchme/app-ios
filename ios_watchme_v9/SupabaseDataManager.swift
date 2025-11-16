@@ -386,37 +386,53 @@ class SupabaseDataManager: ObservableObject {
     /// 統合データフェッチメソッド - すべてのグラフデータを一括で取得
     /// DashboardDataを返し、互換性のため@Publishedプロパティも更新
     /// すべてのレポートを取得するメインメソッド
-    /// 
-    /// 🚀 このメソッドは内部でRPC関数 'get_dashboard_data' を使用します
-    /// 1回のAPIコールで全データ（vibe, behavior, emotion, subject）を取得
+    ///
+    /// 🔄 Phase 1: daily_resultsテーブルへの直接アクセス（RPC解除）
+    /// 気分データのみ取得、行動・感情は将来実装
     ///
     /// - Parameters:
     ///   - deviceId: デバイスID
     ///   - date: 取得したい日付
     ///   - timezone: デバイス固有のタイムゾーン
-    /// - Returns: DashboardData（すべてのレポートを含む）
+    /// - Returns: DashboardData（気分データのみ含む）
     func fetchAllReports(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
         isLoading = true
         errorMessage = nil
-        
-        // 🎯 RPC関数を使用して全データを一括取得（タイムゾーンを渡す）
-        let dashboardData = await fetchAllReportsData(deviceId: deviceId, date: date, timezone: timezone)
-        
+
+        // 🎯 Phase 1: daily_resultsテーブルに直接アクセス
+        let dashboardSummary = await fetchDailyResults(deviceId: deviceId, date: date, timezone: timezone)
+
+        // Subject情報を取得（軽量RPC）
+        let subject = await fetchSubjectInfo(deviceId: deviceId)
+
+        // コメントを取得
+        let comments = await fetchComments(subjectId: subject?.subjectId ?? "", date: date)
+
         // @Publishedプロパティも更新（互換性のため）
         await MainActor.run {
-            self.dailyReport = nil  // vibeReportは廃止
-            // dailyBehaviorReport, dailyEmotionReportの更新は削除（各Viewがローカルで管理）
+            self.dailyReport = dashboardSummary
             self.isLoading = false
         }
-        
-        print("✅ [RPC] All reports fetching completed with subject info")
-        return dashboardData
+
+        print("✅ [Direct Access] Dashboard data fetching completed (vibe only)")
+
+        // Phase 1: 気分のみ対応、行動・感情はnil
+        return DashboardData(
+            behaviorReport: nil,  // Phase 2で実装予定
+            emotionReport: nil,   // Phase 2で実装予定
+            subject: subject,
+            dashboardSummary: dashboardSummary,
+            subjectComments: comments.isEmpty ? nil : comments
+        )
     }
     
-    // MARK: - Data Fetching Methods
-    
+    // MARK: - Data Fetching Methods (Legacy RPC - Phase 3で再導入予定)
+
     /// 統合データフェッチメソッド - すべてのグラフデータを一括で取得
-    /// 
+    ///
+    /// ⚠️ 非推奨: Phase 1では直接アクセス方式を使用（fetchDailyResults）
+    /// Phase 3でRPC最適化として再導入予定
+    ///
     /// ⚠️ 重要: このメソッドはSupabase RPC関数 'get_dashboard_data' を使用します
     /// RPC関数は1回のAPIコールで以下のデータをすべて取得します：
     /// - vibe_report (心理データ)
@@ -434,6 +450,7 @@ class SupabaseDataManager: ObservableObject {
     ///   - date: 取得したい日付
     ///   - timezone: デバイス固有のタイムゾーン（指定しない場合は現在のタイムゾーン）
     /// - Returns: DashboardData（すべてのレポートを含む）
+    @available(*, deprecated, message: "Phase 1では使用しない。Phase 3でRPC再導入時に復活予定。現在はfetchDailyResults()を使用。")
     func fetchAllReportsData(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
         // デバイス固有のタイムゾーンを適用
         let targetTimezone = timezone ?? TimeZone.current
@@ -829,8 +846,74 @@ class SupabaseDataManager: ObservableObject {
         print("✅ Device subject_id updated successfully")
     }
     
+    // MARK: - Daily Results Methods
+
+    /// daily_resultsテーブルから指定日のサマリーデータを取得（直接アクセス）
+    /// - Parameters:
+    ///   - deviceId: デバイスID
+    ///   - date: 対象日付
+    ///   - timezone: デバイス固有のタイムゾーン
+    /// - Returns: 1日のサマリーデータ（DashboardSummary）
+    func fetchDailyResults(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardSummary? {
+        // タイムゾーンを適用
+        let targetTimezone = timezone ?? TimeZone.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = targetTimezone
+        let dateString = formatter.string(from: date)
+
+        print("📊 [Direct Access] Fetching daily_results")
+        print("   Device: \(deviceId)")
+        print("   Date: \(dateString)")
+        print("   Timezone: \(targetTimezone.identifier)")
+
+        do {
+            // daily_resultsテーブルから直接取得
+            let results: [DashboardSummary] = try await supabase
+                .from("daily_results")
+                .select()
+                .eq("device_id", value: deviceId)
+                .eq("local_date", value: dateString)
+                .execute()
+                .value
+
+            if let summary = results.first {
+                print("✅ [Direct Access] Daily results found")
+                print("   Average Vibe: \(summary.averageVibe ?? 0)")
+                print("   Insights: \(summary.insights != nil ? "✓" : "✗")")
+                print("   Vibe Scores: \(summary.vibeScores?.count ?? 0) points")
+                return summary
+            } else {
+                print("ℹ️ [Direct Access] No daily results found for \(dateString)")
+                return nil
+            }
+
+        } catch {
+            print("❌ [Direct Access] Failed to fetch daily_results: \(error)")
+            print("   Error details: \(error.localizedDescription)")
+
+            // デコードエラーの詳細
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("   Key not found: \(key.stringValue) at \(context.codingPath)")
+                case .typeMismatch(let type, let context):
+                    print("   Type mismatch: expected \(type) at \(context.codingPath)")
+                case .valueNotFound(let type, let context):
+                    print("   Value not found: \(type) at \(context.codingPath)")
+                case .dataCorrupted(let context):
+                    print("   Data corrupted at \(context.codingPath)")
+                @unknown default:
+                    print("   Unknown decoding error")
+                }
+            }
+
+            return nil
+        }
+    }
+
     // MARK: - Dashboard Time Blocks Methods
-    
+
     /// spot_resultsテーブルから指定日の詳細データを取得
     /// - Parameters:
     ///   - deviceId: デバイスID
@@ -855,7 +938,7 @@ class SupabaseDataManager: ObservableObject {
                 .select("device_id, local_date, recorded_at, local_time, summary, behavior, vibe_score, created_at")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
-                .order("local_time", ascending: true)
+                .order("local_time", ascending: true)  // ユーザーのローカルタイムでソート（生活リズムを反映）
                 .execute()
                 .value
 
