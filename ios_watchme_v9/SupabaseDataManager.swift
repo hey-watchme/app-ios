@@ -920,7 +920,7 @@ class SupabaseDataManager: ObservableObject {
     ///   - date: 対象日付
     /// - Returns: 録音ごとのデータ配列（時間順でソート済み）
     func fetchDashboardTimeBlocks(deviceId: String, date: Date) async -> [DashboardTimeBlock] {
-        print("📊 Fetching spot results for device: \(deviceId)")
+        print("📊 Fetching spot results with features for device: \(deviceId)")
 
         // 日付フォーマッタの設定
         let formatter = DateFormatter()
@@ -931,9 +931,19 @@ class SupabaseDataManager: ObservableObject {
         print("   Date: \(dateString)")
 
         do {
-            // spot_resultsテーブルから指定デバイス・日付のデータを取得
-            // 必要なカラムのみを明示的に指定してデコードエラーを防ぐ
-            let timeBlocks: [DashboardTimeBlock] = try await supabase
+            // Step 1: spot_resultsテーブルから基本データを取得
+            struct SpotResult: Codable {
+                let device_id: String
+                let local_date: String?
+                let recorded_at: String?
+                let local_time: String?
+                let summary: String?
+                let behavior: String?
+                let vibe_score: Double?
+                let created_at: String?
+            }
+
+            let spotResults: [SpotResult] = try await supabase
                 .from("spot_results")
                 .select("device_id, local_date, recorded_at, local_time, summary, behavior, vibe_score, created_at")
                 .eq("device_id", value: deviceId)
@@ -942,17 +952,99 @@ class SupabaseDataManager: ObservableObject {
                 .execute()
                 .value
 
-            print("✅ Successfully fetched \(timeBlocks.count) spot results")
+            print("✅ Fetched \(spotResults.count) spot results")
+
+            // Step 2: spot_featuresテーブルから追加データを取得
+            struct SpotFeature: Codable {
+                let device_id: String
+                let recorded_at: String?
+                let behavior_extractor_result: [SEDBehaviorTimePoint]?
+                let emotion_extractor_result: [EmotionChunk]?
+            }
+
+            let spotFeatures: [SpotFeature] = try await supabase
+                .from("spot_features")
+                .select("device_id, recorded_at, behavior_extractor_result, emotion_extractor_result")
+                .eq("device_id", value: deviceId)
+                .eq("local_date", value: dateString)
+                .execute()
+                .value
+
+            print("✅ Fetched \(spotFeatures.count) spot features")
+
+            // Step 3: Merge data by recorded_at
+            let featureMap = Dictionary(uniqueKeysWithValues: spotFeatures.compactMap { feature -> (String, SpotFeature)? in
+                guard let recordedAt = feature.recorded_at else { return nil }
+                return (recordedAt, feature)
+            })
+
+            let timeBlocks: [DashboardTimeBlock] = spotResults.compactMap { result in
+                guard let recordedAt = result.recorded_at else { return nil }
+                let feature = featureMap[recordedAt]
+
+                // Manually construct DashboardTimeBlock
+                let jsonData = try? JSONSerialization.data(withJSONObject: [
+                    "device_id": result.device_id,
+                    "local_date": result.local_date as Any,
+                    "recorded_at": result.recorded_at as Any,
+                    "local_time": result.local_time as Any,
+                    "summary": result.summary as Any,
+                    "behavior": result.behavior as Any,
+                    "vibe_score": result.vibe_score as Any,
+                    "created_at": result.created_at as Any,
+                    "behavior_extractor_result": (feature?.behavior_extractor_result ?? []).map { point in
+                        [
+                            "time": point.time,
+                            "events": point.events.map { event in
+                                ["label": event.label, "score": event.score]
+                            }
+                        ]
+                    },
+                    "emotion_extractor_result": (feature?.emotion_extractor_result ?? []).map { chunk in
+                        [
+                            "chunk_id": chunk.chunk_id,
+                            "duration": chunk.duration,
+                            "emotions": chunk.emotions.map { emotion in
+                                [
+                                    "group": emotion.group as Any,
+                                    "label": emotion.label,
+                                    "score": emotion.score as Any,
+                                    "name_en": emotion.name_en as Any,
+                                    "name_ja": emotion.name_ja,
+                                    "percentage": emotion.percentage
+                                ]
+                            },
+                            "end_time": chunk.end_time,
+                            "start_time": chunk.start_time,
+                            "primary_emotion": [
+                                "group": chunk.primary_emotion.group as Any,
+                                "label": chunk.primary_emotion.label,
+                                "score": chunk.primary_emotion.score as Any,
+                                "name_en": chunk.primary_emotion.name_en as Any,
+                                "name_ja": chunk.primary_emotion.name_ja,
+                                "percentage": chunk.primary_emotion.percentage
+                            ]
+                        ]
+                    }
+                ], options: [])
+
+                guard let data = jsonData else { return nil }
+                return try? JSONDecoder().decode(DashboardTimeBlock.self, from: data)
+            }
+
+            print("✅ Successfully merged \(timeBlocks.count) time blocks")
 
             // Log each time block for debugging
             for block in timeBlocks {
-                print("   - \(block.displayTime): score=\(block.vibeScore ?? 0), behavior=\(block.behavior ?? "none")")
+                let behaviorCount = block.behaviorTimePoints.count
+                let emotionCount = block.emotionChunks.count
+                print("   - \(block.displayTime): score=\(block.vibeScore ?? 0), behaviors=\(behaviorCount), emotions=\(emotionCount)")
             }
 
             return timeBlocks
 
         } catch {
-            print("❌ Failed to fetch spot results: \(error)")
+            print("❌ Failed to fetch spot data: \(error)")
             print("   Error details: \(error.localizedDescription)")
 
             // Decoding error details

@@ -8,6 +8,46 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Behavior Extractor Models (SED)
+
+struct SEDBehaviorEvent: Codable, Equatable {
+    let label: String
+    let score: Double
+
+    // Extract Japanese label from "Speech / 会話・発話" format
+    var japaneseLabel: String {
+        let parts = label.split(separator: "/").map { $0.trimmingCharacters(in: .whitespaces) }
+        return parts.last ?? label
+    }
+}
+
+struct SEDBehaviorTimePoint: Codable, Equatable {
+    let time: Double
+    let events: [SEDBehaviorEvent]
+}
+
+// MARK: - Emotion Extractor Models
+
+struct EmotionDetail: Codable, Equatable {
+    let group: String?
+    let label: String
+    let score: Double?
+    let name_en: String?
+    let name_ja: String
+    let percentage: Double
+}
+
+struct EmotionChunk: Codable, Equatable {
+    let chunk_id: Int
+    let duration: Double
+    let emotions: [EmotionDetail]
+    let end_time: Double
+    let start_time: Double
+    let primary_emotion: EmotionDetail
+}
+
+// MARK: - Dashboard Time Block
+
 struct DashboardTimeBlock: Codable, Equatable {
     let deviceId: String
     let date: String?  // local_dateをdateにマッピング（nullの可能性あり）
@@ -18,6 +58,10 @@ struct DashboardTimeBlock: Codable, Equatable {
     let vibeScore: Double?
     let createdAt: String?
     let updatedAt: String?
+
+    // spot_features からの追加データ（Supabaseが自動的にパースした配列）
+    let behaviorTimePoints: [SEDBehaviorTimePoint]
+    let emotionChunks: [EmotionChunk]
 
     // 表示用の時刻文字列（初期化時に1回だけ計算してキャッシュ）
     let displayTime: String
@@ -32,6 +76,8 @@ struct DashboardTimeBlock: Codable, Equatable {
         case vibeScore = "vibe_score"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
+        case behaviorTimePoints = "behavior_extractor_result"
+        case emotionChunks = "emotion_extractor_result"
     }
 
     init(from decoder: Decoder) throws {
@@ -46,6 +92,10 @@ struct DashboardTimeBlock: Codable, Equatable {
         vibeScore = try container.decodeIfPresent(Double.self, forKey: .vibeScore)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+
+        // Supabaseが自動パースした配列を取得（失敗時は空配列）
+        behaviorTimePoints = (try? container.decodeIfPresent([SEDBehaviorTimePoint].self, forKey: .behaviorTimePoints)) ?? []
+        emotionChunks = (try? container.decodeIfPresent([EmotionChunk].self, forKey: .emotionChunks)) ?? []
 
         // displayTimeを初期化時に1回だけ計算（キャッシュ）
         displayTime = Self.calculateDisplayTime(localTime: localTime, recordedAt: recordedAt, deviceId: deviceId)
@@ -101,7 +151,7 @@ struct DashboardTimeBlock: Codable, Equatable {
         guard let score = vibeScore else {
             return Color.safeColor("BehaviorTextTertiary")
         }
-        
+
         if score > 10 {
             return Color.safeColor("SuccessColor")
         } else if score < -10 {
@@ -109,5 +159,59 @@ struct DashboardTimeBlock: Codable, Equatable {
         } else {
             return Color.safeColor("BorderLight")
         }
+    }
+
+    // MARK: - Aggregated Data for Display
+
+    /// Top behaviors aggregated from all time points (sorted by average score)
+    var topBehaviors: [(label: String, score: Double)] {
+        let timePoints = behaviorTimePoints
+        guard !timePoints.isEmpty else { return [] }
+
+        // Collect all events across all time points
+        var eventScores: [String: [Double]] = [:]
+
+        for point in timePoints {
+            for event in point.events {
+                eventScores[event.japaneseLabel, default: []].append(event.score)
+            }
+        }
+
+        // Calculate average score for each label
+        let averaged = eventScores.map { (label, scores) -> (label: String, score: Double) in
+            let avgScore = scores.reduce(0.0, +) / Double(scores.count)
+            return (label, avgScore)
+        }
+
+        // Filter by minimum threshold (0.1) and sort by score
+        return averaged
+            .filter { $0.score > 0.1 }
+            .sorted { $0.score > $1.score }
+    }
+
+    /// Top emotions aggregated from all chunks (sorted by average percentage)
+    var topEmotions: [(name: String, percentage: Double)] {
+        let chunks = emotionChunks
+        guard !chunks.isEmpty else { return [] }
+
+        // Collect all emotions across all chunks
+        var emotionPercentages: [String: [Double]] = [:]
+
+        for chunk in chunks {
+            for emotion in chunk.emotions {
+                emotionPercentages[emotion.name_ja, default: []].append(emotion.percentage)
+            }
+        }
+
+        // Calculate average percentage for each emotion
+        let averaged = emotionPercentages.map { (name, percentages) -> (name: String, percentage: Double) in
+            let avgPercentage = percentages.reduce(0.0, +) / Double(percentages.count)
+            return (name, avgPercentage)
+        }
+
+        // Filter by minimum threshold (5%) and sort by percentage
+        return averaged
+            .filter { $0.percentage > 5.0 }
+            .sorted { $0.percentage > $1.percentage }
     }
 }

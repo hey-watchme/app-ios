@@ -75,9 +75,14 @@ struct ModernVibeCard: View {
                 
                 // インタラクティブタイムライン（Phase 2）
                 // spot_resultsから取得したtimeBlocksを使用
-                if !timeBlocks.isEmpty {
+                // ⚠️ エラーデータはグラフから除外（グラフのジャンプ問題を防ぐ）
+                let validTimeBlocks = timeBlocks.filter { block in
+                    block.displayTime != "⚠️ ERROR" && block.displayTime != "⚠️ PARSE ERROR"
+                }
+
+                if !validTimeBlocks.isEmpty {
                     InteractiveTimelineView(
-                        timeBlocks: timeBlocks,
+                        timeBlocks: validTimeBlocks,
                         burstEvents: dashboardSummary?.burstEvents,  // dashboard_summaryから取得
                         onEventBurst: { score in
                             // バーストエフェクトをトリガー
@@ -103,11 +108,11 @@ struct ModernVibeCard: View {
                     Spacer()
                     
                     Button(action: {
-                        // 気分詳細への遷移
+                        // 分析結果の一覧への遷移
                         onNavigateToDetail?()
                     }) {
                         HStack(spacing: 4) {
-                            Text("気分詳細")
+                            Text("分析結果の一覧")
                                 .font(.caption)
                                 .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
                             Image(systemName: "chevron.right")

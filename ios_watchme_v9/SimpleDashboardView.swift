@@ -97,14 +97,18 @@ struct SimpleDashboardView: View {
                             // 気分カード
                             vibeGraphCard
                                 .padding(.horizontal, 20)
-                            
-                            // 行動グラフカード
-                            behaviorGraphCard
+
+                            // スポット分析セクション（最新3件）
+                            spotAnalysisSection
                                 .padding(.horizontal, 20)
-                            
-                            // 感情グラフカード
-                            emotionGraphCard
-                                .padding(.horizontal, 20)
+
+                            // 行動グラフカード（一時的に非表示）
+                            // behaviorGraphCard
+                            //     .padding(.horizontal, 20)
+
+                            // 感情グラフカード（一時的に非表示）
+                            // emotionGraphCard
+                            //     .padding(.horizontal, 20)
                             
                             // コメントセクション
                             if let subject = subject {
@@ -332,12 +336,12 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
-                HomeView(subject: subject, dashboardSummary: dashboardSummary, selectedDate: date)
+                AnalysisListView(timeBlocks: timeBlocks, selectedDate: date)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .environmentObject(userAccountManager)
                     .navigationBarTitleDisplayMode(.large)
-                    .navigationTitle("気分詳細")
+                    .navigationTitle("分析結果の一覧")
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button("閉じる") {
@@ -421,6 +425,58 @@ struct SimpleDashboardView: View {
                     isCommentFieldFocused = false  // キーボードを閉じる
                     showVibeSheet = true
                 }
+            }
+        }
+    }
+
+    private var spotAnalysisSection: some View {
+        VStack(spacing: 16) {
+            // Section title
+            HStack {
+                Text("最新情報")
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                Spacer()
+            }
+
+            // Show latest 3 spot analysis cards (most recent first)
+            let latestBlocks = Array(timeBlocks.suffix(3).reversed())
+
+            if !latestBlocks.isEmpty {
+                VStack(spacing: 12) {
+                    ForEach(latestBlocks, id: \.recordedAt) { block in
+                        SpotAnalysisCard(timeBlock: block)
+                    }
+                }
+
+                // "Show more" button
+                Button(action: {
+                    isCommentFieldFocused = false
+                    showVibeSheet = true
+                }) {
+                    HStack {
+                        Text("もっと見る")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundStyle(Color.safeColor("AppAccentColor"))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color.safeColor("AppAccentColor"))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(Color.safeColor("CardBackground"))
+                    .cornerRadius(12)
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else {
+                // Empty state
+                Text("分析データがありません")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.safeColor("CardBackground"))
+                    .cornerRadius(12)
             }
         }
     }
@@ -934,6 +990,158 @@ struct SimpleDashboardView: View {
         }
     }
 
+}
+
+// MARK: - Spot Analysis Card
+
+struct SpotAnalysisCard: View {
+    let timeBlock: DashboardTimeBlock
+
+    private var summaryFirstLine: String? {
+        guard let summary = timeBlock.summary else { return nil }
+        let lines = summary.components(separatedBy: .newlines)
+        return lines.first?.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // Header row (time and score)
+            HStack(spacing: 12) {
+                Text(timeBlock.displayTime)
+                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
+                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+
+                Spacer()
+
+                if let score = timeBlock.vibeScore {
+                    HStack(spacing: 4) {
+                        Circle()
+                            .fill(timeBlock.scoreColor)
+                            .frame(width: 6, height: 6)
+                        Text(String(format: "%@%.0fpt", score >= 0 ? "+" : "", score))
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(timeBlock.scoreColor)
+                    }
+                } else {
+                    Text("-")
+                        .font(.system(size: 13))
+                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                }
+            }
+
+            // Behavior (from SED analysis)
+            let topBehaviors = timeBlock.topBehaviors
+            if !topBehaviors.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("行動")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+
+                    HStack(spacing: 8) {
+                        ForEach(Array(topBehaviors.prefix(3).enumerated()), id: \.offset) { index, behavior in
+                            HStack(spacing: 4) {
+                                Text(behavior.label)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                Text(String(format: "(%.2f)", behavior.score))
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                            }
+
+                            if index < topBehaviors.prefix(3).count - 1 {
+                                Text("・")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Emotion (from SER analysis)
+            let topEmotions = timeBlock.topEmotions
+            if !topEmotions.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("感情")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+
+                    HStack(spacing: 8) {
+                        ForEach(Array(topEmotions.prefix(3).enumerated()), id: \.offset) { index, emotion in
+                            HStack(spacing: 4) {
+                                Text(emotion.name)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                Text(String(format: "(%.1f%%)", emotion.percentage))
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                            }
+
+                            if index < topEmotions.prefix(3).count - 1 {
+                                Text("・")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Summary (transcription)
+            if let firstLine = summaryFirstLine {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("内容")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+                    Text(firstLine)
+                        .font(.system(size: 13))
+                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                        .lineLimit(3)
+                }
+            }
+        }
+        .padding(16)
+        .background(Color.safeColor("CardBackground"))
+        .cornerRadius(12)
+    }
+}
+
+// MARK: - Analysis List View
+
+struct AnalysisListView: View {
+    let timeBlocks: [DashboardTimeBlock]
+    let selectedDate: Date
+    @EnvironmentObject var deviceManager: DeviceManager
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                // 日付表示
+                DetailPageDateHeader(selectedDate: selectedDate)
+                    .padding(.top, -8)
+
+                if timeBlocks.isEmpty {
+                    // Empty state
+                    GraphEmptyStateView(
+                        graphType: .vibe,
+                        isDeviceLinked: !deviceManager.devices.isEmpty
+                    )
+                    .padding(.horizontal)
+                } else {
+                    // 時系列順（古い→新しい）で全件表示
+                    VStack(spacing: 12) {
+                        ForEach(timeBlocks, id: \.recordedAt) { block in
+                            SpotAnalysisCard(timeBlock: block)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                }
+
+                Spacer(minLength: 50)
+            }
+        }
+        .background(Color.safeColor("BehaviorBackgroundPrimary"))
+    }
 }
 
 // スクロールオフセット用のPreferenceKey
