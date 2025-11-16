@@ -849,9 +849,10 @@ class SupabaseDataManager: ObservableObject {
 
         do {
             // spot_resultsテーブルから指定デバイス・日付のデータを取得
+            // 必要なカラムのみを明示的に指定してデコードエラーを防ぐ
             let timeBlocks: [DashboardTimeBlock] = try await supabase
                 .from("spot_results")
-                .select()
+                .select("device_id, local_date, recorded_at, local_time, summary, behavior, vibe_score, created_at")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
                 .order("local_time", ascending: true)
@@ -859,11 +860,34 @@ class SupabaseDataManager: ObservableObject {
                 .value
 
             print("✅ Successfully fetched \(timeBlocks.count) spot results")
+
+            // Log each time block for debugging
+            for block in timeBlocks {
+                print("   - \(block.displayTime): score=\(block.vibeScore ?? 0), behavior=\(block.behavior ?? "none")")
+            }
+
             return timeBlocks
 
         } catch {
             print("❌ Failed to fetch spot results: \(error)")
             print("   Error details: \(error.localizedDescription)")
+
+            // Decoding error details
+            if let decodingError = error as? DecodingError {
+                switch decodingError {
+                case .keyNotFound(let key, let context):
+                    print("   Key not found: \(key.stringValue) at \(context.codingPath)")
+                case .typeMismatch(let type, let context):
+                    print("   Type mismatch: expected \(type) at \(context.codingPath)")
+                case .valueNotFound(let type, let context):
+                    print("   Value not found: \(type) at \(context.codingPath)")
+                case .dataCorrupted(let context):
+                    print("   Data corrupted at \(context.codingPath)")
+                @unknown default:
+                    print("   Unknown decoding error")
+                }
+            }
+
             return []
         }
     }

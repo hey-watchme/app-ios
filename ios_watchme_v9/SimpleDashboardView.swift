@@ -19,6 +19,7 @@ struct CachedDashboardData {
     let behaviorReport: BehaviorReport?
     let emotionReport: EmotionReport?
     let subject: Subject?
+    let timeBlocks: [DashboardTimeBlock]  // グラフ用データ
     let subjectComments: [SubjectComment]
     let cachedEmotionPercentages: [(String, Double, String, Color)]
     let timestamp: Date
@@ -39,6 +40,7 @@ struct SimpleDashboardView: View {
     @State private var emotionReport: EmotionReport?
     @State private var subject: Subject?
     @State private var dashboardSummary: DashboardSummary?  // メインデータソース
+    @State private var timeBlocks: [DashboardTimeBlock] = []  // グラフ用データ（spot_results）
     @State private var subjectComments: [SubjectComment] = []  // コメント機能追加
     @State private var isLoading = false
     @State private var lastLoadedDeviceID: String? = nil  // 最後に読み込んだデバイスID
@@ -176,6 +178,7 @@ struct SimpleDashboardView: View {
                         self.behaviorReport = cached.behaviorReport
                         self.emotionReport = cached.emotionReport
                         self.subject = cached.subject
+                        self.timeBlocks = cached.timeBlocks  // グラフ用データ
                         self.subjectComments = cached.subjectComments
                         self.cachedEmotionPercentages = cached.cachedEmotionPercentages
                     }
@@ -224,6 +227,7 @@ struct SimpleDashboardView: View {
                     behaviorReport: self.behaviorReport,
                     emotionReport: self.emotionReport,
                     subject: self.subject,
+                    timeBlocks: self.timeBlocks,  // グラフ用データ
                     subjectComments: self.subjectComments,
                     cachedEmotionPercentages: self.cachedEmotionPercentages,
                     timestamp: Date()
@@ -393,6 +397,7 @@ struct SimpleDashboardView: View {
             if let summary = dashboardSummary {
                 ModernVibeCard(
                     dashboardSummary: summary,
+                    timeBlocks: timeBlocks,  // spot_resultsから取得したグラフデータ
                     onNavigateToDetail: { },
                     showTitle: false  // タイトルを非表示
                 )
@@ -654,6 +659,7 @@ struct SimpleDashboardView: View {
         emotionReport = nil
         subject = nil
         dashboardSummary = nil
+        timeBlocks = []  // グラフ用データもクリア
         subjectComments = []  // コメントもクリア
     }
     
@@ -666,6 +672,7 @@ struct SimpleDashboardView: View {
                 self.emotionReport = nil
                 self.subject = nil
                 self.dashboardSummary = nil
+                self.timeBlocks = []
             }
             return
         }
@@ -688,7 +695,13 @@ struct SimpleDashboardView: View {
             date: date,
             timezone: timezone
         )
-        
+
+        // グラフ用にspot_resultsを取得
+        let fetchedTimeBlocks = await dataManager.fetchDashboardTimeBlocks(
+            deviceId: deviceId,
+            date: date
+        )
+
         // 取得したデータを設定
         await MainActor.run {
             self.behaviorReport = result.behaviorReport
@@ -696,6 +709,7 @@ struct SimpleDashboardView: View {
             self.subject = result.subject
             self.dashboardSummary = result.dashboardSummary
             self.subjectComments = result.subjectComments ?? []
+            self.timeBlocks = fetchedTimeBlocks  // グラフ用データ
 
             // 📊 パフォーマンス最適化: 感情データのキャッシュを更新
             if let emotionReport = result.emotionReport {

@@ -79,10 +79,10 @@ struct HomeView: View {
                         // 時間ごとの詳細リスト
                         UnifiedCard(title: "時間ごとの詳細") {
                             VStack(spacing: 0) {
-                                ForEach(timeBlocks, id: \.timeBlock) { block in
+                                ForEach(timeBlocks, id: \.recordedAt) { block in
                                     TimeBlockRowView(timeBlock: block)
-                                    
-                                    if block.timeBlock != timeBlocks.last?.timeBlock {
+
+                                    if block.recordedAt != timeBlocks.last?.recordedAt {
                                         Divider()
                                             .background(Color.safeColor("BorderLight").opacity(0.3))
                                     }

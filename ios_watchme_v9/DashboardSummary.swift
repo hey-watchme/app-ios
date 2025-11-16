@@ -72,13 +72,13 @@ struct DashboardSummary: Codable {
 // burst_events JSONBフィールドの構造
 struct BurstEvent: Codable {
     let time: String  // HH:MM format
-    let score: Double  // Current vibe score
-    let change: Double  // Score change from previous recording
+    let event: String  // Event description
+    let scoreChange: Double  // Score change from previous recording
 
     enum CodingKeys: String, CodingKey {
         case time
-        case score
-        case change
+        case event
+        case scoreChange = "score_change"
     }
 }
 

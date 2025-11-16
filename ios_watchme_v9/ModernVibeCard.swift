@@ -9,7 +9,8 @@ import SwiftUI
 import Charts
 
 struct ModernVibeCard: View {
-    let dashboardSummary: DashboardSummary?  // メインデータソース
+    let dashboardSummary: DashboardSummary?  // 平均スコアとサマリー用
+    let timeBlocks: [DashboardTimeBlock]  // グラフ用データ（spot_resultsから取得）
     var onNavigateToDetail: (() -> Void)? = nil
     var showTitle: Bool = true  // タイトル表示制御用
     @State private var isAnimating = false
@@ -73,18 +74,16 @@ struct ModernVibeCard: View {
                 }
                 
                 // インタラクティブタイムライン（Phase 2）
-                // dashboard_summaryのvibeScoresのみを使用（フォールバックなし）
-                if let vibeScores = dashboardSummary?.vibeScores {
+                // spot_resultsから取得したtimeBlocksを使用
+                if !timeBlocks.isEmpty {
                     InteractiveTimelineView(
-                        vibeScores: vibeScores,
-                        vibeChanges: nil,  // 古いvibeChangesは使用しない
+                        timeBlocks: timeBlocks,
                         burstEvents: dashboardSummary?.burstEvents,  // dashboard_summaryから取得
                         onEventBurst: { score in
                             // バーストエフェクトをトリガー
                             triggerBurst(score: score)
                         }
                     )
-                    // ID管理は親のNewHomeViewに委ねる（ID削除）
                 }
                 
                 // 1日のサマリー（insightsから取得）

@@ -5,118 +5,194 @@ WatchMeプラットフォームのiOSアプリケーション。
 
 ---
 
-## ✅ App Store審査に向けた課題の解決状況 (2025-10-18レビュー)
-
-TestFlight審査に向けて指摘されていた、ガイドライン関連のすべての重要課題は、以下の通り解決済みです。
-
-| 優先度 | 課題 | 詳細 | ガイドライン | ステータス |
-|:---:|:---|:---|:---|:---:|
-| **最優先** | **アカウント削除機能の実装** | ユーザーがアプリ内からアカウント削除を実行できる機能が実装されました。管理画面API経由でデータベースとSupabase認証の完全削除に対応。 | 5.1.1 | ✅ **実装済み（2025-10-19）** |
-| **推奨** | **UGC（コメント）対策機能** | コメント機能に、不適切なコンテンツをユーザーが**通報する機能**が実装されました。 | 1.2 | ✅ **実装済み** |
-| **低** | **マイクパーミッション要求のタイミング** | マイク許可の要求タイミングが、アプリ起動時から**録音機能の初回利用時**に修正されました。 | - | ✅ **修正済み** |
-
----
-
-## 概要
+## 📱 アプリの概要
 
 このアプリは、音声録音とAI分析による心理状態・感情・行動パターンの可視化ツールです。
-手動録音機能と、外部録音デバイス（別途開発中）からアップロードされたデータを統合的に分析・表示します。
-
 療育・教育・ケアサポートの現場において、**観測対象の変化を可視化し、適切なサポートを提供する**ことを目的としています。
+
+### 主要機能
+
+- **手動録音**: アプリ内での音声録音（フォアグラウンドのみ）
+- **AI分析**: 音声認識、感情分析、行動パターン検出
+- **マルチデバイス対応**: 1ユーザーが複数の観測対象デバイス（録音デバイス）を管理可能
+- **リアルタイム更新**: プッシュ通知によるデータ自動更新
+- **コメント機能**: 観測対象に対する日別コメント投稿
 
 ---
 
-## アプリの主要ページ構成
+## 🏗️ アプリの構成
 
-このアプリは3つの主要ページで構成されており、それぞれ異なる視点から観測対象をサポートします。
+このアプリは3つの主要ページで構成されています。
 
 ### 🏠 ホーム（リアルタイムステータス）
 
 **目的**: 現在の状態をリアルタイムで把握する
 
-- **現時点のステータス表示**: 今日の気分、行動、感情の最新情報
-- **1日のサマリー**: 現時点までの日別データの集計
-- **即時性**: プッシュ通知によるリアルタイム更新
-- **日別コメント**: その日の気づきや観察内容を記録
-
-**ユースケース**: 「今どんな状態か」を素早く確認し、即座に対応が必要な変化を見逃さない
+- 現時点のステータス表示（今日の気分、行動、感情）
+- 1日のサマリー（現時点までの集計）
+- プッシュ通知によるリアルタイム更新
+- 日別コメント記録
 
 ### 📊 レポート（長期的な変化の追跡）
 
 **目的**: 時間軸で変化を可視化し、成長や改善を確認する
 
-- **長期的な時間軸**: 今週、今月、今年、累計など
-- **変化の可視化**: 折れ線グラフ、推移グラフで過去からの変化を表現
-- **療育・教育・ケアサポート**: 過去と比較してどう変わったかを定量的に把握
-- **データドリブンな判断**: エビデンスに基づいたサポート計画の立案
-
-**ユースケース**: 「この3ヶ月でどう成長したか」「支援方法の効果はあったか」を客観的に評価
+- 長期的な時間軸（今週、今月、今年）
+- 折れ線グラフ、推移グラフで変化を表現
+- エビデンスに基づいたサポート計画の立案
 
 ### 👤 観測対象（プロフィールとインサイト）
 
 **目的**: 観測対象の特性と測定結果から得られた知見を統合的に理解する
 
-- **地図ヘッダー**: お住まいの地域の地図を視覚的に表示（Apple MapKit使用）
-  - 国・都道府県・市区町村レベルまで対応予定
-  - ※現在はモックアップで実装（横浜市で表示）
-- **基本情報**: 名前、写真、年齢、性別、お住まいの地域
-- **測定から得られたインサイト**:
-  - 認知スタイル（行動系、思考系など）
-  - 神経機能モデル（注意制御、実行機能、感情制御など）
-  - 知性の形式モデル（多重知能理論に基づく分析）
-- **課題と傾向**: 最近の傾向、注意すべきポイント、強みと弱み
-
-**ユースケース**: 「この子の特性は何か」「どんなサポートが効果的か」を深く理解する
+- 基本情報（名前、写真、年齢、性別、地域）
+- 測定から得られたインサイト（認知スタイル、神経機能モデル、知性の形式モデル）
+- 課題と傾向の表示
 
 ---
 
-### 現在実装済みの主要機能
+## 🗄️ データベース構造
 
-- **手動録音**: アプリ内での音声録音（フォアグラウンドのみ）
-- **AI分析**: 音声認識、感情分析、行動パターン検出
-- **マルチデバイス対応**: 1ユーザーが複数の観測対象デバイス（録音デバイス）を管理可能
-- **リアルタイム更新**: AWS SNS + APNsによるプッシュ通知でデータ自動更新
-- **コメント機能**: 観測対象に対する日別コメント投稿
-- **通知機能**: グローバル通知、パーソナル通知、イベント通知
+### 主要テーブル
+
+#### Spot分析（録音ごと）
+- **`spot_results`**: 録音ごとの分析結果（気分スコア、感情、行動）
+- **`spot_features`**: 録音ごとの特徴量（音響特徴、感情特徴、文字起こし）
+- **`spot_aggregators`**: Spot集計データ（Daily分析トリガー用）
+
+#### Daily分析（1日分の累積）
+- **`daily_results`**: 1日分の累積分析結果
+  - `vibe_score`: 平均気分スコア
+  - `summary`: LLMによる1日のサマリー文章
+  - `vibe_scores`: 時系列スコアデータ `[{time: "HH:MM", score: N}]`
+  - `burst_events`: 急激な変化イベント
+  - `profile_result`: 心理分析結果（daily_trend, key_moments, emotional_stability）
+- **`daily_aggregators`**: Daily集計データ（Profiler API用）
+
+#### その他
+- **`audio_files`**: 音声ファイルメタデータ（S3パス、録音時刻、タイムゾーン）
+- **`devices`**: デバイス情報（観測対象デバイス）
+- **`subjects`**: 観測対象のプロフィール情報
+- **`public.users`**: ユーザー情報（認証・APNsトークン）
+
+### タイムゾーン対応
+
+すべての主要テーブルに `local_date` と `local_time` カラムがあります。
+
+- **UTC時刻**: `recorded_at`, `created_at`, `updated_at`
+- **ローカル時刻**: `local_date`, `local_time`（デバイスのタイムゾーン）
 
 ---
 
-## セットアップ
+## 🔌 API通信
 
-### 1. 必要な環境
+### Supabase RPC関数
+
+iOSアプリは Supabase RPC関数 `get_dashboard_data` を使用して、1回のAPIコールで全データを取得します。
+
+**呼び出し**:
+```swift
+let response: [RPCDashboardResponse] = try await supabase
+    .rpc("get_dashboard_data", params: [
+        "p_device_id": deviceId,
+        "p_date": dateString  // "YYYY-MM-DD"
+    ])
+    .execute()
+    .value
+```
+
+**レスポンス構造**:
+```swift
+struct RPCDashboardResponse: Codable {
+    let behavior_report: BehaviorReport?       // behavior_summaryテーブル
+    let emotion_report: EmotionReport?         // emotion_opensmile_summaryテーブル
+    let subject_info: Subject?                 // subjectsテーブル
+    let dashboard_summary: DashboardSummary?   // daily_resultsテーブル ← 重要
+    let subject_comments: [SubjectComment]?    // subject_commentsテーブル
+}
+```
+
+**重要**: `dashboard_summary` は `daily_results` テーブルから取得されます。
+
+### RPC関数の定義（Supabase側）
+
+```sql
+CREATE OR REPLACE FUNCTION get_dashboard_data(p_device_id text, p_date text)
+RETURNS TABLE (
+    behavior_report jsonb,
+    emotion_report jsonb,
+    subject_info jsonb,
+    dashboard_summary jsonb,  -- daily_resultsテーブルを参照
+    subject_comments jsonb
+)
+```
+
+**参照先テーブル**:
+- `behavior_summary` → `behavior_report`
+- `emotion_opensmile_summary` → `emotion_report`
+- `subjects` → `subject_info`
+- **`daily_results`** → `dashboard_summary` ← 気分データのメインソース
+- `subject_comments` → `subject_comments`
+
+---
+
+## 💻 セットアップ
+
+### 必要な環境
 
 - Xcode 15.0以上
 - iOS 17.0以上
 - Swift 5.9以上
 
-### 2. プロジェクトを開く
+### プロジェクトを開く
 
 ```bash
 cd /Users/kaya.matsumoto/ios_watchme_v9
 open ios_watchme_v9.xcodeproj
 ```
 
-### 3. パッケージ依存関係の解決
+### パッケージ依存関係
 
-Xcodeが自動的にSwift Package Managerの依存関係を解決します。
-
+Swift Package Managerが自動的に以下を解決します：
 - Supabase Swift SDK
 - Mantis（画像トリミング）
 
-### 4. ビルドと実行
+### ビルドと実行
 
-- ターゲットデバイス/シミュレーターを選択
-- `Cmd + R` でビルド・実行
+```bash
+# コンパイルチェック
+xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
+
+# または Xcode で Cmd + R
+```
 
 ---
 
-## 開発時の重要ルール
+## 🔐 認証とユーザーモード
 
-### データベース設計の絶対ルール
+### 権限レベル
 
-- **`auth.users`テーブルへの直接参照は禁止**
-- **すべてのユーザー参照は`public.users(user_id)`を使用**
-- 新規テーブル作成時の外部キー：`REFERENCES public.users(user_id) ON DELETE CASCADE`
+#### 1. 閲覧専用モード（Read-Only）
+- 対象: ゲストユーザー
+- 権限: サンプルデータの閲覧のみ
+
+#### 2. 全権限モード（Full Access）
+- 対象: 認証済みユーザー
+- 権限: 録音、デバイス管理、コメント投稿など全機能
+
+### ユーザーとデバイスの関係
+
+- **1ユーザー = 複数の観測対象デバイス + 1台の通知先デバイス**
+- 観測対象デバイス: 録音される人を表す論理的なID
+- 通知先デバイス: プッシュ通知を受信するユーザーのiPhone
+
+---
+
+## ⚙️ 開発時の重要ルール
+
+### データベース設計
+
+**`auth.users`への直接参照は禁止**。必ず`public.users(user_id)`を使用。
 
 ```swift
 // ❌ 間違い
@@ -126,210 +202,19 @@ let userId = userAccountManager.currentUser?.id
 let userId = userAccountManager.currentUser?.profile?.userId
 ```
 
-### iOS開発時のビルド検証ルール
-
-- **コンパイルチェックのみ**：シミュレーター指定は不要
-- **実際の動作確認はユーザー側で実施**
+### ビルド検証
 
 ```bash
-# ✅ 正しい：シンプルにコンパイルチェックのみ
+# ✅ 正しい：シンプルにコンパイルチェック
 xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
+
+# ❌ 間違い：-destination指定は不要
+xcodebuild -scheme ios_watchme_v9 -destination '...' build
 ```
 
-### コミット前の確認事項
+### Git運用
 
-- 必ず動作確認を実施
-- エラーがない状態でコミット
-- `.gitignore`の確認（秘密情報を含むファイルは除外）
-
----
-
-## プロジェクト構造
-
-```
-ios_watchme_v9/
-├── README.md                       # このファイル
-├── CHANGELOG.md                    # 更新履歴
-├── docs/
-│   ├── TECHNICAL.md               # アーキテクチャ・データベース・API仕様
-│   └── TROUBLESHOOTING.md         # トラブルシューティング
-├── ios_watchme_v9App.swift        # アプリエントリーポイント
-├── ContentView.swift              # メインビュー（ホームタブ）
-├── SimpleDashboardView.swift      # 日別ダッシュボード（ホーム画面用）
-├── AnalysisView.swift             # レポートページ
-├── SubjectTabView.swift           # 観測対象ページ
-├── HomeView.swift                 # 気分詳細ビュー
-├── BehaviorGraphView.swift        # 行動グラフ詳細ビュー
-├── EmotionGraphView.swift         # 感情グラフ詳細ビュー
-├── RecordingView.swift            # 録音機能
-├── LoginView.swift                # ログイン画面
-├── SignUpView.swift               # 会員登録画面
-├── UserInfoView.swift             # マイページ
-├── AudioRecorder.swift            # 録音管理
-├── NetworkManager.swift           # API通信
-├── DeviceManager.swift            # デバイス管理
-├── UserAccountManager.swift       # ユーザー認証管理
-├── SupabaseAuthManager.swift      # Supabase認証
-├── SupabaseDataManager.swift      # データ取得管理
-└── Models/                        # データモデル
-```
-
----
-
-## 技術スタック
-
-- **Swift 5.9+** / **SwiftUI**
-- **AVFoundation** - 音声録音
-- **Supabase** - 認証・データベース・ストレージ
-- **AWS SNS + APNs** - プッシュ通知（リアルタイム更新）
-- **Combine** - リアクティブプログラミング
-
----
-
-## ✅ リアルタイム更新機能（2025-10-15現在）
-
-### AWS SNS + APNsによるプッシュ通知
-
-**目的:**
-観測対象デバイス（録音デバイス）からの音声データがLambda処理完了後、通知先デバイス（iPhone）に自動的にデータ更新を通知し、最短時間でホーム画面を更新
-
-**ステータス:** ✅ 実装完了・動作確認済み
-
-**アーキテクチャ:**
-```
-観測対象デバイス（録音） → Lambda処理（1-3分） → dashboard_summary更新
-  ↓ (AWS SNS → APNs)
-通知先デバイス（iPhone・フォアグラウンド） → トーストバナー表示 → キャッシュクリア → 最新データ取得
-```
-
-**重要な用語:**
-- **観測対象デバイス（録音デバイス）**: 音声データを収集するデバイス（例：Apple Watch）
-- **通知先デバイス（iPhone）**: プッシュ通知を受信するユーザーのiPhone（1ユーザーにつき1台）
-- **APNsトークン**: 通知先デバイス（iPhone）を一意に識別するトークン
-
-**動作環境:**
-- **開発環境**: Sandbox APNs（Xcodeビルド）
-- **本番環境**: Production APNs（TestFlight/App Store）※切り替え可能
-
-**完了した作業:**
-- ✅ AWS SNS Platform Application設定（Sandbox/Production）
-- ✅ Lambda関数のプッシュ通知送信機能（CustomUserData問題の解決）
-- ✅ iOS側のAPNsデバイストークン取得・保存（usersテーブルに保存）
-- ✅ iOS側のサイレント通知受信処理
-- ✅ フォアグラウンド時のトーストバナー表示
-- ✅ フォアグラウンド時の自動データ更新
-- ✅ TabView内の重複通知受信問題の修正
-- ✅ 複数の観測対象デバイスからの通知が1台の通知先デバイスに正常に届く
-
-**通知の動作:**
-- **フォアグラウンド**: トーストバナー表示 → キャッシュクリア → 自動データ再取得
-- **バックグラウンド**: サイレント通知（通知バナーなし、データは次回起動時に取得）
-- **完全終了**: 何も起きない（サイレント通知はアプリ起動不可）
-
-**関連ドキュメント:**
-- [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - 詳細な実装・設定・トラブルシューティング
-
----
-
-## ユーザーモード（権限レベル）
-
-このアプリは**Permission-Based Architecture（権限ベース設計）**を採用しており、ユーザーの権限レベルに応じて利用できる機能が段階的に変化します。
-
-### 権限レベルの種類
-
-#### 1. 閲覧専用モード（Read-Only Mode）
-- **対象**: ゲストユーザー、ログアウトしたユーザー
-- **できること**:
-  - サンプルデバイスのデータ閲覧
-  - ホーム、レポート、観測対象ページの表示
-  - アプリの操作感を体験
-- **できないこと**:
-  - 録音機能の使用
-  - デバイスの追加・編集
-  - コメントの投稿
-  - その他の能動的なアクション
-
-#### 2. 全権限モード（Full Access Mode）
-- **対象**: 認証済みユーザー（メール・パスワードでログイン/サインアップ）
-- **できること**:
-  - すべての機能の利用
-  - 録音機能の使用
-  - デバイスの追加・編集・削除
-  - コメントの投稿
-  - データのエクスポート
-  - 通知の受信
-
-#### 3. プレミアムモード（Premium Mode）*将来実装予定*
-- **対象**: 課金済みプレミアムユーザー
-- **できること**（予定）:
-  - 全権限モードのすべての機能
-  - より詳細なレポート分析（長期トレンド、予測分析など）
-  - データ保存期間の延長
-  - 高度なエクスポート機能（PDF、CSV、グラフ画像など）
-  - 優先サポート
-
-### アップグレードの流れ
-
-```
-閲覧専用モード (ゲスト)
-    ↓ 会員登録・ログイン
-全権限モード (認証済み)
-    ↓ 課金 (将来実装予定)
-プレミアムモード (課金済み)
-```
-
-### 設計思想
-
-従来の「ゲスト/認証ユーザー」という二分法ではなく、**段階的な権限レベル**として設計されています。
-
-- ゲストユーザーは「不完全なユーザー」ではなく「閲覧専用モードで試用中のユーザー」
-- 会員登録は「アカウント作成」ではなく「権限のアップグレード」
-- 将来的な有料プランの追加が容易
-
----
-
-## ユーザーとデバイスの関係
-
-### 基本概念
-
-1. **ユーザー**: アプリにログインするアカウント（メール・パスワード認証）
-2. **観測対象デバイス（録音デバイス）**: 観測対象（録音される人）を表す論理的なID
-3. **通知先デバイス（iPhone）**: プッシュ通知を受信するユーザーのiPhone
-4. **1ユーザー = 複数の観測対象デバイス + 1台の通知先デバイス**: 1人のユーザーが複数の観測対象を管理可能
-
-### デバイス選択方式
-
-- 観測対象デバイスのIDは物理的なiPhoneに紐付かない
-- ユーザーがアプリ内で観測対象デバイスを選択
-- どのiPhoneからでも、同じ観測対象デバイスIDを選択すれば同じデータにアクセス可能
-- QRコードスキャンで新しい観測対象デバイスを追加可能（全権限モードのみ）
-
----
-
-## 関連ドキュメント
-
-- [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計・API仕様
-- [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知の詳細実装・設定・トラブルシューティング
-- [ACCOUNT_DELETION.md](./docs/ACCOUNT_DELETION.md) - アカウント削除機能の実装仕様（App Store審査対応）
-- [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - よくある問題と解決策
-- [CHANGELOG.md](./CHANGELOG.md) - 更新履歴
-- [APP_STORE_METADATA.md](./docs/APP_STORE_METADATA.md) - App Store審査用メタデータ
-
-## 法的文書（外部公開URL）
-
-- **プライバシーポリシー**: https://hey-watch.me/privacy
-- **利用規約**: https://hey-watch.me/terms
-- **サポート**: https://hey-watch.me/
-
----
-
-## Git運用ルール
-
-このプロジェクトは**ブランチベースの開発フロー**を採用しています。
-
-1. `main`ブランチは常に安定した状態を保つ
-2. 開発作業はすべて`feature/xxx`ブランチで実施
-3. 作業完了後、Pull Requestを作成して`main`にマージ
+ブランチベースの開発フロー：
 
 ```bash
 # 作業ブランチを作成
@@ -347,51 +232,76 @@ git push origin feature/機能名
 
 ---
 
-## 将来の開発計画（内部向け）
+## 📡 プッシュ通知（リアルタイム更新）
 
-以下の機能は現在未実装ですが、将来的な拡張として計画されています。
+### アーキテクチャ
 
-### 📱 外部録音デバイス対応（開発中）
-- **専用ハードウェアデバイス**: 常時装着型の録音デバイス（例: Apple Watch、専用ウェアラブル）
-- **30分間隔の自動録音**: バックグラウンドでの連続音声収集
-- **独立した録音処理**: iPhoneアプリとは独立して動作
-- **データ同期**: 録音データを自動的にクラウドにアップロード
-- **バッテリー最適化**: 長時間稼働のための省電力設計
+```
+観測対象デバイス（録音） → Lambda処理 → daily_results更新
+  ↓ (AWS SNS → APNs)
+通知先デバイス（iPhone） → トーストバナー表示 → 最新データ取得
+```
 
-**注意**: 外部デバイスが完成するまで、iPhoneアプリ側ではバックグラウンド録音機能は実装しません。
+### 通知の動作
 
-### 💰 課金機能（プレミアムモード）
-- **In-App Purchase（IAP）**: サブスクリプション型課金
-- **拡張分析機能**: 長期トレンド分析、予測分析、詳細レポート
-- **データ保存期間の延長**: より長期間のデータ保持
-- **優先サポート**: カスタマーサポートの優先対応
-
-### 🌍 多言語対応
-- 英語、中国語、韓国語など主要言語のローカライズ
-- グローバル市場への展開
-
-### 📊 データエクスポート機能強化
-- CSV/JSON形式での詳細データエクスポート
-- レポートのPDF生成
-- サードパーティ連携（Health Kit、Google Fitなど）
+- **フォアグラウンド**: トーストバナー表示 → 自動データ再取得
+- **バックグラウンド**: サイレント通知（次回起動時にデータ取得）
+- **完全終了**: 何も起きない
 
 ---
 
-## App Store リリース戦略
+## 📂 プロジェクト構造
 
-### Phase 1: 初回リリース（現在）
-- 手動録音 + AI分析 + データ可視化（ホーム・レポート・観測対象）
-- バックグラウンド録音は**含めない**（審査リスク低減）
-- フォアグラウンドのみの録音機能として申請
+```
+ios_watchme_v9/
+├── ios_watchme_v9App.swift        # アプリエントリーポイント
+├── ContentView.swift              # メインビュー（ホームタブ）
+├── SimpleDashboardView.swift      # 日別ダッシュボード
+├── AnalysisView.swift             # レポートページ
+├── SubjectTabView.swift           # 観測対象ページ
+├── HomeView.swift                 # 気分詳細ビュー
+├── BehaviorGraphView.swift        # 行動グラフ詳細
+├── EmotionGraphView.swift         # 感情グラフ詳細
+├── RecordingView.swift            # 録音機能
+├── LoginView.swift                # ログイン画面
+├── SignUpView.swift               # 会員登録画面
+├── UserInfoView.swift             # マイページ
+├── AudioRecorder.swift            # 録音管理
+├── NetworkManager.swift           # API通信
+├── DeviceManager.swift            # デバイス管理
+├── UserAccountManager.swift       # ユーザー認証管理
+├── SupabaseAuthManager.swift      # Supabase認証
+├── SupabaseDataManager.swift      # データ取得管理（RPC呼び出し）
+├── DashboardSummary.swift         # daily_resultsデータモデル
+├── DashboardTimeBlock.swift       # spot_resultsデータモデル
+└── Models/                        # その他データモデル
+```
 
-### Phase 2: 外部デバイス対応（将来）
-- 専用録音デバイスのリリース
-- iPhoneアプリはデータ表示・分析に特化
-- アプリアップデートで外部デバイス連携機能を追加
+---
 
-### Phase 3: 課金機能追加
-- プレミアムプランの導入
-- より詳細なレポート機能と長期データ分析の提供
+## 📚 関連ドキュメント
+
+- [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計・API仕様
+- [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知の詳細実装
+- [ACCOUNT_DELETION.md](./docs/ACCOUNT_DELETION.md) - アカウント削除機能（App Store審査対応）
+- [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - トラブルシューティング
+- [CHANGELOG.md](./CHANGELOG.md) - 更新履歴
+
+### 外部公開URL
+
+- **プライバシーポリシー**: https://hey-watch.me/privacy
+- **利用規約**: https://hey-watch.me/terms
+- **サポート**: https://hey-watch.me/
+
+---
+
+## 🛠️ 技術スタック
+
+- **Swift 5.9+** / **SwiftUI**
+- **AVFoundation** - 音声録音
+- **Supabase** - 認証・データベース・ストレージ
+- **AWS SNS + APNs** - プッシュ通知
+- **Combine** - リアクティブプログラミング
 
 ---
 

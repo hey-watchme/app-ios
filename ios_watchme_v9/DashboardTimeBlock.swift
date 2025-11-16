@@ -8,7 +8,7 @@
 import Foundation
 import SwiftUI
 
-struct DashboardTimeBlock: Codable {
+struct DashboardTimeBlock: Codable, Equatable {
     let deviceId: String
     let date: String?  // local_dateをdateにマッピング（nullの可能性あり）
     let recordedAt: String?  // recorded_at (UTC)（nullの可能性あり）
