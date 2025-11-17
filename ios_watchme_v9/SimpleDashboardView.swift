@@ -92,16 +92,24 @@ struct SimpleDashboardView: View {
                     // 📊 Performance optimization: LazyVStack for on-demand rendering
                     LazyVStack(spacing: 20) {
                         if isLoading {
-                            ProgressView("読み込み中...")
-                                .frame(maxWidth: .infinity, minHeight: 200)
+                            // 📊 Skeleton loading for better perceived performance
+                            SkeletonView()
                         } else {
-                            // 気分カード
-                            vibeGraphCard
-                                .padding(.horizontal, 20)
+                            // 📊 Progressive rendering: Show content as it becomes available
 
-                            // スポット分析セクション（最新3件）
-                            spotAnalysisSection
-                                .padding(.horizontal, 20)
+                            // Priority 1: Vibe card (show immediately when dashboardSummary is available)
+                            if dashboardSummary != nil || !timeBlocks.isEmpty {
+                                vibeGraphCard
+                                    .padding(.horizontal, 20)
+                                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                            }
+
+                            // Priority 2: Recent analysis (show when timeBlocks is available)
+                            if !timeBlocks.isEmpty {
+                                spotAnalysisSection
+                                    .padding(.horizontal, 20)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
 
                             // 行動グラフカード（一時的に非表示）
                             // behaviorGraphCard
@@ -111,17 +119,22 @@ struct SimpleDashboardView: View {
                             // emotionGraphCard
                             //     .padding(.horizontal, 20)
 
-                            // コメントセクション
-                            if let subject = subject {
+                            // Priority 3: Comments (show when subject and comments are available)
+                            if let subject = subject, (!subjectComments.isEmpty || dashboardSummary != nil) {
                                 commentSection(subject: subject)
                                     .padding(.horizontal, 20)
                                     .padding(.top, 20)
+                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
 
                             Spacer(minLength: 100)
                         }
                     }
                     .padding(.top, 8)  // 日付セクションとの余白を8pxに変更
+                    .animation(.easeInOut(duration: 0.3), value: isLoading)
+                    .animation(.easeInOut(duration: 0.3), value: dashboardSummary?.date)
+                    .animation(.easeInOut(duration: 0.3), value: timeBlocks.count)
+                    .animation(.easeInOut(duration: 0.3), value: subjectComments.count)
                 }
             }
             .coordinateSpace(name: "scroll")
