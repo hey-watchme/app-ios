@@ -59,9 +59,11 @@ class SupabaseDataManager: ObservableObject {
     // MARK: - Private Properties
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
-    
+
     // 認証マネージャーへの参照（オプショナル）
     private weak var userAccountManager: UserAccountManager?
+    // デバイスマネージャーへの参照（パフォーマンス最適化用）
+    private weak var deviceManager: DeviceManager?
     
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
@@ -85,6 +87,11 @@ class SupabaseDataManager: ObservableObject {
     // 認証マネージャーを設定（後から注入する場合）
     func setAuthManager(_ userAccountManager: UserAccountManager) {
         self.userAccountManager = userAccountManager
+    }
+
+    // デバイスマネージャーを設定（パフォーマンス最適化用）
+    func setDeviceManager(_ deviceManager: DeviceManager) {
+        self.deviceManager = deviceManager
     }
     
     // MARK: - Public Methods
@@ -402,8 +409,27 @@ class SupabaseDataManager: ObservableObject {
         // 🎯 Phase 1: daily_resultsテーブルに直接アクセス
         let dashboardSummary = await fetchDailyResults(deviceId: deviceId, date: date, timezone: timezone)
 
-        // Subject情報を取得（軽量RPC）
-        let subject = await fetchSubjectInfo(deviceId: deviceId)
+        // 🚀 最適化: DeviceManagerからSubject情報を取得（RPC呼び出し削減）
+        let subject: Subject?
+        if let deviceManager = deviceManager {
+            // まず selectedSubject をチェック（selectedDeviceID と一致する場合）
+            if deviceManager.selectedDeviceID == deviceId,
+               let selectedSubject = deviceManager.selectedSubject {
+                subject = selectedSubject
+                print("✅ [fetchAllReports] Subject loaded from selectedSubject: \(selectedSubject.name ?? "Unknown")")
+            } else if let device = deviceManager.devices.first(where: { $0.device_id == deviceId }),
+                      let cachedSubject = device.subject {
+                // フォールバック: devices配列から取得
+                subject = cachedSubject
+                print("✅ [fetchAllReports] Subject loaded from device cache: \(cachedSubject.name ?? "Unknown")")
+            } else {
+                // 最後の手段: RPC呼び出し
+                subject = await fetchSubjectInfo(deviceId: deviceId)
+            }
+        } else {
+            // deviceManager がない場合のみRPC呼び出し
+            subject = await fetchSubjectInfo(deviceId: deviceId)
+        }
 
         // コメントを取得
         let comments = await fetchComments(subjectId: subject?.subjectId ?? "", date: date)
@@ -687,11 +713,21 @@ class SupabaseDataManager: ObservableObject {
 
     /// キャッシュからSubjectを取得（有効期限内のみ）
     private func getCachedSubject(for deviceId: String) -> Subject? {
+        // 📊 パフォーマンス最適化: まずDeviceManagerのdevices配列から取得
+        if let deviceManager = deviceManager,
+           let device = deviceManager.devices.first(where: { $0.device_id == deviceId }),
+           let subject = device.subject {
+            print("✅ [Cache HIT] Subject loaded from DeviceManager for device: \(deviceId)")
+            return subject
+        }
+
+        // フォールバック: subjectCacheから取得
         guard let timestamp = subjectCacheTimestamps[deviceId],
               Date().timeIntervalSince(timestamp) < subjectCacheValidDuration,
               let subject = subjectCache[deviceId] else {
             return nil
         }
+        print("✅ [Cache HIT] Subject loaded from subjectCache for device: \(deviceId)")
         return subject
     }
 
@@ -931,7 +967,7 @@ class SupabaseDataManager: ObservableObject {
         print("   Date: \(dateString)")
 
         do {
-            // Step 1: spot_resultsテーブルから基本データを取得
+            // Step 1 & 2: Fetch spot_results and spot_features in parallel
             struct SpotResult: Codable {
                 let device_id: String
                 let local_date: String?
@@ -943,18 +979,6 @@ class SupabaseDataManager: ObservableObject {
                 let created_at: String?
             }
 
-            let spotResults: [SpotResult] = try await supabase
-                .from("spot_results")
-                .select("device_id, local_date, recorded_at, local_time, summary, behavior, vibe_score, created_at")
-                .eq("device_id", value: deviceId)
-                .eq("local_date", value: dateString)
-                .order("local_time", ascending: true)  // ユーザーのローカルタイムでソート（生活リズムを反映）
-                .execute()
-                .value
-
-            print("✅ Fetched \(spotResults.count) spot results")
-
-            // Step 2: spot_featuresテーブルから追加データを取得
             struct SpotFeature: Codable {
                 let device_id: String
                 let recorded_at: String?
@@ -962,15 +986,26 @@ class SupabaseDataManager: ObservableObject {
                 let emotion_extractor_result: [EmotionChunk]?
             }
 
-            let spotFeatures: [SpotFeature] = try await supabase
+            // 📊 Performance optimization: Parallel database queries
+            let spotResultsQuery = supabase
+                .from("spot_results")
+                .select("device_id, local_date, recorded_at, local_time, summary, behavior, vibe_score, created_at")
+                .eq("device_id", value: deviceId)
+                .eq("local_date", value: dateString)
+                .order("local_time", ascending: true)  // ユーザーのローカルタイムでソート（生活リズムを反映）
+
+            let spotFeaturesQuery = supabase
                 .from("spot_features")
                 .select("device_id, recorded_at, behavior_extractor_result, emotion_extractor_result")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
-                .execute()
-                .value
 
-            print("✅ Fetched \(spotFeatures.count) spot features")
+            async let spotResultsTask: [SpotResult] = spotResultsQuery.execute().value
+            async let spotFeaturesTask: [SpotFeature] = spotFeaturesQuery.execute().value
+
+            let (spotResults, spotFeatures) = try await (spotResultsTask, spotFeaturesTask)
+
+            print("✅ Fetched \(spotResults.count) spot results and \(spotFeatures.count) spot features")
 
             // Step 3: Merge data by recorded_at
             let featureMap = Dictionary(uniqueKeysWithValues: spotFeatures.compactMap { feature -> (String, SpotFeature)? in

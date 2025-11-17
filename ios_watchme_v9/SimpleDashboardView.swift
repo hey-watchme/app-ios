@@ -744,19 +744,20 @@ struct SimpleDashboardView: View {
             }
         }
 
-        // データ取得
+        // 📊 Performance optimization: Parallel network requests
         let timezone = deviceManager.getTimezone(for: deviceId)
-        let result = await dataManager.fetchAllReports(
+
+        async let resultTask = dataManager.fetchAllReports(
             deviceId: deviceId,
             date: date,
             timezone: timezone
         )
-
-        // グラフ用にspot_resultsを取得
-        let fetchedTimeBlocks = await dataManager.fetchDashboardTimeBlocks(
+        async let timeBlocksTask = dataManager.fetchDashboardTimeBlocks(
             deviceId: deviceId,
             date: date
         )
+
+        let (result, fetchedTimeBlocks) = await (resultTask, timeBlocksTask)
 
         // 取得したデータを設定
         await MainActor.run {
