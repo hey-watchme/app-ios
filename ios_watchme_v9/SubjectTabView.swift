@@ -12,26 +12,13 @@ struct SubjectTabView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
 
-    @State private var subject: Subject? = nil
     @State private var showSubjectEdit = false
-    @State private var isLoading = true
     @State private var showNeuralInfo = false
     @State private var showIntelligenceInfo = false
 
     var body: some View {
         ZStack(alignment: .top) {
-            if isLoading {
-                // ローディング中
-                VStack(spacing: 20) {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                    Text("観測対象情報を取得中...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 100)
-            } else if let subject = subject {
+            if let subject = deviceManager.selectedSubject {
                 // 観測対象が設定されている場合
                 ScrollView {
                     VStack(spacing: 0) {
@@ -183,25 +170,16 @@ struct SubjectTabView: View {
                 .padding(.top, 100)
             }
         }
-        .task(id: deviceManager.selectedDeviceID) {
-            await loadSubject()
-        }
         .sheet(isPresented: $showSubjectEdit) {
             if let deviceId = deviceManager.selectedDeviceID {
                 SubjectRegistrationView(
                     deviceID: deviceId,
                     isPresented: $showSubjectEdit,
-                    editingSubject: subject
+                    editingSubject: deviceManager.selectedSubject
                 )
                 .environmentObject(dataManager)
                 .environmentObject(deviceManager)
                 .environmentObject(userAccountManager)
-                .onDisappear {
-                    // 編集後に再読み込み
-                    Task {
-                        await loadSubject()
-                    }
-                }
             }
         }
         .sheet(isPresented: $showNeuralInfo) {
@@ -245,28 +223,6 @@ struct SubjectTabView: View {
                 すべての人に独自の知性の組み合わせがあり、それぞれに価値があります。
                 """
             )
-        }
-    }
-
-    // 観測対象情報を取得
-    private func loadSubject() async {
-        guard let deviceId = deviceManager.selectedDeviceID else {
-            await MainActor.run {
-                subject = nil
-                isLoading = false
-            }
-            return
-        }
-
-        await MainActor.run {
-            isLoading = true
-        }
-
-        let fetchedSubject = await dataManager.fetchSubjectInfo(deviceId: deviceId)
-
-        await MainActor.run {
-            subject = fetchedSubject
-            isLoading = false
         }
     }
 

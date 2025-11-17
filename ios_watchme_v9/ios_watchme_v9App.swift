@@ -43,6 +43,7 @@ struct ios_watchme_v9App: App {
         print("⏱️ [APP-INIT] UserAccountManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
 
         let dataManager = SupabaseDataManager(userAccountManager: userAccountManager)
+        dataManager.setDeviceManager(deviceManager)  // 🚀 DeviceManager参照を設定（パフォーマンス最適化）
         print("⏱️ [APP-INIT] SupabaseDataManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
 
         let recordingStore = RecordingStore(

@@ -18,26 +18,6 @@ struct DashboardData {
     let subjectComments: [SubjectComment]?  // コメント機能追加
 }
 
-// MARK: - RPC Response Structure
-/// Supabase RPC関数 'get_dashboard_data' からの応答構造
-/// ⚠️ 重要: この構造はSupabase側のRPC関数の出力と完全に一致する必要があります
-/// RPC関数の変更時は、必ずこの構造体も更新してください
-struct RPCDashboardResponse: Codable {
-    let behavior_report: BehaviorReport?
-    let emotion_report: EmotionReport?
-    let subject_info: Subject?
-    let dashboard_summary: DashboardSummary?  // メインの気分データソース
-    let subject_comments: [SubjectComment]?  // コメント機能追加
-    
-    private enum CodingKeys: String, CodingKey {
-        case behavior_report
-        case emotion_report
-        case subject_info
-        case dashboard_summary
-        case subject_comments
-    }
-}
-
 // MARK: - Supabaseデータ管理クラス
 // vibe_whisper_summaryテーブルからデータを取得・管理する責務を持つ
 @MainActor
@@ -452,166 +432,6 @@ class SupabaseDataManager: ObservableObject {
         )
     }
     
-    // MARK: - Data Fetching Methods (Legacy RPC - Phase 3で再導入予定)
-
-    /// 統合データフェッチメソッド - すべてのグラフデータを一括で取得
-    ///
-    /// ⚠️ 非推奨: Phase 1では直接アクセス方式を使用（fetchDailyResults）
-    /// Phase 3でRPC最適化として再導入予定
-    ///
-    /// ⚠️ 重要: このメソッドはSupabase RPC関数 'get_dashboard_data' を使用します
-    /// RPC関数は1回のAPIコールで以下のデータをすべて取得します：
-    /// - vibe_report (心理データ)
-    /// - behavior_report (行動データ)
-    /// - emotion_report (感情データ)
-    /// - subject_info (観測対象データ)
-    ///
-    /// 📝 RPC関数の更新が必要な場合：
-    /// 1. Supabase側でRPC関数を更新
-    /// 2. RPCDashboardResponse構造体を更新
-    /// 3. 必要に応じてDashboardData構造体も更新
-    ///
-    /// - Parameters:
-    ///   - deviceId: デバイスID（UUID形式）
-    ///   - date: 取得したい日付
-    ///   - timezone: デバイス固有のタイムゾーン（指定しない場合は現在のタイムゾーン）
-    /// - Returns: DashboardData（すべてのレポートを含む）
-    @available(*, deprecated, message: "Phase 1では使用しない。Phase 3でRPC再導入時に復活予定。現在はfetchDailyResults()を使用。")
-    func fetchAllReportsData(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
-        // デバイス固有のタイムゾーンを適用
-        let targetTimezone = timezone ?? TimeZone.current
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = targetTimezone  // ⭐️ デバイス固有のタイムゾーンを使用
-        
-        let dateString = formatter.string(from: date)
-        print("🚀 [RPC] Fetching all dashboard data via RPC function")
-        print("   Device: \(deviceId)")
-        print("   Date: \(dateString)")
-        print("   Timezone: \(targetTimezone.identifier)")
-        print("   Current Time in Device TZ: \(formatter.string(from: Date()))")
-        
-        do {
-            // RPC関数のパラメータを準備
-            let params = [
-                "p_device_id": deviceId,
-                "p_date": dateString
-            ]
-            
-            print("📤 [RPC] Calling RPC with params: \(params)")
-            print("   🕐 Local iPhone Time: \(Date())")
-            print("   🌍 Target Device Timezone: \(targetTimezone.identifier)")
-            print("   📅 Requesting data for date: \(dateString)")
-            
-            // 📡 Supabase RPC関数を呼び出し（1回のAPIコールですべてのデータを取得）
-            let response: [RPCDashboardResponse] = try await supabase
-                .rpc("get_dashboard_data", params: params)
-                .execute()
-                .value
-            
-            print("📥 [RPC] Response received, count: \(response.count)")
-            
-            // 最初の結果を取得（RPCは配列で返すが、通常1件のみ）
-            guard let rpcData = response.first else {
-                print("⚠️ [RPC] No data returned from RPC function")
-                print("   Response was empty array")
-                return DashboardData(
-                    behaviorReport: nil,
-                    emotionReport: nil,
-                    subject: nil,
-                    dashboardSummary: nil,
-                    subjectComments: nil
-                )
-            }
-            
-            print("✅ [RPC] Successfully fetched all dashboard data")
-            print("   - Behavior Report: \(rpcData.behavior_report != nil ? "✓" : "✗")")
-            print("   - Emotion Report: \(rpcData.emotion_report != nil ? "✓" : "✗")")
-            print("   - Subject Info: \(rpcData.subject_info != nil ? "✓" : "✗")")
-            print("   - Dashboard Summary: \(rpcData.dashboard_summary != nil ? "✓" : "✗")")  
-            print("   - Subject Comments: \(rpcData.subject_comments?.count ?? 0) comments")  
-            if let dashboardSummary = rpcData.dashboard_summary {
-                print("   - Average Vibe from Dashboard Summary: \(dashboardSummary.averageVibe ?? 0)")
-            }
-            
-            // 感情データの簡潔なログ（デバッグ完了後は削除可能）
-            if let emotionReport = rpcData.emotion_report {
-                let activePoints = emotionReport.emotionGraph.filter { $0.totalEmotions > 0 }
-                print("   📊 Emotion: \(activePoints.count) active points")
-            }
-            
-            // RPCレスポンスをDashboardDataに変換
-            return DashboardData(
-                behaviorReport: rpcData.behavior_report,
-                emotionReport: rpcData.emotion_report,
-                subject: rpcData.subject_info,  // ✅ Subject情報も正しく取得
-                dashboardSummary: rpcData.dashboard_summary,  // ✅ Dashboard Summary情報も取得（メインデータソース）
-                subjectComments: rpcData.subject_comments  // ✅ コメント情報も取得
-            )
-            
-        } catch {
-            print("❌ [RPC] Failed to fetch dashboard data: \(error)")
-            print("   Error type: \(type(of: error))")
-            print("   Error details: \(error.localizedDescription)")
-            
-            // デコードエラーの詳細情報を出力
-            if let decodingError = error as? DecodingError {
-                switch decodingError {
-                case .dataCorrupted(let context):
-                    print("   🔍 Data corrupted at: \(context.codingPath)")
-                    print("   Debug description: \(context.debugDescription)")
-                case .keyNotFound(let key, let context):
-                    print("   🔍 Key '\(key.stringValue)' not found at: \(context.codingPath)")
-                    print("   Debug description: \(context.debugDescription)")
-                case .typeMismatch(let type, let context):
-                    print("   🔍 Type mismatch. Expected: \(type)")
-                    print("   At path: \(context.codingPath)")
-                    print("   Debug description: \(context.debugDescription)")
-                case .valueNotFound(let type, let context):
-                    print("   🔍 Value not found. Expected: \(type)")
-                    print("   At path: \(context.codingPath)")
-                    print("   Debug description: \(context.debugDescription)")
-                @unknown default:
-                    print("   🔍 Unknown decoding error")
-                }
-            }
-            
-            // 認証エラーの可能性をチェック
-            let errorString = "\(error)"
-            if errorString.lowercased().contains("auth") || 
-               errorString.lowercased().contains("token") ||
-               errorString.lowercased().contains("unauthorized") ||
-               errorString.lowercased().contains("forbidden") ||
-               errorString.lowercased().contains("jwt") {
-                print("   🔐 ⚠️ This appears to be an authentication error!")
-                print("   💡 Attempting automatic token refresh...")
-                
-                // 認証マネージャーが設定されている場合、自動リカバリーを試行
-                if let userAccountManager = userAccountManager {
-                    let recovered = await userAccountManager.handleAuthenticationError()
-                    
-                    if recovered {
-                        print("   🔄 Token refreshed successfully, retrying RPC call...")
-                        // トークンリフレッシュ成功後、元のリクエストを再試行（タイムゾーンも渡す）
-                        return await fetchAllReportsData(deviceId: deviceId, date: date, timezone: timezone)
-                    } else {
-                        print("   ❌ Token refresh failed - user needs to re-login")
-                    }
-                } else {
-                    print("   ⚠️ No auth manager available for automatic recovery")
-                }
-            }
-            
-            // エラー時は空のデータを返す
-            return DashboardData(
-                behaviorReport: nil,
-                emotionReport: nil,
-                subject: nil,
-                dashboardSummary: nil,
-                subjectComments: nil
-            )
-        }
-    }
     
     // MARK: - Avatar Management
     
@@ -652,7 +472,7 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Subject Management Methods
     
-    /// デバイスIDのみでSubject情報を取得する専用メソッド（軽量版）
+    /// デバイスIDのみでSubject情報を取得する専用メソッド（ダイレクトアクセス版）
     /// HeaderViewなど、Subject情報のみが必要な場合に使用
     /// - Parameter deviceId: デバイスID
     /// - Returns: Subject情報（存在しない場合はnil）
@@ -663,48 +483,51 @@ class SupabaseDataManager: ObservableObject {
             return cachedSubject
         }
 
-        print("👤 [RPC] Fetching subject info only for device: \(deviceId)")
+        print("👤 [Direct Access] Fetching subject info for device: \(deviceId)")
 
         do {
-            // RPC関数のパラメータを準備
-            let params = ["p_device_id": deviceId]
-
-            print("📤 [RPC] Calling get_subject_info with device_id: \(deviceId)")
-
-            // 軽量なRPC関数を呼び出し（Subject情報のみ）
-            struct SubjectResponse: Codable {
-                let subject_info: Subject?
+            // Step 1: devicesテーブルからsubject_idを取得
+            struct DeviceRow: Codable {
+                let subject_id: String?
             }
 
-            let response: [SubjectResponse] = try await supabase
-                .rpc("get_subject_info", params: params)
+            let devices: [DeviceRow] = try await supabase
+                .from("devices")
+                .select("subject_id")
+                .eq("device_id", value: deviceId)
                 .execute()
                 .value
 
-            print("📥 [RPC] Subject info response received")
-
-            // 最初の結果を取得
-            guard let rpcData = response.first else {
-                print("⚠️ [RPC] No subject info returned")
-                // キャッシュからも削除（存在しない）
+            guard let device = devices.first, let subjectId = device.subject_id else {
+                print("ℹ️ [Direct Access] No subject assigned to this device")
                 clearSubjectCache(for: deviceId)
                 return nil
             }
 
-            if let subject = rpcData.subject_info {
-                print("✅ [RPC] Subject found: \(subject.name ?? "Unknown")")
+            print("📤 [Direct Access] Found subject_id: \(subjectId), fetching subject data...")
+
+            // Step 2: subjectsテーブルから全データを取得（notesを含む）
+            let subjects: [Subject] = try await supabase
+                .from("subjects")
+                .select("subject_id, name, age, gender, avatar_url, notes, created_by_user_id, created_at, updated_at")
+                .eq("subject_id", value: subjectId)
+                .execute()
+                .value
+
+            if let subject = subjects.first {
+                print("✅ [Direct Access] Subject found: \(subject.name ?? "Unknown")")
+                print("   📝 Notes: \(subject.notes != nil ? "✓ (\(subject.notes!.prefix(50))...)" : "✗")")
                 // キャッシュに保存
                 cacheSubject(subject, for: deviceId)
                 return subject
             } else {
-                print("ℹ️ [RPC] No subject assigned to this device")
-                // キャッシュからも削除（未設定）
+                print("⚠️ [Direct Access] Subject not found in database")
                 clearSubjectCache(for: deviceId)
                 return nil
             }
 
         } catch {
-            print("❌ [RPC] Failed to fetch subject info: \(error)")
+            print("❌ [Direct Access] Failed to fetch subject info: \(error)")
             return nil
         }
     }
@@ -750,74 +573,6 @@ class SupabaseDataManager: ObservableObject {
         print("🗑️ All subject cache cleared")
     }
     
-    /// デバイスIDのみでSubject情報を取得する専用メソッド（日付非依存）
-    /// HeaderViewなど、Subject情報のみが必要な場合に使用
-    /// - Parameter deviceId: デバイスID
-    /// - Returns: Subject情報（存在しない場合はnil）
-    /// @deprecated: Use fetchSubjectInfo instead (lightweight RPC version)
-    @available(*, deprecated, message: "Use fetchSubjectInfo instead - it's much more efficient")
-    func fetchSubjectOnly(deviceId: String) async -> Subject? {
-        // 新しい軽量メソッドを呼び出す
-        return await fetchSubjectInfo(deviceId: deviceId)
-    }
-    
-    /// デバイスに関連付けられた観測対象を取得
-    /// 観測対象（Subject）情報を取得
-    /// ⚠️ 非推奨: fetchAllReportsData（RPC版）がSubject情報も含むため、個別取得は不要です
-    @available(*, deprecated, message: "Use fetchAllReportsData instead (includes subject info via RPC)")
-    func fetchSubjectForDevice(deviceId: String) async {
-        print("👤 [Legacy] Fetching subject for device: \(deviceId)")
-        
-        do {
-            // まずdevicesテーブルからsubject_idを取得
-            struct DeviceResponse: Codable {
-                let device_id: String
-                let subject_id: String?
-            }
-            
-            let devices: [DeviceResponse] = try await supabase
-                .from("devices")
-                .select()
-                .eq("device_id", value: deviceId)
-                .execute()
-                .value
-            
-            guard let device = devices.first, let subjectId = device.subject_id else {
-                print("ℹ️ No subject assigned to this device")
-                await MainActor.run { [weak self] in
-                    self?.subject = nil
-                }
-                return
-            }
-            
-            // subject_idを使ってsubjectsテーブルから情報を取得
-            let subjects: [Subject] = try await supabase
-                .from("subjects")
-                .select()
-                .eq("subject_id", value: subjectId)
-                .execute()
-                .value
-            
-            if let subject = subjects.first {
-                print("✅ Subject found: \(subject.name ?? "名前なし")")
-                await MainActor.run { [weak self] in
-                    self?.subject = subject
-                }
-            } else {
-                print("⚠️ Subject not found in database")
-                await MainActor.run { [weak self] in
-                    self?.subject = nil
-                }
-            }
-            
-        } catch {
-            print("❌ Failed to fetch subject: \(error)")
-            await MainActor.run { [weak self] in
-                self?.subject = nil
-                self?.errorMessage = "観測対象の取得エラー: \(error.localizedDescription)"
-            }
-        }
-    }
     
     /// 新しい観測対象を登録
     func registerSubject(
@@ -1102,26 +857,83 @@ class SupabaseDataManager: ObservableObject {
         }
     }
     
+    /// 観測対象を削除
+    func deleteSubject(subjectId: String, deviceId: String) async throws {
+        print("🗑️ Deleting subject: \(subjectId) from device: \(deviceId)")
+
+        // Step 1: devicesテーブルからsubject_idをクリア
+        struct DeviceUpdate: Codable {
+            let subject_id: String?
+        }
+
+        let deviceUpdate = DeviceUpdate(subject_id: nil)
+
+        try await supabase
+            .from("devices")
+            .update(deviceUpdate)
+            .eq("device_id", value: deviceId)
+            .execute()
+
+        print("✅ Device subject_id cleared")
+
+        // Step 2: subjectsテーブルからレコードを削除
+        try await supabase
+            .from("subjects")
+            .delete()
+            .eq("subject_id", value: subjectId)
+            .execute()
+
+        print("✅ Subject deleted successfully: \(subjectId)")
+
+        // Step 3: キャッシュをクリア
+        await MainActor.run {
+            clearSubjectCache(for: deviceId)
+            print("🗑️ Subject cache cleared for device: \(deviceId)")
+        }
+    }
+
     /// 観測対象を更新
     func updateSubject(
         subjectId: String,
+        deviceId: String,
         name: String,
         age: Int?,
         gender: String?,
         avatarUrl: String?,
         notes: String?
     ) async throws {
-        print("👤 Updating subject: \(subjectId)")
-        
-        struct SubjectUpdate: Codable {
+        print("👤 Updating subject: \(subjectId) for device: \(deviceId)")
+        print("📝 Update data: name=\(name), age=\(age?.description ?? "nil"), gender=\(gender ?? "nil"), avatarUrl=\(avatarUrl ?? "nil"), notes=\(notes ?? "nil")")
+
+        // Custom Encodable struct that includes nil values in JSON
+        struct SubjectUpdate: Encodable {
             let name: String
             let age: Int?
             let gender: String?
             let avatar_url: String?
             let notes: String?
             let updated_at: String
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(name, forKey: .name)
+                try container.encode(age, forKey: .age)
+                try container.encode(gender, forKey: .gender)
+                try container.encode(avatar_url, forKey: .avatar_url)
+                try container.encode(notes, forKey: .notes)
+                try container.encode(updated_at, forKey: .updated_at)
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case name
+                case age
+                case gender
+                case avatar_url
+                case notes
+                case updated_at
+            }
         }
-        
+
         let now = ISO8601DateFormatter().string(from: Date())
         let subjectUpdate = SubjectUpdate(
             name: name,
@@ -1131,14 +943,28 @@ class SupabaseDataManager: ObservableObject {
             notes: notes,
             updated_at: now
         )
-        
-        try await supabase
+
+        // Log the encoded JSON to see what's being sent
+        if let jsonData = try? JSONEncoder().encode(subjectUpdate),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            print("📤 Sending JSON: \(jsonString)")
+        }
+
+        let response = try await supabase
             .from("subjects")
             .update(subjectUpdate)
             .eq("subject_id", value: subjectId)
             .execute()
-        
+
         print("✅ Subject updated successfully: \(subjectId)")
+        print("📊 Update response status: \(response.status)")
+        print("📊 Update response data: \(String(describing: response.data))")
+
+        // Clear cache after successful update
+        await MainActor.run {
+            clearSubjectCache(for: deviceId)
+            print("🗑️ Subject cache cleared for device: \(deviceId)")
+        }
     }
     
     // MARK: - Notification Methods

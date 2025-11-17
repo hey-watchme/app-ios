@@ -352,28 +352,33 @@ struct DeviceSettingsView: View {
         }
     }
 
-    /// 全デバイスの観測対象を取得（軽量版 - Subject情報のみ）
+    /// 全デバイスの観測対象を取得（最適化版 - デバイス取得時に既にJOINで取得済み）
     private func loadSubjects() async {
         var newSubjects: [String: Subject] = [:]
 
-        // 連携中のデバイスの観測対象を取得
+        // 🚀 パフォーマンス最適化: DeviceManager.devicesに既にsubject情報が含まれている
+        // JOIN取得により、個別のRPC呼び出しは不要（nilの場合もDBにsubject_idがないので呼び出し不要）
         for device in deviceManager.devices {
-            // 📊 パフォーマンス最適化: fetchSubjectInfo（軽量RPC）を使用
-            // ⚠️ 旧: fetchAllReports → 全データ取得（重い）
-            // ✅ 新: fetchSubjectInfo → Subject情報のみ取得（軽い）
-            if let subject = await dataManager.fetchSubjectInfo(deviceId: device.device_id) {
+            if let subject = device.subject {
                 newSubjects[device.device_id] = subject
+                print("✅ [DeviceSettings] Subject loaded from device cache: \(subject.name ?? "Unknown")")
             }
+            // else: subject_idがnullの場合、RPC呼び出しは不要（結果は同じnil）
         }
 
         // サンプルデバイスの観測対象も取得
         if let sampleDevice = sampleDevice {
-            // 📊 パフォーマンス最適化: 既にdevicesに含まれている場合は重複取得をスキップ
             if !deviceManager.devices.contains(where: { $0.device_id == sampleDevice.device_id }) {
+                // サンプルデバイスはdevices配列に含まれていない場合のみRPC呼び出し
                 if let subject = await dataManager.fetchSubjectInfo(deviceId: sampleDevice.device_id) {
                     newSubjects[sampleDevice.device_id] = subject
                 }
             } else {
+                // デバイス配列に含まれている場合、そこからSubjectを取得
+                if let device = deviceManager.devices.first(where: { $0.device_id == sampleDevice.device_id }),
+                   let subject = device.subject {
+                    newSubjects[sampleDevice.device_id] = subject
+                }
                 print("ℹ️ Sample device already included in devices, skipping duplicate fetch")
             }
         }

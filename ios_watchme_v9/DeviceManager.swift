@@ -22,8 +22,19 @@ class DeviceManager: ObservableObject {
         case error(String)              // エラー
     }
 
-    @Published var state: DeviceState = .available([])
-    @Published var selectedDeviceID: String? = nil
+    @Published var state: DeviceState = .available([]) {
+        didSet {
+            updateSelectedSubject()
+        }
+    }
+    @Published var selectedDeviceID: String? = nil {
+        didSet {
+            updateSelectedSubject()
+        }
+    }
+
+    // Selected device's subject (Single Source of Truth for UI)
+    @Published private(set) var selectedSubject: Subject? = nil
 
     // デバイスリストを状態から取得
     var devices: [Device] {
@@ -31,6 +42,17 @@ class DeviceManager: ObservableObject {
             return devices
         }
         return []
+    }
+
+    // Update selectedSubject when selectedDeviceID or devices change
+    private func updateSelectedSubject() {
+        guard let selectedDeviceID = selectedDeviceID else {
+            selectedSubject = nil
+            return
+        }
+
+        let foundDevice = devices.first(where: { $0.device_id == selectedDeviceID })
+        selectedSubject = foundDevice?.subject
     }
 
     var hasDevices: Bool {
@@ -334,15 +356,15 @@ class DeviceManager: ObservableObject {
         // Step 2: device_idのリストを作成してdevicesテーブルから詳細を取得
         let deviceIds = userDevices.map { $0.device_id }
 
-        // Step 3: devicesテーブルから詳細情報を取得
+        // Step 3: devicesテーブルから詳細情報を取得（subjects情報もJOINで一括取得）
+        // 🚀 パフォーマンス最適化: subjects情報を同時に取得することで、後続のRPC呼び出しを削減
+        // 🔧 subjects()内のnotesカラムを明示的に指定してnotesが確実に取得されるようにする
         var devices: [Device] = try await supabase
             .from("devices")
-            .select("*")
+            .select("*, subjects(subject_id, name, age, gender, avatar_url, notes, created_by_user_id, created_at, updated_at)")
             .in("device_id", values: deviceIds)
             .execute()
             .value
-
-        print("📊 Fetched \(devices.count) device details")
 
         // Step 4: roleの情報をデバイスに付与
         for i in devices.indices {
@@ -740,10 +762,72 @@ struct Device: Codable, Equatable {
     let status: String? // デバイスステータス（active, inactive等）
     // user_devicesテーブルから取得した場合のrole情報を保持
     var role: String?
+    // JOIN取得した場合のsubject情報を保持（パフォーマンス最適化）
+    var subject: Subject?
 
     // デモデバイスかどうかを判定
     var isDemo: Bool {
         return device_type == "demo"
+    }
+
+    // Custom decoding to handle Supabase JOIN response
+    enum CodingKeys: String, CodingKey {
+        case device_id, device_type, timezone, owner_user_id, subject_id
+        case created_at, status, role
+        case subjects  // Supabase returns this as an array
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        device_id = try container.decode(String.self, forKey: .device_id)
+        device_type = try container.decode(String.self, forKey: .device_type)
+        timezone = try container.decodeIfPresent(String.self, forKey: .timezone)
+        owner_user_id = try container.decodeIfPresent(String.self, forKey: .owner_user_id)
+        subject_id = try container.decodeIfPresent(String.self, forKey: .subject_id)
+        created_at = try container.decodeIfPresent(String.self, forKey: .created_at)
+        status = try container.decodeIfPresent(String.self, forKey: .status)
+        role = try container.decodeIfPresent(String.self, forKey: .role)
+
+        // Decode subjects (many-to-one relationship returns single object, not array)
+        if let singleSubject = try? container.decode(Subject.self, forKey: .subjects) {
+            // Many-to-one: single object
+            subject = singleSubject
+        } else if let subjects = try? container.decode([Subject].self, forKey: .subjects),
+                  let firstSubject = subjects.first {
+            // Fallback: array (just in case)
+            subject = firstSubject
+        } else {
+            subject = nil
+        }
+    }
+
+    // Custom encoding
+    func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(device_id, forKey: .device_id)
+        try container.encode(device_type, forKey: .device_type)
+        try container.encodeIfPresent(timezone, forKey: .timezone)
+        try container.encodeIfPresent(owner_user_id, forKey: .owner_user_id)
+        try container.encodeIfPresent(subject_id, forKey: .subject_id)
+        try container.encodeIfPresent(created_at, forKey: .created_at)
+        try container.encodeIfPresent(status, forKey: .status)
+        try container.encodeIfPresent(role, forKey: .role)
+        if let subject = subject {
+            try container.encode([subject], forKey: .subjects)
+        }
+    }
+
+    // Manual initializer for non-JOIN cases
+    init(device_id: String, device_type: String, timezone: String?, owner_user_id: String?, subject_id: String?, created_at: String?, status: String?, role: String? = nil, subject: Subject? = nil) {
+        self.device_id = device_id
+        self.device_type = device_type
+        self.timezone = timezone
+        self.owner_user_id = owner_user_id
+        self.subject_id = subject_id
+        self.created_at = created_at
+        self.status = status
+        self.role = role
+        self.subject = subject
     }
 }
 

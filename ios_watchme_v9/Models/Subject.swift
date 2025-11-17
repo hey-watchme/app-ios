@@ -8,7 +8,7 @@
 import Foundation
 
 // MARK: - Subject Model
-struct Subject: Codable {
+struct Subject: Codable, Equatable {
     let subjectId: String
     let name: String?
     let age: Int?

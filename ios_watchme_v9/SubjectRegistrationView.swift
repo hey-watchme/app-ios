@@ -33,6 +33,8 @@ struct SubjectRegistrationView: View {
     @State private var errorMessage: String? = nil
     @State private var showingSuccessAlert = false
     @State private var isUploadingAvatar = false
+    @State private var showingDeleteConfirmation = false
+    @State private var showingDeleteSuccessAlert = false
     
     // Avatar ViewModel
     @StateObject private var avatarViewModel = AvatarUploadViewModel(
@@ -61,6 +63,11 @@ struct SubjectRegistrationView: View {
 
                     // メモ
                     notesSection
+
+                    // 削除ボタン（編集時のみ表示）
+                    if isEditing {
+                        deleteSection
+                    }
 
                     Spacer(minLength: 50)
                 }
@@ -101,6 +108,23 @@ struct SubjectRegistrationView: View {
                 }
             } message: {
                 Text(isEditing ? "観測対象の更新が完了しました。" : "観測対象の登録が完了しました。")
+            }
+            .alert("削除完了", isPresented: $showingDeleteSuccessAlert) {
+                Button("OK") {
+                    dismiss()
+                }
+            } message: {
+                Text("観測対象を削除しました。")
+            }
+            .alert("観測対象を削除", isPresented: $showingDeleteConfirmation) {
+                Button("キャンセル", role: .cancel) { }
+                Button("削除", role: .destructive) {
+                    Task {
+                        await deleteSubject()
+                    }
+                }
+            } message: {
+                Text("この観測対象を完全に削除します。この操作は取り消せません。")
             }
             .alert("エラー", isPresented: .init(
                 get: { errorMessage != nil },
@@ -316,27 +340,64 @@ struct SubjectRegistrationView: View {
             Text("メモ")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            
+
             VStack(alignment: .leading, spacing: 8) {
                 Text("補足情報やその他のメモがあれば記入してください")
                     .font(.caption)
                     .foregroundColor(.secondary)
-                
+
                 TextField("例：趣味はランニング、朝型の生活リズム", text: $notes, axis: .vertical)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .lineLimit(3...6)
             }
         }
     }
+
+    // MARK: - Delete Section
+    private var deleteSection: some View {
+        VStack(spacing: 16) {
+            Divider()
+                .padding(.vertical, 20)
+
+            Text("危険な操作")
+                .font(.headline)
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            Button(action: {
+                showingDeleteConfirmation = true
+            }) {
+                HStack {
+                    Image(systemName: "trash")
+                    Text("観測対象を削除")
+                }
+                .font(.subheadline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 12)
+                .background(Color.red)
+                .cornerRadius(8)
+            }
+
+            Text("この観測対象に関連する全てのデータが削除されます。この操作は取り消せません。")
+                .font(.caption)
+                .foregroundColor(.secondary)
+        }
+    }
     
     // MARK: - Data Loading
     private func loadEditingData() {
         if let subject = editingSubject {
+            print("📖 Loading editing data for subject: \(subject.subjectId)")
+            print("📖 Current subject data: name=\(subject.name ?? "nil"), age=\(subject.age?.description ?? "nil"), gender=\(subject.gender ?? "nil"), notes=\(subject.notes ?? "nil")")
+
             name = subject.name ?? ""
             age = subject.age != nil ? String(subject.age!) : ""
             gender = subject.gender ?? ""
             notes = subject.notes ?? ""
-            
+
+            print("📖 Form initialized: name=\(name), age=\(age), gender=\(gender), notes=\(notes)")
+
             // S3からのアバター画像は、profileImageSectionのAsyncImageで直接表示されるため、
             // ここでは何もロードしない
         }
@@ -481,6 +542,7 @@ struct SubjectRegistrationView: View {
             // 観測対象を更新（アバターURL無しで）
             try await dataManager.updateSubject(
                 subjectId: subject.subjectId,
+                deviceId: deviceID,
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
@@ -523,31 +585,72 @@ struct SubjectRegistrationView: View {
                     isUploadingAvatar = false
                 }
             }
-            
-            // データを再取得
-            _ = await dataManager.fetchAllReports(deviceId: deviceID, date: Date())
+
+            // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
+            if let userId = userAccountManager.currentUser?.id {
+                await deviceManager.initializeDevices(for: userId)
+                print("✅ DeviceManager refreshed with latest subject data")
+            }
 
             // 親ビューに観測対象が更新されたことを通知
             await MainActor.run {
                 NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
             }
 
+            print("✅ Subject update completed - name: \(trimmedName), age: \(ageInt?.description ?? "nil"), gender: \(gender.isEmpty ? "nil" : gender), notes: \(notes.isEmpty ? "nil" : notes)")
+
             await MainActor.run {
                 isLoading = false
-                // プロフィール更新の場合のみ成功アラートを表示
-                if trimmedName != (editingSubject?.name ?? "") ||
-                   ageInt != editingSubject?.age ||
-                   (gender.isEmpty ? nil : gender) != editingSubject?.gender ||
-                   (notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)) != editingSubject?.notes {
-                    showingSuccessAlert = true
-                }
+                // Always show success alert after successful update
+                showingSuccessAlert = true
             }
-            
+
         } catch {
             print("❌ Subject update error: \(error)")
+            print("❌ Error details: \(error)")
             await MainActor.run {
                 isLoading = false
                 errorMessage = "更新に失敗しました: \(error.localizedDescription)"
+            }
+        }
+    }
+
+    // MARK: - Subject Deletion
+    private func deleteSubject() async {
+        guard let subject = editingSubject else { return }
+
+        await MainActor.run {
+            isLoading = true
+            errorMessage = nil
+        }
+
+        do {
+            // 観測対象を削除
+            try await dataManager.deleteSubject(subjectId: subject.subjectId, deviceId: deviceID)
+
+            // DeviceManagerのデータを強制的に再取得
+            if let userId = userAccountManager.currentUser?.id {
+                await deviceManager.initializeDevices(for: userId)
+                print("✅ DeviceManager refreshed after subject deletion")
+            }
+
+            // 親ビューに観測対象が削除されたことを通知
+            await MainActor.run {
+                NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
+            }
+
+            print("✅ Subject deletion completed - subjectId: \(subject.subjectId)")
+
+            await MainActor.run {
+                isLoading = false
+                showingDeleteSuccessAlert = true
+            }
+
+        } catch {
+            print("❌ Subject deletion error: \(error)")
+            await MainActor.run {
+                isLoading = false
+                errorMessage = "削除に失敗しました: \(error.localizedDescription)"
             }
         }
     }

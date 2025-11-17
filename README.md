@@ -86,53 +86,27 @@ WatchMeプラットフォームのiOSアプリケーション。
 
 ## 🔌 API通信
 
-### Supabase RPC関数
+### データアクセス方式
 
-iOSアプリは Supabase RPC関数 `get_dashboard_data` を使用して、1回のAPIコールで全データを取得します。
+**開発中はダイレクトアクセス方式を採用**
 
-**呼び出し**:
-```swift
-let response: [RPCDashboardResponse] = try await supabase
-    .rpc("get_dashboard_data", params: [
-        "p_device_id": deviceId,
-        "p_date": dateString  // "YYYY-MM-DD"
-    ])
-    .execute()
-    .value
-```
+現在、iOSアプリはSupabaseの各テーブルに直接アクセスしています。
 
-**レスポンス構造**:
-```swift
-struct RPCDashboardResponse: Codable {
-    let behavior_report: BehaviorReport?       // behavior_summaryテーブル
-    let emotion_report: EmotionReport?         // emotion_opensmile_summaryテーブル
-    let subject_info: Subject?                 // subjectsテーブル
-    let dashboard_summary: DashboardSummary?   // daily_resultsテーブル ← 重要
-    let subject_comments: [SubjectComment]?    // subject_commentsテーブル
-}
-```
+**主要なデータ取得メソッド**:
+- `fetchDailyResults()` → `daily_results`テーブルから気分データを取得
+- `fetchSubjectInfo()` → `devices` → `subjects`テーブルからプロフィール情報を取得
+- `fetchDashboardTimeBlocks()` → `spot_results` + `spot_features`を並列取得
+- `fetchComments()` → `subject_comments`テーブルからコメントを取得
 
-**重要**: `dashboard_summary` は `daily_results` テーブルから取得されます。
+**メリット**:
+- デバッグが容易（SQLログが明示的に見える）
+- カラム指定が明確（`notes`などの取得漏れを防げる）
+- 開発スピードが速い（RPC関数の修正・デプロイサイクルが不要）
 
-### RPC関数の定義（Supabase側）
-
-```sql
-CREATE OR REPLACE FUNCTION get_dashboard_data(p_device_id text, p_date text)
-RETURNS TABLE (
-    behavior_report jsonb,
-    emotion_report jsonb,
-    subject_info jsonb,
-    dashboard_summary jsonb,  -- daily_resultsテーブルを参照
-    subject_comments jsonb
-)
-```
-
-**参照先テーブル**:
-- `behavior_summary` → `behavior_report`
-- `emotion_opensmile_summary` → `emotion_report`
-- `subjects` → `subject_info`
-- **`daily_results`** → `dashboard_summary` ← 気分データのメインソース
-- `subject_comments` → `subject_comments`
+**今後の方針**:
+- **最終的なパフォーマンスチューニング時にRPC関数を導入**
+- 複数のテーブルを1回のAPIコールで取得する最適化を実施
+- 開発段階では柔軟性を優先し、ダイレクトアクセスを継続
 
 ---
 
@@ -271,7 +245,7 @@ ios_watchme_v9/
 ├── DeviceManager.swift            # デバイス管理
 ├── UserAccountManager.swift       # ユーザー認証管理
 ├── SupabaseAuthManager.swift      # Supabase認証
-├── SupabaseDataManager.swift      # データ取得管理（RPC呼び出し）
+├── SupabaseDataManager.swift      # データ取得管理（ダイレクトアクセス）
 ├── DashboardSummary.swift         # daily_resultsデータモデル
 ├── DashboardTimeBlock.swift       # spot_resultsデータモデル
 └── Models/                        # その他データモデル

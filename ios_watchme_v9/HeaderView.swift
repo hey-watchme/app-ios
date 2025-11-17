@@ -14,7 +14,6 @@ struct HeaderView: View {
     @Binding var showLogoutConfirmation: Bool
     @Binding var showRecordingSheet: Bool
     @Binding var showMyPage: Bool  // マイページ表示制御
-    @State private var subject: Subject? = nil  // ローカル状態として管理
 
     // 通知関連
     @State private var showNotificationSheet = false
@@ -72,16 +71,6 @@ struct HeaderView: View {
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(Color(.systemBackground).shadow(radius: 1))
-        .task(id: deviceManager.selectedDeviceID) {
-            // デバイスが選択されたら、Subject情報を取得
-            guard let deviceId = deviceManager.selectedDeviceID else { 
-                subject = nil
-                return 
-            }
-            
-            // Subject情報のみを取得（軽量なRPC関数を使用）
-            self.subject = await dataManager.fetchSubjectInfo(deviceId: deviceId)
-        }
         .sheet(isPresented: $showNotificationSheet) {
             // 通知画面
             NotificationView()
@@ -109,7 +98,7 @@ struct HeaderView: View {
     // 現在の観測対象またはデバイス情報を表示するView
     @ViewBuilder
     private var currentTargetView: some View {
-        if let subject = subject {
+        if let subject = deviceManager.selectedSubject {
             // 観測対象が設定されている場合
             HStack(spacing: 8) {
                 // アバター表示（AvatarViewコンポーネントを使用）
