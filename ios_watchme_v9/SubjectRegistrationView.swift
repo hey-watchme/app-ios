@@ -487,13 +487,10 @@ struct SubjectRegistrationView: View {
             
             // デバイスにsubject_idを設定
             try await dataManager.updateDeviceSubjectId(deviceId: deviceID, subjectId: subjectId)
-            
-            // データを再取得
-            _ = await dataManager.fetchAllReports(deviceId: deviceID, date: Date())
 
-            // 親ビューに観測対象が更新されたことを通知
-            await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
+            // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
+            if let userId = userAccountManager.currentUser?.id {
+                await deviceManager.initializeDevices(for: userId)
             }
 
             await MainActor.run {
@@ -589,12 +586,6 @@ struct SubjectRegistrationView: View {
             // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
             if let userId = userAccountManager.currentUser?.id {
                 await deviceManager.initializeDevices(for: userId)
-                print("✅ DeviceManager refreshed with latest subject data")
-            }
-
-            // 親ビューに観測対象が更新されたことを通知
-            await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
             }
 
             print("✅ Subject update completed - name: \(trimmedName), age: \(ageInt?.description ?? "nil"), gender: \(gender.isEmpty ? "nil" : gender), notes: \(notes.isEmpty ? "nil" : notes)")

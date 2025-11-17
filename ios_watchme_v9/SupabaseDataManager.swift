@@ -31,11 +31,6 @@ class SupabaseDataManager: ObservableObject {
     @Published var errorMessage: String?
     @Published var subject: Subject?
 
-    // 📊 パフォーマンス最適化: Subjectキャッシュ
-    private var subjectCache: [String: Subject] = [:]  // deviceId: Subject
-    private var subjectCacheTimestamps: [String: Date] = [:]  // キャッシュ更新時刻
-    private let subjectCacheValidDuration: TimeInterval = 300  // 5分間有効
-    
     // MARK: - Private Properties
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
@@ -390,7 +385,7 @@ class SupabaseDataManager: ObservableObject {
         let dashboardSummary = await fetchDailyResults(deviceId: deviceId, date: date, timezone: timezone)
 
         // 🚀 最適化: DeviceManagerからSubject情報を取得（RPC呼び出し削減）
-        let subject: Subject?
+        var subject: Subject? = nil
         if let deviceManager = deviceManager {
             // まず selectedSubject をチェック（selectedDeviceID と一致する場合）
             if deviceManager.selectedDeviceID == deviceId,
@@ -402,13 +397,9 @@ class SupabaseDataManager: ObservableObject {
                 // フォールバック: devices配列から取得
                 subject = cachedSubject
                 print("✅ [fetchAllReports] Subject loaded from device cache: \(cachedSubject.name ?? "Unknown")")
-            } else {
-                // 最後の手段: RPC呼び出し
-                subject = await fetchSubjectInfo(deviceId: deviceId)
             }
-        } else {
-            // deviceManager がない場合のみRPC呼び出し
-            subject = await fetchSubjectInfo(deviceId: deviceId)
+            // ✅ リファクタリング: fetchSubjectInfo()は削除されたため、
+            // DeviceManager.devices[].subjectのみを使用
         }
 
         // コメントを取得
@@ -469,111 +460,9 @@ class SupabaseDataManager: ObservableObject {
             return nil
         }
     }
-    
+
     // MARK: - Subject Management Methods
-    
-    /// デバイスIDのみでSubject情報を取得する専用メソッド（ダイレクトアクセス版）
-    /// HeaderViewなど、Subject情報のみが必要な場合に使用
-    /// - Parameter deviceId: デバイスID
-    /// - Returns: Subject情報（存在しない場合はnil）
-    func fetchSubjectInfo(deviceId: String, forceRefresh: Bool = false) async -> Subject? {
-        // 📊 パフォーマンス最適化: キャッシュチェック
-        if !forceRefresh, let cachedSubject = getCachedSubject(for: deviceId) {
-            print("✅ [Cache HIT] Subject loaded from cache for device: \(deviceId)")
-            return cachedSubject
-        }
 
-        print("👤 [Direct Access] Fetching subject info for device: \(deviceId)")
-
-        do {
-            // Step 1: devicesテーブルからsubject_idを取得
-            struct DeviceRow: Codable {
-                let subject_id: String?
-            }
-
-            let devices: [DeviceRow] = try await supabase
-                .from("devices")
-                .select("subject_id")
-                .eq("device_id", value: deviceId)
-                .execute()
-                .value
-
-            guard let device = devices.first, let subjectId = device.subject_id else {
-                print("ℹ️ [Direct Access] No subject assigned to this device")
-                clearSubjectCache(for: deviceId)
-                return nil
-            }
-
-            print("📤 [Direct Access] Found subject_id: \(subjectId), fetching subject data...")
-
-            // Step 2: subjectsテーブルから全データを取得（notesを含む）
-            let subjects: [Subject] = try await supabase
-                .from("subjects")
-                .select("subject_id, name, age, gender, avatar_url, notes, created_by_user_id, created_at, updated_at")
-                .eq("subject_id", value: subjectId)
-                .execute()
-                .value
-
-            if let subject = subjects.first {
-                print("✅ [Direct Access] Subject found: \(subject.name ?? "Unknown")")
-                print("   📝 Notes: \(subject.notes != nil ? "✓ (\(subject.notes!.prefix(50))...)" : "✗")")
-                // キャッシュに保存
-                cacheSubject(subject, for: deviceId)
-                return subject
-            } else {
-                print("⚠️ [Direct Access] Subject not found in database")
-                clearSubjectCache(for: deviceId)
-                return nil
-            }
-
-        } catch {
-            print("❌ [Direct Access] Failed to fetch subject info: \(error)")
-            return nil
-        }
-    }
-
-    // MARK: - Subject Cache Management
-
-    /// キャッシュからSubjectを取得（有効期限内のみ）
-    private func getCachedSubject(for deviceId: String) -> Subject? {
-        // 📊 パフォーマンス最適化: まずDeviceManagerのdevices配列から取得
-        if let deviceManager = deviceManager,
-           let device = deviceManager.devices.first(where: { $0.device_id == deviceId }),
-           let subject = device.subject {
-            print("✅ [Cache HIT] Subject loaded from DeviceManager for device: \(deviceId)")
-            return subject
-        }
-
-        // フォールバック: subjectCacheから取得
-        guard let timestamp = subjectCacheTimestamps[deviceId],
-              Date().timeIntervalSince(timestamp) < subjectCacheValidDuration,
-              let subject = subjectCache[deviceId] else {
-            return nil
-        }
-        print("✅ [Cache HIT] Subject loaded from subjectCache for device: \(deviceId)")
-        return subject
-    }
-
-    /// Subjectをキャッシュに保存
-    private func cacheSubject(_ subject: Subject, for deviceId: String) {
-        subjectCache[deviceId] = subject
-        subjectCacheTimestamps[deviceId] = Date()
-    }
-
-    /// 特定デバイスのSubjectキャッシュをクリア
-    private func clearSubjectCache(for deviceId: String) {
-        subjectCache.removeValue(forKey: deviceId)
-        subjectCacheTimestamps.removeValue(forKey: deviceId)
-    }
-
-    /// 全Subjectキャッシュをクリア（ログアウト時などに使用）
-    func clearAllSubjectCache() {
-        subjectCache.removeAll()
-        subjectCacheTimestamps.removeAll()
-        print("🗑️ All subject cache cleared")
-    }
-    
-    
     /// 新しい観測対象を登録
     func registerSubject(
         name: String,
@@ -884,12 +773,6 @@ class SupabaseDataManager: ObservableObject {
             .execute()
 
         print("✅ Subject deleted successfully: \(subjectId)")
-
-        // Step 3: キャッシュをクリア
-        await MainActor.run {
-            clearSubjectCache(for: deviceId)
-            print("🗑️ Subject cache cleared for device: \(deviceId)")
-        }
     }
 
     /// 観測対象を更新
@@ -959,12 +842,6 @@ class SupabaseDataManager: ObservableObject {
         print("✅ Subject updated successfully: \(subjectId)")
         print("📊 Update response status: \(response.status)")
         print("📊 Update response data: \(String(describing: response.data))")
-
-        // Clear cache after successful update
-        await MainActor.run {
-            clearSubjectCache(for: deviceId)
-            print("🗑️ Subject cache cleared for device: \(deviceId)")
-        }
     }
     
     // MARK: - Notification Methods

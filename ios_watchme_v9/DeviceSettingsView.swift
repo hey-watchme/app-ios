@@ -33,7 +33,6 @@ struct DeviceSettingsView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
 
     // MARK: - State
-    @State private var subjectsByDevice: [String: Subject] = [:]
     @State private var sampleDevice: Device? = nil
     @State private var isLoading = true
 
@@ -91,14 +90,7 @@ struct DeviceSettingsView: View {
                 Task { await handleQRCodeScanned(scannedCode) }
             }
         }
-        .sheet(item: $editingContext, onDismiss: {
-            // 📊 パフォーマンス最適化: Subject更新時は該当デバイスのみ再取得
-            // ⚠️ 旧: loadAllData() → 全データ再読み込み（重い）
-            // ✅ 新: 該当デバイスのSubjectのみ再取得（軽い）
-            if let deviceId = editingContext?.deviceID {
-                Task { await reloadSubject(for: deviceId) }
-            }
-        }) { context in
+        .sheet(item: $editingContext) { context in
             SubjectRegistrationView(
                 deviceID: context.deviceID,
                 isPresented: .constant(false),
@@ -175,7 +167,7 @@ struct DeviceSettingsView: View {
                 DeviceCard(
                     device: device,
                     isSelected: device.device_id == deviceManager.selectedDeviceID,
-                    subject: subjectsByDevice[device.device_id],
+                    subject: device.subject,
                     onSelect: {
                         if deviceManager.selectedDeviceID == device.device_id {
                             deviceManager.selectDevice(nil)
@@ -218,7 +210,7 @@ struct DeviceSettingsView: View {
                 DeviceCard(
                     device: sampleDevice,
                     isSelected: sampleDevice.device_id == deviceManager.selectedDeviceID,
-                    subject: subjectsByDevice[sampleDevice.device_id],
+                    subject: sampleDevice.subject,
                     onSelect: {
                         if deviceManager.selectedDeviceID == sampleDevice.device_id {
                             deviceManager.selectDevice(nil)
@@ -305,21 +297,21 @@ struct DeviceSettingsView: View {
             try? await Task.sleep(nanoseconds: 100_000_000)
         }
 
-        // 2. サンプルデバイスを取得
+        // 2. サンプルデバイスを取得（Subject情報もJOINで含まれる）
         await loadSampleDevice()
 
-        // 3. 全デバイスの観測対象を取得（サンプルデバイス含む）
-        await loadSubjects()
+        // ✅ DeviceManager.devices[].subjectに既にSubject情報が含まれているため、
+        // loadSubjects()の呼び出しは不要（重複取得を削減）
 
         isLoading = false
     }
 
-    /// サンプルデバイスを取得
+    /// サンプルデバイスを取得（Subject情報もJOINで取得）
     private func loadSampleDevice() async {
         do {
             let devices: [Device] = try await supabase
                 .from("devices")
-                .select("*")
+                .select("*, subjects(subject_id, name, age, gender, avatar_url, notes, created_by_user_id, created_at, updated_at)")
                 .eq("device_id", value: DeviceManager.sampleDeviceID)
                 .execute()
                 .value
@@ -334,59 +326,6 @@ struct DeviceSettingsView: View {
         }
     }
 
-    /// 特定デバイスのSubject情報のみを再取得（Subject更新時）
-    private func reloadSubject(for deviceId: String) async {
-        print("🔄 Reloading subject for device: \(deviceId)")
-
-        // 📊 パフォーマンス最適化: Subject更新時はキャッシュを強制更新
-        if let subject = await dataManager.fetchSubjectInfo(deviceId: deviceId, forceRefresh: true) {
-            await MainActor.run {
-                self.subjectsByDevice[deviceId] = subject
-            }
-            print("✅ Subject reloaded for device: \(deviceId)")
-        } else {
-            await MainActor.run {
-                self.subjectsByDevice[deviceId] = nil
-            }
-            print("ℹ️ No subject found for device: \(deviceId)")
-        }
-    }
-
-    /// 全デバイスの観測対象を取得（最適化版 - デバイス取得時に既にJOINで取得済み）
-    private func loadSubjects() async {
-        var newSubjects: [String: Subject] = [:]
-
-        // 🚀 パフォーマンス最適化: DeviceManager.devicesに既にsubject情報が含まれている
-        // JOIN取得により、個別のRPC呼び出しは不要（nilの場合もDBにsubject_idがないので呼び出し不要）
-        for device in deviceManager.devices {
-            if let subject = device.subject {
-                newSubjects[device.device_id] = subject
-                print("✅ [DeviceSettings] Subject loaded from device cache: \(subject.name ?? "Unknown")")
-            }
-            // else: subject_idがnullの場合、RPC呼び出しは不要（結果は同じnil）
-        }
-
-        // サンプルデバイスの観測対象も取得
-        if let sampleDevice = sampleDevice {
-            if !deviceManager.devices.contains(where: { $0.device_id == sampleDevice.device_id }) {
-                // サンプルデバイスはdevices配列に含まれていない場合のみRPC呼び出し
-                if let subject = await dataManager.fetchSubjectInfo(deviceId: sampleDevice.device_id) {
-                    newSubjects[sampleDevice.device_id] = subject
-                }
-            } else {
-                // デバイス配列に含まれている場合、そこからSubjectを取得
-                if let device = deviceManager.devices.first(where: { $0.device_id == sampleDevice.device_id }),
-                   let subject = device.subject {
-                    newSubjects[sampleDevice.device_id] = subject
-                }
-                print("ℹ️ Sample device already included in devices, skipping duplicate fetch")
-            }
-        }
-
-        await MainActor.run {
-            self.subjectsByDevice = newSubjects
-        }
-    }
 
     /// QRコードをスキャンしてデバイスを追加
     private func handleQRCodeScanned(_ code: String) async {

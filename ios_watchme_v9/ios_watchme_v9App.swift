@@ -304,8 +304,6 @@ struct MainAppView: View {
                 // 閲覧専用モードに移行（ログアウト時）
                 selectedTab = .home
                 onboardingCompleted = false  // オンボーディング完了フラグをリセット
-                // 📊 パフォーマンス最適化: ログアウト時にSubjectキャッシュをクリア
-                dataManager.clearAllSubjectCache()
                 print("🔄 閲覧専用モード - 初期状態にリセット")
             }
         }
