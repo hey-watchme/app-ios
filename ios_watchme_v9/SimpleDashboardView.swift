@@ -97,12 +97,10 @@ struct SimpleDashboardView: View {
                         } else {
                             // 📊 Progressive rendering: Show content as it becomes available
 
-                            // Priority 1: Vibe card (show immediately when dashboardSummary is available)
-                            if dashboardSummary != nil || !timeBlocks.isEmpty {
-                                vibeGraphCard
-                                    .padding(.horizontal, 20)
-                                    .transition(.opacity.combined(with: .scale(scale: 0.95)))
-                            }
+                            // Priority 1: Vibe card (always show - empty state is handled inside)
+                            vibeGraphCard
+                                .padding(.horizontal, 20)
+                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
 
                             // Priority 2: Recent analysis (show when timeBlocks is available)
                             if !timeBlocks.isEmpty {
@@ -424,20 +422,15 @@ struct SimpleDashboardView: View {
                     showVibeSheet = true
                 }
             } else {
+                // エンプティーステート：ナビゲーションボタンを非表示
                 UnifiedCard(
-                    title: "気分",
-                    navigationLabel: "気分詳細",
-                    onNavigate: { }
+                    title: "気分"
                 ) {
                     GraphEmptyStateView(
                         graphType: .vibe,
                         isDeviceLinked: !deviceManager.devices.isEmpty,
                         isCompact: true
                     )
-                }
-                .onTapGesture {
-                    isCommentFieldFocused = false  // キーボードを閉じる
-                    showVibeSheet = true
                 }
             }
         }

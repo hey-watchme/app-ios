@@ -48,27 +48,38 @@ struct GraphEmptyStateView: View {
     }
     
     var body: some View {
-        VStack(spacing: isCompact ? 12 : 20) {
+        VStack(spacing: isCompact ? 16 : 20) {
             // アイコン
             Image(systemName: isDeviceLinked ? graphType.defaultIcon : "iphone.slash")
                 .font(isCompact ? .largeTitle : .system(size: 60))
                 .foregroundColor(isDeviceLinked ? Color.safeColor("BorderLight").opacity(0.5) : Color.safeColor("WarningColor"))
-            
+
             // メッセージ
             if isCompact {
-                // ダッシュボード用の簡潔な表示
-                Text(isDeviceLinked ? "データがありません" : "デバイス未連携")
-                    .font(.subheadline)
-                    .foregroundColor(isDeviceLinked ? .secondary : Color.safeColor("WarningColor"))
+                // ダッシュボード用の説明的な表示
+                VStack(spacing: 8) {
+                    Text(isDeviceLinked ? emptyStateTitle : "デバイス未連携")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .foregroundColor(isDeviceLinked ? .primary : Color.safeColor("WarningColor"))
+
+                    if isDeviceLinked {
+                        Text(emptyStateMessage)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+                            .padding(.horizontal, 20)
+                    }
+                }
             } else {
                 // 通常のグラフビュー用の詳細な表示
                 VStack(spacing: 8) {
                     Text(isDeviceLinked ? "指定した日付のデータがありません" : "デバイスが連携されていません")
                         .font(.headline)
                         .foregroundColor(.primary)
-                    
-                    Text(isDeviceLinked ? 
-                        "この日は\(graphType.dataTypeName)が\n収集されていません" : 
+
+                    Text(isDeviceLinked ?
+                        "この日は\(graphType.dataTypeName)が\n収集されていません" :
                         "ユーザー情報画面から\nデバイスを連携してください")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
@@ -76,8 +87,30 @@ struct GraphEmptyStateView: View {
                 }
             }
         }
-        .frame(maxWidth: .infinity, minHeight: isCompact ? 100 : 300)
-        .padding(isCompact ? 0 : 50)
+        .frame(maxWidth: .infinity, minHeight: isCompact ? 120 : 300)
+        .padding(isCompact ? .vertical : .all, isCompact ? 20 : 50)
+    }
+
+    private var emptyStateTitle: String {
+        switch graphType {
+        case .vibe:
+            return "現在データがありません"
+        case .behavior:
+            return "行動データがありません"
+        case .emotion:
+            return "感情データがありません"
+        }
+    }
+
+    private var emptyStateMessage: String {
+        switch graphType {
+        case .vibe:
+            return "音声情報から、あなたの気分や今日の出来事を分析してみましょう"
+        case .behavior:
+            return "録音することで、行動パターンを分析できます"
+        case .emotion:
+            return "録音することで、感情の変化を分析できます"
+        }
     }
 }
 
