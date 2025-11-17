@@ -31,6 +31,7 @@ struct DeviceSettingsView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var userAccountManager: UserAccountManager
+    @Environment(\.dismiss) var dismiss
 
     // MARK: - State
     @State private var sampleDevice: Device? = nil
@@ -170,9 +171,12 @@ struct DeviceSettingsView: View {
                     subject: device.subject,
                     onSelect: {
                         if deviceManager.selectedDeviceID == device.device_id {
+                            // 既に選択中のデバイスをタップ → 無効化（画面は閉じない）
                             deviceManager.selectDevice(nil)
                         } else {
+                            // 未選択のデバイスをタップ → 有効化して画面を閉じる
                             deviceManager.selectDevice(device.device_id)
+                            dismiss()
                         }
                     },
                     onEditSubject: { subject in
@@ -213,9 +217,12 @@ struct DeviceSettingsView: View {
                     subject: sampleDevice.subject,
                     onSelect: {
                         if deviceManager.selectedDeviceID == sampleDevice.device_id {
+                            // 既に選択中のデバイスをタップ → 無効化（画面は閉じない）
                             deviceManager.selectDevice(nil)
                         } else {
+                            // 未選択のデバイスをタップ → 有効化して画面を閉じる
                             deviceManager.selectDevice(sampleDevice.device_id)
+                            dismiss()
                         }
                     },
                     onEditSubject: { subject in

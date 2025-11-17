@@ -32,7 +32,7 @@ struct DeviceCard: View {
                 )
 
             VStack(spacing: 16) {
-                // トグルボタンと選択状態（左右反転）- 行全体をクリック可能に
+                // トグルスイッチと選択状態 - 行全体をクリック可能に
                 Button(action: onSelect) {
                     HStack {
                         Text(isSelected ? "選択中のデバイス" : "このデバイスを選択する")
@@ -42,16 +42,21 @@ struct DeviceCard: View {
 
                         Spacer()
 
-                        // トグルボタン：選択中は緑のチェック、非選択はグレーの丸
-                        if isSelected {
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.title2)
-                                .foregroundColor(Color.safeColor("SuccessColor"))
-                        } else {
-                            Image(systemName: "circle")
-                                .font(.title2)
-                                .foregroundColor(Color.gray.opacity(0.3))
+                        // トグルスイッチUI
+                        ZStack {
+                            // トラック（溝の部分）
+                            Capsule()
+                                .fill(isSelected ? Color.green : Color.gray.opacity(0.3))
+                                .frame(width: 51, height: 31)
+
+                            // サム（つまみ部分）
+                            Circle()
+                                .fill(Color.white)
+                                .frame(width: 27, height: 27)
+                                .offset(x: isSelected ? 11 : -11)
+                                .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
                         }
+                        .animation(.easeInOut(duration: 0.2), value: isSelected)
                     }
                     .contentShape(Rectangle())
                 }
