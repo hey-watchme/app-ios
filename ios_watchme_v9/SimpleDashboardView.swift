@@ -89,7 +89,8 @@ struct SimpleDashboardView: View {
                         )
                     
                     // ダッシュボードコンテンツ
-                    VStack(spacing: 20) {
+                    // 📊 Performance optimization: LazyVStack for on-demand rendering
+                    LazyVStack(spacing: 20) {
                         if isLoading {
                             ProgressView("読み込み中...")
                                 .frame(maxWidth: .infinity, minHeight: 200)
@@ -109,7 +110,7 @@ struct SimpleDashboardView: View {
                             // 感情グラフカード（一時的に非表示）
                             // emotionGraphCard
                             //     .padding(.horizontal, 20)
-                            
+
                             // コメントセクション
                             if let subject = subject {
                                 commentSection(subject: subject)
