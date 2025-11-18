@@ -599,24 +599,27 @@ class SupabaseDataManager: ObservableObject {
     ///   - deviceId: デバイスID
     ///   - date: 対象日付
     /// - Returns: 録音ごとのデータ配列（時間順でソート済み）
-    func fetchDashboardTimeBlocks(deviceId: String, date: Date) async -> [DashboardTimeBlock] {
+    ///
+    /// ⚠️ 重要: local_dateのみ使用。recorded_at（UTC）は一切参照しない
+    func fetchDashboardTimeBlocks(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
         print("📊 Fetching spot results with features for device: \(deviceId)")
 
-        // 日付フォーマッタの設定
+        // タイムゾーンを適用してlocal_dateを生成
+        let targetTimezone = timezone ?? TimeZone.current
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = TimeZone.current
+        formatter.timeZone = targetTimezone
         let dateString = formatter.string(from: date)
 
         print("   Date: \(dateString)")
+        print("   Timezone: \(targetTimezone.identifier)")
 
         do {
             // Step 1 & 2: Fetch spot_results and spot_features in parallel
             struct SpotResult: Codable {
                 let device_id: String
                 let local_date: String?
-                let recorded_at: String?
-                let local_time: String?
+                let local_time: String?  // ✅ local_timeで結合（ユニークキー）
                 let summary: String?
                 let behavior: String?
                 let vibe_score: Double?
@@ -625,7 +628,7 @@ class SupabaseDataManager: ObservableObject {
 
             struct SpotFeature: Codable {
                 let device_id: String
-                let recorded_at: String?
+                let local_time: String?  // ✅ local_timeで結合
                 let behavior_extractor_result: [SEDBehaviorTimePoint]?
                 let emotion_extractor_result: [EmotionChunk]?
             }
@@ -633,14 +636,14 @@ class SupabaseDataManager: ObservableObject {
             // 📊 Performance optimization: Parallel database queries
             let spotResultsQuery = supabase
                 .from("spot_results")
-                .select("device_id, local_date, recorded_at, local_time, summary, behavior, vibe_score, created_at")
+                .select("device_id, local_date, local_time, summary, behavior, vibe_score, created_at")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
-                .order("local_time", ascending: true)  // ユーザーのローカルタイムでソート（生活リズムを反映）
+                .order("local_time", ascending: true)  // ✅ ローカルタイムでソート
 
             let spotFeaturesQuery = supabase
                 .from("spot_features")
-                .select("device_id, recorded_at, behavior_extractor_result, emotion_extractor_result")
+                .select("device_id, local_time, behavior_extractor_result, emotion_extractor_result")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
 
@@ -651,21 +654,20 @@ class SupabaseDataManager: ObservableObject {
 
             print("✅ Fetched \(spotResults.count) spot results and \(spotFeatures.count) spot features")
 
-            // Step 3: Merge data by recorded_at
+            // Step 3: Merge data by local_time (ユニークキー)
             let featureMap = Dictionary(uniqueKeysWithValues: spotFeatures.compactMap { feature -> (String, SpotFeature)? in
-                guard let recordedAt = feature.recorded_at else { return nil }
-                return (recordedAt, feature)
+                guard let localTime = feature.local_time else { return nil }
+                return (localTime, feature)
             })
 
             let timeBlocks: [DashboardTimeBlock] = spotResults.compactMap { result in
-                guard let recordedAt = result.recorded_at else { return nil }
-                let feature = featureMap[recordedAt]
+                guard let localTime = result.local_time else { return nil }
+                let feature = featureMap[localTime]
 
                 // Manually construct DashboardTimeBlock
                 let jsonData = try? JSONSerialization.data(withJSONObject: [
                     "device_id": result.device_id,
                     "local_date": result.local_date as Any,
-                    "recorded_at": result.recorded_at as Any,
                     "local_time": result.local_time as Any,
                     "summary": result.summary as Any,
                     "behavior": result.behavior as Any,
@@ -687,10 +689,9 @@ class SupabaseDataManager: ObservableObject {
                                 [
                                     "group": emotion.group as Any,
                                     "label": emotion.label,
-                                    "score": emotion.score as Any,
+                                    "score": emotion.score,
                                     "name_en": emotion.name_en as Any,
-                                    "name_ja": emotion.name_ja,
-                                    "percentage": emotion.percentage
+                                    "name_ja": emotion.name_ja
                                 ]
                             },
                             "end_time": chunk.end_time,
@@ -698,10 +699,9 @@ class SupabaseDataManager: ObservableObject {
                             "primary_emotion": [
                                 "group": chunk.primary_emotion.group as Any,
                                 "label": chunk.primary_emotion.label,
-                                "score": chunk.primary_emotion.score as Any,
+                                "score": chunk.primary_emotion.score,
                                 "name_en": chunk.primary_emotion.name_en as Any,
-                                "name_ja": chunk.primary_emotion.name_ja,
-                                "percentage": chunk.primary_emotion.percentage
+                                "name_ja": chunk.primary_emotion.name_ja
                             ]
                         ]
                     }

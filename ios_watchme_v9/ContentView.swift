@@ -46,8 +46,8 @@ struct ContentView: View {
                 
                 // ✅ 権限ベース設計: 状態チェックロジック更新
                 switch deviceManager.state {
-                case .loading:
-                    // ロード中はスピナーを表示
+                case .idle, .loading:
+                    // ロード中または初期状態はスピナーを表示
                     Spacer()
                     VStack(spacing: 20) {
                         ProgressView()

@@ -17,12 +17,13 @@ class DeviceManager: ObservableObject {
 
     // MARK: - State Management（権限ベース設計 - シンプル化）
     enum DeviceState: Equatable {
+        case idle                       // 初期状態（未初期化）
         case loading                    // デバイス情報取得中
-        case available([Device])        // デバイスあり（0個以上）
+        case available([Device])        // デバイスあり（0個以上、サンプル含む）
         case error(String)              // エラー
     }
 
-    @Published var state: DeviceState = .available([]) {
+    @Published var state: DeviceState = .idle {
         didSet {
             updateSelectedSubject()
         }
@@ -214,17 +215,28 @@ class DeviceManager: ObservableObject {
         self.state = .loading
 
         do {
+            // ユーザーのデバイスを取得
             let fetchedDevices = try await fetchUserDevicesInternal(for: userId)
 
-            // デバイスリストをセット（空配列でも可）
-            self.state = .available(fetchedDevices)
+            // サンプルデバイスを取得
+            let sampleDevice = try await fetchSampleDeviceInternal()
+
+            // サンプルデバイスを統合（リストの最後に追加）
+            var allDevices = fetchedDevices
+            if let sample = sampleDevice {
+                allDevices.append(sample)
+                print("✅ サンプルデバイスを統合")
+            }
+
+            // デバイスリストをセット（サンプル含む）
+            self.state = .available(allDevices)
 
             if fetchedDevices.isEmpty {
-                print("📱 デバイスなし")
+                print("📱 ユーザーデバイスなし（サンプルのみ）")
                 selectedDeviceID = nil
                 UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
             } else {
-                print("✅ \(fetchedDevices.count)個のデバイスを取得")
+                print("✅ \(fetchedDevices.count)個のユーザーデバイスを取得")
                 // 選択デバイスを決定
                 determineSelectedDevice(from: fetchedDevices)
             }
@@ -312,7 +324,7 @@ class DeviceManager: ObservableObject {
         let clearStart = Date()
         print("⏱️ [DM-CLEAR] 状態クリア開始")
 
-        state = .available([])
+        state = .idle
         selectedDeviceID = nil
         registrationError = nil
         isLoading = false
@@ -327,7 +339,7 @@ class DeviceManager: ObservableObject {
     @MainActor
     func resetState() {
         print("🔄 DeviceManager: 状態リセット（Full Access Mode用）")
-        self.state = .available([])
+        self.state = .idle
         self.selectedDeviceID = nil
         UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
     }
@@ -346,7 +358,7 @@ class DeviceManager: ObservableObject {
             .eq("user_id", value: userId)
             .execute()
             .value
-        
+
         print("📊 Found \(userDevices.count) user-device relationships")
 
         if userDevices.isEmpty {
@@ -374,6 +386,26 @@ class DeviceManager: ObservableObject {
         }
 
         return devices
+    }
+
+    // サンプルデバイス取得関数（内部用）
+    private func fetchSampleDeviceInternal() async throws -> Device? {
+        print("📡 Fetching sample device: \(DeviceManager.sampleDeviceID)")
+
+        let devices: [Device] = try await supabase
+            .from("devices")
+            .select("*, subjects(subject_id, name, age, gender, avatar_url, notes, created_by_user_id, created_at, updated_at)")
+            .eq("device_id", value: DeviceManager.sampleDeviceID)
+            .execute()
+            .value
+
+        if let device = devices.first {
+            print("✅ Sample device fetched")
+            return device
+        } else {
+            print("⚠️ Sample device not found")
+            return nil
+        }
     }
     
     // MARK: - ユーザーのデバイスを取得（後方互換性）

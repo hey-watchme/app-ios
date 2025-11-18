@@ -79,10 +79,10 @@ struct HomeView: View {
                         // 時間ごとの詳細リスト
                         UnifiedCard(title: "時間ごとの詳細") {
                             VStack(spacing: 0) {
-                                ForEach(timeBlocks, id: \.recordedAt) { block in
+                                ForEach(timeBlocks, id: \.localTime) { block in
                                     TimeBlockRowView(timeBlock: block)
 
-                                    if block.recordedAt != timeBlocks.last?.recordedAt {
+                                    if block.localTime != timeBlocks.last?.localTime {
                                         Divider()
                                             .background(Color.safeColor("BorderLight").opacity(0.3))
                                     }
@@ -116,9 +116,11 @@ struct HomeView: View {
             print("❌ No device selected")
             return
         }
-        
+
+        let timezone = deviceManager.getTimezone(for: deviceId)
+
         isLoadingTimeBlocks = true
-        timeBlocks = await dataManager.fetchDashboardTimeBlocks(deviceId: deviceId, date: selectedDate)
+        timeBlocks = await dataManager.fetchDashboardTimeBlocks(deviceId: deviceId, date: selectedDate, timezone: timezone)
         isLoadingTimeBlocks = false
     }
 }

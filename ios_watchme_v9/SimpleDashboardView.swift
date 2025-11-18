@@ -352,7 +352,7 @@ struct SimpleDashboardView: View {
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .environmentObject(userAccountManager)
-                    .navigationBarTitleDisplayMode(.large)
+                    .navigationBarTitleDisplayMode(.inline)
                     .navigationTitle("分析結果の一覧")
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
@@ -437,7 +437,7 @@ struct SimpleDashboardView: View {
     }
 
     private var spotAnalysisSection: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 0) {
             // Section title
             HStack {
                 Text("最新情報")
@@ -445,16 +445,18 @@ struct SimpleDashboardView: View {
                     .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
                 Spacer()
             }
+            .padding(.bottom, 30)
 
             // Show latest 3 spot analysis cards (most recent first)
             let latestBlocks = Array(timeBlocks.suffix(3).reversed())
 
             if !latestBlocks.isEmpty {
-                VStack(spacing: 12) {
-                    ForEach(latestBlocks, id: \.recordedAt) { block in
+                VStack(spacing: 20) {
+                    ForEach(latestBlocks, id: \.localTime) { block in
                         SpotAnalysisCard(timeBlock: block)
                     }
                 }
+                .padding(.bottom, 16)
 
                 // "Show more" button
                 Button(action: {
@@ -761,7 +763,8 @@ struct SimpleDashboardView: View {
         )
         async let timeBlocksTask = dataManager.fetchDashboardTimeBlocks(
             deviceId: deviceId,
-            date: date
+            date: date,
+            timezone: timezone
         )
 
         let (result, fetchedTimeBlocks) = await (resultTask, timeBlocksTask)
@@ -1012,8 +1015,8 @@ struct SpotAnalysisCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            // Header row (time and score)
+        VStack(alignment: .leading, spacing: 8) {
+            // Header row (time and score) - outside the card
             HStack(spacing: 12) {
                 Text(timeBlock.displayTime)
                     .font(.system(size: 14, weight: .semibold, design: .monospaced))
@@ -1037,80 +1040,78 @@ struct SpotAnalysisCard: View {
                 }
             }
 
-            // Behavior (from SED analysis)
-            let topBehaviors = timeBlock.topBehaviors
-            if !topBehaviors.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("行動")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
-
-                    HStack(spacing: 8) {
-                        ForEach(Array(topBehaviors.prefix(3).enumerated()), id: \.offset) { index, behavior in
-                            HStack(spacing: 4) {
-                                Text(behavior.label)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                Text(String(format: "(%.2f)", behavior.score))
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                            }
-
-                            if index < topBehaviors.prefix(3).count - 1 {
-                                Text("・")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Emotion (from SER analysis)
-            let topEmotions = timeBlock.topEmotions
-            if !topEmotions.isEmpty {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("感情")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
-
-                    HStack(spacing: 8) {
-                        ForEach(Array(topEmotions.prefix(3).enumerated()), id: \.offset) { index, emotion in
-                            HStack(spacing: 4) {
-                                Text(emotion.name)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                Text(String(format: "(%.1f%%)", emotion.percentage))
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                            }
-
-                            if index < topEmotions.prefix(3).count - 1 {
-                                Text("・")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Summary (transcription)
-            if let firstLine = summaryFirstLine {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("内容")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+            // Card content (gray background)
+            VStack(alignment: .leading, spacing: 12) {
+                // Summary (transcription) - moved to top, no title
+                if let firstLine = summaryFirstLine {
                     Text(firstLine)
                         .font(.system(size: 13))
                         .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                         .lineLimit(3)
                 }
+
+                // Behavior (from SED analysis)
+                let topBehaviors = timeBlock.topBehaviors
+                if !topBehaviors.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("行動")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+
+                        HStack(spacing: 8) {
+                            ForEach(Array(topBehaviors.prefix(3).enumerated()), id: \.offset) { index, behavior in
+                                HStack(spacing: 4) {
+                                    Text(behavior.label)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                    Text(String(format: "(%.2f)", behavior.score))
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                                }
+
+                                if index < topBehaviors.prefix(3).count - 1 {
+                                    Text("・")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Emotion (from SER analysis)
+                let topEmotions = timeBlock.topEmotions
+                if !topEmotions.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("感情")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+
+                        HStack(spacing: 8) {
+                            ForEach(Array(topEmotions.prefix(3).enumerated()), id: \.offset) { index, emotion in
+                                HStack(spacing: 4) {
+                                    Text(emotion.name)
+                                        .font(.system(size: 13))
+                                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                    Text(String(format: "(%.2f)", emotion.score))
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                                }
+
+                                if index < topEmotions.prefix(3).count - 1 {
+                                    Text("・")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                                }
+                            }
+                        }
+                    }
+                }
             }
+            .padding(16)
+            .background(Color.safeColor("CardBackground"))
+            .cornerRadius(12)
         }
-        .padding(16)
-        .background(Color.safeColor("CardBackground"))
-        .cornerRadius(12)
     }
 }
 
@@ -1124,10 +1125,6 @@ struct AnalysisListView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // 日付表示
-                DetailPageDateHeader(selectedDate: selectedDate)
-                    .padding(.top, -8)
-
                 if timeBlocks.isEmpty {
                     // Empty state
                     GraphEmptyStateView(
@@ -1137,8 +1134,8 @@ struct AnalysisListView: View {
                     .padding(.horizontal)
                 } else {
                     // 時系列順（古い→新しい）で全件表示
-                    VStack(spacing: 12) {
-                        ForEach(timeBlocks, id: \.recordedAt) { block in
+                    VStack(spacing: 20) {
+                        ForEach(timeBlocks, id: \.localTime) { block in
                             SpotAnalysisCard(timeBlock: block)
                         }
                     }
@@ -1147,8 +1144,9 @@ struct AnalysisListView: View {
 
                 Spacer(minLength: 50)
             }
+            .padding(.top, 20)
         }
-        .background(Color.safeColor("BehaviorBackgroundPrimary"))
+        .background(Color.white)
     }
 }
 

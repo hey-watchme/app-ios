@@ -31,10 +31,9 @@ struct SEDBehaviorTimePoint: Codable, Equatable {
 struct EmotionDetail: Codable, Equatable {
     let group: String?
     let label: String
-    let score: Double?
+    let score: Double
     let name_en: String?
     let name_ja: String
-    let percentage: Double
 }
 
 struct EmotionChunk: Codable, Equatable {
@@ -51,8 +50,7 @@ struct EmotionChunk: Codable, Equatable {
 struct DashboardTimeBlock: Codable, Equatable {
     let deviceId: String
     let date: String?  // local_dateをdateにマッピング（nullの可能性あり）
-    let recordedAt: String?  // recorded_at (UTC)（nullの可能性あり）
-    let localTime: String?  // local_time (YYYY-MM-DD HH:MM:SS)
+    let localTime: String?  // local_time (YYYY-MM-DD HH:MM:SS) - ✅ ユニークキー
     let summary: String?    // その録音の詳細説明
     let behavior: String?   // その録音の行動
     let vibeScore: Double?
@@ -69,7 +67,6 @@ struct DashboardTimeBlock: Codable, Equatable {
     enum CodingKeys: String, CodingKey {
         case deviceId = "device_id"
         case date = "local_date"
-        case recordedAt = "recorded_at"
         case localTime = "local_time"
         case summary
         case behavior
@@ -85,7 +82,6 @@ struct DashboardTimeBlock: Codable, Equatable {
 
         deviceId = try container.decode(String.self, forKey: .deviceId)
         date = try container.decodeIfPresent(String.self, forKey: .date)
-        recordedAt = try container.decodeIfPresent(String.self, forKey: .recordedAt)
         localTime = try container.decodeIfPresent(String.self, forKey: .localTime)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
         behavior = try container.decodeIfPresent(String.self, forKey: .behavior)
@@ -98,16 +94,15 @@ struct DashboardTimeBlock: Codable, Equatable {
         emotionChunks = (try? container.decodeIfPresent([EmotionChunk].self, forKey: .emotionChunks)) ?? []
 
         // displayTimeを初期化時に1回だけ計算（キャッシュ）
-        displayTime = Self.calculateDisplayTime(localTime: localTime, recordedAt: recordedAt, deviceId: deviceId)
+        displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
     }
 
     // 表示用の時刻文字列を計算（staticメソッド）
-    private static func calculateDisplayTime(localTime: String?, recordedAt: String?, deviceId: String) -> String {
+    private static func calculateDisplayTime(localTime: String?, deviceId: String) -> String {
         // ⚠️ 必ずlocal_timeを使用（UTCではなくユーザーの生活時間）
         guard let localTime = localTime else {
             print("❌ [ERROR] local_time is NULL - this should never happen!")
             print("   device_id: \(deviceId)")
-            print("   recorded_at: \(recordedAt ?? "nil")")
             return "⚠️ ERROR"
         }
 
@@ -189,29 +184,29 @@ struct DashboardTimeBlock: Codable, Equatable {
             .sorted { $0.score > $1.score }
     }
 
-    /// Top emotions aggregated from all chunks (sorted by average percentage)
-    var topEmotions: [(name: String, percentage: Double)] {
+    /// Top emotions aggregated from all chunks (sorted by average score)
+    var topEmotions: [(name: String, score: Double)] {
         let chunks = emotionChunks
         guard !chunks.isEmpty else { return [] }
 
         // Collect all emotions across all chunks
-        var emotionPercentages: [String: [Double]] = [:]
+        var emotionScores: [String: [Double]] = [:]
 
         for chunk in chunks {
             for emotion in chunk.emotions {
-                emotionPercentages[emotion.name_ja, default: []].append(emotion.percentage)
+                emotionScores[emotion.name_ja, default: []].append(emotion.score)
             }
         }
 
-        // Calculate average percentage for each emotion
-        let averaged = emotionPercentages.map { (name, percentages) -> (name: String, percentage: Double) in
-            let avgPercentage = percentages.reduce(0.0, +) / Double(percentages.count)
-            return (name, avgPercentage)
+        // Calculate average score for each emotion
+        let averaged = emotionScores.map { (name, scores) -> (name: String, score: Double) in
+            let avgScore = scores.reduce(0.0, +) / Double(scores.count)
+            return (name, avgScore)
         }
 
-        // Filter by minimum threshold (5%) and sort by percentage
+        // Filter by minimum threshold and sort by score
         return averaged
-            .filter { $0.percentage > 5.0 }
-            .sorted { $0.percentage > $1.percentage }
+            .filter { $0.score > 0.1 }
+            .sorted { $0.score > $1.score }
     }
 }

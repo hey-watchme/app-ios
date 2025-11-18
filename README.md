@@ -79,8 +79,15 @@ WatchMeプラットフォームのiOSアプリケーション。
 
 すべての主要テーブルに `local_date` と `local_time` カラムがあります。
 
-- **UTC時刻**: `recorded_at`, `created_at`, `updated_at`
-- **ローカル時刻**: `local_date`, `local_time`（デバイスのタイムゾーン）
+- **UTC時刻**: `recorded_at`, `created_at`, `updated_at` ← **アップロード時のみ使用、アプリでは参照しない**
+- **ローカル時刻**: `local_date`, `local_time` ← **✅ アプリではこれのみ使用**
+  - `local_date`: 日付のみ（YYYY-MM-DD）
+  - `local_time`: 日付+時間（YYYY-MM-DD HH:MM:SS） ← ユニークキー
+
+**重要原則**:
+- アプリ内では`recorded_at`（UTC）を一切参照しない
+- すべてのデータフィルタリング・表示は`local_date`と`local_time`のみ使用
+- タイムゾーン変換は不要（データベースに既にローカルタイムが格納されている）
 
 ---
 
@@ -224,16 +231,30 @@ git push origin feature/機能名
 
 ---
 
+## 📱 画面とファイルの対応表
+
+実装時に参照する画面名とファイル名の対応表です。
+
+| 通称 | 正式名称 | ファイル名 | 説明 |
+|------|---------|-----------|------|
+| **ホーム画面** | ホーム（リアルタイムステータス） | `SimpleDashboardView.swift` | 日別のダッシュボード。気分グラフ、最新のスポット分析（最大3件）、コメント機能を表示 |
+| **分析結果の一覧画面** | 分析結果の一覧 | `SimpleDashboardView.swift`（内部の`AnalysisListView`） | 1日分の全スポット分析を時系列順に表示 |
+| **気分詳細画面** | 気分詳細 | `HomeView.swift` | 気分グラフの詳細と時間ごとの詳細リスト |
+| **レポート画面** | レポート（長期的な変化の追跡） | `AnalysisView.swift` | 週次・月次の長期トレンド表示 |
+| **観測対象画面** | 観測対象（プロフィールとインサイト） | `SubjectTabView.swift` | プロフィール情報とインサイト表示 |
+
+---
+
 ## 📂 プロジェクト構造
 
 ```
 ios_watchme_v9/
 ├── ios_watchme_v9App.swift        # アプリエントリーポイント
 ├── ContentView.swift              # メインビュー（ホームタブ）
-├── SimpleDashboardView.swift      # 日別ダッシュボード
-├── AnalysisView.swift             # レポートページ
-├── SubjectTabView.swift           # 観測対象ページ
-├── HomeView.swift                 # 気分詳細ビュー
+├── SimpleDashboardView.swift      # ホーム画面 + 分析結果の一覧画面
+├── AnalysisView.swift             # レポート画面
+├── SubjectTabView.swift           # 観測対象画面
+├── HomeView.swift                 # 気分詳細画面
 ├── BehaviorGraphView.swift        # 行動グラフ詳細
 ├── EmotionGraphView.swift         # 感情グラフ詳細
 ├── RecordingView.swift            # 録音機能

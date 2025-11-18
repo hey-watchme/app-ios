@@ -222,9 +222,8 @@ struct InteractiveTimelineView: View {
                             .animation(.spring(response: 0.3), value: currentTimeIndex)
                             .onTapGesture {
                                 withAnimation(.spring()) {
-                                    // BurstEventをVibeChangeに変換して表示（互換性のため）
-                                    let eventDescription = event.scoreChange > 0 ? "Mood improved" : "Mood decreased"
-                                    let vibeChange = VibeChange(time: timeBlocks[slot].displayTime, event: eventDescription, score: actualScore)
+                                    // Use actual event content from database
+                                    let vibeChange = VibeChange(time: timeBlocks[slot].displayTime, event: event.event, score: actualScore)
                                     selectedEvent = vibeChange
                                     showEventDetail = true
                                     currentTimeIndex = slot
@@ -549,9 +548,8 @@ struct InteractiveTimelineView: View {
 
                     // イベントに到達したら一時的に表示
                     withAnimation(.spring()) {
-                        // BurstEventをVibeChangeに変換（実際のスコアを使用）
-                        let eventDescription = event.scoreChange > 0 ? "Mood improved" : "Mood decreased"
-                        let vibeChange = VibeChange(time: timeBlocks[slot].displayTime, event: eventDescription, score: actualScore)
+                        // Use actual event content from database
+                        let vibeChange = VibeChange(time: timeBlocks[slot].displayTime, event: event.event, score: actualScore)
                         selectedEvent = vibeChange
                         showEventDetail = true
                         // バーストエフェクトをトリガー
@@ -592,9 +590,8 @@ struct InteractiveTimelineView: View {
 
                     // ドラッグ中にイベントに触れた場合
                     withAnimation(.spring()) {
-                        // BurstEventをVibeChangeに変換（実際のスコアを使用）
-                        let eventDescription = event.scoreChange > 0 ? "Mood improved" : "Mood decreased"
-                        let vibeChange = VibeChange(time: timeBlocks[slot].displayTime, event: eventDescription, score: actualScore)
+                        // Use actual event content from database
+                        let vibeChange = VibeChange(time: timeBlocks[slot].displayTime, event: event.event, score: actualScore)
                         selectedEvent = vibeChange
                         showEventDetail = true
                         // 親ビューにバーストイベントを通知（実際のスコアを使用）
