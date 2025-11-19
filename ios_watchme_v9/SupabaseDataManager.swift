@@ -1204,3 +1204,136 @@ enum SupabaseDataError: Error, LocalizedError {
         }
     }
 }
+
+// MARK: - SupabaseDataManager Extension for Weekly Results
+
+extension SupabaseDataManager {
+    // MARK: - Weekly Results
+
+    /// Fetch weekly results for current week (Monday-Sunday)
+    func fetchWeeklyResults(deviceId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> WeeklyResults? {
+        let tz = timezone ?? TimeZone.current
+
+        // Format week_start_date (YYYY-MM-DD, Monday)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = tz
+        let weekStartString = formatter.string(from: weekStartDate)
+
+        print("📅 [fetchWeeklyResults] Fetching weekly results for \(weekStartString)")
+
+        // Fetch from weekly_results table
+        let urlString = "\(self.supabaseURL)/rest/v1/weekly_results?device_id=eq.\(deviceId)&week_start_date=eq.\(weekStartString)&select=*"
+
+        guard let url = URL(string: urlString) else {
+            print("❌ [fetchWeeklyResults] Invalid URL")
+            return nil
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(self.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ [fetchWeeklyResults] Invalid HTTP response")
+                return nil
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                print("❌ [fetchWeeklyResults] HTTP error: \(httpResponse.statusCode)")
+                if let errorString = String(data: data, encoding: .utf8) {
+                    print("❌ Error response: \(errorString)")
+                }
+                return nil
+            }
+
+            let decoder = JSONDecoder()
+            // No need for date decoding strategy since created_at is String
+            let results = try decoder.decode([WeeklyResults].self, from: data)
+
+            if let weeklyResult = results.first {
+                print("✅ [fetchWeeklyResults] Fetched weekly result: \(weeklyResult.memorableEvents?.count ?? 0) events")
+                return weeklyResult
+            } else {
+                print("⚠️ [fetchWeeklyResults] No weekly results found for \(weekStartString)")
+                return nil
+            }
+
+        } catch {
+            print("❌ [fetchWeeklyResults] Error: \(error.localizedDescription)")
+            if let decodingError = error as? DecodingError {
+                print("❌ Decoding error details: \(decodingError)")
+            }
+            return nil
+        }
+    }
+
+    /// Calculate average vibe score from daily_results for current week
+    func fetchWeeklyAverageVibeScore(deviceId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> Double? {
+        let tz = timezone ?? TimeZone.current
+        var calendar = Calendar.current
+        calendar.timeZone = tz
+
+        // Calculate week end date (Sunday)
+        guard let weekEndDate = calendar.date(byAdding: .day, value: 6, to: weekStartDate) else {
+            print("❌ [fetchWeeklyAverageVibeScore] Failed to calculate week end date")
+            return nil
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = tz
+
+        let startString = formatter.string(from: weekStartDate)
+        let endString = formatter.string(from: weekEndDate)
+
+        print("📅 [fetchWeeklyAverageVibeScore] Fetching daily results from \(startString) to \(endString)")
+
+        // Fetch daily_results for the week
+        let urlString = "\(self.supabaseURL)/rest/v1/daily_results?device_id=eq.\(deviceId)&local_date=gte.\(startString)&local_date=lte.\(endString)&select=vibe_score"
+
+        guard let url = URL(string: urlString) else {
+            print("❌ [fetchWeeklyAverageVibeScore] Invalid URL")
+            return nil
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(self.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            let (data, _) = try await URLSession.shared.data(for: request)
+
+            struct DailyVibeScore: Codable {
+                let vibeScore: Double?
+                enum CodingKeys: String, CodingKey {
+                    case vibeScore = "vibe_score"
+                }
+            }
+
+            let decoder = JSONDecoder()
+            let results = try decoder.decode([DailyVibeScore].self, from: data)
+
+            let scores = results.compactMap { $0.vibeScore }
+            guard !scores.isEmpty else {
+                print("⚠️ [fetchWeeklyAverageVibeScore] No vibe scores found")
+                return nil
+            }
+
+            let average = scores.reduce(0, +) / Double(scores.count)
+            print("✅ [fetchWeeklyAverageVibeScore] Average: \(average) (\(scores.count) days)")
+            return average
+
+        } catch {
+            print("❌ [fetchWeeklyAverageVibeScore] Error: \(error.localizedDescription)")
+            return nil
+        }
+    }
+}

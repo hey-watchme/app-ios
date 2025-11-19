@@ -12,6 +12,11 @@ struct ReportView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
 
+    // Weekly data state
+    @State private var weeklyResults: WeeklyResults?
+    @State private var weeklyAverageVibeScore: Double?
+    @State private var isLoadingWeeklyData = false
+
     // 期間選択の状態
     enum Period: String, CaseIterable {
         case week = "週"
@@ -181,6 +186,8 @@ struct ReportView: View {
     ]
 
     var body: some View {
+        let _ = print("🎨 [ReportView] body rendered, selectedPeriod: \(selectedPeriod.rawValue)")
+
         ScrollView {
             VStack(spacing: 24) {
                 // ヘッダー
@@ -196,6 +203,12 @@ struct ReportView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
+
+                // Weekly Report Section (今週のレポート)
+                if selectedPeriod == .week {
+                    weeklyReportSection
+                        .padding(.horizontal, 20)
+                }
 
                 // 期間選択UI
                 periodSelector
@@ -220,6 +233,10 @@ struct ReportView: View {
             }
         }
         .background(Color(.systemBackground))
+        .task {
+            print("🚀 [ReportView] .task triggered")
+            await loadWeeklyData()
+        }
     }
 
     // MARK: - 期間選択UI
@@ -589,5 +606,225 @@ struct ReportView: View {
             Text(label)
                 .foregroundColor(.secondary)
         }
+    }
+
+    // MARK: - Weekly Report Section
+
+    private var weeklyReportSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section title
+            Text("今週のレポート")
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            if isLoadingWeeklyData {
+                // Loading state
+                VStack(spacing: 12) {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle())
+                    Text("今週のデータを取得中...")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 150)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray6))
+                )
+
+            } else if let weeklyResults = weeklyResults {
+                VStack(alignment: .leading, spacing: 16) {
+                    // Average vibe score
+                    if let avgScore = weeklyAverageVibeScore {
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("週の平均気分")
+                                    .font(.subheadline)
+                                    .foregroundColor(.secondary)
+                                Text(String(format: "%+.0f", avgScore))
+                                    .font(.system(size: 36, weight: .bold, design: .rounded))
+                                    .foregroundColor(vibeScoreColor(avgScore))
+                            }
+                            Spacer()
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6))
+                        )
+                    }
+
+                    // Week summary
+                    if let summary = weeklyResults.summary, !summary.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("週のサマリー")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+
+                            Text(summary)
+                                .font(.body)
+                                .foregroundColor(.primary)
+                                .lineSpacing(4)
+                        }
+                        .padding(16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6))
+                        )
+                    }
+
+                    // Memorable events
+                    if let events = weeklyResults.memorableEvents, !events.isEmpty {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("印象的な出来事")
+                                .font(.subheadline)
+                                .fontWeight(.medium)
+                                .foregroundColor(.secondary)
+
+                            ForEach(events) { event in
+                                memorableEventCard(event)
+                            }
+                        }
+                    }
+                }
+
+            } else {
+                // Empty state
+                VStack(spacing: 12) {
+                    Image(systemName: "calendar.badge.exclamationmark")
+                        .font(.system(size: 40))
+                        .foregroundColor(.secondary)
+                    Text("今週のデータはまだありません")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 150)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray6))
+                )
+            }
+        }
+    }
+
+    private func memorableEventCard(_ event: MemorableEvent) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            // Rank and date
+            HStack {
+                Text("#\(event.rank)")
+                    .font(.caption)
+                    .fontWeight(.bold)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(
+                        RoundedRectangle(cornerRadius: 6)
+                            .fill(Color.accentPurple)
+                    )
+
+                Text("\(event.date) (\(event.dayOfWeek)) \(event.time)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
+                Spacer()
+            }
+
+            // Event summary
+            Text(event.eventSummary)
+                .font(.body)
+                .foregroundColor(.primary)
+                .lineSpacing(4)
+
+            // Transcription snippet
+            if !event.transcriptionSnippet.isEmpty {
+                Text("\"\(event.transcriptionSnippet)\"")
+                    .font(.caption)
+                    .italic()
+                    .foregroundColor(.secondary)
+                    .padding(.top, 4)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(Color(.systemBackground))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(Color(.systemGray5), lineWidth: 1)
+        )
+    }
+
+    private func vibeScoreColor(_ score: Double) -> Color {
+        if score >= 30 {
+            return .green
+        } else if score >= 0 {
+            return .blue
+        } else if score >= -30 {
+            return .orange
+        } else {
+            return .red
+        }
+    }
+
+    // MARK: - Data Loading
+
+    private func loadWeeklyData() async {
+        print("🚀 [loadWeeklyData] Function started")
+
+        print("🔍 Device Manager state:")
+        print("  - Selected Device ID: \(deviceManager.selectedDeviceID ?? "nil")")
+        print("  - Devices count: \(deviceManager.devices.count)")
+
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            print("❌ [loadWeeklyData] No device selected")
+            return
+        }
+
+        print("✅ [loadWeeklyData] Device ID: \(deviceId)")
+
+        isLoadingWeeklyData = true
+
+        // Calculate current week's Monday (week_start_date)
+        let calendar = Calendar.current
+        let now = Date()
+        let weekday = calendar.component(.weekday, from: now)
+
+        print("📅 Current date: \(now)")
+        print("📅 Current weekday: \(weekday) (1=Sunday, 2=Monday)")
+
+        let daysFromMonday = (weekday == 1) ? 6 : weekday - 2  // Sunday=1, Monday=2
+        print("📅 Days from Monday: \(daysFromMonday)")
+
+        guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: now) else {
+            print("❌ Failed to calculate Monday")
+            isLoadingWeeklyData = false
+            return
+        }
+
+        let timezone = deviceManager.getTimezone(for: deviceId)
+
+        // Debug logging
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = timezone ?? TimeZone.current
+
+        let mondayString = formatter.string(from: monday)
+        print("📅 Calculated Monday: \(mondayString)")
+        print("🔍 [ReportView] Fetching weekly data for device: \(deviceId)")
+        print("🔍 [ReportView] Week start date (Monday): \(mondayString)")
+
+        // Fetch weekly results
+        async let weeklyResultsTask = dataManager.fetchWeeklyResults(deviceId: deviceId, weekStartDate: monday, timezone: timezone)
+        async let avgScoreTask = dataManager.fetchWeeklyAverageVibeScore(deviceId: deviceId, weekStartDate: monday, timezone: timezone)
+
+        weeklyResults = await weeklyResultsTask
+        weeklyAverageVibeScore = await avgScoreTask
+
+        print("🔍 [ReportView] Weekly results: \(weeklyResults != nil ? "Found" : "Not found")")
+        print("🔍 [ReportView] Memorable events count: \(weeklyResults?.memorableEvents?.count ?? 0)")
+
+        isLoadingWeeklyData = false
     }
 }
