@@ -15,6 +15,7 @@ struct ReportView: View {
     // Weekly data state
     @State private var weeklyResults: WeeklyResults?
     @State private var weeklyAverageVibeScore: Double?
+    @State private var weeklyDailyVibeScores: [DailyVibeScore] = []
     @State private var isLoadingWeeklyData = false
 
     // 期間選択の状態
@@ -178,11 +179,13 @@ struct ReportView: View {
         ("✈️", "折り紙で飛行機を作れた", "先生に褒められて嬉しかった")
     ]
 
-    // ダイバージェンスローライト（困ったこと・失敗）
-    let divergenceLowlights: [(emoji: String, title: String, description: String)] = [
+    // ダイバージェンス ハイライト（5つのダミーデータ）
+    let divergenceHighlights: [(emoji: String, title: String, description: String)] = [
         ("🧸", "お気に入りのおもちゃを失くした", "どこを探しても見つからず不安になった"),
         ("🥕", "給食のにんじんが食べられなかった", "苦手な野菜が多くて残してしまった"),
-        ("😴", "お昼寝の時間に眠れなかった", "なかなか寝付けず落ち着かなかった")
+        ("😴", "お昼寝の時間に眠れなかった", "なかなか寝付けず落ち着かなかった"),
+        ("🎨", "絵の具が服についてしまった", "お気に入りの服が汚れて悲しかった"),
+        ("📚", "絵本の読み聞かせで集中できなかった", "周りの音が気になって話が入ってこなかった")
     ]
 
     var body: some View {
@@ -191,10 +194,13 @@ struct ReportView: View {
         ScrollView {
             VStack(spacing: 24) {
                 // ヘッダー
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 16) {
                     Text("レポート")
                         .font(.largeTitle)
                         .fontWeight(.bold)
+
+                    // 期間選択UI
+                    periodSelector
 
                     Text(currentPeriodText)
                         .font(.subheadline)
@@ -210,24 +216,12 @@ struct ReportView: View {
                         .padding(.horizontal, 20)
                 }
 
-                // 期間選択UI
-                periodSelector
-                    .padding(.horizontal, 20)
-
-                // 気分
-                moodBarChart
-                    .padding(.horizontal, 20)
-
-                // 気分ハイライト
-                highlightsSection(events: moodHighlights)
-                    .padding(.horizontal, 20)
-
                 // ダイバージェンス・インデックス
                 divergenceIndexSection
                     .padding(.horizontal, 20)
 
-                // ダイバージェンスローライト
-                highlightsSection(events: divergenceLowlights)
+                // ダイバージェンス ハイライト
+                divergenceHighlightsSection
                     .padding(.horizontal, 20)
                     .padding(.bottom, 40)
             }
@@ -608,6 +602,45 @@ struct ReportView: View {
         }
     }
 
+    // MARK: - Divergence Highlights Section
+
+    private var divergenceHighlightsSection: some View {
+        VStack(spacing: 12) {
+            ForEach(divergenceHighlights, id: \.title) { event in
+                HStack(alignment: .top, spacing: 12) {
+                    // 絵文字アイコン
+                    Text(event.emoji)
+                        .font(.system(size: 32))
+                        .frame(width: 50, height: 50)
+                        .background(
+                            Circle()
+                                .fill(Color(.systemGray6))
+                        )
+
+                    // イベント詳細
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(event.title)
+                            .font(.headline)
+                            .foregroundColor(.primary)
+
+                        Text(event.description)
+                            .font(.subheadline)
+                            .foregroundColor(.secondary)
+                            .lineLimit(2)
+                    }
+
+                    Spacer()
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemBackground))
+                        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                )
+            }
+        }
+    }
+
     // MARK: - Weekly Report Section
 
     private var weeklyReportSection: some View {
@@ -632,35 +665,34 @@ struct ReportView: View {
                         .fill(Color(.systemGray6))
                 )
 
-            } else if let weeklyResults = weeklyResults {
+            } else {
                 VStack(alignment: .leading, spacing: 16) {
-                    // Average vibe score
-                    if let avgScore = weeklyAverageVibeScore {
-                        HStack {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("週の平均気分")
-                                    .font(.subheadline)
-                                    .foregroundColor(.secondary)
-                                Text(String(format: "%+.0f", avgScore))
-                                    .font(.system(size: 36, weight: .bold, design: .rounded))
-                                    .foregroundColor(vibeScoreColor(avgScore))
-                            }
-                            Spacer()
-                        }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.systemGray6))
-                        )
-                    }
+                    // Weekly mood bar chart
+                    weeklyMoodBarChart
 
-                    // Week summary
-                    if let summary = weeklyResults.summary, !summary.isEmpty {
+                    // Week summary with average score in top-right
+                    if let weeklyResults = weeklyResults, let summary = weeklyResults.summary, !summary.isEmpty {
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("週のサマリー")
-                                .font(.subheadline)
-                                .fontWeight(.medium)
-                                .foregroundColor(.secondary)
+                            HStack(alignment: .top) {
+                                Text("週のサマリー")
+                                    .font(.subheadline)
+                                    .fontWeight(.medium)
+                                    .foregroundColor(.secondary)
+
+                                Spacer()
+
+                                // Average vibe score (small, top-right)
+                                if let avgScore = weeklyAverageVibeScore {
+                                    VStack(alignment: .trailing, spacing: 2) {
+                                        Text("平均")
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(String(format: "%+.0f", avgScore))
+                                            .font(.system(size: 18, weight: .bold, design: .rounded))
+                                            .foregroundColor(vibeScoreColor(avgScore))
+                                    }
+                                }
+                            }
 
                             Text(summary)
                                 .font(.body)
@@ -675,7 +707,7 @@ struct ReportView: View {
                     }
 
                     // Memorable events
-                    if let events = weeklyResults.memorableEvents, !events.isEmpty {
+                    if let weeklyResults = weeklyResults, let events = weeklyResults.memorableEvents, !events.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
                             Text("印象的な出来事")
                                 .font(.subheadline)
@@ -688,22 +720,6 @@ struct ReportView: View {
                         }
                     }
                 }
-
-            } else {
-                // Empty state
-                VStack(spacing: 12) {
-                    Image(systemName: "calendar.badge.exclamationmark")
-                        .font(.system(size: 40))
-                        .foregroundColor(.secondary)
-                    Text("今週のデータはまだありません")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 150)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.systemGray6))
-                )
             }
         }
     }
@@ -768,6 +784,245 @@ struct ReportView: View {
         }
     }
 
+    // MARK: - Weekly Mood Bar Chart
+
+    private var weeklyMoodBarChart: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("気分")
+                .font(.subheadline)
+                .fontWeight(.medium)
+                .foregroundColor(.secondary)
+
+            if weeklyDailyVibeScores.isEmpty {
+                // Show placeholder if no data
+                VStack(spacing: 8) {
+                    Image(systemName: "chart.bar")
+                        .font(.system(size: 32))
+                        .foregroundColor(.secondary)
+                    Text("データがありません")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, minHeight: 150)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray6))
+                )
+
+            } else {
+                GeometryReader { geometry in
+                    let totalWidth = geometry.size.width - 40 // 右側の目盛りスペース
+                    let barWidth = totalWidth / 7.0 // 7 days
+                    let barInnerWidth = barWidth * (1 - barPaddingRatio * 2)
+                    let chartHeight: CGFloat = 150
+                    let halfHeight = chartHeight / 2
+                    let maxValue: Double = 50.0
+
+                    HStack(spacing: 0) {
+                        // グラフ部分
+                        VStack(spacing: 4) {
+                            // グラフエリア
+                            ZStack(alignment: .top) {
+                                // 背景グリッドライン（上から下：50, 25, 0, -25, -50）
+                                VStack(spacing: 0) {
+                                    // 50のライン（上端）
+                                    gridLine(value: 50, isZero: false, height: 0)
+                                    Spacer().frame(height: chartHeight / 4)
+
+                                    // 25のライン
+                                    gridLine(value: 25, isZero: false, height: 0)
+                                    Spacer().frame(height: chartHeight / 4)
+
+                                    // 0のライン（中央）
+                                    gridLine(value: 0, isZero: true, height: 0)
+                                    Spacer().frame(height: chartHeight / 4)
+
+                                    // -25のライン
+                                    gridLine(value: -25, isZero: false, height: 0)
+                                    Spacer().frame(height: chartHeight / 4)
+
+                                    // -50のライン（下端）
+                                    gridLine(value: -50, isZero: false, height: 0)
+                                }
+                                .frame(height: chartHeight)
+
+                                // 棒グラフ（0を中心に上下）
+                                HStack(alignment: .center, spacing: 0) {
+                                    ForEach(0..<7) { dayIndex in
+                                        let vibeScore = vibeScoreForDay(dayIndex)
+                                        let hasData = hasDataForDay(dayIndex)
+
+                                        ZStack {
+                                            if hasData {
+                                                let barHeight = abs(vibeScore) / maxValue * halfHeight
+                                                let isPositive = vibeScore >= 0
+                                                let barColor = isPositive ? Color.green : Color.red
+
+                                                // 棒を中央から上下に配置
+                                                if isPositive {
+                                                    // ポジティブ：中央から上に伸びる
+                                                    VStack(spacing: 0) {
+                                                        Spacer()
+                                                            .frame(height: halfHeight - barHeight)
+                                                        Rectangle()
+                                                            .fill(barColor)
+                                                            .frame(width: barInnerWidth, height: barHeight)
+                                                        Spacer()
+                                                            .frame(height: halfHeight)
+                                                    }
+                                                } else {
+                                                    // ネガティブ：中央から下に伸びる
+                                                    VStack(spacing: 0) {
+                                                        Spacer()
+                                                            .frame(height: halfHeight)
+                                                        Rectangle()
+                                                            .fill(barColor)
+                                                            .frame(width: barInnerWidth, height: barHeight)
+                                                        Spacer()
+                                                            .frame(height: halfHeight - barHeight)
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        .frame(width: barWidth, height: chartHeight)
+                                    }
+                                }
+                            }
+                            .frame(height: chartHeight)
+
+                            // ラベル部分（曜日 + 日付）
+                            HStack(spacing: 0) {
+                                ForEach(0..<7) { dayIndex in
+                                    VStack(spacing: 2) {
+                                        Text(dayLabelForIndex(dayIndex))
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                        Text(dateLabelForIndex(dayIndex))
+                                            .font(.caption2)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    .frame(width: barWidth)
+                                }
+                            }
+                        }
+                        .frame(width: totalWidth)
+
+                        // 右側の目盛り（グリッドラインと完全一致）
+                        VStack(alignment: .trailing, spacing: 0) {
+                            Text("50")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Spacer().frame(height: chartHeight / 4)
+
+                            Text("25")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Spacer().frame(height: chartHeight / 4)
+
+                            Text("0")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Spacer().frame(height: chartHeight / 4)
+
+                            Text("-25")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                            Spacer().frame(height: chartHeight / 4)
+
+                            Text("-50")
+                                .font(.caption2)
+                                .foregroundColor(.secondary)
+                        }
+                        .frame(width: 30, height: chartHeight)
+                    }
+                }
+                .frame(height: 180)
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.systemGray6))
+                )
+            }
+        }
+    }
+
+    /// Grid line helper
+    private func gridLine(value: Int, isZero: Bool, height: CGFloat) -> some View {
+        HStack {
+            Rectangle()
+                .fill(isZero ? Color(.systemGray4) : Color(.systemGray5))
+                .frame(height: isZero ? 1.0 : 0.5)
+            Spacer()
+        }
+    }
+
+    /// Check if there is data for a specific day
+    private func hasDataForDay(_ dayIndex: Int) -> Bool {
+        let calendar = Calendar.current
+        let now = Date()
+        let weekday = calendar.component(.weekday, from: now)
+        let daysFromMonday = (weekday == 1) ? 6 : weekday - 2
+
+        guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: now),
+              let targetDate = calendar.date(byAdding: .day, value: dayIndex, to: monday) else {
+            return false
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let targetDateString = formatter.string(from: targetDate)
+
+        return weeklyDailyVibeScores.contains(where: { $0.localDate == targetDateString })
+    }
+
+    /// Get vibe score for a specific day index (0=Monday, 6=Sunday)
+    private func vibeScoreForDay(_ dayIndex: Int) -> Double {
+        // Calculate expected date for this day
+        let calendar = Calendar.current
+        let now = Date()
+        let weekday = calendar.component(.weekday, from: now)
+        let daysFromMonday = (weekday == 1) ? 6 : weekday - 2
+
+        guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: now),
+              let targetDate = calendar.date(byAdding: .day, value: dayIndex, to: monday) else {
+            return 0
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        let targetDateString = formatter.string(from: targetDate)
+
+        // Find matching data
+        if let data = weeklyDailyVibeScores.first(where: { $0.localDate == targetDateString }) {
+            return data.vibeScore
+        }
+
+        return 0
+    }
+
+    /// Get day label (月, 火, 水, etc.)
+    private func dayLabelForIndex(_ index: Int) -> String {
+        let labels = ["月", "火", "水", "木", "金", "土", "日"]
+        return labels[index]
+    }
+
+    /// Get date label (11/18 format)
+    private func dateLabelForIndex(_ index: Int) -> String {
+        let calendar = Calendar.current
+        let now = Date()
+        let weekday = calendar.component(.weekday, from: now)
+        let daysFromMonday = (weekday == 1) ? 6 : weekday - 2
+
+        guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: now),
+              let targetDate = calendar.date(byAdding: .day, value: index, to: monday) else {
+            return ""
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M/d"
+        return formatter.string(from: targetDate)
+    }
+
     // MARK: - Data Loading
 
     private func loadWeeklyData() async {
@@ -818,12 +1073,19 @@ struct ReportView: View {
         // Fetch weekly results
         async let weeklyResultsTask = dataManager.fetchWeeklyResults(deviceId: deviceId, weekStartDate: monday, timezone: timezone)
         async let avgScoreTask = dataManager.fetchWeeklyAverageVibeScore(deviceId: deviceId, weekStartDate: monday, timezone: timezone)
+        async let dailyVibeScoresTask = dataManager.fetchWeeklyDailyVibeScores(deviceId: deviceId, weekStartDate: monday, timezone: timezone)
 
         weeklyResults = await weeklyResultsTask
         weeklyAverageVibeScore = await avgScoreTask
+        weeklyDailyVibeScores = await dailyVibeScoresTask
 
         print("🔍 [ReportView] Weekly results: \(weeklyResults != nil ? "Found" : "Not found")")
         print("🔍 [ReportView] Memorable events count: \(weeklyResults?.memorableEvents?.count ?? 0)")
+        print("🔍 [ReportView] Daily vibe scores count: \(weeklyDailyVibeScores.count)")
+        print("🔍 [ReportView] Daily vibe scores data:")
+        for score in weeklyDailyVibeScores {
+            print("  - \(score.localDate): \(score.vibeScore)")
+        }
 
         isLoadingWeeklyData = false
     }

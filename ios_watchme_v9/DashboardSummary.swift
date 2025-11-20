@@ -121,6 +121,18 @@ struct ProfileResultDetails: Codable {
     }
 }
 
+// MARK: - Daily Vibe Score (Weekly Report)
+// Weekly mood chart data (one entry per day)
+struct DailyVibeScore: Codable {
+    let localDate: String  // "2025-11-19" format
+    let vibeScore: Double  // Daily average vibe score
+
+    enum CodingKeys: String, CodingKey {
+        case localDate = "local_date"
+        case vibeScore = "vibe_score"
+    }
+}
+
 // MARK: - 将来の拡張用
 // prompt, insightsなどの他のJSONBフィールドは
 // 実際に使用する際に適切な型定義を追加予定

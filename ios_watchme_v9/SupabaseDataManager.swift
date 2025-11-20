@@ -1336,4 +1336,70 @@ extension SupabaseDataManager {
             return nil
         }
     }
+
+    /// Fetch daily vibe scores for a week (7 days: Monday to Sunday)
+    func fetchWeeklyDailyVibeScores(deviceId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> [DailyVibeScore] {
+        let tz = timezone ?? TimeZone.current
+        var calendar = Calendar.current
+        calendar.timeZone = tz
+
+        // Calculate week end date (Sunday)
+        guard let weekEndDate = calendar.date(byAdding: .day, value: 6, to: weekStartDate) else {
+            print("❌ [fetchWeeklyDailyVibeScores] Failed to calculate week end date")
+            return []
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = tz
+
+        let startString = formatter.string(from: weekStartDate)
+        let endString = formatter.string(from: weekEndDate)
+
+        print("📅 [fetchWeeklyDailyVibeScores] Fetching daily vibe scores from \(startString) to \(endString)")
+
+        // Fetch daily_results for the week
+        let urlString = "\(self.supabaseURL)/rest/v1/daily_results?device_id=eq.\(deviceId)&local_date=gte.\(startString)&local_date=lte.\(endString)&select=local_date,vibe_score&order=local_date.asc"
+
+        guard let url = URL(string: urlString) else {
+            print("❌ [fetchWeeklyDailyVibeScores] Invalid URL")
+            return []
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(self.supabaseAnonKey, forHTTPHeaderField: "apikey")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("❌ [fetchWeeklyDailyVibeScores] Invalid HTTP response")
+                return []
+            }
+
+            guard httpResponse.statusCode == 200 else {
+                print("❌ [fetchWeeklyDailyVibeScores] HTTP error: \(httpResponse.statusCode)")
+                if let errorString = String(data: data, encoding: .utf8) {
+                    print("❌ Error response: \(errorString)")
+                }
+                return []
+            }
+
+            let decoder = JSONDecoder()
+            let results = try decoder.decode([DailyVibeScore].self, from: data)
+
+            print("✅ [fetchWeeklyDailyVibeScores] Fetched \(results.count) daily vibe scores")
+            return results
+
+        } catch {
+            print("❌ [fetchWeeklyDailyVibeScores] Error: \(error.localizedDescription)")
+            if let decodingError = error as? DecodingError {
+                print("❌ Decoding error details: \(decodingError)")
+            }
+            return []
+        }
+    }
 }
