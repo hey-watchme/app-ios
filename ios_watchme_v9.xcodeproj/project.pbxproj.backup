@@ -8,7 +8,6 @@
 
 /* Begin PBXBuildFile section */
 		9189611A2E181B1C00222C7F /* Supabase in Frameworks */ = {isa = PBXBuildFile; productRef = 918961192E181B1C00222C7F /* Supabase */; };
-		91A8170B2ED1B4830081336E /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 91A8170A2ED1B4830081336E /* Lottie */; };
 		91DFF89C2E37C1FA00ABAB40 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 91DFF89B2E37C1FA00ABAB40 /* Launch Screen.storyboard */; };
 		91F6CD982E52BA2300C1B696 /* Mantis in Frameworks */ = {isa = PBXBuildFile; productRef = 91F6CD972E52BA2300C1B696 /* Mantis */; };
 /* End PBXBuildFile section */
@@ -29,19 +28,6 @@
 			remoteInfo = ios_watchme_v9;
 		};
 /* End PBXContainerItemProxy section */
-
-/* Begin PBXCopyFilesBuildPhase section */
-		91A8170F2ED1B4830081336E /* Embed Frameworks */ = {
-			isa = PBXCopyFilesBuildPhase;
-			buildActionMask = 2147483647;
-			dstPath = "";
-			dstSubfolderSpec = 10;
-			files = (
-			);
-			name = "Embed Frameworks";
-			runOnlyForDeploymentPostprocessing = 0;
-		};
-/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		917532592DF9BB8E001BD7DB /* ios_watchme_v9.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ios_watchme_v9.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -88,7 +74,6 @@
 			files = (
 				91F6CD982E52BA2300C1B696 /* Mantis in Frameworks */,
 				9189611A2E181B1C00222C7F /* Supabase in Frameworks */,
-				91A8170B2ED1B4830081336E /* Lottie in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -148,7 +133,6 @@
 				917532552DF9BB8E001BD7DB /* Sources */,
 				917532562DF9BB8E001BD7DB /* Frameworks */,
 				917532572DF9BB8E001BD7DB /* Resources */,
-				91A8170F2ED1B4830081336E /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -161,7 +145,6 @@
 			packageProductDependencies = (
 				918961192E181B1C00222C7F /* Supabase */,
 				91F6CD972E52BA2300C1B696 /* Mantis */,
-				91A8170A2ED1B4830081336E /* Lottie */,
 			);
 			productName = ios_watchme_v9;
 			productReference = 917532592DF9BB8E001BD7DB /* ios_watchme_v9.app */;
@@ -251,7 +234,6 @@
 			packageReferences = (
 				918961172E18170900222C7F /* XCRemoteSwiftPackageReference "supabase-swift" */,
 				91F6CD962E52B98200C1B696 /* XCRemoteSwiftPackageReference "Mantis" */,
-				91A817092ED1B3C90081336E /* XCRemoteSwiftPackageReference "lottie-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 9175325A2DF9BB8E001BD7DB /* Products */;
@@ -641,14 +623,6 @@
 				minimumVersion = 2.5.1;
 			};
 		};
-		91A817092ED1B3C90081336E /* XCRemoteSwiftPackageReference "lottie-ios" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/airbnb/lottie-ios";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 4.5.2;
-			};
-		};
 		91F6CD962E52B98200C1B696 /* XCRemoteSwiftPackageReference "Mantis" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/guoyingtao/Mantis.git";
@@ -664,11 +638,6 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 918961172E18170900222C7F /* XCRemoteSwiftPackageReference "supabase-swift" */;
 			productName = Supabase;
-		};
-		91A8170A2ED1B4830081336E /* Lottie */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 91A817092ED1B3C90081336E /* XCRemoteSwiftPackageReference "lottie-ios" */;
-			productName = Lottie;
 		};
 		91F6CD972E52BA2300C1B696 /* Mantis */ = {
 			isa = XCSwiftPackageProductDependency;
