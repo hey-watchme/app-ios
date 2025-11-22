@@ -185,16 +185,10 @@ struct ContentView: View {
                             ZStack {
                                 // 背景の円（影付き）
                                 Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [Color.safeColor("RecordingActive"), Color.safeColor("RecordingActive").opacity(0.8)]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
+                                    .fill(Color.accentPurple)
                                     .frame(width: 56, height: 56)
-                                    .shadow(color: Color.safeColor("RecordingActive").opacity(0.4), radius: 8, x: 0, y: 4)
-                                
+                                    .shadow(color: Color.accentPurple.opacity(0.4), radius: 8, x: 0, y: 4)
+
                                 // マイクアイコン
                                 Image(systemName: "mic.fill")
                                     .font(.system(size: 24, weight: .semibold))
@@ -214,12 +208,13 @@ struct ContentView: View {
                     .animation(.easeInOut(duration: 0.3), value: deviceManager.isDemoDeviceSelected)
             }
         }
-        .fullScreenCover(isPresented: $showRecordingSheet) {
+        .sheet(isPresented: $showRecordingSheet) {
             FullScreenRecordingView()
                 .environmentObject(deviceManager)
                 .environmentObject(userAccountManager)
                 .environmentObject(recordingStore)
-                .background(Color.clear)  // 背景を透明に
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showQRScanner) {
             QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in

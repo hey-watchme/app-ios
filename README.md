@@ -257,18 +257,23 @@ ios_watchme_v9/
 ├── HomeView.swift                 # 気分詳細画面
 ├── BehaviorGraphView.swift        # 行動グラフ詳細
 ├── EmotionGraphView.swift         # 感情グラフ詳細
-├── RecordingView.swift            # 録音機能
+├── FullScreenRecordingView.swift  # 録音画面（モーダル）
+├── AudioBarVisualizerView.swift   # 音声ビジュアライザー（イコライザー風）
 ├── LoginView.swift                # ログイン画面
 ├── SignUpView.swift               # 会員登録画面
 ├── UserInfoView.swift             # マイページ
-├── AudioRecorder.swift            # 録音管理
+├── RecordingModel.swift           # 録音ファイルモデル
 ├── NetworkManager.swift           # API通信
 ├── DeviceManager.swift            # デバイス管理
 ├── UserAccountManager.swift       # ユーザー認証管理
-├── SupabaseAuthManager.swift      # Supabase認証
 ├── SupabaseDataManager.swift      # データ取得管理（ダイレクトアクセス）
 ├── DashboardSummary.swift         # daily_resultsデータモデル
 ├── DashboardTimeBlock.swift       # spot_resultsデータモデル
+├── Services/
+│   ├── RecordingStore.swift       # 録音状態管理
+│   ├── AudioRecorderService.swift # 録音実行サービス
+│   ├── AudioMonitorService.swift  # 音声レベル監視サービス
+│   └── UploaderService.swift      # アップロードサービス
 └── Models/                        # その他データモデル
 ```
 

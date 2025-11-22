@@ -25,8 +25,8 @@ struct FullScreenRecordingView: View {
     // MARK: - Body
     var body: some View {
         ZStack {
-            // 半透明の黒背景
-            Color.black.opacity(0.8)
+            // 紫背景
+            Color.accentPurple
                 .ignoresSafeArea()
 
             VStack {
@@ -41,7 +41,7 @@ struct FullScreenRecordingView: View {
                 }
 
                 // 音声ビジュアライザー（常に音声に反応）
-                BlobVisualizerView(audioLevel: audioMonitor.audioLevel)
+                AudioBarVisualizerView(audioLevel: audioMonitor.audioLevel)
                     .padding(.bottom, 40)
 
                 // 録音状態に応じた表示
@@ -54,7 +54,7 @@ struct FullScreenRecordingView: View {
 
                     Text("録音中...")
                         .font(.title3)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(.white.opacity(0.8))
                 }
 
                 Spacer()
@@ -67,7 +67,7 @@ struct FullScreenRecordingView: View {
                 .padding(.bottom, 60)
             }
 
-            // 閉じるボタン（右上）- シンプルな白い×
+            // 閉じるボタン（右上）
             VStack {
                 HStack {
                     Spacer()
@@ -206,12 +206,12 @@ struct RecordingButton: View {
                 if isRecording {
                     // 停止ボタン（四角、0.8倍）
                     RoundedRectangle(cornerRadius: 6.4)
-                        .fill(Color.red)
+                        .fill(Color.white)
                         .frame(width: 32, height: 32)
                 } else {
                     // 録音ボタン（円、0.8倍）
                     Circle()
-                        .fill(Color.red)
+                        .fill(Color.white)
                         .frame(width: 64, height: 64)
                 }
             }

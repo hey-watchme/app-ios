@@ -90,8 +90,9 @@ final class AudioMonitorService: ObservableObject {
 
         let rms = sqrt(sum / Float(frameLength))
 
-        // 0.0 〜 1.0 に正規化（調整可能）
-        let normalizedLevel = min(max(rms * 10.0, 0.0), 1.0)
+        // 0.0 〜 1.0 に正規化（録音中と同じ感度になるよう調整）
+        // RMS値は通常非常に小さいため、大きく増幅する必要がある
+        let normalizedLevel = min(max(rms * 50.0, 0.0), 1.0)
 
         return normalizedLevel
     }

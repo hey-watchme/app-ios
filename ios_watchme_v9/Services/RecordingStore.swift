@@ -17,7 +17,6 @@ struct RecordingState {
     var recordingStartTime: Date?
     var recordingDuration: TimeInterval = 0
     var currentSlot: String = ""
-    var audioLevels: [CGFloat] = Array(repeating: 0.0, count: 20)
 
     // 録音ファイル管理
     var recordings: [RecordingModel] = []
@@ -65,7 +64,6 @@ final class RecordingStore: ObservableObject {
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     private var recordingTimer: Timer?
-    private var audioLevelTimer: Timer?
 
     // MARK: - Initialization
     init(
@@ -92,13 +90,7 @@ final class RecordingStore: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // AudioLevelの更新を監視
-        audioService.audioLevelPublisher
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] level in
-                self?.updateAudioLevel(level)
-            }
-            .store(in: &cancellables)
+        // Note: AudioLevelは現在使用していない（AudioMonitorServiceが直接UIに提供）
     }
 
     // MARK: - Public Methods（UIからの指示を受け取るインターフェース）
@@ -345,16 +337,6 @@ final class RecordingStore: ObservableObject {
         recordingTimer?.invalidate()
         recordingTimer = nil
         state.recordingDuration = 0
-    }
-
-    private func updateAudioLevel(_ level: Float) {
-        // 音声レベルを更新（波形表示用）
-        var newLevels = state.audioLevels
-        newLevels.append(CGFloat(level))
-        if newLevels.count > 20 {
-            newLevels.removeFirst()
-        }
-        state.audioLevels = newLevels
     }
 
     private func handleRecordingCompleted(_ result: Result<RecordingInfo, Error>) {
