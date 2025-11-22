@@ -35,7 +35,7 @@ struct FullScreenRecordingView: View {
                 // エラー表示
                 if store.state.showError, let errorMessage = store.state.errorMessage {
                     ErrorMessageView(message: errorMessage) {
-                        store.dismissError()
+                        store.clearError()
                     }
                     .padding(.bottom, 40)
                 }
