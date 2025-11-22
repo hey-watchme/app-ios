@@ -40,8 +40,8 @@ struct FullScreenRecordingView: View {
                     .padding(.bottom, 40)
                 }
 
-                // 音声ビジュアライザー（Lottieアニメーション）
-                RecordingLottieView(audioLevel: CGFloat(audioMonitor.audioLevel))
+                // 音声ビジュアライザー（常に音声に反応）
+                BlobVisualizerView(audioLevel: audioMonitor.audioLevel)
                     .padding(.bottom, 40)
 
                 // 録音状態に応じた表示
