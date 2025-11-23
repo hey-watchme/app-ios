@@ -21,6 +21,7 @@ struct ContentView: View {
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
     @State private var showMyPage = false  // マイページ表示制御
+    @State private var showVideoPickerSheet = false  // 動画選択モーダル
 
     // 録音機能は新しいRecordingStoreが内部で管理
 
@@ -169,31 +170,27 @@ struct ContentView: View {
                 }
             }
             
-            // Floating Action Button (FAB)
+            // Floating Action Buttons (FAB)
             // deviceManagerのshouldShowFABプロパティで表示制御
             if deviceManager.shouldShowFAB {
                 VStack {
                     Spacer()
                     HStack {
                         Spacer()
-                        
-                        Button(action: {
-                            print("🔘 FAB: 録音ボタン押下")
-                            print("✅ 録音シート表示（権限チェックは録音開始時に実行）")
-                            showRecordingSheet = true
-                        }) {
-                            ZStack {
-                                // 背景の円（影付き）
-                                Circle()
-                                    .fill(Color.accentPurple)
-                                    .frame(width: 56, height: 56)
-                                    .shadow(color: Color.accentPurple.opacity(0.4), radius: 8, x: 0, y: 4)
 
-                                // マイクアイコン
-                                Image(systemName: "mic.fill")
-                                    .font(.system(size: 24, weight: .semibold))
-                                    .foregroundColor(.white)
-                            }
+                        VStack(spacing: 16) {
+                            // FAB: Video to audio extraction
+                            FloatingActionButton(icon: "film", action: {
+                                print("🎬 FAB: 動画選択ボタン押下")
+                                showVideoPickerSheet = true
+                            })
+
+                            // FAB: Recording
+                            FloatingActionButton(icon: "mic.fill", action: {
+                                print("🔘 FAB: 録音ボタン押下")
+                                print("✅ 録音シート表示（権限チェックは録音開始時に実行）")
+                                showRecordingSheet = true
+                            })
                         }
                         .padding(.trailing, 20)
                         .padding(.bottom, 20)
@@ -249,6 +246,12 @@ struct ContentView: View {
             UserInfoView(userAccountManager: userAccountManager)
                 .environmentObject(deviceManager)
                 .environmentObject(dataManager)
+        }
+        .sheet(isPresented: $showVideoPickerSheet) {
+            VideoPickerView()
+                .environmentObject(deviceManager)
+                .environmentObject(userAccountManager)
+                .environmentObject(recordingStore)
         }
         .onAppear {
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み

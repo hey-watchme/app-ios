@@ -133,7 +133,15 @@ final class UploaderService {
         // ファイル追加
         body.append("--\(boundary)\r\n".data(using: .utf8)!)
         body.append("Content-Disposition: form-data; name=\"file\"; filename=\"\(request.fileURL.lastPathComponent)\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: audio/wav\r\n\r\n".data(using: .utf8)!)
+
+        // Determine content type based on file extension
+        let contentType: String
+        if request.fileURL.pathExtension.lowercased() == "m4a" {
+            contentType = "audio/mp4"
+        } else {
+            contentType = "audio/wav"
+        }
+        body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)
 
         let fileData = try Data(contentsOf: request.fileURL)
         body.append(fileData)
