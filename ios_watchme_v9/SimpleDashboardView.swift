@@ -213,7 +213,9 @@ struct SimpleDashboardView: View {
             // ✅ キャッシュミス → デバウンス処理（Phase 5-A: デバイス選択直後はスキップ）
             if !isInitialLoad {
                 // スワイプ操作時のみデバウンス適用（無駄なリクエスト防止）
+                #if DEBUG
                 print("⏳ [Debounce] Waiting 300ms before loading data for \(dateString)...")
+                #endif
                 try? await Task.sleep(for: .milliseconds(300))
 
                 // スワイプ継続中ならキャンセルされている
@@ -233,7 +235,9 @@ struct SimpleDashboardView: View {
             }
 
             // ✅ スワイプ停止後のみデータ取得
+            #if DEBUG
             print("📡 [API Request] Loading data for \(dateString)...")
+            #endif
             await loadAllData()
 
             // ✅ キャッシュに保存

@@ -189,7 +189,9 @@ struct ReportView: View {
     ]
 
     var body: some View {
+        #if DEBUG
         let _ = print("🎨 [ReportView] body rendered, selectedPeriod: \(selectedPeriod.rawValue)")
+        #endif
 
         ScrollView {
             VStack(spacing: 24) {
@@ -228,7 +230,9 @@ struct ReportView: View {
         }
         .background(Color(.systemBackground))
         .task {
+            #if DEBUG
             print("🚀 [ReportView] .task triggered")
+            #endif
             await loadWeeklyData()
         }
     }
@@ -1026,18 +1030,23 @@ struct ReportView: View {
     // MARK: - Data Loading
 
     private func loadWeeklyData() async {
+        #if DEBUG
         print("🚀 [loadWeeklyData] Function started")
-
         print("🔍 Device Manager state:")
         print("  - Selected Device ID: \(deviceManager.selectedDeviceID ?? "nil")")
         print("  - Devices count: \(deviceManager.devices.count)")
+        #endif
 
         guard let deviceId = deviceManager.selectedDeviceID else {
+            #if DEBUG
             print("❌ [loadWeeklyData] No device selected")
+            #endif
             return
         }
 
+        #if DEBUG
         print("✅ [loadWeeklyData] Device ID: \(deviceId)")
+        #endif
 
         isLoadingWeeklyData = true
 
@@ -1046,20 +1055,28 @@ struct ReportView: View {
         let now = Date()
         let weekday = calendar.component(.weekday, from: now)
 
+        #if DEBUG
         print("📅 Current date: \(now)")
         print("📅 Current weekday: \(weekday) (1=Sunday, 2=Monday)")
+        #endif
 
         let daysFromMonday = (weekday == 1) ? 6 : weekday - 2  // Sunday=1, Monday=2
+
+        #if DEBUG
         print("📅 Days from Monday: \(daysFromMonday)")
+        #endif
 
         guard let monday = calendar.date(byAdding: .day, value: -daysFromMonday, to: now) else {
+            #if DEBUG
             print("❌ Failed to calculate Monday")
+            #endif
             isLoadingWeeklyData = false
             return
         }
 
         let timezone = deviceManager.getTimezone(for: deviceId)
 
+        #if DEBUG
         // Debug logging
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -1069,6 +1086,7 @@ struct ReportView: View {
         print("📅 Calculated Monday: \(mondayString)")
         print("🔍 [ReportView] Fetching weekly data for device: \(deviceId)")
         print("🔍 [ReportView] Week start date (Monday): \(mondayString)")
+        #endif
 
         // Fetch weekly results
         async let weeklyResultsTask = dataManager.fetchWeeklyResults(deviceId: deviceId, weekStartDate: monday, timezone: timezone)
@@ -1079,6 +1097,7 @@ struct ReportView: View {
         weeklyAverageVibeScore = await avgScoreTask
         weeklyDailyVibeScores = await dailyVibeScoresTask
 
+        #if DEBUG
         print("🔍 [ReportView] Weekly results: \(weeklyResults != nil ? "Found" : "Not found")")
         print("🔍 [ReportView] Memorable events count: \(weeklyResults?.memorableEvents?.count ?? 0)")
         print("🔍 [ReportView] Daily vibe scores count: \(weeklyDailyVibeScores.count)")
@@ -1086,6 +1105,7 @@ struct ReportView: View {
         for score in weeklyDailyVibeScores {
             print("  - \(score.localDate): \(score.vibeScore)")
         }
+        #endif
 
         isLoadingWeeklyData = false
     }

@@ -209,4 +209,33 @@ struct DashboardTimeBlock: Codable, Equatable {
             .filter { $0.score > 0.1 }
             .sorted { $0.score > $1.score }
     }
+
+    // MARK: - Direct Initializer for Performance Optimization
+
+    /// Direct initializer to avoid JSON encoding/decoding overhead
+    init(deviceId: String,
+         localDate: String?,
+         localTime: String?,
+         summary: String?,
+         behavior: String?,
+         vibeScore: Double?,
+         createdAt: String?,
+         updatedAt: String? = nil,
+         behaviorTimePoints: [SEDBehaviorTimePoint],
+         emotionChunks: [EmotionChunk]) {
+
+        self.deviceId = deviceId
+        self.date = localDate
+        self.localTime = localTime
+        self.summary = summary
+        self.behavior = behavior
+        self.vibeScore = vibeScore
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.behaviorTimePoints = behaviorTimePoints
+        self.emotionChunks = emotionChunks
+
+        // Calculate displayTime
+        self.displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
+    }
 }

@@ -391,12 +391,16 @@ class SupabaseDataManager: ObservableObject {
             if deviceManager.selectedDeviceID == deviceId,
                let selectedSubject = deviceManager.selectedSubject {
                 subject = selectedSubject
+                #if DEBUG
                 print("✅ [fetchAllReports] Subject loaded from selectedSubject: \(selectedSubject.name ?? "Unknown")")
+                #endif
             } else if let device = deviceManager.devices.first(where: { $0.device_id == deviceId }),
                       let cachedSubject = device.subject {
                 // フォールバック: devices配列から取得
                 subject = cachedSubject
+                #if DEBUG
                 print("✅ [fetchAllReports] Subject loaded from device cache: \(cachedSubject.name ?? "Unknown")")
+                #endif
             }
             // ✅ リファクタリング: fetchSubjectInfo()は削除されたため、
             // DeviceManager.devices[].subjectのみを使用
@@ -542,10 +546,12 @@ class SupabaseDataManager: ObservableObject {
         formatter.timeZone = targetTimezone
         let dateString = formatter.string(from: date)
 
+        #if DEBUG
         print("📊 [Direct Access] Fetching daily_results")
         print("   Device: \(deviceId)")
         print("   Date: \(dateString)")
         print("   Timezone: \(targetTimezone.identifier)")
+        #endif
 
         do {
             // daily_resultsテーブルから直接取得
@@ -558,13 +564,17 @@ class SupabaseDataManager: ObservableObject {
                 .value
 
             if let summary = results.first {
+                #if DEBUG
                 print("✅ [Direct Access] Daily results found")
                 print("   Average Vibe: \(summary.averageVibe ?? 0)")
                 print("   Insights: \(summary.insights != nil ? "✓" : "✗")")
                 print("   Vibe Scores: \(summary.vibeScores?.count ?? 0) points")
+                #endif
                 return summary
             } else {
+                #if DEBUG
                 print("ℹ️ [Direct Access] No daily results found for \(dateString)")
+                #endif
                 return nil
             }
 
@@ -602,7 +612,9 @@ class SupabaseDataManager: ObservableObject {
     ///
     /// ⚠️ 重要: local_dateのみ使用。recorded_at（UTC）は一切参照しない
     func fetchDashboardTimeBlocks(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
+        #if DEBUG
         print("📊 Fetching spot results with features for device: \(deviceId)")
+        #endif
 
         // タイムゾーンを適用してlocal_dateを生成
         let targetTimezone = timezone ?? TimeZone.current
@@ -611,8 +623,10 @@ class SupabaseDataManager: ObservableObject {
         formatter.timeZone = targetTimezone
         let dateString = formatter.string(from: date)
 
+        #if DEBUG
         print("   Date: \(dateString)")
         print("   Timezone: \(targetTimezone.identifier)")
+        #endif
 
         do {
             // Step 1 & 2: Fetch spot_results and spot_features in parallel
@@ -660,57 +674,27 @@ class SupabaseDataManager: ObservableObject {
                 return (localTime, feature)
             })
 
+            // Optimized: Direct object construction without JSON encoding/decoding
             let timeBlocks: [DashboardTimeBlock] = spotResults.compactMap { result in
                 guard let localTime = result.local_time else { return nil }
                 let feature = featureMap[localTime]
 
-                // Manually construct DashboardTimeBlock
-                let jsonData = try? JSONSerialization.data(withJSONObject: [
-                    "device_id": result.device_id,
-                    "local_date": result.local_date as Any,
-                    "local_time": result.local_time as Any,
-                    "summary": result.summary as Any,
-                    "behavior": result.behavior as Any,
-                    "vibe_score": result.vibe_score as Any,
-                    "created_at": result.created_at as Any,
-                    "behavior_extractor_result": (feature?.behavior_extractor_result ?? []).map { point in
-                        [
-                            "time": point.time,
-                            "events": point.events.map { event in
-                                ["label": event.label, "score": event.score]
-                            }
-                        ]
-                    },
-                    "emotion_extractor_result": (feature?.emotion_extractor_result ?? []).map { chunk in
-                        [
-                            "chunk_id": chunk.chunk_id,
-                            "duration": chunk.duration,
-                            "emotions": chunk.emotions.map { emotion in
-                                [
-                                    "group": emotion.group as Any,
-                                    "label": emotion.label,
-                                    "score": emotion.score,
-                                    "name_en": emotion.name_en as Any,
-                                    "name_ja": emotion.name_ja
-                                ]
-                            },
-                            "end_time": chunk.end_time,
-                            "start_time": chunk.start_time,
-                            "primary_emotion": [
-                                "group": chunk.primary_emotion.group as Any,
-                                "label": chunk.primary_emotion.label,
-                                "score": chunk.primary_emotion.score,
-                                "name_en": chunk.primary_emotion.name_en as Any,
-                                "name_ja": chunk.primary_emotion.name_ja
-                            ]
-                        ]
-                    }
-                ], options: [])
-
-                guard let data = jsonData else { return nil }
-                return try? JSONDecoder().decode(DashboardTimeBlock.self, from: data)
+                // Direct initialization (避免 JSON overhead)
+                return DashboardTimeBlock(
+                    deviceId: result.device_id,
+                    localDate: result.local_date,
+                    localTime: result.local_time,
+                    summary: result.summary,
+                    behavior: result.behavior,
+                    vibeScore: result.vibe_score,
+                    createdAt: result.created_at,
+                    updatedAt: nil,
+                    behaviorTimePoints: feature?.behavior_extractor_result ?? [],
+                    emotionChunks: feature?.emotion_extractor_result ?? []
+                )
             }
 
+            #if DEBUG
             print("✅ Successfully merged \(timeBlocks.count) time blocks")
 
             // Log each time block for debugging
@@ -719,6 +703,7 @@ class SupabaseDataManager: ObservableObject {
                 let emotionCount = block.emotionChunks.count
                 print("   - \(block.displayTime): score=\(block.vibeScore ?? 0), behaviors=\(behaviorCount), emotions=\(emotionCount)")
             }
+            #endif
 
             return timeBlocks
 
@@ -1220,13 +1205,17 @@ extension SupabaseDataManager {
         formatter.timeZone = tz
         let weekStartString = formatter.string(from: weekStartDate)
 
+        #if DEBUG
         print("📅 [fetchWeeklyResults] Fetching weekly results for \(weekStartString)")
+        #endif
 
         // Fetch from weekly_results table
         let urlString = "\(self.supabaseURL)/rest/v1/weekly_results?device_id=eq.\(deviceId)&week_start_date=eq.\(weekStartString)&select=*"
 
         guard let url = URL(string: urlString) else {
+            #if DEBUG
             print("❌ [fetchWeeklyResults] Invalid URL")
+            #endif
             return nil
         }
 
@@ -1240,7 +1229,9 @@ extension SupabaseDataManager {
             let (data, response) = try await URLSession.shared.data(for: request)
 
             guard let httpResponse = response as? HTTPURLResponse else {
+                #if DEBUG
                 print("❌ [fetchWeeklyResults] Invalid HTTP response")
+                #endif
                 return nil
             }
 
