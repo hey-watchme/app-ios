@@ -236,6 +236,7 @@ struct EmotionGraphView: View {
     private func loadEmotionData() async {
         guard let deviceId = deviceManager.selectedDeviceID else {
             print("❌ [EmotionGraphView] No device selected")
+            isLoading = false
             return
         }
 

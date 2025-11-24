@@ -1041,6 +1041,7 @@ struct ReportView: View {
             #if DEBUG
             print("❌ [loadWeeklyData] No device selected")
             #endif
+            isLoadingWeeklyData = false
             return
         }
 

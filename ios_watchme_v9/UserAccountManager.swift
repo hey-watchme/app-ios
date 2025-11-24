@@ -264,6 +264,10 @@ class UserAccountManager: ObservableObject {
             self.deviceManager.clearState()
             print("⏱️ [GUEST-INIT] DeviceManager状態クリア: \(Date().timeIntervalSince(guestInitStart))秒")
 
+            // ゲストモード用に空のデバイスリストで利用可能状態にする
+            self.deviceManager.state = .available([])
+            print("📱 [GUEST-INIT] DeviceManager状態を.available([])に設定")
+
             print("⏱️ [GUEST-INIT] Read-Only Mode初期化完了: \(Date().timeIntervalSince(guestInitStart))秒")
         }
 
@@ -575,6 +579,8 @@ class UserAccountManager: ObservableObject {
 
             // DeviceManagerの状態もクリア
             self.deviceManager.clearState()
+            // ゲストモード用に空のデバイスリストで利用可能状態にする
+            self.deviceManager.state = .available([])
         }
 
         // トークンリフレッシュタイマーを停止

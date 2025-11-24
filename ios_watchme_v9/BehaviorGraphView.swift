@@ -150,6 +150,7 @@ struct BehaviorGraphView: View {
     private func loadBehaviorData() async {
         guard let deviceId = deviceManager.selectedDeviceID else {
             print("❌ [BehaviorGraphView] No device selected")
+            isLoading = false
             return
         }
 

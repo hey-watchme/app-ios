@@ -114,6 +114,7 @@ struct HomeView: View {
     private func loadTimeBlocks() async {
         guard let deviceId = deviceManager.selectedDeviceID else {
             print("❌ No device selected")
+            isLoadingTimeBlocks = false
             return
         }
 
