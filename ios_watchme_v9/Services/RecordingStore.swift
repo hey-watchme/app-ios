@@ -99,32 +99,9 @@ final class RecordingStore: ObservableObject {
     func initialize() async {
         guard !state.isInitialized else { return }
 
-        // バックグラウンドで初期化を実行
-        await withTaskGroup(of: Void.self) { group in
-            // オーディオセッション準備を並列実行
-            group.addTask { [weak self] in
-                guard let self = self else { return }
-                do {
-                    try await self.audioService.prepareAudioSession()
-                    await MainActor.run {
-                        self.state.isAudioSessionPrepared = true
-                        print("✅ RecordingStore: オーディオセッション準備完了")
-                    }
-                } catch {
-                    await MainActor.run {
-                        // エラーが起きてもアプリは使える状態にする
-                        self.state.isAudioSessionPrepared = false
-                        print("⚠️ RecordingStore: オーディオセッション準備失敗（録音開始時にリトライ）- \(error)")
-                    }
-                }
-            }
-
-            // 録音ファイル読み込みを並列実行
-            group.addTask { [weak self] in
-                guard let self = self else { return }
-                await self.loadRecordings()
-            }
-        }
+        // 録音ファイル読み込みのみ実行
+        // オーディオセッション準備は録音開始時まで遅延（AudioMonitorServiceとの競合回避）
+        await loadRecordings()
 
         // 初期化完了
         state.isInitialized = true
