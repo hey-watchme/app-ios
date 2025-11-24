@@ -151,21 +151,84 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
 
 ## 🔐 認証とユーザーモード
 
+### 初回起動時のフロー
+
+```
+アプリ起動
+  ↓
+初期画面（ロゴ + 「はじめる」「ログイン」）
+  ↓「はじめる」押下
+オンボーディング（4ページのスライド）
+  ↓「はじめる」またはスキップ押下
+アカウント選択画面
+  ┃
+  ┣━ 🔵 Google でサインイン
+  ┣━ 📧 メールアドレスで登録（準備中）
+  ┗━ 👤 ゲストとして続行（匿名認証）
+```
+
+### 認証方式
+
+#### 1. 匿名認証（Anonymous Authentication）
+- **対象**: 初めて使うユーザー、すぐに試したいユーザー
+- **特徴**:
+  - アカウント登録不要で即座に全機能を利用可能
+  - Supabaseの匿名認証機能を使用
+  - 後でメールアドレスやGoogle認証にアップグレード可能
+- **制限事項**:
+  - アプリ削除またはデータクリアでアカウント喪失
+  - 複数デバイスでの同期不可
+- **推奨**: 後でメールアドレスまたはGoogle認証への移行を促進
+
+#### 2. Google OAuth認証
+- **対象**: Googleアカウントを持つユーザー
+- **特徴**:
+  - ワンタップで簡単ログイン
+  - パスワード管理不要
+  - 複数デバイスでの同期可能
+- **実装**: Supabase OAuth + Google Cloud Console
+- **フロー**: アプリ → Safari（Googleログイン）→ アプリに自動復帰
+
+#### 3. メールアドレス/パスワード認証（準備中）
+- **対象**: メールアドレスで登録したいユーザー
+- **特徴**:
+  - 従来型の認証方式
+  - 複数デバイスでの同期可能
+- **状態**: 現在準備中（モックアップのみ実装済み）
+
 ### 権限レベル
 
-#### 1. 閲覧専用モード（Read-Only）
-- 対象: ゲストユーザー
-- 権限: サンプルデータの閲覧のみ
+#### 閲覧専用モード（Read-Only）
+- **対象**: 未認証状態（初回起動時）
+- **権限**: サンプルデータの閲覧のみ
+- **状態**: `UserAuthState.readOnly(source: .guest)`
 
-#### 2. 全権限モード（Full Access）
-- 対象: 認証済みユーザー
-- 権限: 録音、デバイス管理、コメント投稿など全機能
+#### 全権限モード（Full Access）
+- **対象**: 認証済みユーザー（匿名、Google、メールアドレス）
+- **権限**: 録音、デバイス管理、コメント投稿など全機能
+- **状態**: `UserAuthState.fullAccess(userId: String)`
+
+### ユーザーアカウントの種類
+
+| 種類 | email | 複数デバイス | データ保護 | 実装状況 |
+|------|-------|------------|----------|---------|
+| 匿名ユーザー | `"anonymous"` | ❌ | ⚠️ 脆弱 | ✅ 実装済み |
+| Googleユーザー | Googleアカウント | ✅ | ✅ 安全 | ✅ 実装済み |
+| メールユーザー | 登録メール | ✅ | ✅ 安全 | 🚧 準備中 |
 
 ### ユーザーとデバイスの関係
 
 - **1ユーザー = 複数の観測対象デバイス + 1台の通知先デバイス**
 - 観測対象デバイス: 録音される人を表す論理的なID
 - 通知先デバイス: プッシュ通知を受信するユーザーのiPhone
+
+### 匿名ユーザーの判定
+
+```swift
+var isAnonymousUser: Bool {
+    return currentUser?.email == "anonymous"
+}
+```
 
 ---
 
@@ -237,6 +300,11 @@ git push origin feature/機能名
 
 | 通称 | 正式名称 | ファイル名 | 説明 |
 |------|---------|-----------|------|
+| **初期画面** | ウェルカム画面 | `ios_watchme_v9App.swift`（内部のMainAppView） | ロゴと「はじめる」「ログイン」ボタン |
+| **オンボーディング画面** | オンボーディング | `OnboardingView.swift` | 4ページのスライド式説明画面 |
+| **アカウント選択画面** | アカウント選択 | `AccountSelectionView.swift` | Google/メール/ゲスト選択画面 |
+| **ログイン画面** | ログイン | `LoginView.swift` | メールアドレスとパスワードでログイン |
+| **会員登録画面** | 会員登録 | `SignUpView.swift` | メールアドレスとパスワードで新規登録 |
 | **ホーム画面** | ホーム（リアルタイムステータス） | `SimpleDashboardView.swift` | 日別のダッシュボード。気分グラフ、最新のスポット分析（最大3件）、コメント機能を表示 |
 | **分析結果の一覧画面** | 分析結果の一覧 | `SimpleDashboardView.swift`（内部の`AnalysisListView`） | 1日分の全スポット分析を時系列順に表示 |
 | **気分詳細画面** | 気分詳細 | `HomeView.swift` | 気分グラフの詳細と時間ごとの詳細リスト |
@@ -251,6 +319,10 @@ git push origin feature/機能名
 ios_watchme_v9/
 ├── ios_watchme_v9App.swift        # アプリエントリーポイント
 ├── ContentView.swift              # メインビュー（ホームタブ）
+├── OnboardingView.swift           # オンボーディング画面（4ページスライド）
+├── AccountSelectionView.swift     # アカウント選択画面（Google/メール/ゲスト）
+├── LoginView.swift                # ログイン画面
+├── SignUpView.swift               # 会員登録画面
 ├── SimpleDashboardView.swift      # ホーム画面 + 分析結果の一覧画面
 ├── AnalysisView.swift             # レポート画面
 ├── SubjectTabView.swift           # 観測対象画面
@@ -259,13 +331,11 @@ ios_watchme_v9/
 ├── EmotionGraphView.swift         # 感情グラフ詳細
 ├── FullScreenRecordingView.swift  # 録音画面（モーダル）
 ├── AudioBarVisualizerView.swift   # 音声ビジュアライザー（イコライザー風）
-├── LoginView.swift                # ログイン画面
-├── SignUpView.swift               # 会員登録画面
 ├── UserInfoView.swift             # マイページ
 ├── RecordingModel.swift           # 録音ファイルモデル
 ├── NetworkManager.swift           # API通信
 ├── DeviceManager.swift            # デバイス管理
-├── UserAccountManager.swift       # ユーザー認証管理
+├── UserAccountManager.swift       # ユーザー認証管理（匿名/Google/メール）
 ├── SupabaseDataManager.swift      # データ取得管理（ダイレクトアクセス）
 ├── DashboardSummary.swift         # daily_resultsデータモデル
 ├── DashboardTimeBlock.swift       # spot_resultsデータモデル
@@ -299,7 +369,8 @@ ios_watchme_v9/
 
 - **Swift 5.9+** / **SwiftUI**
 - **AVFoundation** - 音声録音
-- **Supabase** - 認証・データベース・ストレージ
+- **Supabase** - 認証（匿名認証・Google OAuth）・データベース・ストレージ
+- **Google Cloud Platform** - OAuth 2.0クライアント（Google認証）
 - **AWS SNS + APNs** - プッシュ通知
 - **Combine** - リアクティブプログラミング
 

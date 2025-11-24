@@ -269,6 +269,8 @@ struct MainAppView: View {
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             OnboardingView(isPresented: $showOnboarding)
+                .environmentObject(userAccountManager)
+                .environmentObject(deviceManager)
         }
         .sheet(isPresented: $showLogin) {
             LoginView()
@@ -318,8 +320,32 @@ struct MainAppView: View {
                 userAccountManager.shouldResetToWelcome = false
             }
         }
+        .onOpenURL { url in
+            // Handle OAuth callback from browser
+            print("🔗 URL受信: \(url)")
+            print("🔗 URL Scheme: \(url.scheme ?? "なし")")
+            print("🔗 URL Host: \(url.host ?? "なし")")
+            print("🔗 URL Path: \(url.path)")
+
+            Task {
+                await userAccountManager.handleOAuthCallback(url: url)
+
+                // Close onboarding modal if OAuth succeeded
+                if userAccountManager.isAuthenticated {
+                    print("✅ 認証成功 - onboardingモーダルを閉じます")
+                    await MainActor.run {
+                        showOnboarding = false
+                        onboardingCompleted = true
+                        selectedTab = .home
+                    }
+                } else {
+                    print("⚠️ 認証失敗 - isAuthenticated = false")
+                    print("⚠️ authError: \(userAccountManager.authError ?? "なし")")
+                }
+            }
+        }
     }
-    
+
     // checkAndRegisterDevice関数は削除されました（自動登録を行わないため）
 }
 

@@ -22,7 +22,12 @@ class SupabaseClientManager {
 
         let client = SupabaseClient(
             supabaseURL: URL(string: "https://qvtlwotzuzbavrzqhyvt.supabase.co")!,
-            supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
+            supabaseKey: "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k",
+            options: SupabaseClientOptions(
+                auth: .init(
+                    redirectToURL: URL(string: "watchme://auth/callback")
+                )
+            )
         )
 
         print("⏱️ [SUPABASE-LAZY] Supabaseクライアント遅延初期化完了: \(Date().timeIntervalSince(startTime))秒")
@@ -297,7 +302,13 @@ class UserAccountManager: ObservableObject {
     func requireAuthentication() -> Bool {
         return requireWritePermission()
     }
-    
+
+    // Check if current user is anonymous
+    var isAnonymousUser: Bool {
+        guard let user = currentUser else { return false }
+        return user.email == "anonymous"
+    }
+
     // MARK: - ログイン機能
     func signIn(email: String, password: String) {
         Task { @MainActor in
@@ -377,6 +388,224 @@ class UserAccountManager: ObservableObject {
         }
     }
     
+    // MARK: - 匿名認証機能
+    func signInAnonymously() async {
+        await MainActor.run {
+            isLoading = true
+            authError = nil
+        }
+
+        print("🔐 匿名ログイン開始")
+
+        do {
+            let session = try await supabase.auth.signInAnonymously()
+
+            print("✅ 匿名ログイン成功")
+
+            // Valid token for 1 hour
+            let expiresAt = Date().addingTimeInterval(3600)
+
+            let user = SupabaseUser(
+                id: session.user.id.uuidString,
+                email: "anonymous",  // Mark as anonymous
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                profile: nil,
+                expiresAt: expiresAt
+            )
+
+            await MainActor.run {
+                self.currentUser = user
+                self.isAuthenticated = true
+                self.authState = .fullAccess(userId: user.id)
+                self.saveUserToDefaults(user)
+                self.isLoading = false
+            }
+
+            print("🔄 Authentication state updated: authState = fullAccess (anonymous)")
+
+            // Create profile in public.users table
+            await createAnonymousUserProfile(userId: user.id)
+
+            // Start token refresh timer
+            startTokenRefreshTimer()
+
+            // Initialize authenticated user flow
+            await initializeAuthenticatedUser(authUserId: user.id)
+
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+                self.authError = "匿名ログインに失敗しました: \(error.localizedDescription)"
+                print("❌ 匿名ログインエラー: \(error)")
+            }
+        }
+    }
+
+    // Create anonymous user profile in public.users table
+    private func createAnonymousUserProfile(userId: String) async {
+        do {
+            struct AnonymousUserProfile: Encodable {
+                let user_id: String
+                let name: String
+                let email: String
+                let created_at: String
+            }
+
+            let profileData = AnonymousUserProfile(
+                user_id: userId,
+                name: "ゲストユーザー",
+                email: "anonymous",
+                created_at: ISO8601DateFormatter().string(from: Date())
+            )
+
+            try await supabase
+                .from("users")
+                .insert(profileData)
+                .execute()
+
+            print("✅ 匿名ユーザープロファイル作成成功")
+
+            // Fetch profile after creation
+            await fetchUserProfile(userId: userId)
+
+        } catch {
+            print("❌ 匿名ユーザープロファイル作成エラー: \(error)")
+            // Continue even if profile creation fails
+        }
+    }
+
+    // MARK: - Google OAuth認証
+    func signInWithGoogle() async {
+        await MainActor.run {
+            isLoading = true
+            authError = nil
+        }
+
+        print("🔐 Google認証開始")
+
+        do {
+            // Start OAuth flow (redirects to Safari/Chrome)
+            // redirectToURL is configured globally in SupabaseClientManager
+            try await supabase.auth.signInWithOAuth(provider: .google)
+
+            // OAuth flow continues in browser
+            // Callback is handled by handleOAuthCallback()
+            print("✅ Google認証フロー開始（ブラウザにリダイレクト）")
+
+            await MainActor.run {
+                self.isLoading = false
+            }
+
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+                self.authError = "Google認証に失敗しました: \(error.localizedDescription)"
+                print("❌ Google認証エラー: \(error)")
+            }
+        }
+    }
+
+    // Handle OAuth callback from browser
+    func handleOAuthCallback(url: URL) async {
+        print("🔗 OAuth callback受信: \(url)")
+
+        await MainActor.run {
+            self.isLoading = true
+        }
+
+        do {
+            // Extract session from callback URL
+            let session = try await supabase.auth.session(from: url)
+
+            print("✅ Google認証成功: \(session.user.email ?? "")")
+
+            let expiresAt = Date().addingTimeInterval(3600)
+
+            let user = SupabaseUser(
+                id: session.user.id.uuidString,
+                email: session.user.email ?? "",
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                profile: nil,
+                expiresAt: expiresAt
+            )
+
+            await MainActor.run {
+                self.currentUser = user
+                self.isAuthenticated = true
+                self.authState = .fullAccess(userId: user.id)
+                self.saveUserToDefaults(user)
+                self.isLoading = false
+            }
+
+            print("🔄 認証状態を更新: authState = fullAccess (Google)")
+
+            // Create or update profile in public.users
+            await createOrUpdateUserProfile(userId: user.id, email: user.email)
+
+            // Start token refresh timer
+            startTokenRefreshTimer()
+
+            // Initialize authenticated user flow
+            await initializeAuthenticatedUser(authUserId: user.id)
+
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+                self.authError = "認証の完了に失敗しました: \(error.localizedDescription)"
+                print("❌ OAuth callback処理エラー: \(error)")
+            }
+        }
+    }
+
+    // Create or update user profile (for OAuth users)
+    private func createOrUpdateUserProfile(userId: String, email: String) async {
+        do {
+            // Check if profile exists
+            let existingProfiles: [UserProfile] = try await supabase
+                .from("users")
+                .select()
+                .eq("user_id", value: userId)
+                .execute()
+                .value
+
+            if existingProfiles.isEmpty {
+                // Create new profile
+                struct NewUserProfile: Encodable {
+                    let user_id: String
+                    let name: String
+                    let email: String
+                    let created_at: String
+                }
+
+                let displayName = email.components(separatedBy: "@").first ?? "ユーザー"
+                let profileData = NewUserProfile(
+                    user_id: userId,
+                    name: displayName,
+                    email: email,
+                    created_at: ISO8601DateFormatter().string(from: Date())
+                )
+
+                try await supabase
+                    .from("users")
+                    .insert(profileData)
+                    .execute()
+
+                print("✅ Googleユーザープロファイル作成成功")
+            } else {
+                print("✅ 既存プロファイルを使用")
+            }
+
+            // Fetch profile
+            await fetchUserProfile(userId: userId)
+
+        } catch {
+            print("❌ プロファイル作成/更新エラー: \(error)")
+            // Continue even if profile creation fails
+        }
+    }
+
     // MARK: - サインアップ機能
     func signUp(email: String, password: String, displayName: String = "", newsletter: Bool = false) async {
         await MainActor.run {

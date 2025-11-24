@@ -3,14 +3,17 @@
 //  ios_watchme_v9
 //
 //  オンボーディング画面
-//  ログアウト時に4ページのオンボーディングを表示
+//  完了後にアカウント選択画面を表示
 //
 
 import SwiftUI
 
 struct OnboardingView: View {
+    @EnvironmentObject var userAccountManager: UserAccountManager
+    @EnvironmentObject var deviceManager: DeviceManager
     @Binding var isPresented: Bool
     @State private var currentPage = 0
+    @State private var showAccountSelection = false
 
     private let pages = [
         "onboarding-001",
@@ -42,7 +45,7 @@ struct OnboardingView: View {
                     Spacer()
                     if currentPage < pages.count - 1 {
                         Button(action: {
-                            isPresented = false
+                            showAccountSelection = true
                         }) {
                             Text("スキップ")
                                 .font(.system(size: 16, weight: .medium))
@@ -64,7 +67,7 @@ struct OnboardingView: View {
                 VStack {
                     Spacer()
                     Button(action: {
-                        isPresented = false
+                        showAccountSelection = true
                     }) {
                         Text("はじめる")
                             .font(.system(size: 18, weight: .bold))
@@ -80,6 +83,11 @@ struct OnboardingView: View {
             }
         }
         .ignoresSafeArea()
+        .fullScreenCover(isPresented: $showAccountSelection) {
+            AccountSelectionView(isPresented: $isPresented)
+                .environmentObject(userAccountManager)
+                .environmentObject(deviceManager)
+        }
     }
 }
 
