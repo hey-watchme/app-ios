@@ -3,6 +3,14 @@
 WatchMeプラットフォームのiOSアプリケーション。
 音声録音とAI分析による心理・感情・行動の総合的なモニタリングを提供します。
 
+> **📚 関連ドキュメント**
+> - [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計・API仕様
+> - [AUTHENTICATION.md](./docs/AUTHENTICATION.md) - 認証システム詳細
+> - [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知の詳細実装
+> - [ACCOUNT_DELETION.md](./docs/ACCOUNT_DELETION.md) - アカウント削除機能
+> - [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - トラブルシューティング
+> - [CHANGELOG.md](./CHANGELOG.md) - 更新履歴
+
 ---
 
 ## 📱 アプリの概要
@@ -149,150 +157,17 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
 
 ---
 
-## 🔐 認証とユーザーモード
+## 🔐 認証
 
-### 📋 開発状況（2025-11-25更新）
+WatchMeでは3つの認証方式をサポートしています：
 
-#### ✅ 実装済み
-- 匿名認証（Anonymous Authentication）
-- Google OAuth認証（ASWebAuthenticationSession使用）
-- `public.users`テーブルに`auth_provider`カラム追加
-- 認証プロバイダーの区別（anonymous, email, google, apple, microsoft等）
-- **✨ NEW**: 匿名ユーザーのアップグレードフロー（ゲスト → Googleアカウント連携）
-- **✨ NEW**: エラーメッセージ表示の統一（ToastManager活用）
-- **✨ NEW**: fullScreenCover二重ネスト問題の解消（AuthFlowView統合）
+- **匿名認証**: アカウント登録不要で即座に利用開始（後でアップグレード可能）
+- **Google OAuth**: Googleアカウントでワンタップログイン
+- **メール/パスワード**: 従来型の認証（準備中）
 
-#### 🚧 現在の課題
-- **Google OAuth認証**: 実機テストで最終確認が必要
-  - シミュレータでは正常動作を確認
-  - モーダルクローズ問題は解消済み（fullScreenCover統合による）
-  - **次回セッション**: 実機での認証フロー確認
+認証後は全機能にアクセス可能です。未認証状態ではサンプルデータの閲覧のみ可能です。
 
-#### 📚 データベース参照先
-- **スキーマ管理**: `/Users/kaya.matsumoto/projects/watchme/server-configs/database/`
-- **最新マイグレーション**: `migrations/20251125000000_add_auth_provider_to_users.sql`
-- **スキーマドキュメント**: `current_schema.sql` (最終更新: 2025-11-25)
-
-### 初回起動時のフロー
-
-```
-アプリ起動
-  ↓
-初期画面（ロゴ + 「はじめる」「ログイン」）
-  ↓「はじめる」押下
-統合認証フロー（AuthFlowView）
-  ├─ オンボーディング（4ページのスライド）
-  └─ アカウント選択画面
-      ┃
-      ┣━ 🔵 Google でサインイン（実装済み）
-      ┣━ 📧 メールアドレスで登録（準備中）
-      ┗━ 👤 ゲストとして続行（匿名認証・実装済み）
-```
-
-### 匿名ユーザーのアップグレードフロー（✨ NEW）
-
-```
-ゲストモードでログイン
-  ↓
-アカウント設定画面を開く
-  ↓
-「アカウントを作成してデータを保護」セクションが表示
-  ↓
-タップしてUpgradeAccountViewを表示
-  ┃
-  ┣━ 🔵 Google でアカウント作成
-  ┗━ 📧 メールアドレスで登録（準備中）
-  ↓
-既存データを保持したままアカウントアップグレード完了
-```
-
-### 認証方式
-
-#### 1. 匿名認証（Anonymous Authentication）
-- **対象**: 初めて使うユーザー、すぐに試したいユーザー
-- **特徴**:
-  - アカウント登録不要で即座に全機能を利用可能
-  - Supabaseの匿名認証機能を使用
-  - **✅ NEW**: 後でメールアドレスやGoogle認証にアップグレード可能（UI実装済み）
-- **制限事項**:
-  - アプリ削除またはデータクリアでアカウント喪失
-  - 複数デバイスでの同期不可
-- **実装状況**: ✅ 完全動作（アップグレードフロー含む）
-- **`auth_provider`値**: `"anonymous"`
-- **関連ファイル**:
-  - `UserAccountManager.swift:1403-1477` - `upgradeAnonymousToGoogle()`
-  - `UpgradeAccountView.swift` - アップグレードUI
-  - `AccountSettingsView.swift:29-58` - プロモーションバナー
-
-#### 2. Google OAuth認証
-- **対象**: Googleアカウントを持つユーザー
-- **特徴**:
-  - ワンタップで簡単ログイン
-  - パスワード管理不要
-  - 複数デバイスでの同期可能
-- **技術実装**:
-  - iOS標準の`ASWebAuthenticationSession`を使用
-  - Supabase OAuth (Implicit Flow: `#access_token=...`)
-  - Google Cloud Console OAuth 2.0クライアント設定済み
-- **URL Scheme**: `watchme://auth/callback`
-- **フロー**: アプリ → ASWebAuthenticationSession（Googleログイン）→ アプリに自動復帰
-- **実装状況**: ✅ 実装完了（シミュレータで動作確認済み）
-  - **✅ NEW**: fullScreenCover二重ネスト問題を解消（AuthFlowViewで統合）
-  - **✅ NEW**: モーダル自動クローズ機能を改善
-- **`auth_provider`値**: `"google"`
-- **実装ファイル**:
-  - `UserAccountManager.swift:1354-1401` - `signInWithGoogleDirect()`
-  - `UserAccountManager.swift:1403-1477` - `upgradeAnonymousToGoogle()`
-  - `UserAccountManager.swift:512-596` - `handleOAuthCallback()`
-  - `AuthFlowView.swift` - 統合認証フロー（オンボーディング + アカウント選択）
-
-#### 3. メールアドレス/パスワード認証（準備中）
-- **対象**: メールアドレスで登録したいユーザー
-- **特徴**:
-  - 従来型の認証方式
-  - 複数デバイスでの同期可能
-- **実装状況**: 🚧 モックアップのみ（`signUp()`メソッドは実装済み）
-- **`auth_provider`値**: `"email"`
-
-### 権限レベル
-
-#### 閲覧専用モード（Read-Only）
-- **対象**: 未認証状態（初回起動時）
-- **権限**: サンプルデータの閲覧のみ
-- **状態**: `UserAuthState.readOnly(source: .guest)`
-
-#### 全権限モード（Full Access）
-- **対象**: 認証済みユーザー（匿名、Google、メールアドレス）
-- **権限**: 録音、デバイス管理、コメント投稿など全機能
-- **状態**: `UserAuthState.fullAccess(userId: String)`
-
-### ユーザーアカウントの種類
-
-| 種類 | email | auth_provider | 複数デバイス | データ保護 | 実装状況 |
-|------|-------|--------------|------------|----------|---------|
-| 匿名ユーザー | `"anonymous"` | `"anonymous"` | ❌ | ⚠️ 脆弱 | ✅ 実装済み |
-| Googleユーザー | Googleアカウント | `"google"` | ✅ | ✅ 安全 | ✅ 実装済み |
-| メールユーザー | 登録メール | `"email"` | ✅ | ✅ 安全 | 🚧 準備中 |
-| Appleユーザー | Appleアカウント | `"apple"` | ✅ | ✅ 安全 | 📋 未実装 |
-
-**`auth_provider`フィールド**:
-- `public.users`テーブルで認証プロバイダーを区別
-- CHECK制約で許可される値: `anonymous`, `email`, `google`, `apple`, `microsoft`, `github`, `facebook`, `twitter`
-- 将来的な拡張性を考慮した設計
-
-### ユーザーとデバイスの関係
-
-- **1ユーザー = 複数の観測対象デバイス + 1台の通知先デバイス**
-- 観測対象デバイス: 録音される人を表す論理的なID
-- 通知先デバイス: プッシュ通知を受信するユーザーのiPhone
-
-### 匿名ユーザーの判定
-
-```swift
-var isAnonymousUser: Bool {
-    return currentUser?.email == "anonymous"
-}
-```
+**詳細**: [認証システム詳細ドキュメント](./docs/AUTHENTICATION.md)
 
 ---
 
@@ -304,29 +179,11 @@ var isAnonymousUser: Bool {
 
 **重要原則**: `auth.users`への直接参照は禁止。必ず`public.users(user_id)`を使用。
 
-**テーブル構造**:
-- **`auth.users`**: Supabase認証専用テーブル（直接アクセス不可）
+**主要テーブル**:
+- **`auth.users`**: Supabase認証専用（直接アクセス不可）
 - **`public.users`**: アプリケーション用ユーザープロファイル（✅ 推奨）
-  - `user_id` (UUID, PRIMARY KEY): `auth.users.id`と対応
-  - `email` (TEXT): ユーザーのメールアドレス（匿名の場合は`"anonymous"`）
-  - `auth_provider` (TEXT, NOT NULL): 認証プロバイダー
-  - `apns_token` (TEXT): プッシュ通知用トークン
-  - その他フィールド: `name`, `avatar_url`, `status`, `subscription_plan`等
 
-**データベーススキーマ管理**:
-- **場所**: `/Users/kaya.matsumoto/projects/watchme/server-configs/database/`
-- **最新スキーマ**: `current_schema.sql` (最終更新: 2025-11-25)
-- **マイグレーション**: `migrations/20251125000000_add_auth_provider_to_users.sql`
-
-**コード例**:
-
-```swift
-// ❌ 間違い
-let userId = userAccountManager.currentUser?.id
-
-// ✅ 正しい
-let userId = userAccountManager.currentUser?.profile?.userId
-```
+**詳細**: [認証システム詳細ドキュメント](./docs/AUTHENTICATION.md)
 
 ### ビルド検証
 
@@ -382,13 +239,9 @@ git push origin feature/機能名
 
 | 通称 | 正式名称 | ファイル名 | 説明 |
 |------|---------|-----------|------|
-| **初期画面** | ウェルカム画面 | `ios_watchme_v9App.swift`（内部のMainAppView） | ロゴと「はじめる」「ログイン」ボタン |
-| **統合認証フロー** | オンボーディング + アカウント選択 | `AuthFlowView.swift` ✨ NEW | オンボーディング（4ページ）とアカウント選択を1つのフローに統合 |
-| **オンボーディング画面** | オンボーディング（旧） | `OnboardingView.swift` | 4ページのスライド式説明画面（※後方互換性のため残存、AuthFlowViewで統合済み） |
-| **アカウント選択画面** | アカウント選択（旧） | `AccountSelectionView.swift` | Google/メール/ゲスト選択画面（※後方互換性のため残存、AuthFlowViewで統合済み） |
-| **アップグレード画面** | アカウントアップグレード | `UpgradeAccountView.swift` ✨ NEW | ゲストユーザーがGoogleアカウントに移行する画面 |
-| **ログイン画面** | ログイン | `LoginView.swift` | メールアドレスとパスワードでログイン |
-| **会員登録画面** | 会員登録 | `SignUpView.swift` | メールアドレスとパスワードで新規登録 |
+| **初期画面** | ウェルカム画面 | `ios_watchme_v9App.swift`（MainAppView） | ロゴと「はじめる」「ログイン」ボタン |
+| **認証フロー** | 統合認証フロー | `AuthFlowView.swift` | オンボーディングとアカウント選択 |
+| **ログイン画面** | ログイン | `LoginView.swift` | メール/パスワードでログイン |
 | **ホーム画面** | ホーム（リアルタイムステータス） | `SimpleDashboardView.swift` | 日別のダッシュボード。気分グラフ、最新のスポット分析（最大3件）、コメント機能を表示 |
 | **分析結果の一覧画面** | 分析結果の一覧 | `SimpleDashboardView.swift`（内部の`AnalysisListView`） | 1日分の全スポット分析を時系列順に表示 |
 | **気分詳細画面** | 気分詳細 | `HomeView.swift` | 気分グラフの詳細と時間ごとの詳細リスト |
@@ -403,12 +256,6 @@ git push origin feature/機能名
 ios_watchme_v9/
 ├── ios_watchme_v9App.swift        # アプリエントリーポイント
 ├── ContentView.swift              # メインビュー（ホームタブ）
-├── AuthFlowView.swift             # ✨ NEW: 統合認証フロー（オンボーディング + アカウント選択）
-├── OnboardingView.swift           # オンボーディング画面（※AuthFlowViewで統合済み）
-├── AccountSelectionView.swift     # アカウント選択画面（※AuthFlowViewで統合済み）
-├── UpgradeAccountView.swift       # ✨ NEW: アカウントアップグレード画面（ゲスト → Google連携）
-├── LoginView.swift                # ログイン画面
-├── SignUpView.swift               # 会員登録画面
 ├── SimpleDashboardView.swift      # ホーム画面 + 分析結果の一覧画面
 ├── AnalysisView.swift             # レポート画面
 ├── SubjectTabView.swift           # 観測対象画面
@@ -416,13 +263,16 @@ ios_watchme_v9/
 ├── BehaviorGraphView.swift        # 行動グラフ詳細
 ├── EmotionGraphView.swift         # 感情グラフ詳細
 ├── FullScreenRecordingView.swift  # 録音画面（モーダル）
-├── AudioBarVisualizerView.swift   # 音声ビジュアライザー（イコライザー風）
+├── AudioBarVisualizerView.swift   # 音声ビジュアライザー
 ├── UserInfoView.swift             # マイページ
+├── AuthFlowView.swift             # 統合認証フロー
+├── LoginView.swift                # ログイン画面
+├── UpgradeAccountView.swift       # アカウントアップグレード画面
 ├── RecordingModel.swift           # 録音ファイルモデル
 ├── NetworkManager.swift           # API通信
 ├── DeviceManager.swift            # デバイス管理
-├── UserAccountManager.swift       # ユーザー認証管理（匿名/Google/メール）
-├── SupabaseDataManager.swift      # データ取得管理（ダイレクトアクセス）
+├── UserAccountManager.swift       # ユーザー認証管理
+├── SupabaseDataManager.swift      # データ取得管理
 ├── DashboardSummary.swift         # daily_resultsデータモデル
 ├── DashboardTimeBlock.swift       # spot_resultsデータモデル
 ├── Services/
@@ -430,40 +280,13 @@ ios_watchme_v9/
 │   ├── AudioRecorderService.swift # 録音実行サービス
 │   ├── AudioMonitorService.swift  # 音声レベル監視サービス
 │   ├── UploaderService.swift      # アップロードサービス
-│   └── ToastManager.swift         # ✨ NEW: グローバルトースト通知システム
+│   └── ToastManager.swift         # グローバルトースト通知システム
 └── Models/                        # その他データモデル
-```
-
-### 🎯 今回の改善内容（2025-11-25）
-
-#### 1. fullScreenCover二重ネスト問題の解消
-- **問題**: OnboardingView内でさらにfullScreenCoverを使用し、モーダルクローズが不安定
-- **解決**: AuthFlowViewで統合し、1層のfullScreenCoverのみに変更
-- **効果**: OAuth認証後のモーダル自動クローズが確実に動作
-
-#### 2. エラーメッセージ表示の統一
-- **問題**: 各所でバラバラなエラー表示（Alert、独自UI等）
-- **解決**: ToastManagerで全エラーを統一的に表示
-- **効果**: 非侵襲的（画面を遮らない）で一貫したUX
-
-#### 3. 匿名ユーザーのアップグレードフロー実装
-- **問題**: ゲストユーザーが正式アカウントに移行できない
-- **解決**: UpgradeAccountViewとupgradeAnonymousToGoogle()を実装
-- **効果**: データを失わずにGoogleアカウント連携が可能
 ```
 
 ---
 
-## 📚 関連ドキュメント
-
-- [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計・API仕様
-- [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知の詳細実装
-- [ACCOUNT_DELETION.md](./docs/ACCOUNT_DELETION.md) - アカウント削除機能（App Store審査対応）
-- [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - トラブルシューティング
-- [REMAINING_TASKS.md](./docs/REMAINING_TASKS.md) - 残タスク引き継ぎドキュメント（低優先度リファクタリング）
-- [CHANGELOG.md](./CHANGELOG.md) - 更新履歴
-
-### 外部公開URL
+## 🔗 外部公開URL
 
 - **プライバシーポリシー**: https://hey-watch.me/privacy
 - **利用規約**: https://hey-watch.me/terms
@@ -475,8 +298,7 @@ ios_watchme_v9/
 
 - **Swift 5.9+** / **SwiftUI**
 - **AVFoundation** - 音声録音
-- **Supabase** - 認証（匿名認証・Google OAuth）・データベース・ストレージ
-- **Google Cloud Platform** - OAuth 2.0クライアント（Google認証）
+- **Supabase** - 認証・データベース・ストレージ
 - **AWS SNS + APNs** - プッシュ通知
 - **Combine** - リアクティブプログラミング
 

@@ -1,5 +1,71 @@
 # 更新履歴
 
+> **関連ドキュメント**
+> - [README.md](./README.md) - アプリ全体の概要
+> - [AUTHENTICATION.md](./docs/AUTHENTICATION.md) - 認証システム詳細
+> - [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計
+
+---
+
+## 2025年11月
+
+### v9.30.0 (2025-11-25)
+
+#### 認証システムの改善と安定化
+- **fullScreenCover二重ネスト問題の解消**:
+  - `AuthFlowView.swift`でオンボーディングとアカウント選択を統合
+  - 1層のfullScreenCoverのみに変更し、モーダルクローズの不安定性を解消
+  - OAuth認証後のモーダル自動クローズが確実に動作
+  - コミット: `d978be5`
+
+- **エラーメッセージ表示の統一**:
+  - `ToastManager.swift`導入により全エラーを統一的に表示
+  - 非侵襲的（画面を遮らない）で一貫したUX
+  - 認証エラー、デバイス登録エラー等をトーストで表示
+  - コミット: `3509361`
+
+- **匿名ユーザーのアップグレードフロー実装**:
+  - `UpgradeAccountView.swift`追加：ゲストユーザーがGoogleアカウントに移行可能
+  - `UserAccountManager.swift`に`upgradeAnonymousToGoogle()`メソッド追加（L1403-1477）
+  - 既存データを保持したままアカウントアップグレードが可能
+  - `AccountSettingsView.swift`にプロモーションバナー追加（L29-58）
+  - コミット: `1f61fd9`
+
+#### コード品質の改善
+- **MainAppViewのリファクタリング**:
+  - タブビュー構造の重複を解消（約70行削減、46行追加）
+  - `private var mainTabView`で共通化し、保守性向上
+  - 認証済み・未認証モードで同じタブ構造を共有
+  - タブ追加時の修正箇所を2箇所 → 1箇所に削減
+  - コミット: `c8afe2c`
+
+#### ドキュメント整理
+- **認証システムドキュメントの分離**:
+  - `docs/AUTHENTICATION.md`を新規作成
+  - 認証方式、フロー、データベース設計の詳細を集約
+  - README.mdを簡潔化し、認証は概要のみに
+
+- **README.mdの大幅簡潔化**:
+  - 認証セクションを約150行 → 10行に削減
+  - 履歴情報をCHANGELOG.mdに移動
+  - 冒頭に関連ドキュメントへのリンクを追加
+  - 重複する「関連ドキュメント」セクションを削除
+
+- **引き継ぎドキュメントの削除**:
+  - `docs/REMAINING_TASKS.md`を削除（タスク完了のため）
+
+#### データベーススキーマ更新
+- **`public.users`テーブル**:
+  - `auth_provider`カラム追加（匿名、Google、メール等を区別）
+  - マイグレーション: `migrations/20251125000000_add_auth_provider_to_users.sql`
+  - スキーマドキュメント更新: `current_schema.sql`
+
+#### 実装ファイル
+- 新規: `AuthFlowView.swift`, `UpgradeAccountView.swift`, `ToastManager.swift`, `docs/AUTHENTICATION.md`
+- 更新: `UserAccountManager.swift`, `AccountSettingsView.swift`, `ios_watchme_v9App.swift`, `README.md`
+
+---
+
 ## 2025年10月
 
 ### v9.29.0 (2025-10-19)
