@@ -2,8 +2,8 @@
 
 > **関連ドキュメント**
 > - [README.md](./README.md) - アプリ全体の概要
-> - [AUTHENTICATION.md](./docs/AUTHENTICATION.md) - 認証システム詳細
-> - [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計
+> - [AUTHENTICATION.md](./docs/features/AUTHENTICATION.md) - 認証システム詳細
+> - [TECHNICAL.md](./docs/technical/TECHNICAL.md) - アーキテクチャ・データベース設計
 
 ---
 
@@ -41,15 +41,21 @@
 
 #### ドキュメント整理
 - **認証システムドキュメントの分離**:
-  - `docs/AUTHENTICATION.md`を新規作成
+  - `docs/features/AUTHENTICATION.md`を新規作成
   - 認証方式、フロー、データベース設計の詳細を集約
   - README.mdを簡潔化し、認証は概要のみに
 
 - **README.mdの大幅簡潔化**:
   - 認証セクションを約150行 → 10行に削減
   - 履歴情報をCHANGELOG.mdに移動
-  - 冒頭に関連ドキュメントへのリンクを追加
+  - 冒頭に関連ドキュメントへのリンクを追加（カテゴリ別）
   - 重複する「関連ドキュメント」セクションを削除
+
+- **docsディレクトリの構造化**:
+  - 5つのカテゴリ別サブディレクトリを作成（features, technical, setup, development, operations）
+  - ルートディレクトリの全ドキュメント（TODO.md, MANTIS_SETUP.md等）をdocs配下に移動
+  - 既存のdocs/配下のファイルもカテゴリ別に再配置
+  - 全15ファイルを体系的に整理
 
 - **引き継ぎドキュメントの削除**:
   - `docs/REMAINING_TASKS.md`を削除（タスク完了のため）
@@ -61,8 +67,9 @@
   - スキーマドキュメント更新: `current_schema.sql`
 
 #### 実装ファイル
-- 新規: `AuthFlowView.swift`, `UpgradeAccountView.swift`, `ToastManager.swift`, `docs/AUTHENTICATION.md`
-- 更新: `UserAccountManager.swift`, `AccountSettingsView.swift`, `ios_watchme_v9App.swift`, `README.md`
+- 新規: `AuthFlowView.swift`, `UpgradeAccountView.swift`, `ToastManager.swift`, `docs/features/AUTHENTICATION.md`
+- 更新: `UserAccountManager.swift`, `AccountSettingsView.swift`, `ios_watchme_v9App.swift`, `README.md`, `CHANGELOG.md`
+- 移動: 15ファイルをカテゴリ別サブディレクトリに再配置
 
 ---
 

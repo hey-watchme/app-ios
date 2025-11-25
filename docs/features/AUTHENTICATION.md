@@ -3,9 +3,9 @@
 最終更新: 2025-11-25
 
 > **関連ドキュメント**
-> - [README.md](../README.md) - アプリ全体の概要
-> - [TECHNICAL.md](./TECHNICAL.md) - アーキテクチャ・データベース設計
-> - [CHANGELOG.md](../CHANGELOG.md) - 更新履歴
+> - [README.md](../../README.md) - アプリ全体の概要
+> - [TECHNICAL.md](../technical/TECHNICAL.md) - アーキテクチャ・データベース設計
+> - [CHANGELOG.md](../../CHANGELOG.md) - 更新履歴
 
 ---
 

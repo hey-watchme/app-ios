@@ -4,12 +4,32 @@ WatchMeプラットフォームのiOSアプリケーション。
 音声録音とAI分析による心理・感情・行動の総合的なモニタリングを提供します。
 
 > **📚 関連ドキュメント**
-> - [TECHNICAL.md](./docs/TECHNICAL.md) - アーキテクチャ・データベース設計・API仕様
-> - [AUTHENTICATION.md](./docs/AUTHENTICATION.md) - 認証システム詳細
-> - [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知の詳細実装
-> - [ACCOUNT_DELETION.md](./docs/ACCOUNT_DELETION.md) - アカウント削除機能
-> - [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - トラブルシューティング
-> - [CHANGELOG.md](./CHANGELOG.md) - 更新履歴
+>
+> **機能仕様**:
+> - [AUTHENTICATION.md](./docs/features/AUTHENTICATION.md) - 認証システム詳細
+> - [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/features/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知
+> - [ACCOUNT_DELETION.md](./docs/features/ACCOUNT_DELETION.md) - アカウント削除
+> - [RECORDING_SPECIFICATION.md](./docs/features/RECORDING_SPECIFICATION.md) - 録音仕様
+>
+> **技術仕様**:
+> - [TECHNICAL.md](./docs/technical/TECHNICAL.md) - アーキテクチャ・データベース設計
+> - [COLOR_SYSTEM.md](./docs/technical/COLOR_SYSTEM.md) - カラーシステム
+>
+> **セットアップガイド**:
+> - [MANTIS.md](./docs/setup/MANTIS.md) - Mantisライブラリのセットアップ
+> - [SUPABASE_AUTH.md](./docs/setup/SUPABASE_AUTH.md) - Supabase認証セットアップ
+> - [SUPABASE_PACKAGE.md](./docs/setup/SUPABASE_PACKAGE.md) - Supabaseパッケージセットアップ
+>
+> **開発ガイド**:
+> - [TODO.md](./docs/development/TODO.md) - 開発タスク管理
+> - [COLOR_GUIDE.md](./docs/development/COLOR_GUIDE.md) - カラー管理ガイド
+>
+> **運用**:
+> - [TROUBLESHOOTING.md](./docs/operations/TROUBLESHOOTING.md) - トラブルシューティング
+> - [APP_STORE_METADATA.md](./docs/operations/APP_STORE_METADATA.md) - App Store申請情報
+>
+> **更新履歴**:
+> - [CHANGELOG.md](./CHANGELOG.md) - 変更履歴
 
 ---
 
@@ -167,7 +187,7 @@ WatchMeでは3つの認証方式をサポートしています：
 
 認証後は全機能にアクセス可能です。未認証状態ではサンプルデータの閲覧のみ可能です。
 
-**詳細**: [認証システム詳細ドキュメント](./docs/AUTHENTICATION.md)
+**詳細**: [認証システム詳細ドキュメント](./docs/features/AUTHENTICATION.md)
 
 ---
 
@@ -183,7 +203,7 @@ WatchMeでは3つの認証方式をサポートしています：
 - **`auth.users`**: Supabase認証専用（直接アクセス不可）
 - **`public.users`**: アプリケーション用ユーザープロファイル（✅ 推奨）
 
-**詳細**: [認証システム詳細ドキュメント](./docs/AUTHENTICATION.md)
+**詳細**: [認証システム詳細ドキュメント](./docs/features/AUTHENTICATION.md)
 
 ### ビルド検証
 
