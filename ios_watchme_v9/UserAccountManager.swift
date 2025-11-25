@@ -1399,5 +1399,81 @@ extension UserAccountManager {
             print("✅ ASWebAuthenticationSession started")
         }
     }
+
+    // MARK: - Anonymous User Upgrade
+
+    /// Upgrade anonymous user to Google account
+    /// Returns true if successful, false otherwise
+    func upgradeAnonymousToGoogle() async -> Bool {
+        // Check if current user is anonymous
+        guard isAnonymousUser else {
+            await MainActor.run {
+                authError = "現在のユーザーは匿名ユーザーではありません"
+            }
+            return false
+        }
+
+        await MainActor.run {
+            isLoading = true
+            authError = nil
+        }
+
+        print("🔐 匿名ユーザーアップグレード開始 (Google)")
+
+        // Build OAuth URL for linking
+        let authURL = URL(string: "\(supabaseURL)/auth/v1/authorize?provider=google&redirect_to=watchme://auth/callback")!
+        print("🔗 OAuth URL: \(authURL)")
+
+        return await withCheckedContinuation { continuation in
+            Task { @MainActor in
+                let contextProvider = WebAuthenticationPresentationContextProvider()
+
+                let session = ASWebAuthenticationSession(
+                    url: authURL,
+                    callbackURLScheme: "watchme"
+                ) { callbackURL, error in
+                    Task {
+                        if let error = error {
+                            await MainActor.run {
+                                self.isLoading = false
+                                // User cancelled or error occurred
+                                if (error as NSError).code != ASWebAuthenticationSessionError.canceledLogin.rawValue {
+                                    self.authError = "Google連携に失敗しました: \(error.localizedDescription)"
+                                    print("❌ Google連携エラー: \(error)")
+                                } else {
+                                    print("ℹ️ ユーザーがGoogle連携をキャンセルしました")
+                                }
+                            }
+                            continuation.resume(returning: false)
+                            return
+                        }
+
+                        if let callbackURL = callbackURL {
+                            print("✅ OAuth callback received: \(callbackURL)")
+                            await self.handleOAuthCallback(url: callbackURL)
+
+                            // Check if upgrade was successful
+                            let success = self.isAuthenticated && !self.isAnonymousUser
+                            await MainActor.run {
+                                self.isLoading = false
+                            }
+                            continuation.resume(returning: success)
+                        } else {
+                            await MainActor.run {
+                                self.isLoading = false
+                            }
+                            continuation.resume(returning: false)
+                        }
+                    }
+                }
+
+                session.presentationContextProvider = contextProvider
+                session.prefersEphemeralWebBrowserSession = false
+                session.start()
+
+                print("✅ ASWebAuthenticationSession started for upgrade")
+            }
+        }
+    }
 }
 #endif

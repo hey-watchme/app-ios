@@ -21,10 +21,42 @@ struct AccountSettingsView: View {
     @State private var isDeletingAccount = false
     @State private var deleteAccountError: String?
     @State private var showDeleteAccountError = false
+    @State private var showUpgradeAccount = false  // 匿名アップグレードシート
     
     var body: some View {
         NavigationView {
             List {
+                // 匿名ユーザー向けアップグレード促進（ゲストモード時のみ表示）
+                if userAccountManager.isAnonymousUser {
+                    Section {
+                        Button(action: {
+                            showUpgradeAccount = true
+                        }) {
+                            HStack {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text("アカウントを作成してデータを保護")
+                                        .font(.subheadline)
+                                        .fontWeight(.semibold)
+                                        .foregroundColor(.primary)
+                                    Text("Googleアカウントでログインすると、データがクラウドに保存され安全に管理できます")
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                Spacer()
+                                Image(systemName: "arrow.right.circle.fill")
+                                    .foregroundColor(Color.safeColor("AppAccentColor"))
+                                    .font(.title2)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    } header: {
+                        Text("ゲストモード")
+                    } footer: {
+                        Text("現在はゲストモードでご利用中です。アカウント作成すると、データが失われる心配がなくなります。")
+                    }
+                }
+
                 // このアプリについて
                 Section {
                     HStack {
@@ -171,6 +203,11 @@ struct AccountSettingsView: View {
             .sheet(isPresented: $showFeedbackForm) {
                 FeedbackFormView(context: .general)
                     .environmentObject(userAccountManager)
+            }
+            .sheet(isPresented: $showUpgradeAccount) {
+                UpgradeAccountView()
+                    .environmentObject(userAccountManager)
+                    .environmentObject(ToastManager.shared)
             }
         }
     }
