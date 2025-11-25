@@ -107,6 +107,44 @@ struct MainAppView: View {
         }
     }
 
+    // MARK: - Extracted Views
+
+    /// 共通化されたタブビュー構造
+    private var mainTabView: some View {
+        NavigationStack {
+            VStack(spacing: 0) {
+                // コンテンツエリア（ビューを保持したまま表示/非表示を切り替え）
+                ZStack {
+                    ContentView()
+                        .environmentObject(userAccountManager)
+                        .environmentObject(deviceManager)
+                        .environmentObject(dataManager)
+                        .environmentObject(recordingStore)
+                        .opacity(selectedTab == .home ? 1 : 0)
+                        .zIndex(selectedTab == .home ? 1 : 0)
+
+                    ReportView()
+                        .environmentObject(userAccountManager)
+                        .environmentObject(deviceManager)
+                        .environmentObject(dataManager)
+                        .opacity(selectedTab == .report ? 1 : 0)
+                        .zIndex(selectedTab == .report ? 1 : 0)
+
+                    SubjectTabView()
+                        .environmentObject(userAccountManager)
+                        .environmentObject(deviceManager)
+                        .environmentObject(dataManager)
+                        .opacity(selectedTab == .subject ? 1 : 0)
+                        .zIndex(selectedTab == .subject ? 1 : 0)
+                }
+
+                // カスタムフッターナビゲーション
+                CustomFooterNavigation(selectedTab: $selectedTab)
+            }
+            .edgesIgnoringSafeArea(.bottom)
+        }
+    }
+
     private var mainContent: some View {
         Group {
             if userAccountManager.isCheckingAuthStatus {
@@ -138,82 +176,20 @@ struct MainAppView: View {
                     print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
                 }
             } else if userAccountManager.authState.isAuthenticated {
-                // 全権限モード：メイン機能画面（単一のNavigationStackでラップ）
-                NavigationStack {
-                    VStack(spacing: 0) {
-                        // コンテンツエリア（ビューを保持したまま表示/非表示を切り替え）
-                        ZStack {
-                            ContentView()
-                                .environmentObject(userAccountManager)
-                                .environmentObject(deviceManager)
-                                .environmentObject(dataManager)
-                                .environmentObject(recordingStore)
-                                .opacity(selectedTab == .home ? 1 : 0)
-                                .zIndex(selectedTab == .home ? 1 : 0)
-
-                            ReportView()
-                                .environmentObject(userAccountManager)
-                                .environmentObject(deviceManager)
-                                .environmentObject(dataManager)
-                                .opacity(selectedTab == .report ? 1 : 0)
-                                .zIndex(selectedTab == .report ? 1 : 0)
-
-                            SubjectTabView()
-                                .environmentObject(userAccountManager)
-                                .environmentObject(deviceManager)
-                                .environmentObject(dataManager)
-                                .opacity(selectedTab == .subject ? 1 : 0)
-                                .zIndex(selectedTab == .subject ? 1 : 0)
-                        }
-
-                        // カスタムフッターナビゲーション
-                        CustomFooterNavigation(selectedTab: $selectedTab)
+                // 全権限モード：メイン機能画面
+                mainTabView
+                    .onAppear {
+                        print("📱 MainAppView: 全権限モード - メイン画面表示")
+                        // デバイス取得は認証成功時（onChange）で実行済み
                     }
-                    .edgesIgnoringSafeArea(.bottom)
-                }
-                .onAppear {
-                    print("📱 MainAppView: 全権限モード - メイン画面表示")
-                    // デバイス取得は認証成功時（onChange）で実行済み
-                }
             } else {
                 // 閲覧専用モード（Read-Only Mode）
                 if authFlowCompleted {
                     // 認証フロー完了後：ガイド画面（ダッシュボード）
-                    NavigationStack {
-                        VStack(spacing: 0) {
-                            // コンテンツエリア（ビューを保持したまま表示/非表示を切り替え）
-                            ZStack {
-                                ContentView()
-                                    .environmentObject(userAccountManager)
-                                    .environmentObject(deviceManager)
-                                    .environmentObject(dataManager)
-                                    .environmentObject(recordingStore)
-                                    .opacity(selectedTab == .home ? 1 : 0)
-                                    .zIndex(selectedTab == .home ? 1 : 0)
-
-                                ReportView()
-                                    .environmentObject(userAccountManager)
-                                    .environmentObject(deviceManager)
-                                    .environmentObject(dataManager)
-                                    .opacity(selectedTab == .report ? 1 : 0)
-                                    .zIndex(selectedTab == .report ? 1 : 0)
-
-                                SubjectTabView()
-                                    .environmentObject(userAccountManager)
-                                    .environmentObject(deviceManager)
-                                    .environmentObject(dataManager)
-                                    .opacity(selectedTab == .subject ? 1 : 0)
-                                    .zIndex(selectedTab == .subject ? 1 : 0)
-                            }
-
-                            // カスタムフッターナビゲーション
-                            CustomFooterNavigation(selectedTab: $selectedTab)
+                    mainTabView
+                        .onAppear {
+                            print("📱 MainAppView: 閲覧専用モード - ガイド画面表示")
                         }
-                        .edgesIgnoringSafeArea(.bottom)
-                    }
-                    .onAppear {
-                        print("📱 MainAppView: 閲覧専用モード - ガイド画面表示")
-                    }
                 } else {
                     // 初期画面（「はじめる」「ログイン」）
                     VStack(spacing: 0) {
