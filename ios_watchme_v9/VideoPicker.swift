@@ -79,10 +79,10 @@ struct VideoPicker: UIViewControllerRepresentable {
         }
 
         private func loadVideo(itemProvider: NSItemProvider) {
-            // Show toast immediately
+            // Phase 1: Video loading (0% - 33%)
             DispatchQueue.main.async {
-                ToastManager.shared.showUploading(
-                    title: "動画を読み込み中...",
+                ToastManager.shared.showProgressWithPhase(
+                    phase: "動画を読み込み中...",
                     subtitle: nil,
                     progress: 0.0
                 )
@@ -102,10 +102,10 @@ struct VideoPicker: UIViewControllerRepresentable {
                 }
 
                 DispatchQueue.main.async {
-                    ToastManager.shared.showUploading(
-                        title: "動画を読み込み中...",
+                    ToastManager.shared.showProgressWithPhase(
+                        phase: "動画を読み込み中...",
                         subtitle: nil,
-                        progress: 0.5
+                        progress: 0.16  // 16% (halfway in phase 1)
                     )
                 }
 
@@ -120,18 +120,16 @@ struct VideoPicker: UIViewControllerRepresentable {
                     try FileManager.default.copyItem(at: url, to: tempURL)
 
                     DispatchQueue.main.async {
-                        ToastManager.shared.showUploading(
-                            title: "動画を読み込み中...",
+                        ToastManager.shared.showProgressWithPhase(
+                            phase: "動画を読み込み中...",
                             subtitle: nil,
-                            progress: 1.0
+                            progress: 0.33  // 33% (phase 1 complete)
                         )
 
                         self.parent.selectedVideoURL = tempURL
 
-                        // Wait briefly to show 100% completion before transitioning
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-                            self.parent.onConfirm(tempURL)
-                        }
+                        // Immediately proceed to next phase (no delay needed)
+                        self.parent.onConfirm(tempURL)
                     }
                 } catch {
                     print("❌ Error copying video: \(error)")

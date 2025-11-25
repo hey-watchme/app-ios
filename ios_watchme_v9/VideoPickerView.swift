@@ -68,62 +68,61 @@ struct VideoPickerView: View {
         }
 
         do {
-            // Video is already loaded, start extracting audio
+            // Phase 2: Audio extraction (33% - 66%)
             await MainActor.run {
-                ToastManager.shared.showUploading(
-                    title: "音声を抽出中...",
+                ToastManager.shared.showProgressWithPhase(
+                    phase: "音声を抽出中...",
                     subtitle: nil,
-                    progress: 0.0
+                    progress: 0.33  // Start of phase 2
                 )
             }
 
             try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
 
             await MainActor.run {
-                ToastManager.shared.showUploading(
-                    title: "音声を抽出中...",
+                ToastManager.shared.showProgressWithPhase(
+                    phase: "音声を抽出中...",
                     subtitle: nil,
-                    progress: 0.3
+                    progress: 0.44  // Midpoint of phase 2
                 )
             }
 
             let audioURL = try await extractAudio(from: videoURL)
 
             await MainActor.run {
-                ToastManager.shared.showUploading(
-                    title: "音声を抽出中...",
+                ToastManager.shared.showProgressWithPhase(
+                    phase: "音声を抽出中...",
                     subtitle: nil,
-                    progress: 1.0
+                    progress: 0.66  // End of phase 2
                 )
             }
-            try await Task.sleep(nanoseconds: 300_000_000) // 0.3s
 
-            // Step 2: Upload
+            // Phase 3: Upload (66% - 100%)
             await MainActor.run {
-                ToastManager.shared.showUploading(
-                    title: "音声をアップロード中...",
+                ToastManager.shared.showProgressWithPhase(
+                    phase: "音声をアップロード中...",
                     subtitle: audioURL.lastPathComponent,
-                    progress: 0.0
+                    progress: 0.66  // Start of phase 3
                 )
             }
 
             try await Task.sleep(nanoseconds: 100_000_000) // 0.1s
 
             await MainActor.run {
-                ToastManager.shared.showUploading(
-                    title: "音声をアップロード中...",
+                ToastManager.shared.showProgressWithPhase(
+                    phase: "音声をアップロード中...",
                     subtitle: audioURL.lastPathComponent,
-                    progress: 0.5
+                    progress: 0.83  // Midpoint of phase 3
                 )
             }
 
             try await uploadExtractedAudio(audioURL)
 
             await MainActor.run {
-                ToastManager.shared.showUploading(
-                    title: "音声をアップロード中...",
+                ToastManager.shared.showProgressWithPhase(
+                    phase: "音声をアップロード中...",
                     subtitle: audioURL.lastPathComponent,
-                    progress: 1.0
+                    progress: 1.0  // End of phase 3 (100%)
                 )
             }
             try await Task.sleep(nanoseconds: 300_000_000) // 0.3s

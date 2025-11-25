@@ -15,7 +15,8 @@ struct ToastMessage: Equatable {
         case success    // 成功（緑）
         case error      // エラー（赤）
         case info       // 情報（青）
-        case uploading(progress: Double)  // 送信中（プログレスバー付き）
+        case uploading(progress: Double)  // 送信中（プログレスバー付き）- 互換性のため残す
+        case progress(phase: String, progress: Double)  // フェーズ付きプログレス（推奨）
     }
 
     let id: UUID
@@ -100,13 +101,23 @@ class ToastManager: ObservableObject {
         show(ToastMessage(type: .info, title: title, subtitle: subtitle))
     }
 
-    /// 便利メソッド：アップロード中トースト
+    /// 便利メソッド：アップロード中トースト（互換性のため残す）
     func showUploading(title: String, subtitle: String? = nil, progress: Double) {
         show(ToastMessage(
             type: .uploading(progress: progress),
             title: title,
             subtitle: subtitle,
             autoDismiss: false  // 送信中は自動非表示しない
+        ))
+    }
+
+    /// 便利メソッド：フェーズ付きプログレストースト（推奨）
+    func showProgressWithPhase(phase: String, subtitle: String? = nil, progress: Double) {
+        show(ToastMessage(
+            type: .progress(phase: phase, progress: progress),
+            title: phase,
+            subtitle: subtitle,
+            autoDismiss: false  // プログレス中は自動非表示しない
         ))
     }
 }
@@ -155,8 +166,11 @@ struct ToastOverlay: View {
                 Spacer()
             }
 
-            // プログレスバー（送信中のみ）
+            // プログレスバー（送信中またはフェーズ付きプログレス）
             if case .uploading(let progress) = toast.type {
+                ProgressView(value: progress, total: 1.0)
+                    .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+            } else if case .progress(_, let progress) = toast.type {
                 ProgressView(value: progress, total: 1.0)
                     .progressViewStyle(LinearProgressViewStyle(tint: .blue))
             }
@@ -180,6 +194,8 @@ struct ToastOverlay: View {
             return "info.circle.fill"
         case .uploading:
             return "arrow.up.circle.fill"
+        case .progress:
+            return "arrow.up.circle.fill"
         }
     }
 
@@ -193,6 +209,8 @@ struct ToastOverlay: View {
         case .info:
             return Color.safeColor("AppAccentColor")
         case .uploading:
+            return .blue
+        case .progress:
             return .blue
         }
     }

@@ -339,9 +339,9 @@ final class RecordingStore: ObservableObject {
     private func attemptAutoUpload(_ recording: RecordingModel) async {
         print("🚀 RecordingStore: 自動アップロード開始 - \(recording.fileName)")
 
-        // トースト表示（送信中）
-        ToastManager.shared.showUploading(
-            title: "送信中...",
+        // トースト表示（送信中 0% - 100%）
+        ToastManager.shared.showProgressWithPhase(
+            phase: "送信中...",
             subtitle: recording.fileName,
             progress: 0.0
         )
@@ -350,9 +350,9 @@ final class RecordingStore: ObservableObject {
             // Store層がUploadRequestを構築
             let uploadRequest = createUploadRequest(for: recording)
 
-            // プログレス更新
-            ToastManager.shared.showUploading(
-                title: "送信中...",
+            // プログレス更新（50%）
+            ToastManager.shared.showProgressWithPhase(
+                phase: "送信中...",
                 subtitle: recording.fileName,
                 progress: 0.5
             )
@@ -360,9 +360,19 @@ final class RecordingStore: ObservableObject {
             // アップロード実行
             try await uploaderService.upload(uploadRequest)
 
+            // プログレス更新（100%）
+            ToastManager.shared.showProgressWithPhase(
+                phase: "送信中...",
+                subtitle: recording.fileName,
+                progress: 1.0
+            )
+
             // 成功
             try await audioService.deleteRecordingFile(url: recording.getFileURL())
             print("✅ RecordingStore: 自動アップロード成功、ファイル削除済み")
+
+            // Brief delay to show 100% before showing success
+            try? await Task.sleep(nanoseconds: 300_000_000) // 0.3s
 
             // 成功トースト表示
             ToastManager.shared.showSuccess(
@@ -399,8 +409,8 @@ final class RecordingStore: ObservableObject {
 
             // トースト更新（送信中）
             state.currentUploadingFile = recording.fileName
-            ToastManager.shared.showUploading(
-                title: "送信中...",
+            ToastManager.shared.showProgressWithPhase(
+                phase: "送信中...",
                 subtitle: recording.fileName,
                 progress: progress
             )
