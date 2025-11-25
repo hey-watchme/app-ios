@@ -12,11 +12,10 @@ import SwiftUI
 struct AccountSelectionView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var toastManager: ToastManager
     @Binding var isPresented: Bool
     @State private var showEmailSignUp = false
     @State private var isProcessing = false
-    @State private var showMockAlert = false
-    @State private var mockAlertMessage = ""
 
     var body: some View {
         VStack(spacing: 24) {
@@ -70,8 +69,10 @@ struct AccountSelectionView: View {
 
                 // Email Sign Up (Mock)
                 Button(action: {
-                    mockAlertMessage = "メールアドレス登録は現在準備中です"
-                    showMockAlert = true
+                    toastManager.showInfo(
+                        title: "メールアドレス登録",
+                        subtitle: "現在準備中です"
+                    )
                 }) {
                     HStack {
                         Image(systemName: "envelope.fill")
@@ -119,11 +120,6 @@ struct AccountSelectionView: View {
             .padding(.bottom, 40)
             .disabled(isProcessing)
             .opacity(isProcessing ? 0.6 : 1.0)
-        }
-        .alert("準備中", isPresented: $showMockAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            Text(mockAlertMessage)
         }
         .overlay(
             Group {
@@ -207,4 +203,5 @@ struct AccountSelectionView: View {
     AccountSelectionView(isPresented: .constant(true))
         .environmentObject(UserAccountManager(deviceManager: DeviceManager()))
         .environmentObject(DeviceManager())
+        .environmentObject(ToastManager.shared)
 }

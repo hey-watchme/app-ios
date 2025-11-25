@@ -271,6 +271,7 @@ struct MainAppView: View {
             AuthFlowView(isPresented: $showAuthFlow)
                 .environmentObject(userAccountManager)
                 .environmentObject(deviceManager)
+                .environmentObject(toastManager)
         }
         .sheet(isPresented: $showLogin) {
             LoginView()
@@ -320,6 +321,20 @@ struct MainAppView: View {
                 authFlowCompleted = false
                 // フラグをリセット
                 userAccountManager.shouldResetToWelcome = false
+            }
+        }
+        .onChange(of: userAccountManager.authError) { oldValue, newValue in
+            // 認証エラーをToastで表示（エラーメッセージ統一）
+            if let error = newValue, !error.isEmpty {
+                toastManager.showError(title: "認証エラー", subtitle: error)
+                print("🍞 [Toast] 認証エラー表示: \(error)")
+            }
+        }
+        .onChange(of: deviceManager.registrationError) { oldValue, newValue in
+            // デバイス登録エラーをToastで表示（エラーメッセージ統一）
+            if let error = newValue, !error.isEmpty {
+                toastManager.showError(title: "デバイス登録エラー", subtitle: error)
+                print("🍞 [Toast] デバイス登録エラー表示: \(error)")
             }
         }
         .onOpenURL { url in

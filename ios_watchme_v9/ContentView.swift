@@ -12,6 +12,7 @@ struct ContentView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var recordingStore: RecordingStore
+    @EnvironmentObject var toastManager: ToastManager
 
     // シンプルな状態管理
     @State private var selectedDate: Date = Date()  // 初期値は現在時刻（後でonAppearで調整）
@@ -257,6 +258,13 @@ struct ContentView: View {
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み
             // 日付範囲の初期化
             initializeDateRange()
+        }
+        .onChange(of: recordingStore.state.errorMessage) { oldValue, newValue in
+            // 録音エラーをToastで表示（エラーメッセージ統一）
+            if let error = newValue, !error.isEmpty, recordingStore.state.showError {
+                toastManager.showError(title: "録音エラー", subtitle: error)
+                print("🍞 [Toast] 録音エラー表示: \(error)")
+            }
         }
     }
 
