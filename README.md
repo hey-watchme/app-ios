@@ -33,6 +33,27 @@ WatchMeプラットフォームのiOSアプリケーション。
 
 ---
 
+## 🗺️ ドキュメントガイド
+
+**こんな時は、このドキュメントを参照してください：**
+
+| やりたいこと | 参照先 |
+|------------|--------|
+| 📱 **アプリの全体像を理解したい** | このREADME |
+| 🔐 **認証機能の実装・修正** | [AUTHENTICATION.md](./docs/features/AUTHENTICATION.md) |
+| 🗄️ **データベース設計を確認・変更** | [TECHNICAL.md](./docs/technical/TECHNICAL.md)<br>`/Users/kaya.matsumoto/projects/watchme/server-configs/database/` |
+| 🔌 **API仕様を確認・変更** | [TECHNICAL.md](./docs/technical/TECHNICAL.md) |
+| 📡 **プッシュ通知の仕組みを理解** | [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/features/PUSH_NOTIFICATION_ARCHITECTURE.md) |
+| 🎙️ **録音機能の仕様を確認** | [RECORDING_SPECIFICATION.md](./docs/features/RECORDING_SPECIFICATION.md) |
+| 🎨 **カラーを変更したい** | [COLOR_GUIDE.md](./docs/development/COLOR_GUIDE.md) |
+| 🔧 **環境構築・ライブラリセットアップ** | [docs/setup/](./docs/setup/) |
+| 📝 **開発タスクを確認** | [TODO.md](./docs/development/TODO.md) |
+| 🐛 **トラブルシューティング** | [TROUBLESHOOTING.md](./docs/operations/TROUBLESHOOTING.md) |
+| 📦 **App Store申請準備** | [APP_STORE_METADATA.md](./docs/operations/APP_STORE_METADATA.md) |
+| 📜 **変更履歴を確認** | [CHANGELOG.md](./CHANGELOG.md) |
+
+---
+
 ## 📱 アプリの概要
 
 このアプリは、音声録音とAI分析による心理状態・感情・行動パターンの可視化ツールです。
@@ -79,69 +100,33 @@ WatchMeプラットフォームのiOSアプリケーション。
 
 ---
 
-## 🗄️ データベース構造
+## 🗄️ データベース
 
-### 主要テーブル
+WatchMeは録音データを分析し、気分・感情・行動パターンを可視化します。
 
-#### Spot分析（録音ごと）
-- **`spot_results`**: 録音ごとの分析結果（気分スコア、感情、行動）
-- **`spot_features`**: 録音ごとの特徴量（音響特徴、感情特徴、文字起こし）
-- **`spot_aggregators`**: Spot集計データ（Daily分析トリガー用）
+### データ階層
+- **Spot分析**: 録音ごとの即時分析（気分スコア、感情、行動）
+- **Daily分析**: 1日分の累積分析（トレンド、サマリー、急激な変化イベント）
+- **プロフィール**: 観測対象の基本情報とインサイト
 
-#### Daily分析（1日分の累積）
-- **`daily_results`**: 1日分の累積分析結果
-  - `vibe_score`: 平均気分スコア
-  - `summary`: LLMによる1日のサマリー文章
-  - `vibe_scores`: 時系列スコアデータ `[{time: "HH:MM", score: N}]`
-  - `burst_events`: 急激な変化イベント
-  - `profile_result`: 心理分析結果（daily_trend, key_moments, emotional_stability）
-- **`daily_aggregators`**: Daily集計データ（Profiler API用）
+### 重要な設計原則
+- **タイムゾーン**: すべてのデータは`local_date`/`local_time`で管理（UTC時刻は使用しない）
+- **ユーザー認証**: `auth.users`への直接参照は禁止。必ず`public.users`を使用
 
-#### その他
-- **`audio_files`**: 音声ファイルメタデータ（S3パス、録音時刻、タイムゾーン）
-- **`devices`**: デバイス情報（観測対象デバイス）
-- **`subjects`**: 観測対象のプロフィール情報
-- **`public.users`**: ユーザー情報（認証・APNsトークン）
+**詳細**: [技術仕様ドキュメント](./docs/technical/TECHNICAL.md)
 
-### タイムゾーン対応
-
-すべての主要テーブルに `local_date` と `local_time` カラムがあります。
-
-- **UTC時刻**: `recorded_at`, `created_at`, `updated_at` ← **アップロード時のみ使用、アプリでは参照しない**
-- **ローカル時刻**: `local_date`, `local_time` ← **✅ アプリではこれのみ使用**
-  - `local_date`: 日付のみ（YYYY-MM-DD）
-  - `local_time`: 日付+時間（YYYY-MM-DD HH:MM:SS） ← ユニークキー
-
-**重要原則**:
-- アプリ内では`recorded_at`（UTC）を一切参照しない
-- すべてのデータフィルタリング・表示は`local_date`と`local_time`のみ使用
-- タイムゾーン変換は不要（データベースに既にローカルタイムが格納されている）
+**データベーススキーマ管理**: `/Users/kaya.matsumoto/projects/watchme/server-configs/database/`
 
 ---
 
 ## 🔌 API通信
 
-### データアクセス方式
+iOSアプリはSupabaseを通じてデータを取得・更新します。
 
-**開発中はダイレクトアクセス方式を採用**
+**現在のアプローチ**: Supabaseテーブルへの直接アクセス（開発スピード優先）
+**将来の最適化**: パフォーマンスチューニング時にRPC関数を導入予定
 
-現在、iOSアプリはSupabaseの各テーブルに直接アクセスしています。
-
-**主要なデータ取得メソッド**:
-- `fetchDailyResults()` → `daily_results`テーブルから気分データを取得
-- `fetchSubjectInfo()` → `devices` → `subjects`テーブルからプロフィール情報を取得
-- `fetchDashboardTimeBlocks()` → `spot_results` + `spot_features`を並列取得
-- `fetchComments()` → `subject_comments`テーブルからコメントを取得
-
-**メリット**:
-- デバッグが容易（SQLログが明示的に見える）
-- カラム指定が明確（`notes`などの取得漏れを防げる）
-- 開発スピードが速い（RPC関数の修正・デプロイサイクルが不要）
-
-**今後の方針**:
-- **最終的なパフォーマンスチューニング時にRPC関数を導入**
-- 複数のテーブルを1回のAPIコールで取得する最適化を実施
-- 開発段階では柔軟性を優先し、ダイレクトアクセスを継続
+**詳細**: [技術仕様ドキュメント](./docs/technical/TECHNICAL.md)
 
 ---
 
@@ -191,65 +176,34 @@ WatchMeでは3つの認証方式をサポートしています：
 
 ---
 
-## ⚙️ 開発時の重要ルール
+## ⚙️ 開発時の重要原則
 
-### データベース設計
+### データベース
+- **ユーザー認証**: `auth.users`への直接参照は禁止。必ず`public.users`を使用
+- **タイムゾーン**: `local_date`/`local_time`のみ使用（UTC時刻は使用しない）
 
-#### ユーザー認証テーブルの設計
-
-**重要原則**: `auth.users`への直接参照は禁止。必ず`public.users(user_id)`を使用。
-
-**主要テーブル**:
-- **`auth.users`**: Supabase認証専用（直接アクセス不可）
-- **`public.users`**: アプリケーション用ユーザープロファイル（✅ 推奨）
-
-**詳細**: [認証システム詳細ドキュメント](./docs/features/AUTHENTICATION.md)
-
-### ビルド検証
-
+### ビルド
 ```bash
-# ✅ 正しい：シンプルにコンパイルチェック
 xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
-
-# ❌ 間違い：-destination指定は不要
-xcodebuild -scheme ios_watchme_v9 -destination '...' build
 ```
 
-### Git運用
+### Git
+ブランチベースの開発フロー（`main` → `feature/機能名` → PR → `main`）
 
-ブランチベースの開発フロー：
-
-```bash
-# 作業ブランチを作成
-git checkout main
-git pull origin main
-git checkout -b feature/機能名
-
-# 作業内容をコミット
-git add .
-git commit -m "変更内容の説明"
-
-# リモートにプッシュしてPR作成
-git push origin feature/機能名
-```
+**詳細**:
+- 認証: [AUTHENTICATION.md](./docs/features/AUTHENTICATION.md)
+- 技術仕様: [TECHNICAL.md](./docs/technical/TECHNICAL.md)
+- セットアップ: [docs/setup/](./docs/setup/)
 
 ---
 
-## 📡 プッシュ通知（リアルタイム更新）
+## 📡 プッシュ通知
 
-### アーキテクチャ
+観測対象デバイスで録音・分析が完了すると、自動的に最新データが反映されます。
 
-```
-観測対象デバイス（録音） → Lambda処理 → daily_results更新
-  ↓ (AWS SNS → APNs)
-通知先デバイス（iPhone） → トーストバナー表示 → 最新データ取得
-```
+**仕組み**: AWS Lambda → SNS → APNs → トーストバナー表示 → データ自動再取得
 
-### 通知の動作
-
-- **フォアグラウンド**: トーストバナー表示 → 自動データ再取得
-- **バックグラウンド**: サイレント通知（次回起動時にデータ取得）
-- **完全終了**: 何も起きない
+**詳細**: [プッシュ通知アーキテクチャ](./docs/features/PUSH_NOTIFICATION_ARCHITECTURE.md)
 
 ---
 
