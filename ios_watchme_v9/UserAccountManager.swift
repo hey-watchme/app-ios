@@ -43,14 +43,13 @@ var supabase: SupabaseClient {
     SupabaseClientManager.shared.client
 }
 
-// ユーザー認証状態（権限ベース設計）
+// ユーザー認証状態（シンプル設計）
 enum UserAuthState: Equatable {
-    case readOnly(source: ReadOnlySource)  // 閲覧専用モード（ゲスト、セッション期限切れ）
-    case fullAccess(userId: String)        // 全権限モード（認証済みユーザー）
+    case unauthenticated                   // 未認証（起動直後、ログアウト後）
+    case authenticated(userId: String)     // 認証済み（匿名含む）
 
-    // 後方互換性のため
     var isAuthenticated: Bool {
-        if case .fullAccess = self {
+        if case .authenticated = self {
             return true
         }
         return false
@@ -60,28 +59,14 @@ enum UserAuthState: Equatable {
         return isAuthenticated
     }
 
-    // 権限チェック用プロパティ
     var canEditAvatar: Bool {
         return isAuthenticated
     }
-
-    var canRegisterAccount: Bool {
-        if case .readOnly = self {
-            return true  // 閲覧専用モードからアップグレード可能
-        }
-        return false
-    }
-}
-
-// 閲覧専用モードの原因
-enum ReadOnlySource: Equatable {
-    case guest              // ゲストとして開始
-    case sessionExpired     // セッション期限切れ
 }
 
 // ユーザーアカウント管理クラス（認証とプロファイル）
 class UserAccountManager: ObservableObject {
-    @Published var authState: UserAuthState = .readOnly(source: .guest)
+    @Published var authState: UserAuthState = .unauthenticated
     @Published var isAuthenticated: Bool = false
     @Published var currentUser: SupabaseUser? = nil
     @Published var authError: String? = nil
@@ -169,7 +154,7 @@ class UserAccountManager: ObservableObject {
                     print("✅ [Phase 2-A] トークンは有効（有効期限: \(expiresAt)）- リフレッシュスキップ")
                     self.currentUser = savedUser
                     self.isAuthenticated = true
-                    self.authState = .fullAccess(userId: savedUser.id)
+                    self.authState = .authenticated(userId: savedUser.id)
 
                     // トークンリフレッシュタイマーを開始
                     startTokenRefreshTimer()
@@ -208,13 +193,13 @@ class UserAccountManager: ObservableObject {
 
                         self.currentUser = savedUser
                         self.isAuthenticated = true
-                        self.authState = .fullAccess(userId: savedUser.id)
+                        self.authState = .authenticated(userId: savedUser.id)
                     }
                     // refreshTokenWithRetryが成功した場合は、その中で既にcurrentUserとisAuthenticatedが設定済み
 
                     if self.isAuthenticated {
                         print("✅ 保存された認証状態を復元: \(savedUser.email)")
-                        print("🔄 認証状態復元: authState = fullAccess")
+                        print("🔄 認証状態復元: authState = authenticated")
                         print("🔑 セッショントークンも復元しました")
 
                         // トークンリフレッシュタイマーを開始
@@ -262,7 +247,7 @@ class UserAccountManager: ObservableObject {
 
         // 状態を閲覧専用に設定（@MainActorで実行）
         Task { @MainActor in
-            self.authState = .readOnly(source: .guest)
+            self.authState = .unauthenticated
             self.isAuthenticated = false
             self.currentUser = nil
 
@@ -354,10 +339,10 @@ class UserAccountManager: ObservableObject {
                 self.isAuthenticated = true
 
                 // ✅ 権限ベース設計: 閲覧専用 → 全権限モードへアップグレード
-                self.authState = .fullAccess(userId: user.id)
+                self.authState = .authenticated(userId: user.id)
                 self.saveUserToDefaults(user)
 
-                print("🔄 認証状態を更新: authState = fullAccess")
+                print("🔄 認証状態を更新: authState = authenticated")
                 print("✅ Read-Only Mode → Full Access Mode へアップグレード")
 
                 // ゲストIDをクリア（もう不要）
@@ -418,12 +403,12 @@ class UserAccountManager: ObservableObject {
             await MainActor.run {
                 self.currentUser = user
                 self.isAuthenticated = true
-                self.authState = .fullAccess(userId: user.id)
+                self.authState = .authenticated(userId: user.id)
                 self.saveUserToDefaults(user)
                 self.isLoading = false
             }
 
-            print("🔄 Authentication state updated: authState = fullAccess (anonymous)")
+            print("🔄 Authentication state updated: authState = authenticated (anonymous)")
 
             // Create profile in public.users table
             await createAnonymousUserProfile(userId: user.id)
@@ -570,12 +555,12 @@ class UserAccountManager: ObservableObject {
             await MainActor.run {
                 self.currentUser = user
                 self.isAuthenticated = true
-                self.authState = .fullAccess(userId: user.id)
+                self.authState = .authenticated(userId: user.id)
                 self.saveUserToDefaults(user)
                 self.isLoading = false
             }
 
-            print("🔄 認証状態を更新: authState = fullAccess (Google)")
+            print("🔄 認証状態を更新: authState = authenticated (Google)")
 
             // Create or update profile in public.users
             await createOrUpdateUserProfile(userId: user.id, email: user.email)
@@ -632,7 +617,31 @@ class UserAccountManager: ObservableObject {
 
                 print("✅ Googleユーザープロファイル作成成功 (auth_provider: google)")
             } else {
-                print("✅ 既存プロファイルを使用")
+                // Update existing profile (for anonymous upgrade)
+                let existingProfile = existingProfiles.first!
+
+                // Check if this is an anonymous user being upgraded
+                if existingProfile.email == "anonymous" {
+                    struct UpdateUserProfile: Encodable {
+                        let email: String
+                        let auth_provider: String
+                    }
+
+                    let updateData = UpdateUserProfile(
+                        email: email,
+                        auth_provider: "google"
+                    )
+
+                    try await supabase
+                        .from("users")
+                        .update(updateData)
+                        .eq("user_id", value: userId)
+                        .execute()
+
+                    print("✅ 匿名ユーザーをGoogleアカウントにアップグレード: \(email)")
+                } else {
+                    print("✅ 既存プロファイルを使用")
+                }
             }
 
             // Fetch profile
@@ -799,10 +808,10 @@ class UserAccountManager: ObservableObject {
             await MainActor.run {
                 self.currentUser = nil
                 self.isAuthenticated = false
-                self.authState = .readOnly(source: .sessionExpired)
+                self.authState = .unauthenticated
                 self.authError = nil
 
-                print("👋 ログアウト完了: authState = readOnly(sessionExpired)")
+                print("👋 ログアウト完了: authState = unauthenticated")
 
                 // DeviceManagerの状態もクリア
                 self.deviceManager.clearState()
@@ -841,10 +850,10 @@ class UserAccountManager: ObservableObject {
         Task { @MainActor in
             self.currentUser = nil
             self.isAuthenticated = false
-            self.authState = .readOnly(source: .sessionExpired)
+            self.authState = .unauthenticated
             self.authError = nil
 
-            print("👋 ローカル認証データクリア完了: authState = readOnly(sessionExpired)")
+            print("👋 ローカル認証データクリア完了: authState = unauthenticated")
 
             // DeviceManagerの状態もクリア
             self.deviceManager.clearState()
@@ -1104,7 +1113,7 @@ class UserAccountManager: ObservableObject {
                     await MainActor.run {
                         self.currentUser = updatedUser
                         self.isAuthenticated = true
-                        self.authState = .fullAccess(userId: session.user.id.uuidString)
+                        self.authState = .authenticated(userId: session.user.id.uuidString)
                         self.saveUserToDefaults(updatedUser)
                     }
 

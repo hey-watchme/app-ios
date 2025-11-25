@@ -22,15 +22,15 @@ struct UpgradeAccountView: View {
 
                 // Header
                 VStack(spacing: 16) {
-                    Image(systemName: "shield.checkered")
+                    Image(systemName: "person.badge.plus")
                         .font(.system(size: 60))
                         .foregroundColor(Color.safeColor("AppAccentColor"))
 
-                    Text("アカウントを保護")
+                    Text("アカウント登録")
                         .font(.title2)
                         .fontWeight(.bold)
 
-                    Text("ゲストモードのデータを安全に保存しましょう。\nアカウントを作成すると、データがクラウドに保存され、\n複数デバイスで同期できます。")
+                    Text("ゲストモードのデータを安全に保存しましょう。\nアカウント登録すると、データがクラウドに保存され、\n複数デバイスで同期できます。")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -47,7 +47,7 @@ struct UpgradeAccountView: View {
                     }) {
                         HStack {
                             Image(systemName: "globe")
-                            Text("Google でアカウント作成")
+                            Text("Google でログイン")
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
@@ -66,7 +66,7 @@ struct UpgradeAccountView: View {
                     }) {
                         HStack {
                             Image(systemName: "envelope.fill")
-                            Text("メールアドレスで登録")
+                            Text("メールアドレスでログイン")
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
@@ -91,7 +91,7 @@ struct UpgradeAccountView: View {
                 .disabled(isProcessing)
                 .opacity(isProcessing ? 0.6 : 1.0)
             }
-            .navigationTitle("アカウント作成")
+            .navigationTitle("アカウント登録")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -110,7 +110,7 @@ struct UpgradeAccountView: View {
                                 ProgressView()
                                     .scaleEffect(1.5)
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                Text("アカウントをアップグレード中...")
+                                Text("アカウント登録中...")
                                     .foregroundColor(.white)
                                     .font(.caption)
                             }
@@ -134,13 +134,13 @@ struct UpgradeAccountView: View {
 
                 if success {
                     toastManager.showSuccess(
-                        title: "アカウント作成完了",
+                        title: "アカウント登録完了",
                         subtitle: "ゲストデータをGoogleアカウントに移行しました"
                     )
                     dismiss()
                 } else if let error = userAccountManager.authError {
                     toastManager.showError(
-                        title: "アップグレードエラー",
+                        title: "登録エラー",
                         subtitle: error
                     )
                 }

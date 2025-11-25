@@ -252,12 +252,12 @@ struct UserInfoView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
 
-                // 閲覧専用モードの場合「権限アップグレード」ボタンを表示
-                if userAccountManager.authState.canRegisterAccount {
+                // 匿名ユーザーの場合「アカウント登録」ボタンを表示
+                if userAccountManager.isAnonymousUser {
                     Button(action: {
                         showSignUp = true
                     }) {
-                        Text("新規ユーザー登録")
+                        Text("アカウント登録")
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)

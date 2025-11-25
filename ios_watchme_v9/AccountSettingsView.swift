@@ -26,7 +26,7 @@ struct AccountSettingsView: View {
     var body: some View {
         NavigationView {
             List {
-                // 匿名ユーザー向けアップグレード促進（ゲストモード時のみ表示）
+                // 匿名ユーザー向けアカウント登録促進（匿名認証済みユーザーのみ表示）
                 if userAccountManager.isAnonymousUser {
                     Section {
                         Button(action: {
@@ -34,7 +34,7 @@ struct AccountSettingsView: View {
                         }) {
                             HStack {
                                 VStack(alignment: .leading, spacing: 4) {
-                                    Text("アカウントを作成してデータを保護")
+                                    Text("アカウント登録")
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(.primary)
@@ -53,7 +53,7 @@ struct AccountSettingsView: View {
                     } header: {
                         Text("ゲストモード")
                     } footer: {
-                        Text("現在はゲストモードでご利用中です。アカウント作成すると、データが失われる心配がなくなります。")
+                        Text("現在はゲストモードでご利用中です。アカウント登録すると、データが失われる心配がなくなります。")
                     }
                 }
 
