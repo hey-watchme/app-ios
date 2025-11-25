@@ -82,23 +82,11 @@ struct UserInfoView: View {
                                             .foregroundColor(.primary)
                                     }
 
-                                    // 閲覧専用モードの案内テキスト
-                                    if !userAccountManager.authState.isAuthenticated {
-                                        Text("ログインしていません。音声の分析や、デバイスの連携は、ログインすると利用可能になります。")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .padding(.top, 8)
-                                            .fixedSize(horizontal: false, vertical: true)
-                                    }
-
-                                    // ID（フルで表示）
-                                    // ✅ CLAUDE.md: public.usersのuser_idを使用
-                                    if let userId = userAccountManager.currentUser?.profile?.userId {
-                                        Text("ID: \(userId)")
-                                            .font(.caption)
-                                            .foregroundColor(.secondary)
-                                            .padding(.top, 4)
-                                    }
+                                    // ユーザーステータス
+                                    Text(userAccountManager.userStatusLabel)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                        .padding(.top, 4)
                                 }
                                 .padding(.leading, 20)
                                 

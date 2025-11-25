@@ -292,7 +292,50 @@ class UserAccountManager: ObservableObject {
     // Check if current user is anonymous
     var isAnonymousUser: Bool {
         guard let user = currentUser else { return false }
-        return user.email == "anonymous"
+
+        // Check both currentUser.email and profile.email
+        if user.email == "anonymous" {
+            return true
+        }
+
+        if let profileEmail = user.profile?.email, profileEmail == "anonymous" {
+            return true
+        }
+
+        // Check auth_provider
+        if let authProvider = user.profile?.authProvider, authProvider == "anonymous" {
+            return true
+        }
+
+        return false
+    }
+
+    // Get user status label for display
+    var userStatusLabel: String {
+        guard let user = currentUser else { return "未認証" }
+
+        // Check auth_provider from profile first
+        if let authProvider = user.profile?.authProvider {
+            switch authProvider {
+            case "anonymous":
+                return "ゲストユーザー"
+            case "google":
+                return "Googleアカウント連携"
+            case "email":
+                return "メールアドレス連携"
+            case "apple":
+                return "Appleアカウント連携"
+            default:
+                return authProvider.capitalized + "アカウント連携"
+            }
+        }
+
+        // Fallback: check email
+        if user.email == "anonymous" {
+            return "ゲストユーザー"
+        }
+
+        return "認証済み"
     }
 
     // MARK: - ログイン機能

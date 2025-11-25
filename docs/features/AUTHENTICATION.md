@@ -1,6 +1,6 @@
 # 認証システム詳細ドキュメント
 
-最終更新: 2025-11-25
+最終更新: 2025-11-26
 
 > **関連ドキュメント**
 > - [README.md](../../README.md) - アプリ全体の概要
@@ -17,6 +17,10 @@
 - `public.users`テーブルに`auth_provider`カラム追加
 - 認証プロバイダーの区別（anonymous, email, google, apple, microsoft等）
 - **匿名ユーザーのアップグレードフロー**（ゲスト → Googleアカウント連携）
+  - email/auth_providerの自動更新機能
+  - 既存データ（アバター等）の完全引き継ぎ
+- **認証状態管理の簡素化**（UserAuthState: unauthenticated/authenticated）
+- **ユーザーステータス表示**（マイページにステータスラベル表示）
 - **エラーメッセージ表示の統一**（ToastManager活用）
 - **fullScreenCover二重ネスト問題の解消**（AuthFlowView統合）
 - **タブビュー構造の重複解消**（MainAppViewリファクタリング）
@@ -91,9 +95,12 @@
 **`auth_provider`値**: `"anonymous"`
 
 **関連ファイル**:
+- `UserAccountManager.swift:293-339` - `isAnonymousUser`, `userStatusLabel`
 - `UserAccountManager.swift:1403-1477` - `upgradeAnonymousToGoogle()`
-- `UpgradeAccountView.swift` - アップグレードUI
-- `AccountSettingsView.swift:29-58` - プロモーションバナー
+- `UserAccountManager.swift:599-669` - `createOrUpdateUserProfile()` (email/auth_provider更新処理)
+- `UpgradeAccountView.swift` - アカウント登録UI
+- `AccountSettingsView.swift:29-58` - アカウント登録ボタン
+- `UserInfoView.swift:85-89` - ユーザーステータス表示
 
 ---
 
@@ -162,17 +169,27 @@
 
 ---
 
-## 🔐 権限レベル
+## 🔐 認証状態
 
-### 閲覧専用モード（Read-Only）
-- **対象**: 未認証状態（初回起動時）
-- **権限**: サンプルデータの閲覧のみ
-- **状態**: `UserAuthState.readOnly(source: .guest)`
+### UserAuthState（簡素化版）
 
-### 全権限モード（Full Access）
-- **対象**: 認証済みユーザー（匿名、Google、メールアドレス）
-- **権限**: 録音、デバイス管理、コメント投稿など全機能
-- **状態**: `UserAuthState.fullAccess(userId: String)`
+アプリの認証状態は2つのみ：
+
+| 状態 | 説明 | 権限 |
+|------|------|------|
+| `.unauthenticated` | 未認証（起動直後、ログアウト後） | なし（AuthFlowViewが表示される） |
+| `.authenticated(userId)` | 認証済み（匿名含む） | 全機能利用可能 |
+
+**重要**: ユーザーは必ず認証フロー（Google/メール/匿名）を経由するため、`.unauthenticated`状態は一時的なもの。
+
+### ユーザーステータス表示
+
+マイページには`userStatusLabel`プロパティで以下のステータスを表示：
+
+- **ゲストユーザー**: `auth_provider = "anonymous"`
+- **Googleアカウント連携**: `auth_provider = "google"`
+- **メールアドレス連携**: `auth_provider = "email"`
+- **Appleアカウント連携**: `auth_provider = "apple"`
 
 ---
 
