@@ -157,12 +157,14 @@ struct UserInfoView: View {
                                 InfoListRow(label: "名前", value: name)
                             }
 
-                            // メールアドレス
-                            InfoListRow(label: "メールアドレス", value: user.email)
+                            // メールアドレス（匿名の場合は「未設定」）
+                            let displayEmail = (user.email == "anonymous" || user.email.isEmpty) ? "未設定" : user.email
+                            let emailColor: Color = (user.email == "anonymous" || user.email.isEmpty) ? .secondary : .primary
+                            InfoListRow(label: "メールアドレス", value: displayEmail, valueColor: emailColor)
 
                             // ニュースレター配信設定
                             if let profile = user.profile {
-                                // ニュースレター設定切り替え
+                                // ニュースレター設定切り替え（匿名ユーザーは無効化）
                                 VStack(spacing: 0) {
                                     HStack {
                                         Text("ニュースレター配信")
@@ -179,6 +181,7 @@ struct UserInfoView: View {
                                                 }
                                             ))
                                             .labelsHidden()
+                                            .disabled(userAccountManager.isAnonymousUser)
                                         } else {
                                             // 未設定の場合はデフォルトでfalse
                                             Toggle("", isOn: Binding(
@@ -188,6 +191,7 @@ struct UserInfoView: View {
                                                 }
                                             ))
                                             .labelsHidden()
+                                            .disabled(userAccountManager.isAnonymousUser)
                                         }
                                     }
                                     .padding(.horizontal, 16)
