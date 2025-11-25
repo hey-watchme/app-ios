@@ -460,6 +460,7 @@ ios_watchme_v9/
 - [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知の詳細実装
 - [ACCOUNT_DELETION.md](./docs/ACCOUNT_DELETION.md) - アカウント削除機能（App Store審査対応）
 - [TROUBLESHOOTING.md](./docs/TROUBLESHOOTING.md) - トラブルシューティング
+- [REMAINING_TASKS.md](./docs/REMAINING_TASKS.md) - 残タスク引き継ぎドキュメント（低優先度リファクタリング）
 - [CHANGELOG.md](./CHANGELOG.md) - 更新履歴
 
 ### 外部公開URL
