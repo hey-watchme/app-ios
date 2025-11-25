@@ -80,8 +80,8 @@ struct MainAppView: View {
     @EnvironmentObject var toastManager: ToastManager
     @EnvironmentObject var recordingStore: RecordingStore
     @State private var showLogin = false
-    @State private var showOnboarding = false
-    @State private var onboardingCompleted = false  // オンボーディング完了フラグ
+    @State private var showAuthFlow = false  // 統合認証フロー（オンボーディング + アカウント選択）
+    @State private var authFlowCompleted = false  // 認証フロー完了フラグ
 
 
     // フッターナビゲーション用の選択状態
@@ -177,8 +177,8 @@ struct MainAppView: View {
                 }
             } else {
                 // 閲覧専用モード（Read-Only Mode）
-                if onboardingCompleted {
-                    // オンボーディング完了後：ガイド画面（ダッシュボード）
+                if authFlowCompleted {
+                    // 認証フロー完了後：ガイド画面（ダッシュボード）
                     NavigationStack {
                         VStack(spacing: 0) {
                             // コンテンツエリア（ビューを保持したまま表示/非表示を切り替え）
@@ -229,9 +229,9 @@ struct MainAppView: View {
 
                         // ボタンを最下部に配置
                         VStack(spacing: 16) {
-                            // はじめるボタン → オンボーディング表示
+                            // はじめるボタン → 認証フロー表示
                             Button(action: {
-                                showOnboarding = true
+                                showAuthFlow = true
                             }) {
                                 Text("はじめる")
                                     .fontWeight(.semibold)
@@ -267,8 +267,8 @@ struct MainAppView: View {
                 }
             }
         }
-        .fullScreenCover(isPresented: $showOnboarding) {
-            OnboardingView(isPresented: $showOnboarding)
+        .fullScreenCover(isPresented: $showAuthFlow) {
+            AuthFlowView(isPresented: $showAuthFlow)
                 .environmentObject(userAccountManager)
                 .environmentObject(deviceManager)
         }
@@ -276,11 +276,11 @@ struct MainAppView: View {
             LoginView()
                 .environmentObject(userAccountManager)
         }
-        .onChange(of: showOnboarding) { oldValue, newValue in
-            // オンボーディングが閉じられた時
+        .onChange(of: showAuthFlow) { oldValue, newValue in
+            // 認証フローが閉じられた時
             if oldValue == true && newValue == false {
-                print("✅ オンボーディング完了")
-                onboardingCompleted = true
+                print("✅ 認証フロー完了")
+                authFlowCompleted = true
             }
         }
         .task {
@@ -295,8 +295,8 @@ struct MainAppView: View {
                 // 全権限モードへ移行（ログイン/サインアップ成功時）
                 // すべてのモーダルを閉じる
                 showLogin = false
-                showOnboarding = false  // Google認証成功時にモーダルを閉じる
-                onboardingCompleted = true  // オンボーディング完了フラグを設定
+                showAuthFlow = false  // 認証フロー成功時にモーダルを閉じる
+                authFlowCompleted = true  // 認証フロー完了フラグを設定
                 // ホーム画面にリセット
                 selectedTab = .home
                 print("✅ 全権限モード - すべてのモーダルを閉じてホーム画面に遷移")
@@ -307,7 +307,7 @@ struct MainAppView: View {
             } else {
                 // 閲覧専用モードに移行（ログアウト時）
                 selectedTab = .home
-                onboardingCompleted = false  // オンボーディング完了フラグをリセット
+                authFlowCompleted = false  // 認証フロー完了フラグをリセット
                 print("🔄 閲覧専用モード - 初期状態にリセット")
             }
         }
@@ -317,33 +317,19 @@ struct MainAppView: View {
             if newValue == true {
                 print("🔄 閲覧専用モード - 初期画面に戻る")
                 selectedTab = .home
-                onboardingCompleted = false
+                authFlowCompleted = false
                 // フラグをリセット
                 userAccountManager.shouldResetToWelcome = false
             }
         }
         .onOpenURL { url in
             // Handle OAuth callback from browser
-            print("🔗 URL受信: \(url)")
-            print("🔗 URL Scheme: \(url.scheme ?? "なし")")
-            print("🔗 URL Host: \(url.host ?? "なし")")
-            print("🔗 URL Path: \(url.path)")
+            // Note: AuthFlowView will also handle this callback, but we keep this
+            // as a fallback for edge cases where the view might not be active
+            print("🔗 [MainAppView] URL受信: \(url)")
 
             Task {
                 await userAccountManager.handleOAuthCallback(url: url)
-
-                // Close onboarding modal if OAuth succeeded
-                if userAccountManager.isAuthenticated {
-                    print("✅ 認証成功 - onboardingモーダルを閉じます")
-                    await MainActor.run {
-                        showOnboarding = false
-                        onboardingCompleted = true
-                        selectedTab = .home
-                    }
-                } else {
-                    print("⚠️ 認証失敗 - isAuthenticated = false")
-                    print("⚠️ authError: \(userAccountManager.authError ?? "なし")")
-                }
             }
         }
     }

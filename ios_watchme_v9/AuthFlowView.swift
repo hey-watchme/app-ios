@@ -1,24 +1,142 @@
 //
-//  AccountSelectionView.swift
+//  AuthFlowView.swift
 //  ios_watchme_v9
 //
-//  Account selection screen after onboarding
-//  Note: このビューは現在使用されていません（AuthFlowViewで統合済み）
-//  後方互換性のために残してあります
+//  Unified authentication flow (Onboarding + Account Selection)
+//  Solves the fullScreenCover nesting issue
 //
 
 import SwiftUI
 
-struct AccountSelectionView: View {
+struct AuthFlowView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @Binding var isPresented: Bool
-    @State private var showEmailSignUp = false
+
+    // Authentication flow steps
+    @State private var currentStep: AuthStep = .onboarding
+    @State private var currentPage = 0
+
+    // Account selection state
     @State private var isProcessing = false
     @State private var showMockAlert = false
     @State private var mockAlertMessage = ""
 
+    enum AuthStep {
+        case onboarding
+        case accountSelection
+    }
+
+    private let onboardingPages = [
+        "onboarding-001",
+        "onboarding-002",
+        "onboarding-003",
+        "onboarding-004"
+    ]
+
     var body: some View {
+        ZStack {
+            switch currentStep {
+            case .onboarding:
+                onboardingView
+            case .accountSelection:
+                accountSelectionView
+            }
+        }
+        .onChange(of: userAccountManager.authState) { _, newValue in
+            // Monitor authentication state changes
+            if newValue.isAuthenticated {
+                print("✅ [AuthFlowView] Authentication successful - closing modal")
+
+                Task {
+                    // Auto-register device
+                    if let userId = userAccountManager.currentUser?.profile?.userId {
+                        await deviceManager.registerDevice(userId: userId)
+                    }
+
+                    await MainActor.run {
+                        isPresented = false
+                    }
+                }
+            }
+        }
+        .onOpenURL { url in
+            // Handle OAuth callback
+            print("🔗 [AuthFlowView] URL received: \(url)")
+            Task {
+                await userAccountManager.handleOAuthCallback(url: url)
+            }
+        }
+    }
+
+    // MARK: - Onboarding View
+
+    private var onboardingView: some View {
+        ZStack {
+            // Page content
+            TabView(selection: $currentPage) {
+                ForEach(0..<onboardingPages.count, id: \.self) { index in
+                    Image(onboardingPages[index])
+                        .resizable()
+                        .scaledToFill()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
+                        .ignoresSafeArea()
+                        .tag(index)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            .indexViewStyle(.page(backgroundDisplayMode: .always))
+
+            // Skip button (shown except on last page)
+            VStack {
+                HStack {
+                    Spacer()
+                    if currentPage < onboardingPages.count - 1 {
+                        Button(action: {
+                            currentStep = .accountSelection
+                        }) {
+                            Text("スキップ")
+                                .font(.system(size: 16, weight: .medium))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 10)
+                                .background(Color.black.opacity(0.5))
+                                .cornerRadius(20)
+                        }
+                        .padding(.top, 60)
+                        .padding(.trailing, 20)
+                    }
+                }
+                Spacer()
+            }
+
+            // "Get Started" button on last page
+            if currentPage == onboardingPages.count - 1 {
+                VStack {
+                    Spacer()
+                    Button(action: {
+                        currentStep = .accountSelection
+                    }) {
+                        Text("はじめる")
+                            .font(.system(size: 18, weight: .bold))
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(Color("AppAccentColor"))
+                            .cornerRadius(12)
+                    }
+                    .padding(.horizontal, 40)
+                    .padding(.bottom, 80)
+                }
+            }
+        }
+        .ignoresSafeArea()
+    }
+
+    // MARK: - Account Selection View
+
+    private var accountSelectionView: some View {
         VStack(spacing: 24) {
             // Close button
             HStack {
@@ -143,31 +261,14 @@ struct AccountSelectionView: View {
                 }
             }
         )
-        .onChange(of: userAccountManager.authState) { oldValue, newValue in
-            // Monitor authentication state changes
-            if newValue.isAuthenticated {
-                print("✅ [AccountSelectionView] 認証成功検知 - モーダルを閉じます")
-
-                Task {
-                    // Auto-register device
-                    if let userId = userAccountManager.currentUser?.profile?.userId {
-                        await deviceManager.registerDevice(userId: userId)
-                    }
-
-                    await MainActor.run {
-                        isPresented = false
-                    }
-                }
-            }
-        }
     }
 
-    // Google Sign In
+    // MARK: - Actions
+
     private func signInWithGoogle() {
         isProcessing = true
         Task {
             // Use direct ASWebAuthenticationSession implementation
-            // This ensures OAuth callback is properly received
             await userAccountManager.signInWithGoogleDirect()
 
             // Note: OAuth flow continues in browser
@@ -178,7 +279,6 @@ struct AccountSelectionView: View {
         }
     }
 
-    // Guest Continue (Anonymous Auth)
     private func continueAsGuest() {
         isProcessing = true
         Task {
@@ -204,7 +304,7 @@ struct AccountSelectionView: View {
 }
 
 #Preview {
-    AccountSelectionView(isPresented: .constant(true))
+    AuthFlowView(isPresented: .constant(true))
         .environmentObject(UserAccountManager(deviceManager: DeviceManager()))
         .environmentObject(DeviceManager())
 }

@@ -2,18 +2,16 @@
 //  OnboardingView.swift
 //  ios_watchme_v9
 //
-//  オンボーディング画面
-//  完了後にアカウント選択画面を表示
+//  オンボーディング画面（シンプル版）
+//  Note: このビューは現在使用されていません（AuthFlowViewで統合済み）
+//  後方互換性のために残してあります
 //
 
 import SwiftUI
 
 struct OnboardingView: View {
-    @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
     @Binding var isPresented: Bool
     @State private var currentPage = 0
-    @State private var showAccountSelection = false
 
     private let pages = [
         "onboarding-001",
@@ -45,7 +43,7 @@ struct OnboardingView: View {
                     Spacer()
                     if currentPage < pages.count - 1 {
                         Button(action: {
-                            showAccountSelection = true
+                            isPresented = false
                         }) {
                             Text("スキップ")
                                 .font(.system(size: 16, weight: .medium))
@@ -67,7 +65,7 @@ struct OnboardingView: View {
                 VStack {
                     Spacer()
                     Button(action: {
-                        showAccountSelection = true
+                        isPresented = false
                     }) {
                         Text("はじめる")
                             .font(.system(size: 18, weight: .bold))
@@ -83,11 +81,6 @@ struct OnboardingView: View {
             }
         }
         .ignoresSafeArea()
-        .fullScreenCover(isPresented: $showAccountSelection) {
-            AccountSelectionView(isPresented: $isPresented)
-                .environmentObject(userAccountManager)
-                .environmentObject(deviceManager)
-        }
     }
 }
 
