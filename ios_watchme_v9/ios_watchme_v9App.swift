@@ -293,11 +293,13 @@ struct MainAppView: View {
             print("🔄 MainAppView: 権限レベル変化 \(oldValue) → \(newValue)")
             if newValue.isAuthenticated {
                 // 全権限モードへ移行（ログイン/サインアップ成功時）
-                // シートを閉じる
+                // すべてのモーダルを閉じる
                 showLogin = false
+                showOnboarding = false  // Google認証成功時にモーダルを閉じる
+                onboardingCompleted = true  // オンボーディング完了フラグを設定
                 // ホーム画面にリセット
                 selectedTab = .home
-                print("✅ 全権限モード - ホーム画面に遷移")
+                print("✅ 全権限モード - すべてのモーダルを閉じてホーム画面に遷移")
 
                 // 📊 Phase 2-B: デバイス取得の重複を排除
                 // UserAccountManager内で既にfetchUserDevicesが実行されているため、ここでは不要

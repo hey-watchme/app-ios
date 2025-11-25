@@ -8,6 +8,7 @@
 import SwiftUI
 import Foundation
 import Supabase
+import AuthenticationServices
 #if os(iOS)
 import UIKit
 #endif
@@ -450,13 +451,15 @@ class UserAccountManager: ObservableObject {
                 let name: String
                 let email: String
                 let created_at: String
+                let auth_provider: String
             }
 
             let profileData = AnonymousUserProfile(
                 user_id: userId,
                 name: "ゲストユーザー",
                 email: "anonymous",
-                created_at: ISO8601DateFormatter().string(from: Date())
+                created_at: ISO8601DateFormatter().string(from: Date()),
+                auth_provider: "anonymous"
             )
 
             try await supabase
@@ -464,7 +467,7 @@ class UserAccountManager: ObservableObject {
                 .insert(profileData)
                 .execute()
 
-            print("✅ 匿名ユーザープロファイル作成成功")
+            print("✅ 匿名ユーザープロファイル作成成功 (auth_provider: anonymous)")
 
             // Fetch profile after creation
             await fetchUserProfile(userId: userId)
@@ -514,9 +517,42 @@ class UserAccountManager: ObservableObject {
             self.isLoading = true
         }
 
+        // Parse URL fragment (Implicit Flow: #access_token=...)
+        guard let fragment = url.fragment else {
+            await MainActor.run {
+                self.isLoading = false
+                self.authError = "認証URLが無効です"
+                print("❌ URLフラグメントがありません")
+            }
+            return
+        }
+
+        // Parse fragment as query parameters
+        let params = fragment.components(separatedBy: "&").reduce(into: [String: String]()) { result, component in
+            let parts = component.components(separatedBy: "=")
+            if parts.count == 2 {
+                result[parts[0]] = parts[1]
+            }
+        }
+
+        guard let accessToken = params["access_token"],
+              let refreshToken = params["refresh_token"] else {
+            await MainActor.run {
+                self.isLoading = false
+                self.authError = "認証トークンの取得に失敗しました"
+                print("❌ access_tokenまたはrefresh_tokenがありません")
+            }
+            return
+        }
+
+        print("✅ トークン抽出成功")
+
         do {
-            // Extract session from callback URL
-            let session = try await supabase.auth.session(from: url)
+            // Set session with tokens
+            let session = try await supabase.auth.setSession(
+                accessToken: accessToken,
+                refreshToken: refreshToken
+            )
 
             print("✅ Google認証成功: \(session.user.email ?? "")")
 
@@ -577,6 +613,7 @@ class UserAccountManager: ObservableObject {
                     let name: String
                     let email: String
                     let created_at: String
+                    let auth_provider: String
                 }
 
                 let displayName = email.components(separatedBy: "@").first ?? "ユーザー"
@@ -584,7 +621,8 @@ class UserAccountManager: ObservableObject {
                     user_id: userId,
                     name: displayName,
                     email: email,
-                    created_at: ISO8601DateFormatter().string(from: Date())
+                    created_at: ISO8601DateFormatter().string(from: Date()),
+                    auth_provider: "google"
                 )
 
                 try await supabase
@@ -592,7 +630,7 @@ class UserAccountManager: ObservableObject {
                     .insert(profileData)
                     .execute()
 
-                print("✅ Googleユーザープロファイル作成成功")
+                print("✅ Googleユーザープロファイル作成成功 (auth_provider: google)")
             } else {
                 print("✅ 既存プロファイルを使用")
             }
@@ -640,6 +678,7 @@ class UserAccountManager: ObservableObject {
                     let email: String
                     let newsletter_subscription: Bool
                     let created_at: String
+                    let auth_provider: String
                 }
 
                 let profileData = UserProfile(
@@ -647,7 +686,8 @@ class UserAccountManager: ObservableObject {
                     name: displayName,
                     email: email,
                     newsletter_subscription: newsletter,
-                    created_at: ISO8601DateFormatter().string(from: Date())
+                    created_at: ISO8601DateFormatter().string(from: Date()),
+                    auth_provider: "email"
                 )
 
                 try await supabase
@@ -655,7 +695,7 @@ class UserAccountManager: ObservableObject {
                     .insert(profileData)
                     .execute()
 
-                print("✅ public.usersプロファイル作成成功")
+                print("✅ public.usersプロファイル作成成功 (auth_provider: email)")
 
             } catch {
                 print("❌ プロファイル作成エラー: \(error)")
@@ -1267,7 +1307,8 @@ struct UserProfile: Codable {
     let createdAt: String?
     let updatedAt: String?
     let newsletter: Bool?
-    
+    let authProvider: String?  // Authentication provider (anonymous, email, google, apple, etc.)
+
     enum CodingKeys: String, CodingKey {
         case userId = "user_id"
         case name
@@ -1277,7 +1318,8 @@ struct UserProfile: Codable {
         case subscriptionPlan = "subscription_plan"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
-        case newsletter = "newsletter_subscription"  // DBカラム名に合わせて修正
+        case newsletter = "newsletter_subscription"
+        case authProvider = "auth_provider"
     }
 }
 
@@ -1296,3 +1338,66 @@ struct SupabaseErrorResponse: Codable {
     let error: String?
     let error_description: String?
 }
+
+// MARK: - ASWebAuthenticationSession Support
+#if os(iOS)
+// Helper class for ASWebAuthenticationSession presentation context
+class WebAuthenticationPresentationContextProvider: NSObject, ASWebAuthenticationPresentationContextProviding {
+    func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
+        return UIApplication.shared.windows.first { $0.isKeyWindow } ?? ASPresentationAnchor()
+    }
+}
+
+extension UserAccountManager {
+    // Direct implementation using ASWebAuthenticationSession (Alternative to Supabase SDK)
+    // This ensures that the OAuth callback URL is properly received by the app
+    func signInWithGoogleDirect() async {
+        await MainActor.run {
+            isLoading = true
+            authError = nil
+        }
+
+        print("🔐 Google認証開始 (ASWebAuthenticationSession direct implementation)")
+
+        // Build OAuth URL
+        let authURL = URL(string: "\(supabaseURL)/auth/v1/authorize?provider=google&redirect_to=watchme://auth/callback")!
+        print("🔗 OAuth URL: \(authURL)")
+
+        await MainActor.run {
+            let contextProvider = WebAuthenticationPresentationContextProvider()
+
+            let session = ASWebAuthenticationSession(
+                url: authURL,
+                callbackURLScheme: "watchme"
+            ) { callbackURL, error in
+                Task {
+                    if let error = error {
+                        await MainActor.run {
+                            self.isLoading = false
+                            // User cancelled or error occurred
+                            if (error as NSError).code != ASWebAuthenticationSessionError.canceledLogin.rawValue {
+                                self.authError = "Google認証に失敗しました: \(error.localizedDescription)"
+                                print("❌ Google認証エラー: \(error)")
+                            } else {
+                                print("ℹ️ ユーザーがGoogle認証をキャンセルしました")
+                            }
+                        }
+                        return
+                    }
+
+                    if let callbackURL = callbackURL {
+                        print("✅ OAuth callback received: \(callbackURL)")
+                        await self.handleOAuthCallback(url: callbackURL)
+                    }
+                }
+            }
+
+            session.presentationContextProvider = contextProvider
+            session.prefersEphemeralWebBrowserSession = false  // Allow persistent login
+            session.start()
+
+            print("✅ ASWebAuthenticationSession started")
+        }
+    }
+}
+#endif

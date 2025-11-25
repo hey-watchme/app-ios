@@ -19,6 +19,20 @@ struct AccountSelectionView: View {
 
     var body: some View {
         VStack(spacing: 24) {
+            // Close button
+            HStack {
+                Spacer()
+                Button(action: {
+                    isPresented = false
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.secondary)
+                }
+                .padding(.top, 20)
+                .padding(.trailing, 20)
+            }
+
             Spacer()
 
             // Header
@@ -128,16 +142,12 @@ struct AccountSelectionView: View {
                 }
             }
         )
-        .onOpenURL { url in
-            // Handle OAuth callback in this view
-            print("🔗 [AccountSelectionView] URL受信: \(url)")
-            Task {
-                await userAccountManager.handleOAuthCallback(url: url)
+        .onChange(of: userAccountManager.authState) { oldValue, newValue in
+            // Monitor authentication state changes
+            if newValue.isAuthenticated {
+                print("✅ [AccountSelectionView] 認証成功検知 - モーダルを閉じます")
 
-                // Close this view if authentication succeeded
-                if userAccountManager.isAuthenticated {
-                    print("✅ [AccountSelectionView] 認証成功 - モーダルを閉じます")
-
+                Task {
                     // Auto-register device
                     if let userId = userAccountManager.currentUser?.profile?.userId {
                         await deviceManager.registerDevice(userId: userId)
@@ -146,12 +156,14 @@ struct AccountSelectionView: View {
                     await MainActor.run {
                         isPresented = false
                     }
-                } else {
-                    print("⚠️ [AccountSelectionView] 認証失敗")
-                    if let error = userAccountManager.authError {
-                        print("⚠️ エラー: \(error)")
-                    }
                 }
+            }
+        }
+        .onOpenURL { url in
+            // Handle OAuth callback in this view (fallback for non-ASWebAuthenticationSession flows)
+            print("🔗 [AccountSelectionView] URL受信: \(url)")
+            Task {
+                await userAccountManager.handleOAuthCallback(url: url)
             }
         }
     }
@@ -160,7 +172,9 @@ struct AccountSelectionView: View {
     private func signInWithGoogle() {
         isProcessing = true
         Task {
-            await userAccountManager.signInWithGoogle()
+            // Use direct ASWebAuthenticationSession implementation
+            // This ensures OAuth callback is properly received
+            await userAccountManager.signInWithGoogleDirect()
 
             // Note: OAuth flow continues in browser
             // This view stays open until callback is received

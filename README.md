@@ -151,6 +151,26 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
 
 ## 🔐 認証とユーザーモード
 
+### 📋 開発状況（2025-11-25更新）
+
+#### ✅ 実装済み
+- 匿名認証（Anonymous Authentication）
+- Google OAuth認証（ASWebAuthenticationSession使用）
+- `public.users`テーブルに`auth_provider`カラム追加
+- 認証プロバイダーの区別（anonymous, email, google, apple, microsoft等）
+
+#### 🚧 現在の課題
+- **Google OAuth認証**: 技術的には成功するが、認証後のモーダルクローズに問題あり
+  - コールバックURL（`watchme://auth/callback`）は正常に受信
+  - トークン抽出とセッション作成は成功
+  - `.onChange(of: userAccountManager.authState)`で自動クローズを実装済み
+  - **次回セッション**: 実機テストで動作確認が必要
+
+#### 📚 データベース参照先
+- **スキーマ管理**: `/Users/kaya.matsumoto/projects/watchme/server-configs/database/`
+- **最新マイグレーション**: `migrations/20251125000000_add_auth_provider_to_users.sql`
+- **スキーマドキュメント**: `current_schema.sql` (最終更新: 2025-11-25)
+
 ### 初回起動時のフロー
 
 ```
@@ -160,11 +180,11 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
   ↓「はじめる」押下
 オンボーディング（4ページのスライド）
   ↓「はじめる」またはスキップ押下
-アカウント選択画面
+アカウント選択画面（戻るボタンあり）
   ┃
-  ┣━ 🔵 Google でサインイン
+  ┣━ 🔵 Google でサインイン（実装済み）
   ┣━ 📧 メールアドレスで登録（準備中）
-  ┗━ 👤 ゲストとして続行（匿名認証）
+  ┗━ 👤 ゲストとして続行（匿名認証・実装済み）
 ```
 
 ### 認証方式
@@ -174,11 +194,12 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
 - **特徴**:
   - アカウント登録不要で即座に全機能を利用可能
   - Supabaseの匿名認証機能を使用
-  - 後でメールアドレスやGoogle認証にアップグレード可能
+  - 後でメールアドレスやGoogle認証にアップグレード可能（TODO: UI未実装）
 - **制限事項**:
   - アプリ削除またはデータクリアでアカウント喪失
   - 複数デバイスでの同期不可
-- **推奨**: 後でメールアドレスまたはGoogle認証への移行を促進
+- **実装状況**: ✅ 完全動作
+- **`auth_provider`値**: `"anonymous"`
 
 #### 2. Google OAuth認証
 - **対象**: Googleアカウントを持つユーザー
@@ -186,15 +207,26 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
   - ワンタップで簡単ログイン
   - パスワード管理不要
   - 複数デバイスでの同期可能
-- **実装**: Supabase OAuth + Google Cloud Console
-- **フロー**: アプリ → Safari（Googleログイン）→ アプリに自動復帰
+- **技術実装**:
+  - iOS標準の`ASWebAuthenticationSession`を使用
+  - Supabase OAuth (Implicit Flow: `#access_token=...`)
+  - Google Cloud Console OAuth 2.0クライアント設定済み
+- **URL Scheme**: `watchme://auth/callback`
+- **フロー**: アプリ → ASWebAuthenticationSession（Googleログイン）→ アプリに自動復帰
+- **実装状況**: ✅ 技術的には成功（モーダルクローズの最終確認待ち）
+- **`auth_provider`値**: `"google"`
+- **実装ファイル**:
+  - `UserAccountManager.swift:1318-1369` - `signInWithGoogleDirect()`
+  - `UserAccountManager.swift:512-596` - `handleOAuthCallback()`
+  - `AccountSelectionView.swift:159-173` - Google認証ボタン
 
 #### 3. メールアドレス/パスワード認証（準備中）
 - **対象**: メールアドレスで登録したいユーザー
 - **特徴**:
   - 従来型の認証方式
   - 複数デバイスでの同期可能
-- **状態**: 現在準備中（モックアップのみ実装済み）
+- **実装状況**: 🚧 モックアップのみ（`signUp()`メソッドは実装済み）
+- **`auth_provider`値**: `"email"`
 
 ### 権限レベル
 
@@ -210,11 +242,17 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
 
 ### ユーザーアカウントの種類
 
-| 種類 | email | 複数デバイス | データ保護 | 実装状況 |
-|------|-------|------------|----------|---------|
-| 匿名ユーザー | `"anonymous"` | ❌ | ⚠️ 脆弱 | ✅ 実装済み |
-| Googleユーザー | Googleアカウント | ✅ | ✅ 安全 | ✅ 実装済み |
-| メールユーザー | 登録メール | ✅ | ✅ 安全 | 🚧 準備中 |
+| 種類 | email | auth_provider | 複数デバイス | データ保護 | 実装状況 |
+|------|-------|--------------|------------|----------|---------|
+| 匿名ユーザー | `"anonymous"` | `"anonymous"` | ❌ | ⚠️ 脆弱 | ✅ 実装済み |
+| Googleユーザー | Googleアカウント | `"google"` | ✅ | ✅ 安全 | ✅ 実装済み |
+| メールユーザー | 登録メール | `"email"` | ✅ | ✅ 安全 | 🚧 準備中 |
+| Appleユーザー | Appleアカウント | `"apple"` | ✅ | ✅ 安全 | 📋 未実装 |
+
+**`auth_provider`フィールド**:
+- `public.users`テーブルで認証プロバイダーを区別
+- CHECK制約で許可される値: `anonymous`, `email`, `google`, `apple`, `microsoft`, `github`, `facebook`, `twitter`
+- 将来的な拡張性を考慮した設計
 
 ### ユーザーとデバイスの関係
 
@@ -236,7 +274,25 @@ var isAnonymousUser: Bool {
 
 ### データベース設計
 
-**`auth.users`への直接参照は禁止**。必ず`public.users(user_id)`を使用。
+#### ユーザー認証テーブルの設計
+
+**重要原則**: `auth.users`への直接参照は禁止。必ず`public.users(user_id)`を使用。
+
+**テーブル構造**:
+- **`auth.users`**: Supabase認証専用テーブル（直接アクセス不可）
+- **`public.users`**: アプリケーション用ユーザープロファイル（✅ 推奨）
+  - `user_id` (UUID, PRIMARY KEY): `auth.users.id`と対応
+  - `email` (TEXT): ユーザーのメールアドレス（匿名の場合は`"anonymous"`）
+  - `auth_provider` (TEXT, NOT NULL): 認証プロバイダー
+  - `apns_token` (TEXT): プッシュ通知用トークン
+  - その他フィールド: `name`, `avatar_url`, `status`, `subscription_plan`等
+
+**データベーススキーマ管理**:
+- **場所**: `/Users/kaya.matsumoto/projects/watchme/server-configs/database/`
+- **最新スキーマ**: `current_schema.sql` (最終更新: 2025-11-25)
+- **マイグレーション**: `migrations/20251125000000_add_auth_provider_to_users.sql`
+
+**コード例**:
 
 ```swift
 // ❌ 間違い
