@@ -158,13 +158,15 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
 - Google OAuth認証（ASWebAuthenticationSession使用）
 - `public.users`テーブルに`auth_provider`カラム追加
 - 認証プロバイダーの区別（anonymous, email, google, apple, microsoft等）
+- **✨ NEW**: 匿名ユーザーのアップグレードフロー（ゲスト → Googleアカウント連携）
+- **✨ NEW**: エラーメッセージ表示の統一（ToastManager活用）
+- **✨ NEW**: fullScreenCover二重ネスト問題の解消（AuthFlowView統合）
 
 #### 🚧 現在の課題
-- **Google OAuth認証**: 技術的には成功するが、認証後のモーダルクローズに問題あり
-  - コールバックURL（`watchme://auth/callback`）は正常に受信
-  - トークン抽出とセッション作成は成功
-  - `.onChange(of: userAccountManager.authState)`で自動クローズを実装済み
-  - **次回セッション**: 実機テストで動作確認が必要
+- **Google OAuth認証**: 実機テストで最終確認が必要
+  - シミュレータでは正常動作を確認
+  - モーダルクローズ問題は解消済み（fullScreenCover統合による）
+  - **次回セッション**: 実機での認証フロー確認
 
 #### 📚 データベース参照先
 - **スキーマ管理**: `/Users/kaya.matsumoto/projects/watchme/server-configs/database/`
@@ -178,13 +180,30 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
   ↓
 初期画面（ロゴ + 「はじめる」「ログイン」）
   ↓「はじめる」押下
-オンボーディング（4ページのスライド）
-  ↓「はじめる」またはスキップ押下
-アカウント選択画面（戻るボタンあり）
+統合認証フロー（AuthFlowView）
+  ├─ オンボーディング（4ページのスライド）
+  └─ アカウント選択画面
+      ┃
+      ┣━ 🔵 Google でサインイン（実装済み）
+      ┣━ 📧 メールアドレスで登録（準備中）
+      ┗━ 👤 ゲストとして続行（匿名認証・実装済み）
+```
+
+### 匿名ユーザーのアップグレードフロー（✨ NEW）
+
+```
+ゲストモードでログイン
+  ↓
+アカウント設定画面を開く
+  ↓
+「アカウントを作成してデータを保護」セクションが表示
+  ↓
+タップしてUpgradeAccountViewを表示
   ┃
-  ┣━ 🔵 Google でサインイン（実装済み）
-  ┣━ 📧 メールアドレスで登録（準備中）
-  ┗━ 👤 ゲストとして続行（匿名認証・実装済み）
+  ┣━ 🔵 Google でアカウント作成
+  ┗━ 📧 メールアドレスで登録（準備中）
+  ↓
+既存データを保持したままアカウントアップグレード完了
 ```
 
 ### 認証方式
@@ -194,12 +213,16 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
 - **特徴**:
   - アカウント登録不要で即座に全機能を利用可能
   - Supabaseの匿名認証機能を使用
-  - 後でメールアドレスやGoogle認証にアップグレード可能（TODO: UI未実装）
+  - **✅ NEW**: 後でメールアドレスやGoogle認証にアップグレード可能（UI実装済み）
 - **制限事項**:
   - アプリ削除またはデータクリアでアカウント喪失
   - 複数デバイスでの同期不可
-- **実装状況**: ✅ 完全動作
+- **実装状況**: ✅ 完全動作（アップグレードフロー含む）
 - **`auth_provider`値**: `"anonymous"`
+- **関連ファイル**:
+  - `UserAccountManager.swift:1403-1477` - `upgradeAnonymousToGoogle()`
+  - `UpgradeAccountView.swift` - アップグレードUI
+  - `AccountSettingsView.swift:29-58` - プロモーションバナー
 
 #### 2. Google OAuth認証
 - **対象**: Googleアカウントを持つユーザー
@@ -213,12 +236,15 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
   - Google Cloud Console OAuth 2.0クライアント設定済み
 - **URL Scheme**: `watchme://auth/callback`
 - **フロー**: アプリ → ASWebAuthenticationSession（Googleログイン）→ アプリに自動復帰
-- **実装状況**: ✅ 技術的には成功（モーダルクローズの最終確認待ち）
+- **実装状況**: ✅ 実装完了（シミュレータで動作確認済み）
+  - **✅ NEW**: fullScreenCover二重ネスト問題を解消（AuthFlowViewで統合）
+  - **✅ NEW**: モーダル自動クローズ機能を改善
 - **`auth_provider`値**: `"google"`
 - **実装ファイル**:
-  - `UserAccountManager.swift:1318-1369` - `signInWithGoogleDirect()`
+  - `UserAccountManager.swift:1354-1401` - `signInWithGoogleDirect()`
+  - `UserAccountManager.swift:1403-1477` - `upgradeAnonymousToGoogle()`
   - `UserAccountManager.swift:512-596` - `handleOAuthCallback()`
-  - `AccountSelectionView.swift:159-173` - Google認証ボタン
+  - `AuthFlowView.swift` - 統合認証フロー（オンボーディング + アカウント選択）
 
 #### 3. メールアドレス/パスワード認証（準備中）
 - **対象**: メールアドレスで登録したいユーザー
@@ -357,8 +383,10 @@ git push origin feature/機能名
 | 通称 | 正式名称 | ファイル名 | 説明 |
 |------|---------|-----------|------|
 | **初期画面** | ウェルカム画面 | `ios_watchme_v9App.swift`（内部のMainAppView） | ロゴと「はじめる」「ログイン」ボタン |
-| **オンボーディング画面** | オンボーディング | `OnboardingView.swift` | 4ページのスライド式説明画面 |
-| **アカウント選択画面** | アカウント選択 | `AccountSelectionView.swift` | Google/メール/ゲスト選択画面 |
+| **統合認証フロー** | オンボーディング + アカウント選択 | `AuthFlowView.swift` ✨ NEW | オンボーディング（4ページ）とアカウント選択を1つのフローに統合 |
+| **オンボーディング画面** | オンボーディング（旧） | `OnboardingView.swift` | 4ページのスライド式説明画面（※後方互換性のため残存、AuthFlowViewで統合済み） |
+| **アカウント選択画面** | アカウント選択（旧） | `AccountSelectionView.swift` | Google/メール/ゲスト選択画面（※後方互換性のため残存、AuthFlowViewで統合済み） |
+| **アップグレード画面** | アカウントアップグレード | `UpgradeAccountView.swift` ✨ NEW | ゲストユーザーがGoogleアカウントに移行する画面 |
 | **ログイン画面** | ログイン | `LoginView.swift` | メールアドレスとパスワードでログイン |
 | **会員登録画面** | 会員登録 | `SignUpView.swift` | メールアドレスとパスワードで新規登録 |
 | **ホーム画面** | ホーム（リアルタイムステータス） | `SimpleDashboardView.swift` | 日別のダッシュボード。気分グラフ、最新のスポット分析（最大3件）、コメント機能を表示 |
@@ -375,8 +403,10 @@ git push origin feature/機能名
 ios_watchme_v9/
 ├── ios_watchme_v9App.swift        # アプリエントリーポイント
 ├── ContentView.swift              # メインビュー（ホームタブ）
-├── OnboardingView.swift           # オンボーディング画面（4ページスライド）
-├── AccountSelectionView.swift     # アカウント選択画面（Google/メール/ゲスト）
+├── AuthFlowView.swift             # ✨ NEW: 統合認証フロー（オンボーディング + アカウント選択）
+├── OnboardingView.swift           # オンボーディング画面（※AuthFlowViewで統合済み）
+├── AccountSelectionView.swift     # アカウント選択画面（※AuthFlowViewで統合済み）
+├── UpgradeAccountView.swift       # ✨ NEW: アカウントアップグレード画面（ゲスト → Google連携）
 ├── LoginView.swift                # ログイン画面
 ├── SignUpView.swift               # 会員登録画面
 ├── SimpleDashboardView.swift      # ホーム画面 + 分析結果の一覧画面
@@ -399,8 +429,27 @@ ios_watchme_v9/
 │   ├── RecordingStore.swift       # 録音状態管理
 │   ├── AudioRecorderService.swift # 録音実行サービス
 │   ├── AudioMonitorService.swift  # 音声レベル監視サービス
-│   └── UploaderService.swift      # アップロードサービス
+│   ├── UploaderService.swift      # アップロードサービス
+│   └── ToastManager.swift         # ✨ NEW: グローバルトースト通知システム
 └── Models/                        # その他データモデル
+```
+
+### 🎯 今回の改善内容（2025-11-25）
+
+#### 1. fullScreenCover二重ネスト問題の解消
+- **問題**: OnboardingView内でさらにfullScreenCoverを使用し、モーダルクローズが不安定
+- **解決**: AuthFlowViewで統合し、1層のfullScreenCoverのみに変更
+- **効果**: OAuth認証後のモーダル自動クローズが確実に動作
+
+#### 2. エラーメッセージ表示の統一
+- **問題**: 各所でバラバラなエラー表示（Alert、独自UI等）
+- **解決**: ToastManagerで全エラーを統一的に表示
+- **効果**: 非侵襲的（画面を遮らない）で一貫したUX
+
+#### 3. 匿名ユーザーのアップグレードフロー実装
+- **問題**: ゲストユーザーが正式アカウントに移行できない
+- **解決**: UpgradeAccountViewとupgradeAnonymousToGoogle()を実装
+- **効果**: データを失わずにGoogleアカウント連携が可能
 ```
 
 ---
