@@ -155,6 +155,7 @@ struct DeviceSettingsView: View {
             )
             .environmentObject(deviceManager)
             .environmentObject(dataManager)
+            .environmentObject(userAccountManager)
         }
         .alert("デバイス追加エラー", isPresented: $showAddDeviceAlert, presenting: addDeviceError) { _ in
             Button("OK", role: .cancel) { }

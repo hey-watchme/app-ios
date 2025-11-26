@@ -686,4 +686,39 @@ class NetworkManager: ObservableObject {
 
         print("✅ アカウント削除成功")
     }
+
+    // デバイス削除（管理画面API経由）
+    func deleteDevice(deviceId: String) async throws {
+        let adminURL = "https://admin.hey-watch.me/api/devices/\(deviceId)"
+
+        guard let url = URL(string: adminURL) else {
+            throw NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "DELETE"
+        request.timeoutInterval = 30.0
+
+        print("🗑️ Device delete request sent: \(adminURL)")
+
+        let (data, response) = try await URLSession.shared.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "NetworkManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        }
+
+        print("📡 Device delete response: \(httpResponse.statusCode)")
+
+        if let responseString = String(data: data, encoding: .utf8) {
+            print("📡 Response body: \(responseString)")
+        }
+
+        guard httpResponse.statusCode == 200 else {
+            let errorMessage = "Device deletion failed: status code \(httpResponse.statusCode)"
+            print("❌ \(errorMessage)")
+            throw NSError(domain: "NetworkManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
+        }
+
+        print("✅ Device deleted successfully")
+    }
 } 

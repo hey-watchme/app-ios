@@ -20,6 +20,7 @@ struct AuthFlowView: View {
 
     // Account selection state
     @State private var isProcessing = false
+    @State private var showLogin = false
 
     enum AuthStep {
         case onboarding
@@ -46,17 +47,8 @@ struct AuthFlowView: View {
             // Monitor authentication state changes
             if newValue.isAuthenticated {
                 print("✅ [AuthFlowView] Authentication successful - closing modal")
-
-                Task {
-                    // Auto-register device
-                    if let userId = userAccountManager.currentUser?.profile?.userId {
-                        await deviceManager.registerDevice(userId: userId)
-                    }
-
-                    await MainActor.run {
-                        isPresented = false
-                    }
-                }
+                // Note: デバイス登録はUserAccountManager.initializeAuthenticatedUser()で実行される
+                isPresented = false
             }
         }
         .onOpenURL { url in
@@ -137,20 +129,6 @@ struct AuthFlowView: View {
 
     private var accountSelectionView: some View {
         VStack(spacing: 24) {
-            // Close button
-            HStack {
-                Spacer()
-                Button(action: {
-                    isPresented = false
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(.secondary)
-                }
-                .padding(.top, 20)
-                .padding(.trailing, 20)
-            }
-
             Spacer()
 
             // Header
@@ -235,9 +213,24 @@ struct AuthFlowView: View {
                 .padding(.top, 8)
             }
             .padding(.horizontal, 32)
-            .padding(.bottom, 40)
             .disabled(isProcessing)
             .opacity(isProcessing ? 0.6 : 1.0)
+
+            // Login link
+            Button(action: {
+                showLogin = true
+            }) {
+                Text("アカウントをお持ちの方はこちら")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.bottom, 40)
+        }
+        .sheet(isPresented: $showLogin) {
+            LoginView()
+                .environmentObject(userAccountManager)
+                .environmentObject(toastManager)
+                .environmentObject(deviceManager)
         }
         .overlay(
             Group {
@@ -282,11 +275,7 @@ struct AuthFlowView: View {
 
             // Check success
             if userAccountManager.isAuthenticated {
-                // Auto-register device
-                if let userId = userAccountManager.currentUser?.profile?.userId {
-                    await deviceManager.registerDevice(userId: userId)
-                }
-
+                // Note: デバイス登録はUserAccountManager.initializeAuthenticatedUser()で実行される
                 await MainActor.run {
                     isPresented = false
                 }

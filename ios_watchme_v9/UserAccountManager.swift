@@ -940,6 +940,14 @@ class UserAccountManager: ObservableObject {
             }
 
             await deviceManager.initializeDevices(for: userId)
+
+            // 3. デバイスが0件の場合は自動登録
+            if !deviceManager.hasRealDevices {
+                print("📱 デバイスが0件のため、自動登録を実行")
+                await deviceManager.registerDevice(userId: userId)
+            } else {
+                print("✅ 既存デバイスあり（\(deviceManager.devices.count)件）")
+            }
         } else {
             print("❌ プロファイル取得に失敗 - デバイス初期化をスキップ")
         }

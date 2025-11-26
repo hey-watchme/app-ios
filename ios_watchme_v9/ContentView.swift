@@ -102,7 +102,8 @@ struct ContentView: View {
 
                         // デバイス未登録時のガイドオーバーレイ
                         // 条件: 実際のデバイス（デモ以外）がない かつ 何も選択されていない場合のみ表示
-                        if !deviceManager.hasRealDevices && deviceManager.selectedDeviceID == nil {
+                        // TODO: 一旦非表示（デバイス紐付け中に一瞬表示される問題を回避）
+                        if false && !deviceManager.hasRealDevices && deviceManager.selectedDeviceID == nil {
                             DeviceSetupGuideOverlay(
                                 onSelectThisDevice: {
                                     print("🔘 DeviceSetupGuideOverlay: このデバイスで測定するボタン押下")

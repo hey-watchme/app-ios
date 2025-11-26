@@ -12,6 +12,7 @@ struct DeviceEditView: View {
     @Binding var isPresented: Bool
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
+    @EnvironmentObject var userAccountManager: UserAccountManager
     @State private var deviceName: String = ""
     @State private var deviceType: String = ""
     @State private var timezone: String = ""
@@ -23,7 +24,9 @@ struct DeviceEditView: View {
     @State private var showUnlinkConfirmation = false
     @State private var isUnlinking = false
     @State private var showUnlinkSuccess = false
-    
+    @State private var showDeleteConfirmation = false
+    @State private var isDeleting = false
+
     var body: some View {
         NavigationView {
             ScrollView {
@@ -129,7 +132,32 @@ struct DeviceEditView: View {
                         .cornerRadius(12)
                     }
                     .disabled(isUnlinking)
-                    
+
+                    // このデバイスを削除ボタン
+                    Button(action: {
+                        showDeleteConfirmation = true
+                    }) {
+                        HStack {
+                            if isDeleting {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                                Text("削除中...")
+                            } else {
+                                Image(systemName: "trash.fill")
+                                Text("このデバイスを削除")
+                            }
+                        }
+                        .font(.body)
+                        .fontWeight(.medium)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.red.opacity(0.8).opacity(isDeleting ? 0.6 : 1.0))
+                        .cornerRadius(12)
+                    }
+                    .disabled(isDeleting || isUnlinking)
+
                     Spacer(minLength: 50)
                 }
                 .padding()
@@ -183,6 +211,16 @@ struct DeviceEditView: View {
         } message: {
             Text("このアカウントとデバイスの連携が解除され、データを閲覧できなくなります。\n\n本当に解除しますか？")
         }
+        .alert("このデバイスを削除しますか？", isPresented: $showDeleteConfirmation) {
+            Button("キャンセル", role: .cancel) { }
+            Button("削除する", role: .destructive) {
+                Task {
+                    await deleteDevice()
+                }
+            }
+        } message: {
+            Text("デバイス本体とすべての連携が削除されます。この操作は取り消せません。\n\n本当に削除しますか？")
+        }
     }
     
     private func loadDeviceInfo() {
@@ -231,19 +269,19 @@ struct DeviceEditView: View {
         await MainActor.run {
             isUnlinking = true
         }
-        
+
         do {
             // デバイス連携を解除
             try await deviceManager.unlinkDevice(device.device_id)
-            
+
             // 成功したら少し待ってから画面を閉じる
             await MainActor.run {
                 showUnlinkSuccess = true
             }
-            
+
             // 0.5秒待つ（ユーザーが成功を認識できるように）
             try? await Task.sleep(nanoseconds: 500_000_000)
-            
+
             await MainActor.run {
                 isPresented = false
             }
@@ -251,6 +289,36 @@ struct DeviceEditView: View {
             await MainActor.run {
                 isUnlinking = false
                 errorMessage = "デバイス連携の解除に失敗しました: \(error.localizedDescription)"
+                showErrorAlert = true
+            }
+        }
+    }
+
+    private func deleteDevice() async {
+        await MainActor.run {
+            isDeleting = true
+        }
+
+        do {
+            // NetworkManagerを遅延初期化（削除時のみインスタンス化）
+            let networkManager = NetworkManager()
+            try await networkManager.deleteDevice(deviceId: device.device_id)
+
+            // 成功したら少し待ってから画面を閉じる
+            try? await Task.sleep(nanoseconds: 500_000_000)
+
+            await MainActor.run {
+                isPresented = false
+            }
+
+            // デバイスリストを再読み込み
+            if let userId = userAccountManager.currentUser?.profile?.userId {
+                await deviceManager.initializeDevices(for: userId)
+            }
+        } catch {
+            await MainActor.run {
+                isDeleting = false
+                errorMessage = "デバイスの削除に失敗しました: \(error.localizedDescription)"
                 showErrorAlert = true
             }
         }
@@ -274,5 +342,6 @@ struct DeviceEditView_Previews: PreviewProvider {
         DeviceEditView(device: sampleDevice, isPresented: .constant(true))
             .environmentObject(DeviceManager())
             .environmentObject(SupabaseDataManager())
+            .environmentObject(UserAccountManager(deviceManager: DeviceManager()))
     }
 }

@@ -6,9 +6,8 @@ WatchMeプラットフォームのiOSアプリケーション。
 > **📚 関連ドキュメント**
 >
 > **機能仕様**:
-> - [AUTHENTICATION.md](./docs/features/AUTHENTICATION.md) - 認証システム詳細
+> - [AUTHENTICATION.md](./docs/features/AUTHENTICATION.md) - 認証システム詳細（アカウント削除含む）
 > - [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/features/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知
-> - [ACCOUNT_DELETION.md](./docs/features/ACCOUNT_DELETION.md) - アカウント削除
 > - [RECORDING_SPECIFICATION.md](./docs/features/RECORDING_SPECIFICATION.md) - 録音仕様
 >
 > **技術仕様**:

@@ -9,11 +9,14 @@ import SwiftUI
 
 struct LoginView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
+    @EnvironmentObject var toastManager: ToastManager
+    @EnvironmentObject var deviceManager: DeviceManager
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var showPassword: Bool = false
-    @State private var showSignUp: Bool = false
+    @State private var showOnboarding: Bool = false
     @State private var showValidationErrors: Bool = false
+    @State private var isProcessing: Bool = false
     @Environment(\.dismiss) private var dismiss
 
     // フォーカス管理
@@ -182,12 +185,51 @@ struct LoginView: View {
                     .cornerRadius(10)
                 }
                 .disabled(userAccountManager.isLoading)
+
+                // 区切り
+                HStack {
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(.secondary.opacity(0.3))
+                    Text("または")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .padding(.horizontal, 8)
+                    Rectangle()
+                        .frame(height: 1)
+                        .foregroundColor(.secondary.opacity(0.3))
+                }
+                .padding(.vertical, 16)
+
+                // Googleログインボタン
+                Button(action: {
+                    focusedField = nil
+                    signInWithGoogle()
+                }) {
+                    HStack {
+                        if isProcessing {
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(0.8)
+                        }
+
+                        Image(systemName: "globe")
+                        Text("Google でログイン")
+                            .fontWeight(.semibold)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 44)
+                    .background(Color.blue)
+                    .foregroundColor(.white)
+                    .cornerRadius(10)
+                }
+                .disabled(userAccountManager.isLoading || isProcessing)
             }
             .padding(.horizontal, 40)
 
             // 新規登録リンク
             Button(action: {
-                showSignUp = true
+                showOnboarding = true
             }) {
                 Text("新規ではじめる")
                     .font(.footnote)
@@ -197,18 +239,28 @@ struct LoginView: View {
 
             Spacer()
         }
-        .sheet(isPresented: $showSignUp) {
-            SignUpView()
+        .fullScreenCover(isPresented: $showOnboarding) {
+            AuthFlowView(isPresented: $showOnboarding)
                 .environmentObject(userAccountManager)
+                .environmentObject(deviceManager)
+                .environmentObject(toastManager)
         }
         .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
             print("🔍 LoginView - isAuthenticated変更検知: \(oldValue) → \(newValue)")
             if newValue {
                 print("🔄 ログイン成功 - LoginViewからdismiss実行")
-                // サインアップシートを閉じる
-                showSignUp = false
+                // Note: デバイス登録はUserAccountManager.initializeAuthenticatedUser()で実行される
+                // オンボーディングシートを閉じる
+                showOnboarding = false
                 // LoginView自体も閉じる
                 dismiss()
+            }
+        }
+        .onOpenURL { url in
+            // Handle OAuth callback
+            print("🔗 [LoginView] URL received: \(url)")
+            Task {
+                await userAccountManager.handleOAuthCallback(url: url)
             }
         }
     }
@@ -229,5 +281,20 @@ struct LoginView: View {
         // バリデーション成功
         showValidationErrors = false
         userAccountManager.signIn(email: email, password: password)
+    }
+
+    // Googleログイン処理
+    private func signInWithGoogle() {
+        isProcessing = true
+        Task {
+            // Use direct ASWebAuthenticationSession implementation
+            await userAccountManager.signInWithGoogleDirect()
+
+            // Note: OAuth flow continues in browser
+            // This view stays open until callback is received
+            await MainActor.run {
+                isProcessing = false
+            }
+        }
     }
 }
