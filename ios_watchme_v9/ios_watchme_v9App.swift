@@ -424,100 +424,44 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         print("❌ [PUSH] APNsデバイストークン取得失敗: \(error.localizedDescription)")
     }
 
-    // MARK: - サイレント通知受信（フォアグラウンド/バックグラウンド両対応）
-
-    func application(_ application: UIApplication,
-                    didReceiveRemoteNotification userInfo: [AnyHashable: Any],
-                    fetchCompletionHandler completionHandler: @escaping (UIBackgroundFetchResult) -> Void) {
-
-        print("📬 [PUSH] サイレント通知受信: \(userInfo)")
-        print("📱 [PUSH] アプリ状態: \(application.applicationState == .active ? "フォアグラウンド" : "バックグラウンド")")
-
-        // dashboard_summary更新通知の場合
-        if let action = userInfo["action"] as? String, action == "refresh_dashboard" {
-            handleDashboardUpdate(userInfo)
-            completionHandler(.newData)
-        } else {
-            print("⚠️ [PUSH] 未知のアクション")
-            completionHandler(.noData)
-        }
-    }
-
-    // MARK: - フォアグラウンド通知受信（レイヤー2: 権限チェック）
+    // MARK: - フォアグラウンド通知受信（統一ハンドラー）
 
     func userNotificationCenter(_ center: UNUserNotificationCenter,
                                willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
         let userInfo = notification.request.content.userInfo
 
-        print("📬 [PUSH] フォアグラウンド通知受信: \(userInfo)")
+        print("📬 [PUSH] Foreground notification received")
 
-        // ✅ レイヤー2: 認証済みユーザーのみ通知を表示
-        let userId = UserDefaults.standard.string(forKey: "current_user_id")
-        guard userId != nil else {
-            print("⚠️ [PUSH] ログアウト中のため通知を無視")
-            return []  // 通知を表示しない
+        // Permission check: Authenticated users only
+        guard UserDefaults.standard.string(forKey: "current_user_id") != nil else {
+            print("⚠️ [PUSH] Notification ignored (user not authenticated)")
+            return []
         }
 
-        // ✅ 通知の対象デバイスが現在選択中のデバイスか確認
+        // Device filter: Current selected device only
         if let targetDeviceId = userInfo["device_id"] as? String {
-            let selectedDeviceId = UserDefaults.standard.string(forKey: "selected_device_id")
+            let selectedDeviceId = UserDefaults.standard.string(forKey: "watchme_selected_device_id")
             guard targetDeviceId == selectedDeviceId else {
-                print("⚠️ [PUSH] 別デバイス(\(targetDeviceId))の通知のため無視（現在選択: \(selectedDeviceId ?? "なし")）")
+                print("⚠️ [PUSH] Notification ignored (different device: target=\(targetDeviceId), selected=\(selectedDeviceId ?? "nil"))")
                 return []
             }
         }
 
-        // dashboard_summary更新通知の場合
-        if let action = userInfo["action"] as? String, action == "refresh_dashboard" {
-            // ✅ 軽い振動フィードバックを発生
+        // Delegate to PushNotificationManager
+        let handled = PushNotificationManager.shared.handleAPNsPayload(userInfo)
+
+        if handled {
+            // Light haptic feedback for user experience
             await MainActor.run {
                 let feedbackGenerator = UIImpactFeedbackGenerator(style: .light)
                 feedbackGenerator.impactOccurred()
-                print("✨ [PUSH] 軽い振動フィードバック発生")
+                print("✨ [PUSH] Haptic feedback triggered")
             }
 
-            handleDashboardUpdate(userInfo)
-            // フォアグラウンドではバナーと音で通知
             return [.banner, .sound]
         }
 
         return []
-    }
-
-    // MARK: - ダッシュボード更新処理
-
-    private func handleDashboardUpdate(_ userInfo: [AnyHashable: Any]) {
-        guard let deviceId = userInfo["device_id"] as? String,
-              let date = userInfo["date"] as? String else {
-            print("⚠️ [PUSH] 無効な通知ペイロード")
-            return
-        }
-
-        print("🔄 [PUSH] ダッシュボード更新通知: deviceId=\(deviceId), date=\(date)")
-
-        // apsペイロードからメッセージ本文を取得
-        var messageBody: String?
-        if let aps = userInfo["aps"] as? [String: Any],
-           let alert = aps["alert"] as? [String: Any],
-           let body = alert["body"] as? String {
-            messageBody = body
-            print("📝 [PUSH] メッセージ本文: \(body)")
-        }
-
-        // NotificationCenterで通知を送信（SimpleDashboardViewで監視）
-        var notificationUserInfo: [String: Any] = [
-            "device_id": deviceId,
-            "date": date
-        ]
-        if let messageBody = messageBody {
-            notificationUserInfo["message"] = messageBody
-        }
-
-        NotificationCenter.default.post(
-            name: NSNotification.Name("RefreshDashboard"),
-            object: nil,
-            userInfo: notificationUserInfo
-        )
     }
 
     // MARK: - デバイストークン保存

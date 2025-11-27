@@ -266,6 +266,7 @@ class DeviceManager: ObservableObject {
         let ownerDevices = devices.filter { $0.role == "owner" }
         if let firstOwnerDevice = ownerDevices.first {
             self.selectedDeviceID = firstOwnerDevice.device_id
+            UserDefaults.standard.set(firstOwnerDevice.device_id, forKey: selectedDeviceIDKey)
             print("🔍 Auto-selected owner device: \(firstOwnerDevice.device_id)")
             return
         }
@@ -274,6 +275,7 @@ class DeviceManager: ObservableObject {
         let viewerDevices = devices.filter { $0.role == "viewer" }
         if let firstViewerDevice = viewerDevices.first {
             self.selectedDeviceID = firstViewerDevice.device_id
+            UserDefaults.standard.set(firstViewerDevice.device_id, forKey: selectedDeviceIDKey)
             print("🔍 Auto-selected viewer device: \(firstViewerDevice.device_id)")
             return
         }
@@ -281,6 +283,7 @@ class DeviceManager: ObservableObject {
         // 4. 最後の手段：リストの最初のデバイス
         if let firstDevice = devices.first {
             self.selectedDeviceID = firstDevice.device_id
+            UserDefaults.standard.set(firstDevice.device_id, forKey: selectedDeviceIDKey)
             print("🔍 Auto-selected first device: \(firstDevice.device_id)")
         }
     }

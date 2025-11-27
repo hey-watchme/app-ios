@@ -1,522 +1,176 @@
-# WatchMe プッシュ通知アーキテクチャ（AWS SNS + APNs）
+# WatchMe プッシュ通知仕様書
 
-**作成日**: 2025-10-13
-**最終更新**: 2025-10-15
-**ステータス**: ✅ 実装完了・動作確認済み
+**最終更新**: 2025-11-27
 
 ---
 
-## 📖 用語定義（重要）
+## 📊 システム概要
 
-本ドキュメントでは、以下の用語を明確に区別します：
+Lambda処理完了後、iOSアプリにリアルタイムでデータ更新を通知します。
 
-| 用語 | 説明 | データベース | 例 |
-|------|------|------------|------|
-| **観測対象デバイス** または **録音デバイス** | 音声データを収集するデバイス | `devices`テーブル | 松本遍のApple Watch、松本正弦のApple Watch |
-| **通知先デバイス** または **iPhoneデバイス** | プッシュ通知を受信するユーザーのiPhone | - | ユーザーのiPhone（1ユーザーにつき1台） |
-| **APNsトークン** | 通知先デバイス（iPhone）を一意に識別するトークン | `users.apns_token` | 7cb89fa1198f12001efa... |
-| **device_id** | 観測対象デバイスのUUID | `devices.device_id` | d067d407-cf73-4174-a9c1-d91fb60d64d0 |
-| **user_id** | ユーザーのUUID | `users.user_id` | 164cba5a-dba6-4cbc-9b39-4eea28d98fa5 |
-
-**重要**：1人のユーザーは、**複数の観測対象デバイス**（録音デバイス）を所有できますが、**通知先デバイス（iPhone）は1台のみ**です。
-
----
-
-## 📊 概要
-
-Lambda処理完了後、iOSアプリにリアルタイムでデータ更新を通知するため、AWS SNS + Apple Push Notification service (APNs)を使用します。
-
-### 🎯 目的
-
-- Lambda処理完了後、即座にiOSアプリ（通知先デバイス）に通知
-- ユーザーがアプリを開いているときは自動的にデータ再取得
-- スケーラブルで信頼性の高い通知システム
+**技術スタック**: AWS SNS + Apple Push Notification service (APNs)
 
 ---
 
 ## 🏗️ アーキテクチャ
 
-```mermaid
-graph LR
-    subgraph "観測対象デバイス（録音デバイス）"
-        A1[松本遍のApple Watch]
-        A2[松本正弦のApple Watch]
-    end
-
-    subgraph "Lambda処理"
-        A1 --> B[dashboard-analysis-worker]
-        A2 --> B
-        B --> C[dashboard_summary更新]
-    end
-
-    subgraph "プッシュ通知"
-        C --> D[SNS Platform Endpoint]
-        D --> E[APNs]
-    end
-
-    subgraph "通知先デバイス（iPhone）"
-        E --> F[プッシュ通知受信]
-        F --> G{アプリ状態}
-        G -->|Foreground| H[トーストバナー表示]
-        G -->|Background| I[サイレント通知]
-        H --> J[今日のキャッシュクリア]
-        I --> J
-        J --> K[データ再取得]
-    end
+```
+観測対象デバイス（録音） → Lambda処理 → SNS → APNs → 通知先デバイス（iPhone）
+                                                      ↓
+                                            トーストバナー表示
+                                                      ↓
+                                            データ自動更新
 ```
 
-**データフロー**：
-1. **観測対象デバイス**（録音デバイス）から音声データ送信
-2. Lambda処理完了後、該当ユーザーの**通知先デバイス**（iPhone）にプッシュ通知送信
-3. **1ユーザーにつき1つのAPNsトークン**（複数の観測対象デバイスがあっても、通知先は1台のiPhoneのみ）
+**データフロー**:
+1. 観測対象デバイス（録音デバイス）から音声データ送信
+2. Lambda処理完了後、プッシュ通知送信
+3. 通知先デバイス（iPhone）でデータ自動更新
 
 ---
 
-## ✅ 実装済み内容（2025-10-14）
+## 📖 用語定義
 
-### 1. AWS SNS Platform Application
+| 用語 | 説明 | データベース |
+|------|------|------------|
+| **観測対象デバイス（録音デバイス）** | 音声データを収集するデバイス | `devices`テーブル |
+| **通知先デバイス（iPhone）** | プッシュ通知を受信するユーザーのiPhone | - |
+| **APNsトークン** | 通知先デバイスを一意に識別するトークン | `users.apns_token` |
 
-#### 開発環境（Sandbox）
-- **名前**: `watchme-ios-app-sandbox`
-- **ARN**: `arn:aws:sns:ap-southeast-2:754724220380:app/APNS_SANDBOX/watchme-ios-app-sandbox`
-- **証明書**: Sandbox用APNs証明書（有効期限: 確認要）
-- **用途**: Xcodeから直接インストールしたアプリ
-
-#### 本番環境（Production）
-- **名前**: `watchme-ios-app`
-- **ARN**: `arn:aws:sns:ap-southeast-2:754724220380:app/APNS/watchme-ios-app`
-- **証明書**: Production用APNs証明書（有効期限: 2026-11-12）
-- **用途**: TestFlight/App Store公開版
+**重要**: 1ユーザーは複数の観測対象デバイスを所有できますが、通知先デバイスは1台のみです。
 
 ---
 
-### 2. Lambda関数実装
+## ⚙️ 環境設定
 
-**ファイル**: `/Users/kaya.matsumoto/projects/watchme/server-configs/lambda-functions/watchme-dashboard-analysis-worker/lambda_function.py`
+### 開発環境（Sandbox）
 
-#### 主要機能
+**用途**: Xcodeから直接インストールしたアプリ
 
-1. **プッシュ通知送信** (`send_push_notification`)
-   - SupabaseからAPNsトークンを取得
-   - SNS Platform Endpointを自動作成または更新
-   - プッシュ通知を送信
+| 項目 | 値 |
+|------|-----|
+| **Platform Application** | `watchme-ios-app-sandbox` |
+| **ARN** | `arn:aws:sns:ap-southeast-2:754724220380:app/APNS_SANDBOX/watchme-ios-app-sandbox` |
+| **証明書** | Sandbox用APNs証明書 |
+| **Lambda設定** | `SNS_PLATFORM_APP_ARN = 'arn:aws:sns:.../APNS_SANDBOX/...'` |
 
-2. **Endpoint自動再有効化**
-   - `EndpointDisabledException`を自動検知
-   - Endpointを再有効化してリトライ
+### 本番環境（Production）
 
-3. **現在の設定**
-   - **環境**: Sandbox（開発用）
-   - **通知タイプ**: 通常の通知（バナー表示）※テスト用
-   - **ペイロード**: `APNS_SANDBOX`
+**用途**: TestFlight/App Store公開版
+
+| 項目 | 値 |
+|------|-----|
+| **Platform Application** | `watchme-ios-app` |
+| **ARN** | `arn:aws:sns:ap-southeast-2:754724220380:app/APNS/watchme-ios-app` |
+| **証明書** | Production用APNs証明書（有効期限: 2026-11-12） |
+| **Lambda設定** | `SNS_PLATFORM_APP_ARN = 'arn:aws:sns:.../APNS/...'` |
+
+---
+
+## 🔧 Lambda関数実装
+
+**ファイル**: `/Users/kaya.matsumoto/projects/watchme/server-configs/production/lambda-functions/watchme-dashboard-analysis-worker/lambda_function.py`
+
+### プッシュ通知送信処理
 
 ```python
-SNS_PLATFORM_APP_ARN = 'arn:aws:sns:ap-southeast-2:754724220380:app/APNS_SANDBOX/watchme-ios-app-sandbox'
+# 1. SupabaseからAPNsトークン取得
+apns_token = get_user_apns_token(device_id)
 
-# 観測対象名（Subject名）を取得
-subject_name = get_subject_name_for_device(device_id)
+# 2. SNS Platform Endpoint作成/更新
+endpoint_arn = create_or_update_endpoint(device_id, apns_token)
 
-# メッセージを動的に生成
-if subject_name:
-    body_text = f"{subject_name}さんの最新データが届きました✨"
-else:
-    device_id_short = device_id[:8]
-    body_text = f"デバイス {device_id_short} の最新データが届きました✨"
-
+# 3. プッシュ通知送信
 message = {
-    'APNS_SANDBOX': json.dumps({
+    'APNS_SANDBOX': json.dumps({  # 本番: 'APNS'
         'aps': {
             'alert': {
-                'body': body_text
+                'body': f"{subject_name}さんの{local_date}のデータ分析が完了しました✨"
             },
             'sound': 'default',
             'content-available': 1
         },
         'device_id': device_id,
-        'date': date,
+        'date': local_date,
         'action': 'refresh_dashboard'
     })
 }
+
+sns_client.publish(
+    TargetArn=endpoint_arn,
+    Message=json.dumps(message),
+    MessageStructure='json'
+)
+```
+
+### トークン取得フロー
+
+```python
+# device_id → user_id → apns_token
+user_devices = get_user_devices(device_id)  # roleに関係なく全ユーザー取得
+for user_id in user_devices:
+    apns_token = get_apns_token(user_id)  # users.apns_token から取得
+    if apns_token:
+        return apns_token
 ```
 
 ---
 
-### 3. IAM権限設定
+## 📱 iOS側実装
 
-**ロール**: `watchme-dashboard-analysis-worker-role-ff2gu1tt`
+### デバイストークン取得・保存
 
-**ポリシー**: `SNSPushNotificationPolicy`
+**ファイル**: `ios_watchme_v9App.swift`
 
-```json
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Effect": "Allow",
-      "Action": [
-        "sns:Publish",
-        "sns:CreatePlatformEndpoint",
-        "sns:SetEndpointAttributes",
-        "sns:GetEndpointAttributes"
-      ],
-      "Resource": [
-        "arn:aws:sns:ap-southeast-2:754724220380:app/APNS/watchme-ios-app",
-        "arn:aws:sns:ap-southeast-2:754724220380:endpoint/APNS/watchme-ios-app/*",
-        "arn:aws:sns:ap-southeast-2:754724220380:app/APNS_SANDBOX/watchme-ios-app-sandbox",
-        "arn:aws:sns:ap-southeast-2:754724220380:endpoint/APNS_SANDBOX/watchme-ios-app-sandbox/*"
-      ]
+```swift
+// AppDelegate.didRegisterForRemoteNotificationsWithDeviceToken
+func application(_ application: UIApplication,
+                didRegisterForRemoteNotificationsWithDeviceToken deviceToken: Data) {
+    let token = deviceToken.map { String(format: "%02.2hhx", $0) }.joined()
+    saveDeviceToken(token)  // Supabase users.apns_token に保存
+}
+```
+
+### プッシュ通知ハンドラー
+
+```swift
+// AppDelegate.userNotificationCenter(_:willPresent:)
+func userNotificationCenter(_ center: UNUserNotificationCenter,
+                           willPresent notification: UNNotification) async -> UNNotificationPresentationOptions {
+    // 1. 認証チェック
+    guard UserDefaults.standard.string(forKey: "current_user_id") != nil else {
+        return []
     }
-  ]
+
+    // 2. デバイスフィルター（選択中デバイスのみ）
+    if let targetDeviceId = userInfo["device_id"] as? String {
+        let selectedDeviceId = UserDefaults.standard.string(forKey: "watchme_selected_device_id")
+        guard targetDeviceId == selectedDeviceId else {
+            return []
+        }
+    }
+
+    // 3. PushNotificationManagerに処理を委譲
+    PushNotificationManager.shared.handleAPNsPayload(userInfo)
+
+    return [.banner, .sound]
 }
 ```
 
 ---
 
-### 4. iOS側実装
+## 🗄️ データベース設計
 
-#### デバイストークン管理
-- ✅ APNsデバイストークン取得機能実装済み
-- ✅ トークンをSupabase `users.apns_token`に保存（2025-10-14修正）
-- ✅ ログイン後に自動的にトークン登録・保存
-- ✅ テストデバイストークン: `7cb89fa1198f12001efa7ab7aa45cbfc3f04b7b15d113911f9058cbd348a2652`
-
-#### プッシュ通知ハンドラー
-- ✅ `AppDelegate`実装済み
-- ✅ フォアグラウンド受信処理
-- ✅ バックグラウンド受信処理
-- ✅ 通知タップ時の処理
-- ✅ トーストバナー表示実装済み（フォアグラウンド時）
-
----
-
-## 🐛 解決した問題
-
-### 問題1: UNUserNotificationCenterDelegateが設定されていない（2025-10-14）
-**エラー**: プッシュ通知が届かない（Xcodeコンソールに何も出力されない）
-
-**原因**: `UNUserNotificationCenter.current().delegate = self`が設定されていなかった
-
-**解決**:
-`ios_watchme_v9App.swift`の`AppDelegate.didFinishLaunchingWithOptions`に追加：
-```swift
-UNUserNotificationCenter.current().delegate = self
-```
-
----
-
-### 問題2: TabView内で通知が重複受信される（2025-10-14）
-**現象**: 1回の通知で7回のキャッシュクリア・データ再取得が実行される
-
-**原因**: TabViewが複数のSimpleDashboardViewインスタンスを事前生成し、全てが`onReceive`で同じ通知を受信していた
-
-**解決**:
-`SimpleDashboardView.swift`の`onReceive`処理を修正：
-- このビューの`date`が今日でない場合は早期リターン
-- 不要なログ出力を削減
-
-```swift
-// このビューが今日を表示中の場合のみ処理
-guard calendar.isDate(date, inSameDayAs: today) else {
-    return
-}
-```
-
----
-
-### 問題3: Lambda関数で`requests`ライブラリがない
-**エラー**: `Runtime.ImportModuleError: No module named 'requests'`
-
-**原因**: 依存ライブラリがデプロイパッケージに含まれていなかった
-
-**解決**:
-```bash
-cd /Users/kaya.matsumoto/projects/watchme/server-configs/lambda-functions/watchme-dashboard-analysis-worker
-./build.sh
-aws lambda update-function-code --function-name watchme-dashboard-analysis-worker --zip-file fileb://function.zip --region ap-southeast-2
-```
-
----
-
-### 問題4: APNs環境のミスマッチ
-**エラー**: `EndpointDisabled`
-
-**原因**:
-- SNS Platform Application = **Production環境（APNS）**
-- iOSアプリ（Xcodeビルド） = **Sandbox環境**
-- 環境が一致していなかった
-
-**解決**:
-1. Sandbox用APNs証明書を作成（`.p12`）
-2. SNS Platform Application `watchme-ios-app-sandbox`を作成
-3. Lambda関数を`APNS_SANDBOX`に変更
-
----
-
-### 問題5: IAM権限不足
-**エラー**: `AuthorizationError: User is not authorized to perform: SNS:CreatePlatformEndpoint on resource: arn:aws:sns:.../APNS_SANDBOX/...`
-
-**原因**: IAMポリシーが本番環境のARNのみ許可していた
-
-**解決**: IAMポリシーにSandbox環境のARNを追加
-
----
-
-### 問題6: APNsトークンの保存先が間違っている（2025-10-14）
-**エラー**: トークンが取得できない、または間違った観測対象デバイスでプッシュ通知が動作しない
-
-**原因**:
-- APNsトークンを`devices`テーブル（観測対象デバイス）に保存していた（設計ミス）
-- `user_devices.role='owner'`で絞り込んでいたため、一部観測対象デバイスで通知が届かない
-
-**解決**:
-1. **データベース設計変更**
-   - APNsトークンの保存先を`devices`（観測対象デバイス）→`users`（ユーザー）テーブルに変更
-   - `users.apns_token`カラムを追加
-   - `devices.apns_token`カラムを削除
-
-2. **iOS側修正**
-   - `DeviceManager.swift`: トークン保存処理を`users`テーブルに変更
-   - `UserAccountManager.swift`: ログイン後にAPNsトークン登録を要求
-
-3. **Lambda側修正**
-   - `role='owner'`条件を完全に削除
-   - 観測対象デバイス（device_id）に紐づく全ユーザーの`user_id`を取得
-   - 各ユーザーの`apns_token`をチェックし、最初に見つかったトークンを使用
-
-**修正後のフロー**:
-```
-Lambda処理完了（観測対象デバイスのdevice_idを受け取る）
-  ↓
-device_id から user_devices テーブルを検索（roleに関係なく）
-  ↓
-user_id のリストを取得
-  ↓
-各 user_id について users.apns_token をチェック
-  ↓
-最初に見つかったトークンで通知先デバイス（iPhone）にプッシュ通知送信
-```
-
----
-
-### 問題7: CustomUserDataによるEndpoint属性エラー（2025-10-15）
-**エラー**: `InvalidParameterException: Endpoint already exists with the same Token, but different attributes`
-
-**原因**:
-- SNS Endpointの`CustomUserData`に**観測対象デバイスのdevice_id**を保存していた
-- 1人のユーザーが複数の観測対象デバイスを所有している場合、同じAPNsトークンで異なる`CustomUserData`を持つEndpointを作成しようとする
-- 例：
-  - 観測対象デバイス1（d067d407...）の処理 → `CustomUserData: {"device_id": "d067d407..."}`
-  - 観測対象デバイス2（9f7d6e27...）の処理 → `CustomUserData: {"device_id": "9f7d6e27..."}` ← 属性エラー
-
-**解決**:
-1. **Lambda関数修正**
-   - `create_or_update_endpoint`関数から`CustomUserData`を完全に削除
-   - APNsトークンのみでEndpointを作成（1ユーザーにつき1つのEndpoint）
-
-2. **既存Endpointのクリーンアップ**
-   - AWS SNS Consoleから古いEndpointを手動削除
-   - 次回のLambda実行時に、新しいEndpointが1つだけ作成される
-
-**修正後の動作**:
-```
-観測対象デバイス1の処理 → user_id取得 → APNsトークン取得 → Endpoint作成（CustomUserDataなし）
-観測対象デバイス2の処理 → user_id取得 → APNsトークン取得 → 既存Endpoint使用（属性一致）
-```
-
-**重要な教訓**:
-- **SNS Endpointは通知先デバイス（iPhone）ごとに1つ**
-- **観測対象デバイス（録音デバイス）の情報をEndpointに保存してはいけない**
-- **用語の明確化が必須**：「デバイス」という言葉の曖昧さが設計ミスの原因
-
----
-
-## 📋 データベース構造
-
-### usersテーブル（2025-10-14修正）
+### usersテーブル
 
 ```sql
--- APNsトークンの保存先をusersテーブルに変更
 ALTER TABLE public.users
 ADD COLUMN apns_token TEXT;
 
 CREATE INDEX idx_users_apns_token ON public.users(apns_token);
-
--- 旧devicesテーブルのカラムを削除
-ALTER TABLE public.devices DROP COLUMN IF EXISTS apns_token;
-DROP INDEX IF EXISTS idx_devices_apns_token;
 ```
 
-**設計変更の理由：**
-- APNsトークン = **通知先デバイス（このユーザーが使っているiPhone）**を識別
-- 観測対象デバイス（録音デバイス：松本遍、松本正弦など）とは無関係
-- 正しい保存先：`public.users.apns_token`（1ユーザーにつき1つ）
-
-**現在の状態**: ✅ カラム追加済み、トークン保存済み
-
-**データ例**:
-```sql
--- ユーザーテーブル（通知先デバイスのAPNsトークンを保存）
-users:
-  user_id: 164cba5a-dba6-4cbc-9b39-4eea28d98fa5
-  apns_token: 7cb89fa1198f12001efa...  ← 通知先デバイス（iPhone）のトークン
-
--- 観測対象デバイステーブル（録音デバイス）
-devices:
-  device_id: d067d407-cf73-4174-a9c1-d91fb60d64d0  ← 松本遍のApple Watch
-  device_id: 9f7d6e27-98c3-4c19-bdfb-f7fda58b9a93  ← 松本正弦のApple Watch
-
--- ユーザーと観測対象デバイスの紐付け
-user_devices:
-  user_id: 164cba5a-dba6-4cbc-9b39-4eea28d98fa5
-  device_id: d067d407-cf73-4174-a9c1-d91fb60d64d0
-  role: owner
-
-  user_id: 164cba5a-dba6-4cbc-9b39-4eea28d98fa5
-  device_id: 9f7d6e27-98c3-4c19-bdfb-f7fda58b9a93
-  role: owner
-```
-
-→ 複数の観測対象デバイスからデータが送られても、プッシュ通知は**1台の通知先デバイス（iPhone）にのみ送信される**
-
----
-
-## 🧪 テスト状況
-
-### ✅ 完全動作確認済み（2025-10-15）
-
-#### Lambda側
-- ✅ APNsトークン取得処理: 実装完了（`users`テーブルから取得）
-- ✅ `role`条件削除: 完了（全ユーザーに対応）
-- ✅ Endpoint自動作成: 実装済み（CustomUserDataなし）
-- ✅ Endpoint自動削除・再作成: 実装済み
-- ✅ IAM権限: `SNS:DeleteEndpoint`追加済み
-- ✅ CloudWatch Logs: 詳細ログ出力中
-- ✅ プッシュ通知送信: **動作確認済み**
-
-#### iOS側
-- ✅ デバイストークン取得: 成功
-- ✅ トークン保存: 成功（`users.apns_token`に保存済み）
-- ✅ ログイン後のトークン登録: 実装完了
-- ✅ プッシュ通知ハンドラー: 実装済み
-- ✅ トーストバナー表示: 実装済み（フォアグラウンド時）
-- ✅ プッシュ通知受信: **動作確認済み**
-- ✅ フォアグラウンド時の自動データ更新: **動作確認済み**
-
-#### 動作確認ログ（2025-10-15）
-```
-📬 [PUSH] サイレント通知受信
-📱 [PUSH] アプリ状態: フォアグラウンド
-🔄 [PUSH] ダッシュボード更新通知: deviceId=d067d407-cf73-4174-a9c1-d91fb60d64d0, date=2025-10-15
-🔄 [PUSH] RefreshDashboard notification received
-🗑️ [PUSH] Today's cache cleared
-🔄 [PUSH] Reloading today's data...
-✅ [RPC] Successfully fetched all dashboard data
-```
-
-- ✅ 複数の観測対象デバイス（d067d407, 9f7d6e27）からの通知が同じ通知先デバイス（iPhone）に正常に届く
-- ✅ トーストバナー表示後、データが自動更新される
-
----
-
-## 🔄 次のステップ
-
-### 1. 動作確認（最優先）
-
-#### テスト手順
-1. **次の30分スロット（18:00、18:30など）でLambda実行を待つ**
-2. **CloudWatch Logsで以下を確認**:
-   ```
-   [PUSH] Step 1: Getting all user_ids for device: ...
-   [PUSH] Found N user(s) for device: [...]
-   [PUSH] Step 2: Getting APNs token for user: ...
-   [PUSH] ✅ APNs token found for user: ..., token: 7cb89fa1...
-   [PUSH] ✅ Push notification sent successfully
-   ```
-3. **iOSアプリでプッシュ通知受信を確認**
-   - フォアグラウンド時: トーストバナー表示
-   - バックグラウンド時: 通知バナー表示
-
-#### 未解決の問題
-- ⚠️ バックグラウンドスレッドから`@Published`プロパティを更新している警告（大量）
-  - 場所: `UserAccountManager.swift`のトークンリフレッシュ処理
-  - 影響: 現時点では動作に問題なし（警告のみ）
-  - 修正: `MainActor`で囲む必要あり
-
----
-
-### 2. 本番環境への切り替え
-
-#### TestFlightまたはApp Store公開時
-
-```python
-# 本番環境用のSNS Platform Application ARN
-SNS_PLATFORM_APP_ARN = 'arn:aws:sns:ap-southeast-2:754724220380:app/APNS/watchme-ios-app'
-
-# 観測対象名（Subject名）を取得
-subject_name = get_subject_name_for_device(device_id)
-
-# メッセージを動的に生成
-if subject_name:
-    body_text = f"{subject_name}さんの最新データが届きました✨"
-else:
-    device_id_short = device_id[:8]
-    body_text = f"デバイス {device_id_short} の最新データが届きました✨"
-
-message = {
-    'APNS': json.dumps({  # APNS_SANDBOX → APNS
-        'aps': {
-            'alert': {
-                'body': body_text
-            },
-            'sound': 'default',
-            'content-available': 1
-        },
-        'device_id': device_id,
-        'date': date,
-        'action': 'refresh_dashboard'
-    })
-}
-```
-
----
-
-### 3. 環境自動切り替え（推奨）
-
-環境変数で自動切り替え：
-
-```python
-import os
-
-# 環境判定
-ENV = os.environ.get('ENV', 'development')  # development | production
-
-if ENV == 'production':
-    SNS_PLATFORM_APP_ARN = 'arn:aws:sns:ap-southeast-2:754724220380:app/APNS/watchme-ios-app'
-    MESSAGE_KEY = 'APNS'
-else:
-    SNS_PLATFORM_APP_ARN = 'arn:aws:sns:ap-southeast-2:754724220380:app/APNS_SANDBOX/watchme-ios-app-sandbox'
-    MESSAGE_KEY = 'APNS_SANDBOX'
-```
-
----
-
-## 💰 コスト見積もり
-
-### AWS SNS
-- **料金**: 100万メッセージまで無料、以降$0.50/100万メッセージ
-- **使用量**: 48回/日 × 30日 = 1,440回/月
-- **月額コスト**: $0（無料枠内）
-
-### APNs
-- Appleからの課金なし（無料）
-
----
-
-## 📚 参考資料
-
-- [AWS SNS APNs連携](https://docs.aws.amazon.com/sns/latest/dg/sns-mobile-application-as-subscriber.html)
-- [Apple Push Notifications](https://developer.apple.com/documentation/usernotifications)
-- [Swift UserNotifications](https://developer.apple.com/documentation/usernotifications)
+**設計理由**: APNsトークンは通知先デバイス（iPhone）を識別するため、`users`テーブルに保存。
 
 ---
 
@@ -524,349 +178,166 @@ else:
 
 ### プッシュ通知が届かない場合
 
-1. **CloudWatch Logsを確認**
-   - ログストリームに`[PUSH] ✅ Push notification sent successfully`があるか
-   - エラーログがないか
+#### 1. XcodeのSigning設定を確認（最頻出）
 
-2. **SNS Endpointの状態を確認**
-   - AWS Console → SNS → Applications → Endpoints
-   - ステータスが「有効」になっているか
+**症状**: データは届くがプッシュ通知が届かない
 
-3. **iOSアプリの権限を確認**
-   - 設定 → 通知 → アプリ名 → 通知を許可
+**原因**: Apple IDがサインアウトされている、Teamが「Unknown name」になっている
 
-4. **環境の一致を確認**
-   - Xcodeビルド → Sandbox環境
-   - TestFlight/App Store → Production環境
+**解決手順**:
 
----
+1. **Xcode > Settings > Accounts**
+   - Apple IDが追加されているか確認
+   - なければ「+」ボタンからApple IDを追加
 
-## 🚨 未解決問題（2025-10-14 23:10 JST）
+2. **プロジェクト > Signing & Capabilities**
+   - 「Team」のプルダウンで正しいTeamを選択
+   - 「Unknown name」が消えることを確認
+   - 「Automatically manage signing」にチェックが入っていることを確認
 
-### 症状：特定デバイスのみプッシュ通知が届かない
-
-**発生状況**：
-- ✅ **正常動作デバイス**: `9f7d6e27-98c3-4c19-bdfb-f7fda58b9a93` - 全処理が成功し、dashboard_summaryが更新される
-- ❌ **失敗デバイス**: `d067d407-cf73-4174-a9c1-d91fb60d64d0` - 22:00以降、dashboard_summaryが更新されない（18:30で停止）
-
-**重要な事実**：
-1. **同じ時刻（22:00）に両デバイスが処理されている**
-2. **両デバイスとも同じユーザー（user_id: 164cba5a...）、同じrole（owner）**
-3. **音声長**: 失敗デバイス=10秒、成功デバイス=60秒（短い方が失敗）
-4. **処理内容による差はないはず**（AIが判断）
-5. **今日の18:30まで失敗デバイスも正常動作していた**
-6. **本日の変更**: Lambda環境変数を`anon`キー → `service_role`キーに変更
-
----
-
-### 調査済み事項
-
-#### ✅ 調査済み（問題なし）
-1. **user_devicesテーブル**: 両デバイスとも同じ設定（role=owner）
-2. **dashboard-analysis-worker**: service_roleキーで正常動作（手動テスト成功）
-3. **dashboard-summary-worker**: 正常動作（成功デバイスのログで確認）
-4. **Vibe Scorer API (`/analyze-dashboard-summary`)**: 手動テストで成功（26秒で完了）
-
-#### ❌ 問題箇所の特定
-
-**audio-worker（watchme-audio-worker）が原因**：
-
-```
-22:00の処理（CloudWatch Logs）:
-- 成功デバイス（9f7d6e27）:
-  "vibe_scorer": {"status_code": 200, "success": true}
-  → "Triggering dashboard summary" メッセージあり
-
-- 失敗デバイス（d067d407）:
-  "vibe_scorer": {"status_code": 504, "success": false}
-  → "Triggering dashboard summary" メッセージなし
-```
-
-**コード（lambda_function.py:46）**:
-```python
-# Vibe Scorerが成功した場合、累積分析キューにメッセージを送信
-if results.get('vibe_scorer', {}).get('success'):
-    trigger_dashboard_summary(device_id, date, time_slot)
-```
-
-**処理フロー**:
-```
-audio-worker
-  ↓
-vibe_scorer API (/vibe-scorer/analyze-timeblock) 呼び出し
-  ↓
-失敗デバイス: 504エラー → success=false
-  ↓
-dashboard-summary-queueにメッセージ送信されず
-  ↓
-dashboard-summary-worker 起動せず
-  ↓
-dashboard-analysis-worker 起動せず
-  ↓
-プッシュ通知送信されず
-```
-
----
-
-### 核心的な謎（未解決）
-
-**なぜ特定デバイスだけvibe_scorer APIが504エラーになるのか？**
-
-**既知の事実**：
-1. 呼び出しエンドポイント: `POST /vibe-scorer/analyze-timeblock`
-2. タイムアウト設定: audio-workerは180秒、nginxは60秒
-3. **504は「処理が60秒以上かかった」ではない可能性**
-   - 実際にAPIがエラーを返している
-   - タイムアウト後もバックエンド処理は継続するはずだが、データベースにデータが入っていない
-   - つまり、**APIレベルで処理が失敗している**
-
-**除外された可能性**：
-- ❌ RLSポリシー（service_roleキーで回避済み）
-- ❌ user_devicesのrole制限（両方owner）
-- ❌ 音声長（短い方が失敗するのは逆）
-- ❌ 処理内容の差（AIが判断）
-
-**過去の類似問題**：
-- 以前、デバイスのowner/visitor制限で特定デバイスが弾かれる問題があった
-- 原因は「隠れた仕様」だった
-
----
-
-### 検証が必要な仮説
-
-1. **vibe_scorer APIの内部処理**
-   - 特定デバイスIDまたはデータで失敗する条件がないか？
-   - `/vibe-scorer/analyze-timeblock` エンドポイントのコードを確認
-   - 手動でcurlテストして、実際のエラーレスポンスを確認
-
-2. **audio-workerの条件分岐**
-   - 特定デバイスを除外する隠れた条件がないか？
-   - `/Users/kaya.matsumoto/projects/watchme/server-configs/lambda-functions/watchme-audio-worker/lambda_function.py` を再確認
-
-3. **dashboardテーブルのデータ**
-   - 22:00のタイムブロックデータが正常に保存されているか？
-   - promptフィールドに問題がないか？
-
-4. **他のデバイスでテスト**
-   - 複数デバイスで検証し、成功/失敗のパターンを特定
-
----
-
-### 次のステップ（優先順位順）
-
-1. **vibe_scorer API (`/vibe-scorer/analyze-timeblock`) を手動テスト**
+3. **ビルド＆実行**
    ```bash
-   # d067d407デバイスの22:00データで実際にAPIを呼び出す
-   # promptをdashboardテーブルから取得して送信
-   # エラーレスポンスの詳細を確認
+   xcodebuild -scheme ios_watchme_v9 -destination 'id=<device_id>' clean build
    ```
 
-2. **EC2サーバーのVibe Scorer APIログを確認**
-   ```bash
-   ssh -i /Users/kaya.matsumoto/watchme-key.pem ubuntu@3.24.16.82
-   docker logs api-gpt-v1 --tail 500 --since 3h | grep "d067d407"
-   # d067d407のリクエストが来ているか？
-   # エラーログがあるか？
-   ```
-
-3. **audio-workerを修正（暫定対策）**
-   ```python
-   # vibe_scorerの成功/失敗に関わらず、dashboard-summaryキューに送信
-   # 修正箇所: lambda_function.py:46
-   trigger_dashboard_summary(device_id, date, time_slot)
-   ```
-
-4. **複数デバイスで検証**
-   - 他のデバイスIDでテストし、成功/失敗のパターンを特定
-   - デバイス固有の問題か、データ内容の問題かを切り分け
+**発生頻度**: macOSアップデート後、Xcodeバージョンアップ後に発生（数ヶ月〜1年に1回程度）
 
 ---
 
-### ファイルパス
+#### 2. Push Notificationsが有効か確認
 
-**Lambda関数**:
-- audio-worker: `/Users/kaya.matsumoto/projects/watchme/server-configs/lambda-functions/watchme-audio-worker/lambda_function.py`
-- dashboard-summary-worker: `/Users/kaya.matsumoto/projects/watchme/server-configs/lambda-functions/watchme-dashboard-summary-worker/lambda_function.py`
-- dashboard-analysis-worker: `/Users/kaya.matsumoto/projects/watchme/server-configs/lambda-functions/watchme-dashboard-analysis-worker/lambda_function.py`
+**Xcode > Target > Signing & Capabilities**
 
-**Vibe Scorer API**:
-- ローカル: `/Users/kaya.matsumoto/api_gpt_v1/main.py`
-- EC2サーバー: `/home/ubuntu/api_gpt_v1/`（Dockerコンテナ: `api-gpt-v1`）
-
-**SSH接続**:
-```bash
-ssh -i /Users/kaya.matsumoto/watchme-key.pem ubuntu@3.24.16.82
-```
+- 「Push Notifications」が追加されているか確認
+- なければ「+ Capability」から追加
 
 ---
 
-### データベース確認クエリ
+#### 3. Lambda側のログ確認
 
 ```bash
-# service_roleキーで確認
-SERVICE_ROLE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1MTM4MDMzMCwiZXhwIjoyMDY2OTU2MzMwfQ.8KrfVB5F7fWPYiX2r4FneVwylBDYvMYtHNcUjDD2ri4"
+aws logs tail /aws/lambda/watchme-dashboard-analysis-worker --since 1h --filter-pattern "[PUSH]"
+```
 
-# dashboard_summary確認
-curl -s 'https://qvtlwotzuzbavrzqhyvt.supabase.co/rest/v1/dashboard_summary?device_id=eq.d067d407-cf73-4174-a9c1-d91fb60d64d0&date=eq.2025-10-14&select=*' \
-  -H "apikey: $SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SERVICE_ROLE_KEY"
-
-# dashboard（22:00のタイムブロック）確認
-curl -s 'https://qvtlwotzuzbavrzqhyvt.supabase.co/rest/v1/dashboard?device_id=eq.d067d407-cf73-4174-a9c1-d91fb60d64d0&date=eq.2025-10-14&time_block=eq.22-00&select=*' \
-  -H "apikey: $SERVICE_ROLE_KEY" \
-  -H "Authorization: Bearer $SERVICE_ROLE_KEY"
+**確認ポイント**:
+```
+[PUSH] ✅ APNs token found for user: ...
+[PUSH] ✅ Push notification sent successfully: <MessageId>
 ```
 
 ---
 
-## 🎯 通知フィルタリング動作（重要）
+#### 4. APNs環境の一致を確認
 
-### マルチデバイス環境での通知表示
+| アプリインストール方法 | 必要な環境 | Lambda設定 |
+|---------------------|-----------|-----------|
+| Xcode直接インストール | Sandbox | `APNS_SANDBOX` |
+| TestFlight/App Store | Production | `APNS` |
 
-**前提**：
-- 1人のユーザーが**複数の観測対象デバイス**（録音デバイス）を管理
-- 例：デバイスA（9f7d6e27...）、デバイスB（d067d407...）
-- iOSアプリでは**1つのデバイスを選択**して表示中
+**環境不一致の場合**: Lambda関数の`SNS_PLATFORM_APP_ARN`を修正
 
 ---
 
-### フォアグラウンド（アプリ起動中）の動作
+#### 5. iOS側のログ確認
 
-**実装箇所**: `ios_watchme_v9App.swift` の `userNotificationCenter(_:willPresent:)`
+**Xcodeコンソールで以下が出ているか確認**:
 
-```swift
-// ✅ 通知の対象デバイスが現在選択中のデバイスか確認
-if let targetDeviceId = userInfo["device_id"] as? String {
-    let selectedDeviceId = UserDefaults.standard.string(forKey: "selected_device_id")
-    guard targetDeviceId == selectedDeviceId else {
-        print("⚠️ [PUSH] 別デバイスの通知のため無視")
-        return []  // ← 通知を表示しない
-    }
-}
+**✅ 正常な場合**:
+```
+📬 [PUSH] Foreground notification received
+📬 [PUSH-MANAGER] Notification handled:
+   Type: refresh_dashboard
+   Device: e33f212e-72a1-4de3-80fa-f9bed75704c7
+   Date: 2025-11-27
+🍞 [Toast] 表示: デバイス e33f212e の2025-11-27のデータ分析が完了しました✨
 ```
 
-**結果**：
-- ✅ **選択中のデバイス**の通知 → トーストバナーで表示
-- ❌ **選択外のデバイス**の通知 → 無視される（表示されない）
-
-**例**：
-- デバイスAを選択中
-- デバイスBから通知が来る → **表示されない**
-- デバイスAから通知が来る → **トーストバナーで表示**
-
----
-
-### バックグラウンド（アプリ閉じている時）の動作
-
-**iOS標準の動作**：
-- iOSが自動で通知センターに表示
-- **フィルタリングは適用されない**
-
-**結果**：
-- ✅ **選択中のデバイス**の通知 → 通知センターに表示
-- ✅ **選択外のデバイス**の通知 → **通知センターに表示**
-
-**例**：
-- デバイスAを選択中
-- アプリを閉じている
-- デバイスBから通知が来る → **通知センターに表示される**
-- デバイスAから通知が来る → **通知センターに表示される**
-
----
-
-### フォアグラウンドとバックグラウンドの関係
-
-**通知は排他的（どちらか一方のみ）**：
-
+**❌ 異常な場合**:
 ```
-通知送信（Lambda）
-    ↓
-APNs経由でiPhoneに届く
-    ↓
-┌─────────────────────────────────┐
-│ アプリの状態をiOSが判定          │
-└─────────────────────────────────┘
-    ↓                    ↓
-フォアグラウンド      バックグラウンド
-    ↓                    ↓
-userNotificationCenter   iOSが自動表示
-(_:willPresent:)         （通知センター）
-    ↓
-フィルタリング処理
-    ↓
-選択中デバイスのみ表示
+⚠️ [PUSH] Notification ignored (user not authenticated)
+⚠️ [PUSH] Notification ignored (different device: ...)
 ```
 
-**重要**：
-- **アプリ起動中** → トーストバナーで表示（選択デバイスのみ）
-- **アプリ閉じている** → 通知センターに表示（全デバイス）
-- **同時には出ない**（iOSが自動判断）
+→ 認証状態またはデバイス選択状態を確認
 
 ---
 
-### まとめ表
+#### 6. APNs証明書の有効期限確認
 
-| 状態 | 選択中デバイスの通知 | 選択外デバイスの通知 |
-|------|---------------------|-------------------|
-| **フォアグラウンド（アプリ起動中）** | ✅ トーストバナーで表示 | ❌ 表示されない（フィルタリング済み） |
-| **バックグラウンド（アプリ閉じている）** | ✅ 通知センターに表示 | ✅ 通知センターに表示（フィルタリングなし） |
+**Apple Developer Portal**: https://developer.apple.com/account/resources/certificates/list
 
----
+- Sandbox証明書: 有効期限を確認
+- Production証明書: 有効期限 2026-11-12
 
-### 設計の理由
-
-**バックグラウンド時にフィルタリングしない理由**：
-1. ユーザーが重要な通知を見逃す可能性を減らす
-2. 通知センターで全デバイスの状態を確認できる
-3. 実装がシンプル（iOS標準動作を利用）
-
-**フォアグラウンド時にフィルタリングする理由**：
-1. 現在見ているデバイスの通知のみ表示する方が直感的
-2. 不要なトーストバナーで画面が邪魔されない
-3. ユーザー体験の向上
+**期限切れの場合**: 証明書を再発行してAWS SNSに再アップロード
 
 ---
 
-## 📝 修正履歴
+#### 7. Supabaseのトークン確認
 
-### 2025-10-15（22:57 JST）
-- ✅ **観測対象名の表示機能を追加**
-  - Lambda関数に`get_subject_name_for_device()`関数を追加
-  - devicesテーブルからsubject_idを取得 → subjectsテーブルから名前を取得
-  - 通知メッセージを動的生成：「山田太郎さんの最新データが届きました✨」
-  - 観測対象未登録時のフォールバック：「デバイス a1b2c3d4 の最新データが届きました✨」
-- ✅ **ログアウト時のAPNs通知解除機能を実装**
-  - `UIApplication.shared.unregisterForRemoteNotifications()`をログアウト時に実行
-  - OSレベルでプッシュ通知の登録を解除（最も確実な方法）
-  - セッション有効中に`removeAPNsToken()`を実行（RLS問題を解決）
-  - `current_user_id`のUserDefaultsをクリア
-- ✅ **フォアグラウンド通知受信時の権限チェック機能を追加**
-  - 認証状態をチェック：`current_user_id`がない場合は通知を無視
-  - デバイスIDをチェック：現在選択中のデバイスの通知のみ表示
-  - 選択外のデバイスの通知は無視（フォアグラウンド時のみ）
-- ✅ **軽い振動フィードバックを追加**
-  - `UIImpactFeedbackGenerator(style: .light)`を使用
-  - トーストバナー表示時に最も軽い振動を発生
-- ✅ **通知フィルタリング動作のドキュメント化**
-  - フォアグラウンド/バックグラウンドでの動作の違いを明文化
-  - マルチデバイス環境での通知表示ルールを詳細に記載
+```sql
+SELECT user_id, apns_token FROM users WHERE user_id = '<user_id>';
+```
 
-### 2025-10-15（00:43 JST）
-- ✅ **完全解決**: プッシュ通知が正常に動作
-- ✅ **根本原因の発見**: `CustomUserData`に観測対象デバイスのdevice_idを保存していたため、属性エラーが発生
-- ✅ Lambda関数修正：`CustomUserData`を完全に削除
-- ✅ IAM権限追加：`SNS:DeleteEndpoint`を追加
-- ✅ 用語の標準化：「観測対象デバイス（録音デバイス）」と「通知先デバイス（iPhone）」を明確に区別
-- ✅ ドキュメント大幅更新：用語定義、アーキテクチャ図、解決した問題を追加
-
-### 2025-10-14（23:10 JST）
-- ✅ Lambda環境変数を`service_role`キーに変更
-- ✅ dashboard-analysis-workerを修正（API失敗時でもプッシュ通知送信）
-- ✅ データベース設計変更：APNsトークンを`devices`→`users`テーブルに移行
-- ✅ iOS側実装：ログイン後のトークン登録処理を追加
-- ✅ Lambda側実装：`role='owner'`条件を削除、全ユーザーに対応
-- ✅ トーストバナー表示機能を追加
+- `apns_token`が保存されているか確認
+- 空の場合: ログイン後に自動保存されるため、再ログイン
 
 ---
 
-*最終更新: 2025-10-15 22:57 JST*
+## 🧪 動作確認手順
+
+### 1. 開発環境での確認
+
+1. **Xcodeでアプリをビルド＆実行**
+2. **アプリを起動したまま（フォアグラウンド）**
+3. **新しい録音をアップロード**
+4. **約2-3分後、プッシュ通知を確認**
+   - トーストバナーが表示される
+   - データが自動更新される
+
+### 2. Xcodeコンソールログで確認
+
+```
+📬 [PUSH] Foreground notification received
+✨ [PUSH] Haptic feedback triggered
+🗑️ [PUSH] Cache cleared: <device_id>_<date>
+📊 [Direct Access] Fetching daily_results
+✅ [Direct Access] Daily results found
+🍞 [Toast] 表示: ...
+```
+
+---
+
+## 🎯 通知フィルタリング
+
+### フォアグラウンド（アプリ起動中）
+
+- ✅ **選択中デバイス**の通知 → トーストバナー表示
+- ❌ **選択外デバイス**の通知 → 無視
+
+### バックグラウンド（アプリ閉じている）
+
+- ✅ **全デバイス**の通知 → 通知センターに表示（フィルタリングなし）
+
+---
+
+## 💰 コスト
+
+- **AWS SNS**: 無料枠内（月1,440回程度）
+- **APNs**: 無料
+
+---
+
+## 📚 関連ファイル
+
+### Lambda関数
+- `/Users/kaya.matsumoto/projects/watchme/server-configs/production/lambda-functions/watchme-dashboard-analysis-worker/lambda_function.py`
+
+### iOS実装
+- `ios_watchme_v9/ios_watchme_v9App.swift` - AppDelegate
+- `ios_watchme_v9/Services/PushNotificationManager.swift` - 通知処理
+- `ios_watchme_v9/DeviceManager.swift` - トークン保存
+
+---
+
+*最終更新: 2025-11-27*

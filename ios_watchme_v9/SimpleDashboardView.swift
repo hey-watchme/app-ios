@@ -31,7 +31,10 @@ struct SimpleDashboardView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var userAccountManager: UserAccountManager
-    
+
+    // Push notification manager (centralized)
+    @StateObject private var pushManager = PushNotificationManager.shared
+
     // スティッキーヘッダーの表示状態を内部で管理
     @State private var showStickyHeader = false
     
@@ -280,74 +283,51 @@ struct SimpleDashboardView: View {
                 isInitialLoad = true
             }
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("RefreshDashboard"))) { notification in
-            // プッシュ通知からのダッシュボード更新指示
-            guard let userInfo = notification.userInfo,
-                  let deviceId = userInfo["device_id"] as? String,
-                  let dateStr = userInfo["date"] as? String else {
+        .onChange(of: pushManager.latestUpdate) { oldValue, newValue in
+            // Handle push notification updates from centralized manager
+            guard let update = newValue else { return }
+
+            // Only process dashboard refresh notifications
+            guard update.type == .refreshDashboard else { return }
+
+            // Filter: Only process if this view's device matches
+            guard update.deviceId == deviceManager.selectedDeviceID else {
+                print("⚠️ [PUSH] Update ignored (different device)")
                 return
             }
 
-            // 現在表示中のデバイスと一致する場合のみ処理
-            guard deviceId == deviceManager.selectedDeviceID else {
-                return
-            }
-
-            // 通知の日付を解析
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.timeZone = deviceManager.getTimezone(for: deviceId)
-            guard let notificationDate = formatter.date(from: dateStr) else {
-                return
-            }
-
-            // 今日のデータのみ処理
+            // Filter: Only process today's data
             let calendar = deviceManager.deviceCalendar
             let today = calendar.startOfDay(for: Date())
-            let notificationDay = calendar.startOfDay(for: notificationDate)
 
-            // 通知が今日のものか確認
-            guard calendar.isDate(today, inSameDayAs: notificationDay) else {
-                return
-            }
-
-            // このビューが今日を表示中の場合のみ処理
             guard calendar.isDate(date, inSameDayAs: today) else {
+                print("⚠️ [PUSH] Update ignored (not today's view)")
                 return
             }
 
-            print("🔄 [PUSH] RefreshDashboard notification received: deviceId=\(deviceId), date=\(dateStr)")
+            print("🔄 [PUSH] Dashboard update received: \(update.deviceId) - \(update.date)")
 
-            // プッシュ通知のメッセージ本文を取得
-            let message: String
-            if let userMessage = userInfo["message"] as? String {
-                message = userMessage
-                print("📝 [PUSH] トーストメッセージを更新: \(message)")
-            } else {
-                // メッセージがない場合はエラーログを出力
-                print("❌ [PUSH] エラー: プッシュ通知にメッセージが含まれていません")
-                print("❌ [PUSH] userInfo: \(userInfo)")
-                message = "⚠️ データがありません"
-            }
-
-            // フォアグラウンド時のみトーストを表示
-            if UIApplication.shared.applicationState == .active {
-                ToastManager.shared.showInfo(title: message)
-            }
-
-            // キャッシュクリア
+            // Clear today's cache
+            let formatter = DateFormatter()
+            formatter.dateFormat = "yyyy-MM-dd"
+            formatter.timeZone = deviceManager.getTimezone(for: update.deviceId)
             let todayString = formatter.string(from: today)
-            let todayCacheKey = "\(deviceId)_\(todayString)"
+            let todayCacheKey = "\(update.deviceId)_\(todayString)"
 
             dataCache.removeValue(forKey: todayCacheKey)
             cacheKeys.removeAll { $0 == todayCacheKey }
 
-            print("🗑️ [PUSH] Today's cache cleared: \(todayCacheKey)")
+            print("🗑️ [PUSH] Cache cleared: \(todayCacheKey)")
 
-            // データ再読み込み
-            print("🔄 [PUSH] Reloading today's data...")
+            // Reload data
             Task {
                 await loadAllData()
+
+                // Show toast after data is loaded
+                await MainActor.run {
+                    ToastManager.shared.showInfo(title: update.message)
+                    print("🍞 [PUSH] Toast displayed: \(update.message)")
+                }
             }
         }
         .sheet(isPresented: $showVibeSheet) {
