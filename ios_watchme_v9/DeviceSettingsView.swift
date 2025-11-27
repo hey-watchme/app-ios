@@ -59,25 +59,33 @@ struct DeviceSettingsView: View {
                         .frame(maxWidth: .infinity, minHeight: 200)
 
                 case .available(let allDevices):
-                    // サンプルを除外した実デバイス
-                    let realDevices = allDevices.filter { $0.device_id != DeviceManager.sampleDeviceID }
-                    // サンプルデバイス
-                    let sampleDevice = allDevices.first(where: { $0.device_id == DeviceManager.sampleDeviceID })
+                    // Classify devices by type
+                    let observerDevices = allDevices.filter { $0.device_type == "observer" }
+                    let iosDevices = allDevices.filter { $0.device_type == "ios" || $0.device_type == "android" }
+                    let sampleDevices = allDevices.filter { $0.device_type == "demo" }
 
-                    if realDevices.isEmpty {
+                    // Show empty state only if no devices at all
+                    if allDevices.isEmpty {
                         EmptyDeviceState()
                     } else {
-                        DeviceList(devices: realDevices)
+                        // Observer Section
+                        if !observerDevices.isEmpty {
+                            DeviceList(title: "Observer", devices: observerDevices)
+                            Spacer().frame(height: 50)
+                        }
+
+                        // iPhone Section
+                        if !iosDevices.isEmpty {
+                            DeviceList(title: "iPhone", devices: iosDevices)
+                            Spacer().frame(height: 50)
+                        }
+
+                        // Sample Devices Section
+                        if !sampleDevices.isEmpty {
+                            DeviceList(title: "サンプルデバイス", devices: sampleDevices, isSampleSection: true)
+                            Spacer().frame(height: 50)
+                        }
                     }
-
-                    Spacer().frame(height: 50)
-
-                    // サンプルデバイスセクション
-                    if let sample = sampleDevice {
-                        SampleDeviceSection(sampleDevice: sample)
-                    }
-
-                    Spacer().frame(height: 50)
 
                     DeviceAddCard()
 
@@ -196,14 +204,14 @@ struct DeviceSettingsView: View {
 
     // MARK: - Device List
     @ViewBuilder
-    private func DeviceList(devices: [Device]) -> some View {
+    private func DeviceList(title: String, devices: [Device], isSampleSection: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("デバイス一覧")
+            Text(title)
                 .font(.system(size: 24, weight: .bold))
                 .foregroundColor(.primary)
                 .padding(.horizontal)
 
-            // デバイス一覧を表示（逆順）
+            // Display devices (reversed order)
             ForEach(devices.reversed(), id: \.device_id) { device in
                 DeviceCard(
                     device: device,
@@ -211,80 +219,45 @@ struct DeviceSettingsView: View {
                     subject: device.subject,
                     onSelect: {
                         if deviceManager.selectedDeviceID == device.device_id {
-                            // 既に選択中のデバイスをタップ → 無効化（画面は閉じない）
+                            // Already selected -> deselect (keep screen open)
                             deviceManager.selectDevice(nil)
                         } else {
-                            // 未選択のデバイスをタップ → 有効化して画面を閉じる
+                            // Not selected -> select and close screen
                             deviceManager.selectDevice(device.device_id)
                             dismiss()
                         }
                     },
                     onEditSubject: { subject in
-                        editingContext = SubjectEditingContext(
-                            deviceID: device.device_id,
-                            editingSubject: subject
-                        )
+                        // Sample devices: read-only (no subject editing)
+                        if !isSampleSection {
+                            editingContext = SubjectEditingContext(
+                                deviceID: device.device_id,
+                                editingSubject: subject
+                            )
+                        }
                     },
                     onAddSubject: {
-                        editingContext = SubjectEditingContext(
-                            deviceID: device.device_id,
-                            editingSubject: nil
-                        )
+                        // Sample devices: read-only (no subject adding)
+                        if !isSampleSection {
+                            editingContext = SubjectEditingContext(
+                                deviceID: device.device_id,
+                                editingSubject: nil
+                            )
+                        }
                     },
                     onEditDevice: {
-                        deviceEditingContext = DeviceEditingContext(device: device)
+                        // Sample devices: read-only (view only)
+                        if !isSampleSection {
+                            deviceEditingContext = DeviceEditingContext(device: device)
+                        }
                     }
                 )
-                .id(device.device_id)  // 📊 パフォーマンス最適化: 安定したIDで再描画を最小化
+                .id(device.device_id)
                 .padding(.horizontal)
             }
         }
     }
 
-    // MARK: - Sample Device Section
-    @ViewBuilder
-    private func SampleDeviceSection(sampleDevice: Device) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("サンプルデバイス")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.primary)
-                .padding(.horizontal)
-
-            DeviceCard(
-                device: sampleDevice,
-                isSelected: sampleDevice.device_id == deviceManager.selectedDeviceID,
-                subject: sampleDevice.subject,
-                onSelect: {
-                    if deviceManager.selectedDeviceID == sampleDevice.device_id {
-                        // 既に選択中のデバイスをタップ → 無効化（画面は閉じない）
-                        deviceManager.selectDevice(nil)
-                    } else {
-                        // 未選択のデバイスをタップ → 有効化して画面を閉じる
-                        deviceManager.selectDevice(sampleDevice.device_id)
-                        dismiss()
-                    }
-                },
-                onEditSubject: { subject in
-                    editingContext = SubjectEditingContext(
-                        deviceID: sampleDevice.device_id,
-                        editingSubject: subject
-                    )
-                },
-                onAddSubject: {
-                    editingContext = SubjectEditingContext(
-                        deviceID: sampleDevice.device_id,
-                        editingSubject: nil
-                    )
-                },
-                onEditDevice: {
-                    // サンプルデバイスも詳細表示（閲覧のみ）
-                    deviceEditingContext = DeviceEditingContext(device: sampleDevice)
-                }
-            )
-            .id(sampleDevice.device_id)  // 📊 パフォーマンス最適化: 安定したIDで再描画を最小化
-            .padding(.horizontal)
-        }
-    }
 
     // MARK: - Device Add Card
     @ViewBuilder

@@ -183,13 +183,33 @@ class DeviceManager: ObservableObject {
                 }
             }
 
-            // 登録成功後、ユーザーのデバイス一覧を再取得
+            // --- Step 3: Add default sample device ---
+            print("📱 Step 3: Adding default sample device")
+            let sampleDeviceRelation = UserDeviceInsert(
+                user_id: userId,
+                device_id: DeviceManager.sampleDeviceID,
+                role: "viewer"
+            )
+
+            do {
+                try await supabase
+                    .from("user_devices")
+                    .insert(sampleDeviceRelation, returning: .minimal)
+                    .execute()
+
+                print("✅ Step 3: Default sample device added for user: \(userId)")
+            } catch {
+                print("⚠️ Sample device insert failed (may already exist): \(error)")
+                // Sample device insertion failure is not critical - continue
+            }
+
+            // Reload user devices
             await self.fetchUserDevices(for: userId)
 
-            // 登録完了
+            // Registration complete
             await MainActor.run {
                 self.isLoading = false
-                self.registrationError = nil  // エラーをクリア
+                self.registrationError = nil
             }
 
         } catch {
@@ -215,21 +235,11 @@ class DeviceManager: ObservableObject {
         self.state = .loading
 
         do {
-            // ユーザーのデバイスを取得
+            // Get all user devices (including sample devices from user_devices table)
             let fetchedDevices = try await fetchUserDevicesInternal(for: userId)
 
-            // サンプルデバイスを取得
-            let sampleDevice = try await fetchSampleDeviceInternal()
-
-            // サンプルデバイスを統合（リストの最後に追加）
-            var allDevices = fetchedDevices
-            if let sample = sampleDevice {
-                allDevices.append(sample)
-                print("✅ サンプルデバイスを統合")
-            }
-
-            // デバイスリストをセット（サンプル含む）
-            self.state = .available(allDevices)
+            // Set device list
+            self.state = .available(fetchedDevices)
 
             if fetchedDevices.isEmpty {
                 print("📱 ユーザーデバイスなし（サンプルのみ）")
@@ -424,59 +434,23 @@ class DeviceManager: ObservableObject {
         print("✅ fetchUserDevices completed")
     }
     
-    // MARK: - デバイス選択
+    // MARK: - Device Selection
     func selectDevice(_ deviceId: String?) {
-        // nilの場合は選択を解除
+        // Clear selection if nil
         guard let deviceId = deviceId else {
-            // 選択解除前に、サンプルデバイスだったかチェック
-            let wasSampleDevice = selectedDeviceID == DeviceManager.sampleDeviceID
-
             selectedDeviceID = nil
             UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
             print("📱 Device selection cleared")
-
-            // サンプルデバイスの場合、userDevicesからも削除
-            if wasSampleDevice {
-                var updatedDevices = devices
-                updatedDevices.removeAll { $0.device_id == DeviceManager.sampleDeviceID }
-                self.state = .available(updatedDevices)
-                print("📱 Sample device removed from devices")
-            }
             return
         }
 
-        // サンプルデバイスまたはdevicesに含まれるデバイスの場合のみ選択可能
-        let isSampleDevice = deviceId == DeviceManager.sampleDeviceID
-        let isUserDevice = devices.contains(where: { $0.device_id == deviceId })
-
-        if isSampleDevice || isUserDevice {
-            // サンプルデバイスの場合、devicesに追加（存在しない場合のみ）
-            if isSampleDevice && !devices.contains(where: { $0.device_id == deviceId }) {
-                print("📱 Sample device: Adding to devices")
-                let sampleDevice = Device(
-                    device_id: DeviceManager.sampleDeviceID,
-                    device_type: "observer",
-                    timezone: "Asia/Tokyo",
-                    owner_user_id: nil,
-                    subject_id: nil,
-                    created_at: nil,
-                    status: "active",
-                    role: "viewer"
-                )
-                var updatedDevices = devices
-                updatedDevices.append(sampleDevice)
-                self.state = .available(updatedDevices)
-            }
-
+        // Only allow selection of devices in the user's device list
+        if devices.contains(where: { $0.device_id == deviceId }) {
             selectedDeviceID = deviceId
-            // 選択したデバイスIDを永続化
             UserDefaults.standard.set(deviceId, forKey: selectedDeviceIDKey)
-
-            if isSampleDevice {
-                print("📱 Sample device selected: \(deviceId)")
-            } else {
-                print("📱 Selected device saved: \(deviceId)")
-            }
+            print("📱 Selected device saved: \(deviceId)")
+        } else {
+            print("⚠️ Device not found in user's device list: \(deviceId)")
         }
     }
     

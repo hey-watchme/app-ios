@@ -108,7 +108,7 @@ struct DeviceEditView: View {
                     
 
 
-                    // デバイス連携解除ボタン
+                    // Unlink device button
                     Button(action: {
                         showUnlinkConfirmation = true
                     }) {
@@ -133,30 +133,32 @@ struct DeviceEditView: View {
                     }
                     .disabled(isUnlinking)
 
-                    // このデバイスを削除ボタン
-                    Button(action: {
-                        showDeleteConfirmation = true
-                    }) {
-                        HStack {
-                            if isDeleting {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                                Text("削除中...")
-                            } else {
-                                Image(systemName: "trash.fill")
-                                Text("このデバイスを削除")
+                    // Delete device button (hidden for sample devices)
+                    if !device.isDemo {
+                        Button(action: {
+                            showDeleteConfirmation = true
+                        }) {
+                            HStack {
+                                if isDeleting {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                    Text("削除中...")
+                                } else {
+                                    Image(systemName: "trash.fill")
+                                    Text("このデバイスを削除")
+                                }
                             }
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.red.opacity(0.8).opacity(isDeleting ? 0.6 : 1.0))
+                            .cornerRadius(12)
                         }
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.red.opacity(0.8).opacity(isDeleting ? 0.6 : 1.0))
-                        .cornerRadius(12)
+                        .disabled(isDeleting || isUnlinking)
                     }
-                    .disabled(isDeleting || isUnlinking)
 
                     Spacer(minLength: 50)
                 }
