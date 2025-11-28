@@ -584,6 +584,15 @@ class UserAccountManager: ObservableObject {
 
             print("✅ Google認証成功: \(session.user.email ?? "")")
 
+            // Extract Google avatar URL from user metadata
+            var googleAvatarUrl: String?
+            if case let .string(pictureValue) = session.user.userMetadata["picture"] {
+                googleAvatarUrl = pictureValue
+            } else if case let .string(avatarUrlValue) = session.user.userMetadata["avatar_url"] {
+                googleAvatarUrl = avatarUrlValue
+            }
+            print("🖼️ Google avatar URL: \(googleAvatarUrl ?? "none")")
+
             let expiresAt = Date().addingTimeInterval(3600)
 
             let user = SupabaseUser(
@@ -606,7 +615,7 @@ class UserAccountManager: ObservableObject {
             print("🔄 認証状態を更新: authState = authenticated (Google)")
 
             // Create or update profile in public.users
-            await createOrUpdateUserProfile(userId: user.id, email: user.email)
+            await createOrUpdateUserProfile(userId: user.id, email: user.email, avatarUrl: googleAvatarUrl)
 
             // Start token refresh timer
             startTokenRefreshTimer()
@@ -624,7 +633,7 @@ class UserAccountManager: ObservableObject {
     }
 
     // Create or update user profile (for OAuth users)
-    private func createOrUpdateUserProfile(userId: String, email: String) async {
+    private func createOrUpdateUserProfile(userId: String, email: String, avatarUrl: String? = nil) async {
         do {
             // Check if profile exists
             let existingProfiles: [UserProfile] = try await supabase
@@ -642,6 +651,7 @@ class UserAccountManager: ObservableObject {
                     let email: String
                     let created_at: String
                     let auth_provider: String
+                    let avatar_url: String?
                 }
 
                 let displayName = email.components(separatedBy: "@").first ?? "ユーザー"
@@ -650,7 +660,8 @@ class UserAccountManager: ObservableObject {
                     name: displayName,
                     email: email,
                     created_at: ISO8601DateFormatter().string(from: Date()),
-                    auth_provider: "google"
+                    auth_provider: "google",
+                    avatar_url: avatarUrl
                 )
 
                 try await supabase
@@ -658,7 +669,7 @@ class UserAccountManager: ObservableObject {
                     .insert(profileData)
                     .execute()
 
-                print("✅ Googleユーザープロファイル作成成功 (auth_provider: google)")
+                print("✅ Googleユーザープロファイル作成成功 (auth_provider: google, avatar_url: \(avatarUrl ?? "none"))")
             } else {
                 // Update existing profile (for anonymous upgrade)
                 let existingProfile = existingProfiles.first!
@@ -668,11 +679,13 @@ class UserAccountManager: ObservableObject {
                     struct UpdateUserProfile: Encodable {
                         let email: String
                         let auth_provider: String
+                        let avatar_url: String?
                     }
 
                     let updateData = UpdateUserProfile(
                         email: email,
-                        auth_provider: "google"
+                        auth_provider: "google",
+                        avatar_url: avatarUrl
                     )
 
                     try await supabase
@@ -681,9 +694,26 @@ class UserAccountManager: ObservableObject {
                         .eq("user_id", value: userId)
                         .execute()
 
-                    print("✅ 匿名ユーザーをGoogleアカウントにアップグレード: \(email)")
+                    print("✅ 匿名ユーザーをGoogleアカウントにアップグレード: \(email), avatar_url: \(avatarUrl ?? "none")")
                 } else {
-                    print("✅ 既存プロファイルを使用")
+                    // Update avatar_url for existing Google users
+                    if let avatarUrl = avatarUrl {
+                        struct UpdateAvatar: Encodable {
+                            let avatar_url: String
+                        }
+
+                        let updateData = UpdateAvatar(avatar_url: avatarUrl)
+
+                        try await supabase
+                            .from("users")
+                            .update(updateData)
+                            .eq("user_id", value: userId)
+                            .execute()
+
+                        print("✅ 既存プロファイルのアバター更新: \(avatarUrl)")
+                    } else {
+                        print("✅ 既存プロファイルを使用")
+                    }
                 }
             }
 
@@ -1419,8 +1449,11 @@ extension UserAccountManager {
 
         print("🔐 Google認証開始 (ASWebAuthenticationSession direct implementation)")
 
-        // Build OAuth URL
-        let authURL = URL(string: "\(supabaseURL)/auth/v1/authorize?provider=google&redirect_to=watchme://auth/callback")!
+        // Build OAuth URL with scopes for profile and email
+        // Request additional scopes to get user profile information including avatar
+        let scopes = "openid email profile"
+        let encodedScopes = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? scopes
+        let authURL = URL(string: "\(supabaseURL)/auth/v1/authorize?provider=google&redirect_to=watchme://auth/callback&scopes=\(encodedScopes)")!
         print("🔗 OAuth URL: \(authURL)")
 
         await MainActor.run {
@@ -1480,8 +1513,10 @@ extension UserAccountManager {
 
         print("🔐 匿名ユーザーアップグレード開始 (Google)")
 
-        // Build OAuth URL for linking
-        let authURL = URL(string: "\(supabaseURL)/auth/v1/authorize?provider=google&redirect_to=watchme://auth/callback")!
+        // Build OAuth URL for linking with scopes for profile and email
+        let scopes = "openid email profile"
+        let encodedScopes = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? scopes
+        let authURL = URL(string: "\(supabaseURL)/auth/v1/authorize?provider=google&redirect_to=watchme://auth/callback&scopes=\(encodedScopes)")!
         print("🔗 OAuth URL: \(authURL)")
 
         return await withCheckedContinuation { continuation in
