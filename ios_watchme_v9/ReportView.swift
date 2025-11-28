@@ -22,7 +22,6 @@ struct ReportView: View {
     enum Period: String, CaseIterable {
         case week = "週"
         case month = "月"
-        case year = "年"
     }
 
     @State private var selectedPeriod: Period = .week
@@ -116,8 +115,6 @@ struct ReportView: View {
             return weeklyMoodData
         case .month:
             return monthlyMoodData
-        case .year:
-            return yearlyMoodData
         }
     }
 
@@ -127,8 +124,6 @@ struct ReportView: View {
             return weeklyDivergenceData
         case .month:
             return monthlyDivergenceData
-        case .year:
-            return yearlyDivergenceData
         }
     }
 
@@ -164,11 +159,6 @@ struct ReportView: View {
             formatter.locale = Locale(identifier: "ja_JP")
             formatter.dateFormat = "yyyy年M月"
             return formatter.string(from: now)
-
-        case .year:
-            // 年の場合：「2025年」
-            let year = calendar.component(.year, from: now)
-            return "\(year)年"
         }
     }
 
@@ -218,21 +208,34 @@ struct ReportView: View {
                         .padding(.horizontal, 20)
                 }
 
-                // ダイバージェンス・インデックス
-                divergenceIndexSection
-                    .padding(.horizontal, 20)
+                // Monthly Report Section (今月のレポート)
+                if selectedPeriod == .month {
+                    monthlyReportSection
+                        .padding(.horizontal, 20)
+                }
 
-                // ダイバージェンス ハイライト
-                divergenceHighlightsSection
-                    .padding(.horizontal, 20)
-                    .padding(.bottom, 40)
+                // NOTE: ダイバージェンス・インデックスは後から開発予定のため非表示
+                // divergenceIndexSection
+                //     .padding(.horizontal, 20)
+                //
+                // divergenceHighlightsSection
+                //     .padding(.horizontal, 20)
+
+                Spacer()
+                    .frame(height: 40)
             }
         }
         .background(Color(.systemBackground))
-        .task {
+        .task(id: deviceManager.isReady) {
             #if DEBUG
-            print("🚀 [ReportView] .task triggered")
+            print("🚀 [ReportView] .task triggered - isReady: \(deviceManager.isReady)")
             #endif
+            guard deviceManager.isReady else {
+                #if DEBUG
+                print("⏸️ [ReportView] DeviceManager not ready, skipping data load")
+                #endif
+                return
+            }
             await loadWeeklyData()
         }
     }
@@ -642,6 +645,36 @@ struct ReportView: View {
                         .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
                 )
             }
+        }
+    }
+
+    // MARK: - Monthly Report Section
+
+    private var monthlyReportSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Section title
+            Text("今月のレポート")
+                .font(.title3)
+                .fontWeight(.semibold)
+
+            // Empty state (data not yet available)
+            VStack(spacing: 12) {
+                Image(systemName: "chart.bar.doc.horizontal")
+                    .font(.system(size: 48))
+                    .foregroundColor(.secondary)
+                Text("今月のレポートはまだ利用できません")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+                Text("近日中に公開予定です")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 200)
+            .padding(32)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color(.systemGray6))
+            )
         }
     }
 

@@ -73,6 +73,27 @@ class DeviceManager: ObservableObject {
     var isViewingSample: Bool {
         selectedDeviceID == DeviceManager.sampleDeviceID
     }
+
+    // MARK: - State-based Helper Properties (SSOT)
+
+    /// Whether the device manager is ready to use (has loaded devices and selected one)
+    var isReady: Bool {
+        guard case .available = state else { return false }
+        return selectedDeviceID != nil
+    }
+
+    /// Whether the device manager is currently loading
+    var isLoadingDevices: Bool {
+        if case .loading = state { return true }
+        return false
+    }
+
+    /// Whether the device manager has encountered an error
+    var hasError: Bool {
+        if case .error = state { return true }
+        return false
+    }
+
     @Published var registrationError: String? = nil
     @Published var isLoading: Bool = false
     

@@ -170,7 +170,13 @@ struct SimpleDashboardView: View {
         }
         .task(id: LoadDataTrigger(date: date, deviceId: deviceManager.selectedDeviceID)) {
             // 📊 パフォーマンス最適化: データ取得を一元化（Phase 1-A: デバウンス + キャッシュ）
-            guard case .available = deviceManager.state else {
+            guard deviceManager.isReady else {
+                #if DEBUG
+                print("⏸️ [SimpleDashboardView] DeviceManager not ready, skipping data load")
+                #endif
+                await MainActor.run {
+                    clearAllData()
+                }
                 return
             }
 
