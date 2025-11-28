@@ -137,7 +137,8 @@ struct DeviceCard: View {
                         Button(action: { onEditSubject(subject) }) {
                             HStack(spacing: 12) {
                                 ZStack {
-                                    AvatarView(type: .subject, id: subject.subjectId, size: 40)
+                                    // SSOT: Subject.avatarUrl を渡す
+                                    AvatarView(type: .subject, id: subject.subjectId, size: 40, avatarUrl: subject.avatarUrl)
 
                                     Circle()
                                         .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 2)

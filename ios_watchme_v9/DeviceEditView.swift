@@ -108,33 +108,35 @@ struct DeviceEditView: View {
                     
 
 
-                    // Unlink device button
-                    Button(action: {
-                        showUnlinkConfirmation = true
-                    }) {
-                        HStack {
-                            if isUnlinking {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                                Text("解除中...")
-                            } else {
-                                Image(systemName: "minus.circle.fill")
-                                Text("デバイス連携解除")
+                    // Unlink device button (always visible if user can unlink)
+                    if device.canUnlinkDevice {
+                        Button(action: {
+                            showUnlinkConfirmation = true
+                        }) {
+                            HStack {
+                                if isUnlinking {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                    Text("解除中...")
+                                } else {
+                                    Image(systemName: "minus.circle.fill")
+                                    Text("デバイス連携解除")
+                                }
                             }
+                            .font(.body)
+                            .fontWeight(.medium)
+                            .foregroundColor(.white)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(Color.red.opacity(isUnlinking ? 0.6 : 1.0))
+                            .cornerRadius(12)
                         }
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.red.opacity(isUnlinking ? 0.6 : 1.0))
-                        .cornerRadius(12)
+                        .disabled(isUnlinking)
                     }
-                    .disabled(isUnlinking)
 
-                    // Delete device button (hidden for sample devices)
-                    if !device.isDemo {
+                    // Delete device button (only for owners of non-demo devices)
+                    if device.canDeleteDevice {
                         Button(action: {
                             showDeleteConfirmation = true
                         }) {

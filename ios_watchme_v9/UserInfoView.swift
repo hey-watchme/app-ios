@@ -106,12 +106,16 @@ struct UserInfoView: View {
                                 showingAvatarPicker = true
                             }) {
                                 ZStack(alignment: .bottomTrailing) {
-                                    // ✅ CLAUDE.md: public.usersのuser_idを使用
-                                    AvatarView(userId: userAccountManager.currentUser?.profile?.userId, size: 100)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(Color(.systemBackground), lineWidth: 4)
-                                        )
+                                    // ✅ SSOT: UserProfile.avatarUrl を渡す
+                                    AvatarView(
+                                        userId: userAccountManager.currentUser?.profile?.userId,
+                                        size: 100,
+                                        avatarUrl: userAccountManager.currentUser?.profile?.avatarUrl
+                                    )
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color(.systemBackground), lineWidth: 4)
+                                    )
 
                                     // カメラアイコンを追加
                                     Circle()
@@ -133,7 +137,7 @@ struct UserInfoView: View {
                         } else {
                             // 閲覧専用モード: アバター編集不可
                             ZStack(alignment: .bottomTrailing) {
-                                AvatarView(userId: nil, size: 100)
+                                AvatarView(userId: nil, size: 100, avatarUrl: nil)
                                     .overlay(
                                         Circle()
                                             .stroke(Color(.systemBackground), lineWidth: 4)

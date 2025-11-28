@@ -228,17 +228,15 @@ struct DeviceSettingsView: View {
                         }
                     },
                     onEditSubject: { subject in
-                        // Sample devices: read-only (no subject editing)
-                        if !isSampleSection {
-                            editingContext = SubjectEditingContext(
-                                deviceID: device.device_id,
-                                editingSubject: subject
-                            )
-                        }
+                        // Always allow navigation (view/edit depends on device permissions)
+                        editingContext = SubjectEditingContext(
+                            deviceID: device.device_id,
+                            editingSubject: subject
+                        )
                     },
                     onAddSubject: {
-                        // Sample devices: read-only (no subject adding)
-                        if !isSampleSection {
+                        // Allow navigation if device can edit subject
+                        if device.canEditSubject {
                             editingContext = SubjectEditingContext(
                                 deviceID: device.device_id,
                                 editingSubject: nil
@@ -246,10 +244,8 @@ struct DeviceSettingsView: View {
                         }
                     },
                     onEditDevice: {
-                        // Sample devices: read-only (view only)
-                        if !isSampleSection {
-                            deviceEditingContext = DeviceEditingContext(device: device)
-                        }
+                        // Always allow navigation (view/edit depends on device permissions)
+                        deviceEditingContext = DeviceEditingContext(device: device)
                     }
                 )
                 .id(device.device_id)

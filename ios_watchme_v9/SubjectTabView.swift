@@ -32,8 +32,8 @@ struct SubjectTabView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             // アバターと基本情報
                             HStack(alignment: .top, spacing: 12) {
-                                // 左：小さめのアバター
-                                AvatarView(type: .subject, id: subject.subjectId, size: 60)
+                                // 左：小さめのアバター（SSOT: Subject.avatarUrl を渡す）
+                                AvatarView(type: .subject, id: subject.subjectId, size: 60, avatarUrl: subject.avatarUrl)
                                     .environmentObject(dataManager)
 
                                 // 右：名前、年齢・性別・地域

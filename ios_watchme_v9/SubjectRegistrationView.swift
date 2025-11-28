@@ -50,6 +50,16 @@ struct SubjectRegistrationView: View {
     private var isEditing: Bool {
         editingSubject != nil
     }
+
+    // View-only mode (based on device permissions)
+    private var isViewOnly: Bool {
+        // Get device from deviceManager
+        guard let device = deviceManager.devices.first(where: { $0.device_id == deviceID }) else {
+            return false
+        }
+        // If device cannot edit subject, this is view-only mode
+        return !device.canEditSubject
+    }
     
     var body: some View {
         NavigationView {
@@ -64,8 +74,8 @@ struct SubjectRegistrationView: View {
                     // メモ
                     notesSection
 
-                    // 削除ボタン（編集時のみ表示）
-                    if isEditing {
+                    // 削除ボタン（編集時かつ編集可能な場合のみ表示）
+                    if isEditing && !isViewOnly {
                         deleteSection
                     }
 
@@ -74,26 +84,32 @@ struct SubjectRegistrationView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
             }
-            .navigationTitle(isEditing ? "観測対象を編集" : "観測対象を追加")
+            .navigationTitle(
+                isViewOnly ? "観測対象の詳細" :
+                isEditing ? "観測対象を編集" : "観測対象を追加"
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("キャンセル") {
+                    Button(isViewOnly ? "閉じる" : "キャンセル") {
                         dismiss()
                     }
                 }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(isEditing ? "更新" : "登録") {
-                        Task {
-                            if isEditing {
-                                await updateSubject()
-                            } else {
-                                await registerSubject()
+                // View-only mode: No save button
+                if !isViewOnly {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button(isEditing ? "更新" : "登録") {
+                            Task {
+                                if isEditing {
+                                    await updateSubject()
+                                } else {
+                                    await registerSubject()
+                                }
                             }
                         }
+                        .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                     }
-                    .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || isLoading)
                 }
             }
             .onAppear {
@@ -206,7 +222,9 @@ struct SubjectRegistrationView: View {
             VStack(spacing: 12) {
                 // UserInfoViewと同じUIデザイン：アバター + 右下にカメラアイコン
                 Button(action: {
-                    showingAvatarPicker = true
+                    if !isViewOnly {
+                        showingAvatarPicker = true
+                    }
                 }) {
                     ZStack(alignment: .bottomTrailing) {
                         // アバター画像表示
@@ -285,6 +303,7 @@ struct SubjectRegistrationView: View {
                     
                     TextField("例：田中太郎", text: $name)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disabled(isViewOnly)
                 }
                 
                 // 年齢（任意）
@@ -297,6 +316,7 @@ struct SubjectRegistrationView: View {
                     TextField("例：25", text: $age)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
                         .keyboardType(.numberPad)
+                        .disabled(isViewOnly)
                 }
                 
                 // 性別（任意）
@@ -329,6 +349,7 @@ struct SubjectRegistrationView: View {
                         .background(Color(.systemGray6))
                         .cornerRadius(8)
                     }
+                    .disabled(isViewOnly)
                 }
             }
         }
@@ -349,6 +370,7 @@ struct SubjectRegistrationView: View {
                 TextField("例：趣味はランニング、朝型の生活リズム", text: $notes, axis: .vertical)
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .lineLimit(3...6)
+                    .disabled(isViewOnly)
             }
         }
     }

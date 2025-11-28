@@ -870,9 +870,9 @@ struct SimpleDashboardView: View {
     @ViewBuilder
     private func commentRow(_ comment: SubjectComment) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            // アバター表示（AvatarViewはユーザーIDから自動的にURLを構築）
-            AvatarView(userId: comment.userId, size: 32)
-            
+            // アバター表示（SSOT: SubjectComment.userAvatarUrl を渡す）
+            AvatarView(userId: comment.userId, size: 32, avatarUrl: comment.userAvatarUrl)
+
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(comment.displayName)

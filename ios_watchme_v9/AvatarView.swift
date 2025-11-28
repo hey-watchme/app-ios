@@ -24,22 +24,25 @@ struct AvatarView: View {
     let type: AvatarType
     let id: String?
     let size: CGFloat
+    let providedAvatarUrl: String? // SSOT: Subject.avatarUrl or User.avatarUrl from parent
     let useS3: Bool = true // ✅ Avatar Uploader APIを使用してS3に保存
-    
+
     // 互換性のための初期化（既存のuser用）
-    init(userId: String?, size: CGFloat = 80) {
+    init(userId: String?, size: CGFloat = 80, avatarUrl: String? = nil) {
         self.type = .user
         self.id = userId
         self.size = size
+        self.providedAvatarUrl = avatarUrl
     }
-    
+
     // 汎用的な初期化
-    init(type: AvatarType, id: String?, size: CGFloat = 80) {
+    init(type: AvatarType, id: String?, size: CGFloat = 80, avatarUrl: String? = nil) {
         self.type = type
         self.id = id
         self.size = size
+        self.providedAvatarUrl = avatarUrl
     }
-    
+
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var avatarUrl: URL?
     @State private var isLoadingAvatar = true
@@ -85,6 +88,11 @@ struct AvatarView: View {
         .onChange(of: id) { oldValue, newValue in
             loadAvatar()
         }
+        .onChange(of: providedAvatarUrl) { oldValue, newValue in
+            // SSOT が更新されたら即座に再読み込み
+            print("🔄 [AvatarView] providedAvatarUrl changed: \(oldValue ?? "nil") -> \(newValue ?? "nil")")
+            loadAvatar()
+        }
         .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AvatarUpdated"))) { _ in
             // アバターが更新されたら再読み込み
             lastUpdateTime = Date()
@@ -101,11 +109,18 @@ struct AvatarView: View {
 
             isLoadingAvatar = true
 
-            if useS3 {
-                // S3のURLを設定（Avatar Uploader API経由でアップロード済み）
+            // SSOT: providedAvatarUrl を優先使用
+            if let providedUrl = providedAvatarUrl, !providedUrl.isEmpty {
+                // Parent component から渡された avatar_url を使用（Subject.avatarUrl など）
+                let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
+                self.avatarUrl = URL(string: "\(providedUrl)?t=\(timestamp)")
+                print("✅ [AvatarView] Using provided avatarUrl from SSOT: \(providedUrl)")
+            } else if useS3 {
+                // Fallback: S3のURLを設定（Avatar Uploader API経由でアップロード済み）
                 let baseURL = AWSManager.shared.getAvatarURL(type: type.s3Type, id: id)
                 let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
                 self.avatarUrl = URL(string: "\(baseURL.absoluteString)?t=\(timestamp)")
+                print("⚠️ [AvatarView] Using S3 fallback URL (providedAvatarUrl was nil)")
             } else {
                 // Supabaseから取得（既存の実装、userのみ対応）
                 if type == .user {

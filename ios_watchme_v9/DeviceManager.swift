@@ -391,11 +391,18 @@ class DeviceManager: ObservableObject {
             .execute()
             .value
 
-        // Step 4: roleの情報をデバイスに付与
+        // Step 4: roleの情報をデバイスに付与 + デバッグログ
         for i in devices.indices {
             if let userDevice = userDevices.first(where: { $0.device_id == devices[i].device_id }) {
                 devices[i].role = userDevice.role
             }
+
+            // デバッグ: デバイスごとにSubject情報を確認
+            let device = devices[i]
+            print("🔍 Device[\(i)]: \(device.device_id) (type: \(device.device_type))")
+            print("   subject_id: \(device.subject_id ?? "nil")")
+            print("   subject.name: \(device.subject?.name ?? "nil")")
+            print("   subject.avatarUrl: \(device.subject?.avatarUrl ?? "nil")")
         }
 
         return devices
@@ -414,6 +421,9 @@ class DeviceManager: ObservableObject {
 
         if let device = devices.first {
             print("✅ Sample device fetched")
+            print("🔍 Sample device subject_id: \(device.subject_id ?? "nil")")
+            print("🔍 Sample device subject: \(device.subject?.name ?? "nil")")
+            print("🔍 Sample device subject.avatarUrl: \(device.subject?.avatarUrl ?? "nil")")
             return device
         } else {
             print("⚠️ Sample device not found")
@@ -774,9 +784,50 @@ struct Device: Codable, Equatable {
     // JOIN取得した場合のsubject情報を保持（パフォーマンス最適化）
     var subject: Subject?
 
-    // デモデバイスかどうかを判定
+    // MARK: - Permission Helpers
+
+    // Demo device (read-only sample data)
     var isDemo: Bool {
         return device_type == "demo"
+    }
+
+    // Can edit device settings (timezone, etc.)
+    var canEditDevice: Bool {
+        // Owner can edit (except demo devices)
+        if role == "owner" && !isDemo {
+            return true
+        }
+        return false
+    }
+
+    // Can delete device from database
+    var canDeleteDevice: Bool {
+        // Only non-demo owners can delete
+        return role == "owner" && !isDemo
+    }
+
+    // Can unlink device from user_devices (disconnect)
+    var canUnlinkDevice: Bool {
+        // Anyone with a role can unlink (including demo viewers)
+        return role != nil
+    }
+
+    // Can view device details
+    var canViewDeviceDetails: Bool {
+        // All devices can be viewed
+        return true
+    }
+
+    // Can edit subject
+    var canEditSubject: Bool {
+        // Owner can edit subject (except demo devices)
+        return role == "owner" && !isDemo
+    }
+
+    // Can view subject details
+    var canViewSubjectDetails: Bool {
+        // All subjects can be viewed
+        return true
     }
 
     // Custom decoding to handle Supabase JOIN response

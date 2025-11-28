@@ -101,8 +101,8 @@ struct HeaderView: View {
         if let subject = deviceManager.selectedSubject {
             // 観測対象が設定されている場合
             HStack(spacing: 8) {
-                // アバター表示（AvatarViewコンポーネントを使用）
-                AvatarView(type: .subject, id: subject.subjectId, size: 32)
+                // アバター表示（SSOT: Subject.avatarUrl を渡す）
+                AvatarView(type: .subject, id: subject.subjectId, size: 32, avatarUrl: subject.avatarUrl)
                     .environmentObject(dataManager)
 
                 // 観測対象名（「さん」付き）
