@@ -602,6 +602,50 @@ class SupabaseDataManager: ObservableObject {
         }
     }
 
+    /// Fetch daily_results for a date range (multiple days)
+    /// - Parameters:
+    ///   - deviceId: Device ID
+    ///   - startDate: Start date of the period
+    ///   - endDate: End date of the period
+    ///   - timezone: Device-specific timezone
+    /// - Returns: Array of DashboardSummary sorted by date (oldest first)
+    func fetchDailyResultsRange(deviceId: String, startDate: Date, endDate: Date, timezone: TimeZone? = nil) async -> [DashboardSummary] {
+        let targetTimezone = timezone ?? TimeZone.current
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = targetTimezone
+
+        let startDateString = formatter.string(from: startDate)
+        let endDateString = formatter.string(from: endDate)
+
+        #if DEBUG
+        print("📊 [Range Query] Fetching daily_results")
+        print("   Device: \(deviceId)")
+        print("   Period: \(startDateString) 〜 \(endDateString)")
+        #endif
+
+        do {
+            let results: [DashboardSummary] = try await supabase
+                .from("daily_results")
+                .select()
+                .eq("device_id", value: deviceId)
+                .gte("local_date", value: startDateString)
+                .lte("local_date", value: endDateString)
+                .order("local_date", ascending: true)
+                .execute()
+                .value
+
+            #if DEBUG
+            print("✅ [Range Query] Fetched \(results.count) daily results")
+            #endif
+            return results
+
+        } catch {
+            print("❌ [Range Query] Failed to fetch daily_results: \(error)")
+            return []
+        }
+    }
+
     // MARK: - Dashboard Time Blocks Methods
 
     /// spot_resultsテーブルから指定日の詳細データを取得

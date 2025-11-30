@@ -1,0 +1,105 @@
+//
+//  DailyDetailView.swift
+//  ios_watchme_v9
+//
+//  Daily分析の詳細ページ（モックアップ）
+//
+
+import SwiftUI
+
+struct DailyDetailView: View {
+    let deviceId: String
+    let localDate: String
+
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        NavigationView {
+            ScrollView {
+                VStack(spacing: 24) {
+                    // Placeholder content
+                    VStack(spacing: 16) {
+                        Image(systemName: "calendar.circle.fill")
+                            .font(.system(size: 64))
+                            .foregroundColor(.accentPurple)
+
+                        Text("Daily分析の詳細")
+                            .font(.title2)
+                            .fontWeight(.bold)
+
+                        Text("ここにDaily分析の詳細が入ります")
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                            .multilineTextAlignment(.center)
+
+                        Divider()
+                            .padding(.vertical)
+
+                        // Debug info
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Text("Device ID:")
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Text(deviceId)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+
+                            HStack {
+                                Text("Local Date:")
+                                    .fontWeight(.medium)
+                                Spacer()
+                                Text(localDate)
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6))
+                        )
+
+                        // Future implementation preview
+                        VStack(alignment: .leading, spacing: 12) {
+                            Text("実装予定の内容:")
+                                .font(.subheadline)
+                                .fontWeight(.semibold)
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Label("日次平均 vibe_score", systemImage: "chart.line.uptrend.xyaxis")
+                                Label("日次サマリー（summary）", systemImage: "text.alignleft")
+                                Label("時系列グラフ（vibe_scores配列）", systemImage: "waveform.path.ecg")
+                                Label("感情変化イベント（burst_events）", systemImage: "bolt.fill")
+                                Label("その日のSpot一覧", systemImage: "list.bullet")
+                            }
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(Color(.systemGray6))
+                        )
+
+                        Text("📝 次フェーズでデータ取得を実装")
+                            .font(.caption)
+                            .foregroundColor(.orange)
+                            .padding(.top)
+                    }
+                    .padding()
+                }
+            }
+            .navigationTitle("Daily分析")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("閉じる") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
