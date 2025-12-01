@@ -57,12 +57,12 @@ struct BehaviorGraphView: View {
                                 VStack(spacing: 12) {
                                     ForEach(Array(report.summaryRanking.prefix(10).enumerated()), id: \.offset) { index, event in
                                         HStack(spacing: 16) {
-                                            Text(event.event)
+                                            Text(event.displayName)
                                                 .font(.body)
                                                 .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
-                                            
+
                                             Spacer()
-                                            
+
                                             HStack(spacing: 4) {
                                                 Text("\(event.count)")
                                                     .font(.callout)
@@ -73,7 +73,7 @@ struct BehaviorGraphView: View {
                                                     .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
                                             }
                                         }
-                                        
+
                                         if index < min(9, report.summaryRanking.count - 1) {
                                             Divider()
                                                 .background(Color.safeColor("BehaviorBackgroundSecondary"))
@@ -282,7 +282,7 @@ struct TimeBlockDetailView: View {
                     if let events = timeBlock.events, !events.isEmpty {
                         ForEach(events) { event in
                             HStack {
-                                Text(event.event)
+                                Text(event.displayName)
                                     .font(.subheadline)
                                 Spacer()
                                 Text("\(event.count)回")
