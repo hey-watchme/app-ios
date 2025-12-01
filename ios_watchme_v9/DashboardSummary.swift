@@ -50,10 +50,25 @@ struct DashboardSummary: Codable {
         case burstEvents = "burst_events"
     }
     
+    // Manual initializer for creating placeholder data
+    init(deviceId: UUID, date: String, processedCount: Int?, lastTimeBlock: String?, createdAt: String?, updatedAt: String?, averageVibe: Float?, vibeScores: [VibeScoreDataPoint]?, analysisResult: AnalysisResult?, insights: String?, burstEvents: [BurstEvent]?) {
+        self.deviceId = deviceId
+        self.date = date
+        self.processedCount = processedCount
+        self.lastTimeBlock = lastTimeBlock
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.averageVibe = averageVibe
+        self.vibeScores = vibeScores
+        self.analysisResult = analysisResult
+        self.insights = insights
+        self.burstEvents = burstEvents
+    }
+
     // カスタムデコーダーで、JSONB型のフィールドをスキップしつつ必要なフィールドだけ取得
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
-        
+
         deviceId = try container.decode(UUID.self, forKey: .deviceId)
         date = try container.decode(String.self, forKey: .date)
         processedCount = try container.decodeIfPresent(Int.self, forKey: .processedCount)

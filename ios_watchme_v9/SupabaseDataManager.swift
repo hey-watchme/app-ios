@@ -646,6 +646,78 @@ class SupabaseDataManager: ObservableObject {
         }
     }
 
+    // MARK: - Spot Results Methods
+
+    /// Fetch single spot result with details
+    /// - Parameters:
+    ///   - deviceId: Device ID
+    ///   - recordedAt: recorded_at timestamp (ISO8601)
+    /// - Returns: SpotResult with full details or nil if not found
+    func fetchSpotDetail(deviceId: String, recordedAt: String) async -> SpotResult? {
+        #if DEBUG
+        print("📊 [Spot Detail] Fetching spot_results")
+        print("   Device: \(deviceId)")
+        print("   Recorded At: \(recordedAt)")
+        #endif
+
+        do {
+            let results: [SpotResult] = try await supabase
+                .from("spot_results")
+                .select()
+                .eq("device_id", value: deviceId)
+                .eq("recorded_at", value: recordedAt)
+                .limit(1)
+                .execute()
+                .value
+
+            #if DEBUG
+            if let result = results.first {
+                print("✅ [Spot Detail] Found spot result")
+            } else {
+                print("⚠️ [Spot Detail] No spot result found")
+            }
+            #endif
+
+            return results.first
+        } catch {
+            print("❌ [Spot Detail] Failed to fetch spot_results: \(error)")
+            return nil
+        }
+    }
+
+    /// Fetch all spot results for a specific day
+    /// - Parameters:
+    ///   - deviceId: Device ID
+    ///   - localDate: Local date string (yyyy-MM-dd)
+    /// - Returns: Array of SpotResult sorted by local_time
+    func fetchSpotsForDay(deviceId: String, localDate: String) async -> [SpotResult] {
+        #if DEBUG
+        print("📊 [Spots for Day] Fetching spot_results")
+        print("   Device: \(deviceId)")
+        print("   Local Date: \(localDate)")
+        #endif
+
+        do {
+            let results: [SpotResult] = try await supabase
+                .from("spot_results")
+                .select()
+                .eq("device_id", value: deviceId)
+                .eq("local_date", value: localDate)
+                .order("local_time", ascending: true)
+                .execute()
+                .value
+
+            #if DEBUG
+            print("✅ [Spots for Day] Fetched \(results.count) spot results")
+            #endif
+
+            return results
+        } catch {
+            print("❌ [Spots for Day] Failed to fetch spot_results: \(error)")
+            return []
+        }
+    }
+
     // MARK: - Dashboard Time Blocks Methods
 
     /// spot_resultsテーブルから指定日の詳細データを取得
