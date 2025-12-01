@@ -9,62 +9,38 @@ import SwiftUI
 
 struct SpotDetailView: View {
     let deviceId: String
-    let recordedAt: String
+    let spotData: DashboardTimeBlock
 
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var dataManager: SupabaseDataManager
 
-    @State private var spotResult: SpotResult?
-    @State private var isLoading = true
-
     var body: some View {
         NavigationView {
             ScrollView {
-                if isLoading {
-                    ProgressView()
-                        .padding()
-                } else if let result = spotResult {
-                    VStack(spacing: 24) {
-                        // Time header
-                        timeHeader(result)
+                VStack(spacing: 24) {
+                    // Time header
+                    timeHeader
 
-                        // Vibe Score
-                        if let vibeScore = result.vibeScore {
-                            vibeScoreCard(vibeScore)
-                        }
-
-                        // Summary
-                        if let summary = result.summary {
-                            contentCard(title: "Summary", content: summary, icon: "text.alignleft")
-                        }
-
-                        // Behavior
-                        if let behavior = result.behavior {
-                            contentCard(title: "Behavior", content: behavior, icon: "figure.walk")
-                        }
-
-                        // Transcription
-                        if let transcription = result.transcription {
-                            contentCard(title: "Transcription", content: transcription, icon: "waveform")
-                        }
-
-                        Spacer()
-                            .frame(height: 40)
+                    // Vibe Score
+                    if let vibeScore = spotData.vibeScore {
+                        vibeScoreCard(vibeScore)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                } else {
-                    VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 48))
-                            .foregroundColor(.orange)
 
-                        Text("Data not found")
-                            .font(.title3)
-                            .fontWeight(.medium)
+                    // Summary
+                    if let summary = spotData.summary {
+                        contentCard(title: "Summary", content: summary, icon: "text.alignleft")
                     }
-                    .padding()
+
+                    // Behavior
+                    if let behavior = spotData.behavior {
+                        contentCard(title: "Behavior", content: behavior, icon: "figure.walk")
+                    }
+
+                    Spacer()
+                        .frame(height: 40)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
             }
             .background(Color(.systemBackground))
             .navigationTitle("Spot Analysis")
@@ -77,24 +53,13 @@ struct SpotDetailView: View {
                 }
             }
         }
-        .task {
-            await loadData()
-        }
-    }
-
-    // MARK: - Data Loading
-
-    private func loadData() async {
-        isLoading = true
-        spotResult = await dataManager.fetchSpotDetail(deviceId: deviceId, recordedAt: recordedAt)
-        isLoading = false
     }
 
     // MARK: - View Components
 
-    private func timeHeader(_ result: SpotResult) -> some View {
+    private var timeHeader: some View {
         VStack(spacing: 8) {
-            if let localDate = result.localDate, let localTime = result.localTime {
+            if let localDate = spotData.date, let localTime = spotData.localTime {
                 Text(formatDate(localDate))
                     .font(.headline)
                     .foregroundColor(.secondary)
@@ -175,13 +140,24 @@ struct SpotDetailView: View {
 
     private func formatTime(_ timeString: String) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        guard let time = formatter.date(from: timeString) else {
-            return timeString
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+
+        // ISO8601 format with milliseconds: "2025-11-27T07:31:01.352"
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+
+        if let time = formatter.date(from: timeString) {
+            formatter.dateFormat = "HH:mm"
+            return formatter.string(from: time)
         }
 
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: time)
+        // Fallback: try without milliseconds
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        if let time = formatter.date(from: timeString) {
+            formatter.dateFormat = "HH:mm"
+            return formatter.string(from: time)
+        }
+
+        return timeString
     }
 
     private func vibeScoreColor(_ score: Double) -> Color {

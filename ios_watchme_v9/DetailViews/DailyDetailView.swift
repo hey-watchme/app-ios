@@ -11,152 +11,114 @@ import Charts
 struct DailyDetailView: View {
     let deviceId: String
     let localDate: String
+    let dailySummary: DashboardSummary
+    let spotResults: [DashboardTimeBlock]
 
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var dataManager: SupabaseDataManager
 
-    @State private var dailySummary: DashboardSummary?
-    @State private var spotResults: [SpotResult] = []
-    @State private var isLoading = true
-    @State private var showSpotDetail = false
-    @State private var selectedSpot: SpotResult?
+    @State private var selectedSpot: DashboardTimeBlock?
 
     var body: some View {
         NavigationView {
             ScrollView {
-                if isLoading {
-                    ProgressView()
-                        .padding()
-                } else if let summary = dailySummary {
-                    VStack(spacing: 24) {
-                        // Date header
-                        dateHeader
-
-                        // Vibe Score
-                        if let vibeScore = summary.averageVibe {
-                            vibeScoreCard(Double(vibeScore))
-                        }
-
-                        // Summary
-                        if let insights = summary.insights {
-                            summaryCard(insights)
-                        }
-
-                        // Vibe Scores Time Series
-                        if let vibeScores = summary.vibeScores, !vibeScores.isEmpty {
-                            vibeScoresChart(vibeScores)
-                        }
-
-                        // Burst Events
-                        if let burstEvents = summary.burstEvents, !burstEvents.isEmpty {
-                            burstEventsSection(burstEvents)
-                        }
-
-                        // Spot Results
-                        if !spotResults.isEmpty {
-                            spotResultsSection
-                        }
-
-                        Spacer()
-                            .frame(height: 40)
+                VStack(spacing: 24) {
+                    // Vibe Score
+                    if let vibeScore = dailySummary.averageVibe {
+                        vibeScoreCard(Double(vibeScore))
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                } else {
-                    VStack(spacing: 16) {
-                        Image(systemName: "exclamationmark.triangle")
-                            .font(.system(size: 48))
-                            .foregroundColor(.orange)
 
-                        Text("Data not found")
-                            .font(.title3)
-                            .fontWeight(.medium)
+                    // Summary
+                    if let insights = dailySummary.insights {
+                        summaryCard(insights)
                     }
-                    .padding()
+
+                    // Vibe Scores Time Series
+                    if let vibeScores = dailySummary.vibeScores, !vibeScores.isEmpty {
+                        vibeScoresChart(vibeScores)
+                    }
+
+                    // Burst Events
+                    if let burstEvents = dailySummary.burstEvents, !burstEvents.isEmpty {
+                        burstEventsSection(burstEvents)
+                    }
+
+                    // Spot Results
+                    if !spotResults.isEmpty {
+                        spotResultsSection
+                    }
+
+                    Spacer()
+                        .frame(height: 40)
                 }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
             }
             .background(Color(.systemBackground))
-            .navigationTitle("Daily Analysis")
+            .navigationTitle(formatDateHeader(localDate))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Close") {
+                    Button("閉じる") {
                         dismiss()
                     }
                 }
             }
         }
         .sheet(item: $selectedSpot) { spot in
-            SpotDetailView(deviceId: deviceId, recordedAt: spot.recordedAt)
+            SpotDetailView(deviceId: deviceId, spotData: spot)
                 .environmentObject(dataManager)
         }
-        .task {
-            await loadData()
-        }
-    }
-
-    // MARK: - Data Loading
-
-    private func loadData() async {
-        isLoading = true
-
-        // Fetch daily summary
-        let startDate = dateFromString(localDate) ?? Date()
-        let dailyResults = await dataManager.fetchDailyResultsRange(
-            deviceId: deviceId,
-            startDate: startDate,
-            endDate: startDate
-        )
-        dailySummary = dailyResults.first
-
-        // Fetch spot results for the day
-        spotResults = await dataManager.fetchSpotsForDay(deviceId: deviceId, localDate: localDate)
-
-        isLoading = false
     }
 
     // MARK: - View Components
 
-    private var dateHeader: some View {
-        Text(formatDateHeader(localDate))
-            .font(.title2)
-            .fontWeight(.bold)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
     private func vibeScoreCard(_ score: Double) -> some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .foregroundColor(.accentPurple)
-                Text("Daily Average Vibe Score")
-                    .font(.headline)
-                Spacer()
-            }
+        VStack(spacing: 8) {
+            // Emoji (same as ModernVibeCard)
+            Text(emotionEmoji(for: score))
+                .font(.system(size: 108))
 
-            Text(String(format: "%.1f", score))
-                .font(.system(size: 48, weight: .bold))
-                .foregroundColor(vibeScoreColor(score))
+            // Score
+            Text(String(format: "%.0f pt", score))
+                .font(.caption)
+                .fontWeight(.semibold)
+                .foregroundColor(scoreColor(for: score).opacity(0.8))
         }
         .frame(maxWidth: .infinity)
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
-        )
+        .padding(.bottom, 24)
+    }
+
+    // Emoji logic (same as ModernVibeCard)
+    private func emotionEmoji(for score: Double) -> String {
+        if score > 50 {
+            return "👏"
+        } else if score > 30 {
+            return "✌️"
+        } else if score > 0 {
+            return "👍"
+        } else if score > -30 {
+            return "👌"
+        } else if score > -50 {
+            return "💪"
+        } else {
+            return "💔"
+        }
+    }
+
+    // Score color logic (same as ModernVibeCard)
+    private func scoreColor(for score: Double) -> Color {
+        if score > 30 {
+            return .green
+        } else if score < -30 {
+            return .red
+        } else {
+            return .gray
+        }
     }
 
     private func summaryCard(_ summary: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "text.alignleft")
-                    .foregroundColor(.accentPurple)
-                Text("Daily Summary")
-                    .font(.headline)
-                Spacer()
-            }
-
             Text(summary)
                 .font(.body)
                 .foregroundColor(.primary)
@@ -212,7 +174,7 @@ struct DailyDetailView: View {
             HStack {
                 Image(systemName: "bolt.fill")
                     .foregroundColor(.accentPurple)
-                Text("Burst Events")
+                Text("ハイライト")
                     .font(.headline)
                 Spacer()
             }
@@ -256,7 +218,7 @@ struct DailyDetailView: View {
             HStack {
                 Image(systemName: "list.bullet")
                     .foregroundColor(.accentPurple)
-                Text("Spot Results (\(spotResults.count))")
+                Text("時間別分析結果 (\(spotResults.count))")
                     .font(.headline)
                 Spacer()
             }
@@ -275,7 +237,7 @@ struct DailyDetailView: View {
         )
     }
 
-    private func spotResultRow(_ spot: SpotResult) -> some View {
+    private func spotResultRow(_ spot: DashboardTimeBlock) -> some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
                 if let localTime = spot.localTime {
@@ -298,7 +260,7 @@ struct DailyDetailView: View {
                 Text(String(format: "%.1f", vibeScore))
                     .font(.title3)
                     .fontWeight(.semibold)
-                    .foregroundColor(vibeScoreColor(vibeScore))
+                    .foregroundColor(scoreColor(for: vibeScore))
             }
 
             Image(systemName: "chevron.right")
@@ -328,13 +290,24 @@ struct DailyDetailView: View {
 
     private func formatTime(_ timeString: String) -> String {
         let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm:ss"
-        guard let time = formatter.date(from: timeString) else {
-            return timeString
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+
+        // ISO8601 format with milliseconds: "2025-11-27T07:31:01.352"
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
+
+        if let time = formatter.date(from: timeString) {
+            formatter.dateFormat = "HH:mm"
+            return formatter.string(from: time)
         }
 
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: time)
+        // Fallback: try without milliseconds
+        formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+        if let time = formatter.date(from: timeString) {
+            formatter.dateFormat = "HH:mm"
+            return formatter.string(from: time)
+        }
+
+        return timeString
     }
 
     private func dateFromString(_ dateString: String) -> Date? {
@@ -343,15 +316,4 @@ struct DailyDetailView: View {
         return formatter.date(from: dateString)
     }
 
-    private func vibeScoreColor(_ score: Double) -> Color {
-        if score >= 30 {
-            return .green
-        } else if score >= 0 {
-            return .blue
-        } else if score >= -30 {
-            return .orange
-        } else {
-            return .red
-        }
-    }
 }

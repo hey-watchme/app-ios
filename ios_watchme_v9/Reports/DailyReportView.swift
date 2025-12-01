@@ -28,10 +28,14 @@ struct DailyReportView: View {
 
     @State private var selectedPeriod: ReportPeriod = .week
     @State private var dailySummaries: [DashboardSummary] = []
+    @State private var spotResultsByDate: [String: [DashboardTimeBlock]] = [:]
     @State private var isLoading = false
+    @State private var isLoadingSpotResults = false
 
     @State private var showDailyDetailSheet = false
     @State private var selectedDailyDate: String = ""
+    @State private var selectedDailySummary: DashboardSummary?
+    @State private var selectedSpotResults: [DashboardTimeBlock] = []
 
     var body: some View {
         ScrollView {
@@ -69,8 +73,24 @@ struct DailyReportView: View {
         }
         .background(Color(.systemBackground))
         .sheet(isPresented: $showDailyDetailSheet) {
-            if let deviceId = deviceManager.selectedDeviceID {
-                DailyDetailView(deviceId: deviceId, localDate: selectedDailyDate)
+            if let deviceId = deviceManager.selectedDeviceID,
+               let dailySummary = selectedDailySummary {
+                DailyDetailView(
+                    deviceId: deviceId,
+                    localDate: selectedDailyDate,
+                    dailySummary: dailySummary,
+                    spotResults: selectedSpotResults
+                )
+                .environmentObject(deviceManager)
+                .environmentObject(dataManager)
+            }
+        }
+        .onChange(of: showDailyDetailSheet) { _, newValue in
+            if newValue {
+                // Fetch spot results when opening detail view
+                Task {
+                    await loadSpotResultsForSelectedDate()
+                }
             }
         }
         .task {
@@ -111,6 +131,7 @@ struct DailyReportView: View {
         print("📅 [DailyReport] End date: \(formatter.string(from: today))")
         #endif
 
+        // Fetch daily summaries
         let results = await dataManager.fetchDailyResultsRange(
             deviceId: deviceId,
             startDate: startDate,
@@ -118,7 +139,7 @@ struct DailyReportView: View {
         )
 
         #if DEBUG
-        print("📊 [DailyReport] Fetched \(results.count) records")
+        print("📊 [DailyReport] Fetched \(results.count) daily records")
         if !results.isEmpty {
             print("📊 [DailyReport] First date: \(results.first?.date ?? "unknown")")
             print("📊 [DailyReport] Last date: \(results.last?.date ?? "unknown")")
@@ -135,9 +156,43 @@ struct DailyReportView: View {
         }
         #endif
 
+        // Note: Spot results will be fetched on-demand when user opens detail view
+        // This avoids loading potentially 90 days * N recordings upfront
+        spotResultsByDate = [:]
+
         // Fill missing days with nil data to show full time axis
         dailySummaries = fillMissingDays(results: results, startDate: startDate, endDate: today)
         isLoading = false
+    }
+
+    private func loadSpotResultsForSelectedDate() async {
+        guard let deviceId = deviceManager.selectedDeviceID else { return }
+
+        // Check if already loaded
+        if let cached = spotResultsByDate[selectedDailyDate] {
+            selectedSpotResults = cached
+            return
+        }
+
+        isLoadingSpotResults = true
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: selectedDailyDate) else {
+            isLoadingSpotResults = false
+            return
+        }
+
+        let timezone = deviceManager.getTimezone(for: deviceId)
+        let spotResults = await dataManager.fetchDashboardTimeBlocks(
+            deviceId: deviceId,
+            date: date,
+            timezone: timezone
+        )
+
+        spotResultsByDate[selectedDailyDate] = spotResults
+        selectedSpotResults = spotResults
+        isLoadingSpotResults = false
     }
 
     /// Fill missing days with placeholder data to show complete time axis
@@ -470,6 +525,7 @@ struct DailyReportView: View {
 
                 Button(action: {
                     selectedDailyDate = summary.date
+                    selectedDailySummary = summary
                     showDailyDetailSheet = true
                 }) {
                     HStack {

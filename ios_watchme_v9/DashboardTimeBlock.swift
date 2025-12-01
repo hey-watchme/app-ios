@@ -47,7 +47,7 @@ struct EmotionChunk: Codable, Equatable {
 
 // MARK: - Dashboard Time Block
 
-struct DashboardTimeBlock: Codable, Equatable {
+struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let deviceId: String
     let date: String?  // local_dateをdateにマッピング（nullの可能性あり）
     let localTime: String?  // local_time (YYYY-MM-DD HH:MM:SS) - ✅ ユニークキー
@@ -63,6 +63,11 @@ struct DashboardTimeBlock: Codable, Equatable {
 
     // 表示用の時刻文字列（初期化時に1回だけ計算してキャッシュ）
     let displayTime: String
+
+    // Identifiable conformance
+    var id: String {
+        "\(deviceId)_\(localTime ?? "unknown")"
+    }
 
     enum CodingKeys: String, CodingKey {
         case deviceId = "device_id"
