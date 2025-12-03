@@ -455,6 +455,8 @@ struct DeviceCard_Previews: PreviewProvider {
             gender: "男性",
             avatarUrl: nil,
             notes: nil,
+            prefecture: "東京都",
+            city: "渋谷区",
             createdByUserId: "user1",
             createdAt: "2025-08-02T00:00:00Z",
             updatedAt: "2025-08-02T00:00:00Z"

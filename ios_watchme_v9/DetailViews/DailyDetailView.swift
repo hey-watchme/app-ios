@@ -214,63 +214,13 @@ struct DailyDetailView: View {
     }
 
     private var spotResultsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "list.bullet")
-                    .foregroundColor(.accentPurple)
-                Text("時間別分析結果 (\(spotResults.count))")
-                    .font(.headline)
-                Spacer()
+        SpotAnalysisListSection(
+            title: "時間別分析結果 (\(spotResults.count))",
+            spotResults: spotResults,
+            showMoreButton: false,
+            onTapSpot: { spot in
+                selectedSpot = spot
             }
-
-            ForEach(spotResults) { spot in
-                spotResultRow(spot)
-                    .onTapGesture {
-                        selectedSpot = spot
-                    }
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
-        )
-    }
-
-    private func spotResultRow(_ spot: DashboardTimeBlock) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 4) {
-                if let localTime = spot.localTime {
-                    Text(formatTime(localTime))
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                }
-
-                if let summary = spot.summary {
-                    Text(summary)
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .lineLimit(2)
-                }
-            }
-
-            Spacer()
-
-            if let vibeScore = spot.vibeScore {
-                Text(String(format: "%.1f", vibeScore))
-                    .font(.title3)
-                    .fontWeight(.semibold)
-                    .foregroundColor(scoreColor(for: vibeScore))
-            }
-
-            Image(systemName: "chevron.right")
-                .font(.caption)
-                .foregroundColor(.secondary)
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white)
         )
     }
 

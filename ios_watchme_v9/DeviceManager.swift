@@ -407,7 +407,7 @@ class DeviceManager: ObservableObject {
         // 🔧 subjects()内のnotesカラムを明示的に指定してnotesが確実に取得されるようにする
         var devices: [Device] = try await supabase
             .from("devices")
-            .select("*, subjects(subject_id, name, age, gender, avatar_url, notes, created_by_user_id, created_at, updated_at)")
+            .select("*, subjects(subject_id, name, age, gender, avatar_url, notes, prefecture, city, created_by_user_id, created_at, updated_at)")
             .in("device_id", values: deviceIds)
             .execute()
             .value
@@ -435,7 +435,7 @@ class DeviceManager: ObservableObject {
 
         let devices: [Device] = try await supabase
             .from("devices")
-            .select("*, subjects(subject_id, name, age, gender, avatar_url, notes, created_by_user_id, created_at, updated_at)")
+            .select("*, subjects(subject_id, name, age, gender, avatar_url, notes, prefecture, city, created_by_user_id, created_at, updated_at)")
             .eq("device_id", value: DeviceManager.sampleDeviceID)
             .execute()
             .value

@@ -139,11 +139,16 @@ class UserAccountManager: ObservableObject {
         let checkStartTime = Date()
         print("⏱️ [AUTH-CHECK] 認証チェック開始")
 
-        Task { @MainActor in
+        // 非同期処理をバックグラウンドで開始（メインスレッドをブロックしない）
+        Task.detached(priority: .userInitiated) { [weak self] in
+            guard let self = self else { return }
+
             print("⏱️ [AUTH-CHECK] Task開始: \(Date().timeIntervalSince(checkStartTime))秒")
 
             let loadStart = Date()
-            let savedUser = loadUserFromDefaults()
+            let savedUser = await Task { @MainActor in
+                self.loadUserFromDefaults()
+            }.value
             print("⏱️ [AUTH-CHECK] UserDefaults読み込み完了: \(Date().timeIntervalSince(loadStart))秒")
 
             if let savedUser = savedUser {
@@ -152,17 +157,24 @@ class UserAccountManager: ObservableObject {
                 if let expiresAt = savedUser.expiresAt, expiresAt > Date().addingTimeInterval(7200) {
                     // まだ2時間以上有効 → リフレッシュ不要
                     print("✅ [Phase 2-A] トークンは有効（有効期限: \(expiresAt)）- リフレッシュスキップ")
-                    self.currentUser = savedUser
-                    self.isAuthenticated = true
-                    self.authState = .authenticated(userId: savedUser.id)
 
-                    // トークンリフレッシュタイマーを開始
-                    startTokenRefreshTimer()
+                    await MainActor.run {
+                        self.currentUser = savedUser
+                        self.isAuthenticated = true
+                        self.authState = .authenticated(userId: savedUser.id)
+                    }
+
+                    // トークンリフレッシュタイマーを開始（メインスレッドで実行）
+                    await MainActor.run {
+                        self.startTokenRefreshTimer()
+                    }
 
                     // 統一初期化フローを実行
-                    await initializeAuthenticatedUser(authUserId: savedUser.id)
+                    await self.initializeAuthenticatedUser(authUserId: savedUser.id)
 
-                    self.isCheckingAuthStatus = false
+                    await MainActor.run {
+                        self.isCheckingAuthStatus = false
+                    }
                     return
                 }
 
@@ -173,16 +185,18 @@ class UserAccountManager: ObservableObject {
                 guard let refreshToken = savedUser.refreshToken else {
                     // リフレッシュトークンがない → 即座にゲストモードへ
                     print("⚠️ リフレッシュトークンなし - ゲストモードに移行")
-                    clearLocalAuthData()
-                    initializeGuestMode()
-                    self.isCheckingAuthStatus = false
+                    await self.clearLocalAuthData()
+                    await MainActor.run {
+                        self.initializeGuestMode()
+                        self.isCheckingAuthStatus = false
+                    }
                     return
                 }
 
                 // 保存されたトークンでセッションを復元
                 do {
                     // まずリフレッシュトークンでトークンを更新してみる
-                    let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 1)  // 📊 Phase 2-A: 2回→1回に削減
+                    let success = await self.refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 1)  // 📊 Phase 2-A: 2回→1回に削減
 
                     if !success {
                         // リフレッシュ失敗時は保存されたトークンで復元を試みる
@@ -191,25 +205,33 @@ class UserAccountManager: ObservableObject {
                             refreshToken: refreshToken
                         )
 
-                        self.currentUser = savedUser
-                        self.isAuthenticated = true
-                        self.authState = .authenticated(userId: savedUser.id)
+                        await MainActor.run {
+                            self.currentUser = savedUser
+                            self.isAuthenticated = true
+                            self.authState = .authenticated(userId: savedUser.id)
+                        }
                     }
                     // refreshTokenWithRetryが成功した場合は、その中で既にcurrentUserとisAuthenticatedが設定済み
 
-                    if self.isAuthenticated {
+                    let isAuthenticated = await MainActor.run { self.isAuthenticated }
+                    if isAuthenticated {
                         print("✅ 保存された認証状態を復元: \(savedUser.email)")
                         print("🔄 認証状態復元: authState = authenticated")
                         print("🔑 セッショントークンも復元しました")
 
                         // トークンリフレッシュタイマーを開始
-                        startTokenRefreshTimer()
+                        await MainActor.run {
+                            self.startTokenRefreshTimer()
+                        }
 
                         // 統一初期化フローを実行
-                        await initializeAuthenticatedUser(authUserId: currentUser?.id ?? savedUser.id)
+                        let userId = await MainActor.run { self.currentUser?.id ?? savedUser.id }
+                        await self.initializeAuthenticatedUser(authUserId: userId)
                     }
 
-                    self.isCheckingAuthStatus = false  // 認証確認完了
+                    await MainActor.run {
+                        self.isCheckingAuthStatus = false  // 認証確認完了
+                    }
 
                 } catch {
                     print("❌ セッション復元エラー: \(error)")
@@ -217,24 +239,34 @@ class UserAccountManager: ObservableObject {
 
                     // エラー時はリフレッシュトークンで再試行
                     if let refreshToken = savedUser.refreshToken {
-                        let success = await refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 1)  // 📊 Phase 2-A: 2回→1回に削減
+                        let success = await self.refreshTokenWithRetry(refreshToken: refreshToken, maxRetries: 1)  // 📊 Phase 2-A: 2回→1回に削減
                         if !success {
                             print("⚠️ 再ログインが必要です - ゲストモードに移行")
-                            clearLocalAuthData()
-                            initializeGuestMode()
+                            await self.clearLocalAuthData()
+                            await MainActor.run {
+                                self.initializeGuestMode()
+                            }
                         }
                     } else {
-                        clearLocalAuthData()
-                        initializeGuestMode()
+                        await self.clearLocalAuthData()
+                        await MainActor.run {
+                            self.initializeGuestMode()
+                        }
                     }
-                    self.isCheckingAuthStatus = false  // 認証確認完了
+                    await MainActor.run {
+                        self.isCheckingAuthStatus = false  // 認証確認完了
+                    }
                 }
             } else {
                 print("⏱️ [AUTH-CHECK] 認証情報なし - ゲストモードへ: \(Date().timeIntervalSince(checkStartTime))秒")
                 let guestStart = Date()
-                initializeGuestMode()
+                await MainActor.run {
+                    self.initializeGuestMode()
+                }
                 print("⏱️ [AUTH-CHECK] ゲストモード初期化完了: \(Date().timeIntervalSince(guestStart))秒")
-                self.isCheckingAuthStatus = false  // 認証確認完了
+                await MainActor.run {
+                    self.isCheckingAuthStatus = false  // 認証確認完了
+                }
                 print("⏱️ [AUTH-CHECK] 認証チェック完了（ゲスト）: \(Date().timeIntervalSince(checkStartTime))秒")
             }
         }
@@ -838,7 +870,7 @@ class UserAccountManager: ObservableObject {
                 // セッションエラーの場合は再ログインを促す
                 if case AuthError.sessionMissing = error {
                     self.authError = "セッションの有効期限が切れました。再度ログインしてください。"
-                    self.clearLocalAuthData()
+                    await self.clearLocalAuthData()
                 }
             }
         }
@@ -916,11 +948,11 @@ class UserAccountManager: ObservableObject {
     }
     
     // クライアント側認証データクリア（セッション期限切れ時に使用）
-    private func clearLocalAuthData() {
+    private func clearLocalAuthData() async {
         print("🧹 ローカル認証データクリア開始")
 
         // ✅ @Published プロパティの更新は @MainActor で実行
-        Task { @MainActor in
+        await MainActor.run {
             self.currentUser = nil
             self.isAuthenticated = false
             self.authState = .unauthenticated
@@ -932,11 +964,11 @@ class UserAccountManager: ObservableObject {
             self.deviceManager.clearState()
             // ゲストモード用に空のデバイスリストで利用可能状態にする
             self.deviceManager.state = .available([])
-        }
 
-        // トークンリフレッシュタイマーを停止
-        refreshTimer?.invalidate()
-        refreshTimer = nil
+            // トークンリフレッシュタイマーを停止
+            self.refreshTimer?.invalidate()
+            self.refreshTimer = nil
+        }
 
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
@@ -1163,7 +1195,7 @@ class UserAccountManager: ObservableObject {
             return
         }
         
-        await refreshTokenWithRetry(refreshToken: refreshToken)
+        _ = await refreshTokenWithRetry(refreshToken: refreshToken)
     }
     
     // リトライ機能付きトークンリフレッシュ
@@ -1225,7 +1257,7 @@ class UserAccountManager: ObservableObject {
         
         guard let refreshToken = currentUser?.refreshToken else {
             print("❌ リフレッシュトークンがないため再ログインが必要です")
-            clearLocalAuthData()
+            await clearLocalAuthData()
             return false
         }
         
@@ -1234,7 +1266,7 @@ class UserAccountManager: ObservableObject {
         
         if !success {
             print("❌ 自動リカバリー失敗 - 再ログインが必要です")
-            clearLocalAuthData()
+            await clearLocalAuthData()
             authError = "セッションの有効期限が切れました。再度ログインしてください。"
         } else {
             print("✅ 自動リカバリー成功 - 処理を継続できます")

@@ -15,10 +15,12 @@ struct Subject: Codable, Equatable {
     let gender: String?
     let avatarUrl: String?
     let notes: String?
+    let prefecture: String?
+    let city: String?
     let createdByUserId: String?
     let createdAt: String?
     let updatedAt: String?
-    
+
     enum CodingKeys: String, CodingKey {
         case subjectId = "subject_id"
         case name
@@ -26,6 +28,8 @@ struct Subject: Codable, Equatable {
         case gender
         case avatarUrl = "avatar_url"
         case notes
+        case prefecture
+        case city
         case createdByUserId = "created_by_user_id"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -49,5 +53,15 @@ struct Subject: Codable, Equatable {
     // 観測対象の情報が設定されているかどうか
     var hasMetadata: Bool {
         return name != nil || age != nil || gender != nil
+    }
+
+    // Location display string
+    var locationDisplay: String? {
+        if let city = city, !city.isEmpty {
+            return city
+        } else if let prefecture = prefecture, !prefecture.isEmpty {
+            return prefecture
+        }
+        return nil
     }
 }

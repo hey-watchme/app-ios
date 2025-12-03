@@ -22,6 +22,8 @@ struct SubjectRegistrationView: View {
     @State private var name: String = ""
     @State private var age: String = ""
     @State private var gender: String = ""
+    @State private var prefecture: String = ""
+    @State private var city: String = ""
     @State private var notes: String = ""
     @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImageData: Data? = nil
@@ -43,8 +45,19 @@ struct SubjectRegistrationView: View {
         authToken: nil
     )
     
-    // 性別選択肢
+    // Gender options
     private let genderOptions = ["男性", "女性", "その他", "回答しない"]
+
+    // Prefecture options (47 prefectures of Japan)
+    private let prefectureOptions = [
+        "北海道", "青森県", "岩手県", "宮城県", "秋田県", "山形県", "福島県",
+        "茨城県", "栃木県", "群馬県", "埼玉県", "千葉県", "東京都", "神奈川県",
+        "新潟県", "富山県", "石川県", "福井県", "山梨県", "長野県", "岐阜県",
+        "静岡県", "愛知県", "三重県", "滋賀県", "京都府", "大阪府", "兵庫県",
+        "奈良県", "和歌山県", "鳥取県", "島根県", "岡山県", "広島県", "山口県",
+        "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
+        "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
+    ]
     
     // 編集モードかどうかの判定
     private var isEditing: Bool {
@@ -351,10 +364,55 @@ struct SubjectRegistrationView: View {
                     }
                     .disabled(isViewOnly)
                 }
+
+                // Prefecture (optional)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("都道府県")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Menu {
+                        Button("選択しない") {
+                            prefecture = ""
+                        }
+
+                        ForEach(prefectureOptions, id: \.self) { option in
+                            Button(option) {
+                                prefecture = option
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Text(prefecture.isEmpty ? "選択してください" : prefecture)
+                                .foregroundColor(prefecture.isEmpty ? .secondary : .primary)
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .foregroundColor(.secondary)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(8)
+                    }
+                    .disabled(isViewOnly)
+                }
+
+                // City (optional)
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("市区町村")
+                        .font(.subheadline)
+                        .fontWeight(.medium)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    TextField("例：横浜市", text: $city)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disabled(isViewOnly)
+                }
             }
         }
     }
-    
+
     // MARK: - Notes Section
     private var notesSection: some View {
         VStack(spacing: 16) {
@@ -411,14 +469,16 @@ struct SubjectRegistrationView: View {
     private func loadEditingData() {
         if let subject = editingSubject {
             print("📖 Loading editing data for subject: \(subject.subjectId)")
-            print("📖 Current subject data: name=\(subject.name ?? "nil"), age=\(subject.age?.description ?? "nil"), gender=\(subject.gender ?? "nil"), notes=\(subject.notes ?? "nil")")
+            print("📖 Current subject data: name=\(subject.name ?? "nil"), age=\(subject.age?.description ?? "nil"), gender=\(subject.gender ?? "nil"), prefecture=\(subject.prefecture ?? "nil"), city=\(subject.city ?? "nil"), notes=\(subject.notes ?? "nil")")
 
             name = subject.name ?? ""
             age = subject.age != nil ? String(subject.age!) : ""
             gender = subject.gender ?? ""
+            prefecture = subject.prefecture ?? ""
+            city = subject.city ?? ""
             notes = subject.notes ?? ""
 
-            print("📖 Form initialized: name=\(name), age=\(age), gender=\(gender), notes=\(notes)")
+            print("📖 Form initialized: name=\(name), age=\(age), gender=\(gender), prefecture=\(prefecture), city=\(city), notes=\(notes)")
 
             // S3からのアバター画像は、profileImageSectionのAsyncImageで直接表示されるため、
             // ここでは何もロードしない
@@ -466,6 +526,8 @@ struct SubjectRegistrationView: View {
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
+                prefecture: prefecture.isEmpty ? nil : prefecture,
+                city: city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : city.trimmingCharacters(in: .whitespacesAndNewlines),
                 avatarUrl: nil, // S3アップロード後に更新するため、一旦null
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 createdByUserId: currentUser.id
@@ -565,6 +627,8 @@ struct SubjectRegistrationView: View {
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
+                prefecture: prefecture.isEmpty ? nil : prefecture,
+                city: city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : city.trimmingCharacters(in: .whitespacesAndNewlines),
                 avatarUrl: nil, // S3のURLを使うため、DBにはnullを設定
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             )

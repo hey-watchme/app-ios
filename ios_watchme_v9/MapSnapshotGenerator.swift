@@ -12,7 +12,7 @@ class MapSnapshotGenerator {
 
     /// 地域名から地図スナップショット画像を生成
     /// - Parameters:
-    ///   - locationName: 地域名（例：「横浜市」「神奈川県」）
+    ///   - locationName: 地域名（例：「横浜市」「神奈川県」「日本」）
     ///   - size: 画像サイズ
     /// - Returns: 生成された地図のUIImage
     static func generateSnapshot(for locationName: String, size: CGSize) async -> UIImage? {
@@ -21,12 +21,25 @@ class MapSnapshotGenerator {
             return nil
         }
 
+        // Zoom level based on location scope
+        // "日本" (Japan): Wide view (15 degrees delta)
+        // Prefecture (都道府県): Medium view (1 degree delta)
+        // City (市区町村): Close view (0.1 degrees delta)
+        let span: MKCoordinateSpan
+        if locationName == "日本" || locationName == "Japan" {
+            // Japan-wide view
+            span = MKCoordinateSpan(latitudeDelta: 15.0, longitudeDelta: 15.0)
+        } else if locationName.hasSuffix("県") || locationName.hasSuffix("都") || locationName.hasSuffix("府") || locationName.hasSuffix("道") {
+            // Prefecture-level view
+            span = MKCoordinateSpan(latitudeDelta: 1.0, longitudeDelta: 1.0)
+        } else {
+            // City-level view
+            span = MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
+        }
+
         // 地図のスナップショットを生成
         let options = MKMapSnapshotter.Options()
-        options.region = MKCoordinateRegion(
-            center: coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.1, longitudeDelta: 0.1)
-        )
+        options.region = MKCoordinateRegion(center: coordinate, span: span)
         options.size = size
         options.mapType = .standard
 

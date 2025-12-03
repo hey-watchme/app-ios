@@ -18,9 +18,6 @@ struct SpotDetailView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {
-                    // Time header
-                    timeHeader
-
                     // Vibe Score
                     if let vibeScore = spotData.vibeScore {
                         vibeScoreCard(vibeScore)
@@ -28,12 +25,12 @@ struct SpotDetailView: View {
 
                     // Summary
                     if let summary = spotData.summary {
-                        contentCard(title: "Summary", content: summary, icon: "text.alignleft")
+                        contentCard(title: "概要", content: summary, icon: "text.alignleft")
                     }
 
                     // Behavior
                     if let behavior = spotData.behavior {
-                        contentCard(title: "Behavior", content: behavior, icon: "figure.walk")
+                        contentCard(title: "行動", content: behavior, icon: "figure.walk")
                     }
 
                     Spacer()
@@ -43,11 +40,11 @@ struct SpotDetailView: View {
                 .padding(.top, 20)
             }
             .background(Color(.systemBackground))
-            .navigationTitle("Spot Analysis")
+            .navigationTitle(formatNavigationTitle())
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Close") {
+                    Button("閉じる") {
                         dismiss()
                     }
                 }
@@ -57,33 +54,12 @@ struct SpotDetailView: View {
 
     // MARK: - View Components
 
-    private var timeHeader: some View {
-        VStack(spacing: 8) {
-            if let localDate = spotData.date, let localTime = spotData.localTime {
-                Text(formatDate(localDate))
-                    .font(.headline)
-                    .foregroundColor(.secondary)
-
-                Text(formatTime(localTime))
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
-                    .foregroundColor(.primary)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
-        )
-    }
-
     private func vibeScoreCard(_ score: Double) -> some View {
         VStack(spacing: 12) {
             HStack {
                 Image(systemName: "chart.line.uptrend.xyaxis")
                     .foregroundColor(.accentPurple)
-                Text("Vibe Score")
+                Text("気分")
                     .font(.headline)
                 Spacer()
             }
@@ -125,6 +101,28 @@ struct SpotDetailView: View {
     }
 
     // MARK: - Helpers
+
+    private func formatNavigationTitle() -> String {
+        guard let localDate = spotData.date, let localTime = spotData.localTime else {
+            return "スポット分析"
+        }
+
+        let dateString = formatDateShort(localDate)
+        let timeString = formatTime(localTime)
+        return "\(dateString) \(timeString)"
+    }
+
+    private func formatDateShort(_ dateString: String) -> String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: dateString) else {
+            return dateString
+        }
+
+        formatter.dateFormat = "M/d (E)"
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: date)
+    }
 
     private func formatDate(_ dateString: String) -> String {
         let formatter = DateFormatter()

@@ -173,7 +173,9 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
 
         for point in timePoints {
             for event in point.events {
-                eventScores[event.japaneseLabel, default: []].append(event.score)
+                // Use translated label from BehaviorEventType
+                let translatedLabel = translateBehaviorLabel(event.label)
+                eventScores[translatedLabel, default: []].append(event.score)
             }
         }
 
@@ -187,6 +189,13 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         return averaged
             .filter { $0.score > 0.1 }
             .sorted { $0.score > $1.score }
+    }
+
+    // Translate behavior label using BehaviorEventType
+    private func translateBehaviorLabel(_ label: String) -> String {
+        // Extract English part from "Speech / 会話・発話" format
+        let englishLabel = label.split(separator: "/").first?.trimmingCharacters(in: .whitespaces) ?? label
+        return BehaviorEventType(rawValue: englishLabel)?.displayName ?? englishLabel
     }
 
     /// Top emotions aggregated from all chunks (sorted by average score)

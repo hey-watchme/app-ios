@@ -23,10 +23,14 @@ struct SubjectTabView: View {
                 ScrollView {
                     VStack(spacing: 0) {
                         // 地図ヘッダー（見切れる形で表示）
-                        MapSnapshotView(locationName: "横浜市", height: 200)
-                            .offset(y: -50) // 上部を見切らせる
-                            .frame(height: 150) // 表示される高さ
-                            .clipped()
+                        // Location display: city/prefecture if available, otherwise show Japan map
+                        MapSnapshotView(
+                            locationName: subject.locationDisplay ?? "日本",
+                            height: 200
+                        )
+                        .offset(y: -50) // 上部を見切らせる
+                        .frame(height: 150) // 表示される高さ
+                        .clipped()
 
                         // プロフィールセクション（白背景）
                         VStack(alignment: .leading, spacing: 16) {
@@ -69,15 +73,17 @@ struct SubjectTabView: View {
                                                 .foregroundColor(.secondary)
                                         }
 
-                                        // 地域（静的に横浜市を表示）
-                                        if subject.age != nil || subject.gender != nil {
-                                            Text("•")
+                                        // Location (prefecture and city)
+                                        if let locationName = subject.locationDisplay {
+                                            if subject.age != nil || subject.gender != nil {
+                                                Text("•")
+                                                    .font(.subheadline)
+                                                    .foregroundColor(.secondary)
+                                            }
+                                            Text(locationName)
                                                 .font(.subheadline)
                                                 .foregroundColor(.secondary)
                                         }
-                                        Text("横浜市")
-                                            .font(.subheadline)
-                                            .foregroundColor(.secondary)
                                     }
 
                                     Spacer()

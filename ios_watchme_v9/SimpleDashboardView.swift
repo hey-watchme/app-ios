@@ -54,7 +54,7 @@ struct SimpleDashboardView: View {
     // 📊 パフォーマンス最適化: データキャッシュ（Phase 1-A）
     @State private var dataCache: [String: CachedDashboardData] = [:]
     @State private var cacheKeys: [String] = []  // LRU管理用
-    private let maxCacheSize = 15  // 最近15日分をキャッシュ（スワイプ体験向上）
+    private let maxCacheSize = 30  // 最近30日分をキャッシュ（スワイプ体験向上＆メモリ効率改善）
 
     // 📊 パフォーマンス最適化: デバイス選択直後フラグ（Phase 5-A）
     @State private var isInitialLoad = false
@@ -72,6 +72,7 @@ struct SimpleDashboardView: View {
     @State private var showVibeSheet = false
     @State private var showBehaviorSheet = false
     @State private var showEmotionSheet = false
+    @State private var selectedSpotForDetail: DashboardTimeBlock?
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -196,8 +197,8 @@ struct SimpleDashboardView: View {
 
             // ✅ キャッシュヒット → 即座に表示（スワイプ超高速）
             if let cached = dataCache[cacheKey] {
-                // キャッシュが新鮮か確認（5分以内）
-                if Date().timeIntervalSince(cached.timestamp) < 300 {
+                // キャッシュが新鮮か確認（30分以内に延長してAPI呼び出しを削減）
+                if Date().timeIntervalSince(cached.timestamp) < 1800 {
                     await MainActor.run {
                         self.dashboardSummary = cached.dashboardSummary
                         self.behaviorReport = cached.behaviorReport
@@ -210,7 +211,7 @@ struct SimpleDashboardView: View {
                     print("✅ [Cache HIT] Data loaded from cache for \(dateString)")
                     return
                 } else {
-                    print("⚠️ [Cache EXPIRED] Cache data is older than 5 minutes for \(dateString)")
+                    print("⚠️ [Cache EXPIRED] Cache data is older than 30 minutes for \(dateString)")
                 }
             }
 
@@ -394,6 +395,12 @@ struct SimpleDashboardView: View {
                 .environmentObject(userAccountManager)
             }
         }
+        .sheet(item: $selectedSpotForDetail) { spot in
+            if let deviceId = deviceManager.selectedDeviceID {
+                SpotDetailView(deviceId: deviceId, spotData: spot)
+                    .environmentObject(dataManager)
+            }
+        }
     }
     
     // MARK: - View Components
@@ -427,57 +434,20 @@ struct SimpleDashboardView: View {
     }
 
     private var spotAnalysisSection: some View {
-        VStack(spacing: 0) {
-            // Section title
-            HStack {
-                Text("最新情報")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                Spacer()
+        let latestBlocks = Array(timeBlocks.suffix(3).reversed())
+
+        return SpotAnalysisListSection(
+            title: "最新情報",
+            spotResults: latestBlocks,
+            showMoreButton: true,
+            onTapSpot: { block in
+                selectedSpotForDetail = block
+            },
+            onTapShowMore: {
+                isCommentFieldFocused = false
+                showVibeSheet = true
             }
-            .padding(.bottom, 30)
-
-            // Show latest 3 spot analysis cards (most recent first)
-            let latestBlocks = Array(timeBlocks.suffix(3).reversed())
-
-            if !latestBlocks.isEmpty {
-                VStack(spacing: 20) {
-                    ForEach(latestBlocks, id: \.localTime) { block in
-                        SpotAnalysisCard(timeBlock: block)
-                    }
-                }
-                .padding(.bottom, 16)
-
-                // "Show more" button
-                Button(action: {
-                    isCommentFieldFocused = false
-                    showVibeSheet = true
-                }) {
-                    HStack {
-                        Text("もっと見る")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundStyle(Color.safeColor("AppAccentColor"))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Color.safeColor("AppAccentColor"))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(Color.safeColor("CardBackground"))
-                    .cornerRadius(12)
-                }
-                .buttonStyle(PlainButtonStyle())
-            } else {
-                // Empty state
-                Text("分析データがありません")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.safeColor("CardBackground"))
-                    .cornerRadius(12)
-            }
-        }
+        )
     }
     
     private var behaviorGraphCard: some View {
@@ -997,6 +967,7 @@ struct SimpleDashboardView: View {
 
 struct SpotAnalysisCard: View {
     let timeBlock: DashboardTimeBlock
+    var onTapDetail: (() -> Void)? = nil
 
     private var summaryFirstLine: String? {
         guard let summary = timeBlock.summary else { return nil }
@@ -1037,33 +1008,31 @@ struct SpotAnalysisCard: View {
                     Text(firstLine)
                         .font(.system(size: 13))
                         .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
-                        .lineLimit(3)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // Behavior (from SED analysis)
                 let topBehaviors = timeBlock.topBehaviors
                 if !topBehaviors.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("行動")
-                            .font(.system(size: 11, weight: .semibold))
+                    HStack(spacing: 4) {
+                        Text("[行動]")
+                            .font(.system(size: 13))
                             .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
 
-                        HStack(spacing: 8) {
-                            ForEach(Array(topBehaviors.prefix(3).enumerated()), id: \.offset) { index, behavior in
-                                HStack(spacing: 4) {
-                                    Text(behavior.label)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                    Text(String(format: "(%.2f)", behavior.score))
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                                }
+                        ForEach(Array(topBehaviors.prefix(3).enumerated()), id: \.offset) { index, behavior in
+                            HStack(spacing: 4) {
+                                Text(behavior.label)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                Text(String(format: "(%.2f)", behavior.score))
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                            }
 
-                                if index < topBehaviors.prefix(3).count - 1 {
-                                    Text("・")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                                }
+                            if index < topBehaviors.prefix(3).count - 1 {
+                                Text("・")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
                             }
                         }
                     }
@@ -1072,30 +1041,45 @@ struct SpotAnalysisCard: View {
                 // Emotion (from SER analysis)
                 let topEmotions = timeBlock.topEmotions
                 if !topEmotions.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        Text("感情")
-                            .font(.system(size: 11, weight: .semibold))
+                    HStack(spacing: 4) {
+                        Text("[感情]")
+                            .font(.system(size: 13))
                             .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
 
-                        HStack(spacing: 8) {
-                            ForEach(Array(topEmotions.prefix(3).enumerated()), id: \.offset) { index, emotion in
-                                HStack(spacing: 4) {
-                                    Text(emotion.name)
-                                        .font(.system(size: 13))
-                                        .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                    Text(String(format: "(%.2f)", emotion.score))
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                                }
+                        ForEach(Array(topEmotions.prefix(3).enumerated()), id: \.offset) { index, emotion in
+                            HStack(spacing: 4) {
+                                Text(emotion.name)
+                                    .font(.system(size: 13))
+                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                                Text(String(format: "(%.2f)", emotion.score))
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                            }
 
-                                if index < topEmotions.prefix(3).count - 1 {
-                                    Text("・")
-                                        .font(.system(size: 11))
-                                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                                }
+                            if index < topEmotions.prefix(3).count - 1 {
+                                Text("・")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
                             }
                         }
                     }
+                }
+
+                // Detail button
+                if let onTapDetail = onTapDetail {
+                    Button(action: onTapDetail) {
+                        HStack {
+                            Text("詳細を見る")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.safeColor("AppAccentColor"))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.safeColor("AppAccentColor"))
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                        .padding(.top, 8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
                 }
             }
             .padding(16)
@@ -1137,6 +1121,71 @@ struct AnalysisListView: View {
             .padding(.top, 20)
         }
         .background(Color.white)
+    }
+}
+
+// MARK: - Spot Analysis List Section (Shared Component)
+
+struct SpotAnalysisListSection: View {
+    let title: String
+    let spotResults: [DashboardTimeBlock]
+    var showMoreButton: Bool = false
+    let onTapSpot: (DashboardTimeBlock) -> Void
+    var onTapShowMore: (() -> Void)? = nil
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // Section title
+            HStack {
+                Text(title)
+                    .font(.system(size: 24, weight: .bold))
+                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                Spacer()
+            }
+            .padding(.bottom, 30)
+
+            if !spotResults.isEmpty {
+                VStack(spacing: 20) {
+                    ForEach(spotResults, id: \.localTime) { block in
+                        SpotAnalysisCard(
+                            timeBlock: block,
+                            onTapDetail: {
+                                onTapSpot(block)
+                            }
+                        )
+                    }
+                }
+                .padding(.bottom, 16)
+
+                // "Show more" button (optional)
+                if showMoreButton, let onTapShowMore = onTapShowMore {
+                    Button(action: onTapShowMore) {
+                        HStack {
+                            Text("もっと見る")
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(Color.safeColor("AppAccentColor"))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundStyle(Color.safeColor("AppAccentColor"))
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.safeColor("CardBackground"))
+                        .cornerRadius(12)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            } else {
+                // Empty state
+                Text("分析データがありません")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.safeColor("CardBackground"))
+                    .cornerRadius(12)
+            }
+        }
     }
 }
 

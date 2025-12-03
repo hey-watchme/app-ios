@@ -472,25 +472,31 @@ class SupabaseDataManager: ObservableObject {
         name: String,
         age: Int?,
         gender: String?,
+        prefecture: String?,
+        city: String?,
         avatarUrl: String?,
         notes: String?,
         createdByUserId: String
     ) async throws -> String {
         print("👤 Registering new subject: \(name)")
-        
+
         struct SubjectInsert: Codable {
             let name: String
             let age: Int?
             let gender: String?
+            let prefecture: String?
+            let city: String?
             let avatar_url: String?
             let notes: String?
             let created_by_user_id: String
         }
-        
+
         let subjectInsert = SubjectInsert(
             name: name,
             age: age,
             gender: gender,
+            prefecture: prefecture,
+            city: city,
             avatar_url: avatarUrl,
             notes: notes,
             created_by_user_id: createdByUserId
@@ -883,17 +889,21 @@ class SupabaseDataManager: ObservableObject {
         name: String,
         age: Int?,
         gender: String?,
+        prefecture: String?,
+        city: String?,
         avatarUrl: String?,
         notes: String?
     ) async throws {
         print("👤 Updating subject: \(subjectId) for device: \(deviceId)")
-        print("📝 Update data: name=\(name), age=\(age?.description ?? "nil"), gender=\(gender ?? "nil"), avatarUrl=\(avatarUrl ?? "nil"), notes=\(notes ?? "nil")")
+        print("📝 Update data: name=\(name), age=\(age?.description ?? "nil"), gender=\(gender ?? "nil"), prefecture=\(prefecture ?? "nil"), city=\(city ?? "nil"), avatarUrl=\(avatarUrl ?? "nil"), notes=\(notes ?? "nil")")
 
         // Custom Encodable struct that includes nil values in JSON
         struct SubjectUpdate: Encodable {
             let name: String
             let age: Int?
             let gender: String?
+            let prefecture: String?
+            let city: String?
             let avatar_url: String?
             let notes: String?
             let updated_at: String
@@ -903,6 +913,8 @@ class SupabaseDataManager: ObservableObject {
                 try container.encode(name, forKey: .name)
                 try container.encode(age, forKey: .age)
                 try container.encode(gender, forKey: .gender)
+                try container.encode(prefecture, forKey: .prefecture)
+                try container.encode(city, forKey: .city)
                 try container.encode(avatar_url, forKey: .avatar_url)
                 try container.encode(notes, forKey: .notes)
                 try container.encode(updated_at, forKey: .updated_at)
@@ -912,6 +924,8 @@ class SupabaseDataManager: ObservableObject {
                 case name
                 case age
                 case gender
+                case prefecture
+                case city
                 case avatar_url
                 case notes
                 case updated_at
@@ -923,6 +937,8 @@ class SupabaseDataManager: ObservableObject {
             name: name,
             age: age,
             gender: gender,
+            prefecture: prefecture,
+            city: city,
             avatar_url: avatarUrl,
             notes: notes,
             updated_at: now
