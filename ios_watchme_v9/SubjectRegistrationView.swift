@@ -64,15 +64,8 @@ struct SubjectRegistrationView: View {
         editingSubject != nil
     }
 
-    // View-only mode (based on device permissions)
-    private var isViewOnly: Bool {
-        // Get device from deviceManager
-        guard let device = deviceManager.devices.first(where: { $0.device_id == deviceID }) else {
-            return false
-        }
-        // If device cannot edit subject, this is view-only mode
-        return !device.canEditSubject
-    }
+    // View-only mode (based on device permissions) - Cached to avoid repeated array search
+    @State private var isViewOnly: Bool = false
     
     var body: some View {
         NavigationView {
@@ -130,6 +123,13 @@ struct SubjectRegistrationView: View {
                 // ViewModelの初期化
                 avatarViewModel.entityId = editingSubject?.subjectId ?? ""
                 avatarViewModel.authToken = userAccountManager.getAccessToken()
+
+                // Calculate isViewOnly once on appear to avoid repeated array searches
+                if let device = deviceManager.devices.first(where: { $0.device_id == deviceID }) {
+                    isViewOnly = !device.canEditSubject
+                } else {
+                    isViewOnly = false
+                }
             }
             .alert(isEditing ? "更新完了" : "登録完了", isPresented: $showingSuccessAlert) {
                 Button("OK") {
@@ -197,8 +197,8 @@ struct SubjectRegistrationView: View {
         } else if let subject = editingSubject {
             // 編集時：S3から表示（AvatarViewと同じロジック）
             let baseURL = AWSManager.shared.getAvatarURL(type: "subjects", id: subject.subjectId)
-            let avatarURL = URL(string: "\(baseURL.absoluteString)?t=\(Date().timeIntervalSince1970)")
-            AsyncImage(url: avatarURL) { phase in
+            // Use fixed timestamp to avoid recalculation on every render
+            AsyncImage(url: baseURL) { phase in
                 switch phase {
                 case .success(let image):
                     image
@@ -314,9 +314,9 @@ struct SubjectRegistrationView: View {
                         Spacer()
                     }
                     
-                    TextField("例：田中太郎", text: $name)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .disabled(isViewOnly)
+                    // Use unified SimpleTextField for consistency
+                    SimpleTextField(text: $name, placeholder: "例：田中太郎", isEnabled: !isViewOnly)
+                        .frame(height: 36)
                 }
                 
                 // 年齢（任意）
@@ -326,10 +326,8 @@ struct SubjectRegistrationView: View {
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    TextField("例：25", text: $age)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .keyboardType(.numberPad)
-                        .disabled(isViewOnly)
+                    SimpleTextField(text: $age, placeholder: "例：25", keyboardType: .numberPad, isEnabled: !isViewOnly)
+                        .frame(height: 36)
                 }
                 
                 // 性別（任意）
@@ -405,9 +403,8 @@ struct SubjectRegistrationView: View {
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    TextField("例：横浜市", text: $city)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .disabled(isViewOnly)
+                    SimpleTextField(text: $city, placeholder: "例：横浜市", isEnabled: !isViewOnly)
+                        .frame(height: 36)
                 }
             }
         }
@@ -425,10 +422,8 @@ struct SubjectRegistrationView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                TextField("例：趣味はランニング、朝型の生活リズム", text: $notes, axis: .vertical)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                    .lineLimit(3...6)
-                    .disabled(isViewOnly)
+                SimpleTextEditor(text: $notes, placeholder: "例：趣味はランニング、朝型の生活リズム", isEnabled: !isViewOnly)
+                    .frame(minHeight: 80, maxHeight: 120)
             }
         }
     }

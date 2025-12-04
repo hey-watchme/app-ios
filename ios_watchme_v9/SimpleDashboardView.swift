@@ -220,13 +220,22 @@ struct SimpleDashboardView: View {
                 isLoading = true
             }
 
-            // ✅ キャッシュミス → デバウンス処理（Phase 5-A: デバイス選択直後はスキップ）
+            // ✅ キャッシュミス → デバウンス処理を最適化
             if !isInitialLoad {
-                // スワイプ操作時のみデバウンス適用（無駄なリクエスト防止）
+                // デバウンス時間を動的に決定
+                let debounceTime: UInt64
+                if dataCache[cacheKey] != nil {
+                    // キャッシュ存在時（期限切れ）: 100ms
+                    debounceTime = 100
+                } else {
+                    // 完全に新規データ: 200ms（300msから短縮）
+                    debounceTime = 200
+                }
+
                 #if DEBUG
-                print("⏳ [Debounce] Waiting 300ms before loading data for \(dateString)...")
+                print("⏳ [Debounce] Waiting \(debounceTime)ms before loading data for \(dateString)...")
                 #endif
-                try? await Task.sleep(for: .milliseconds(300))
+                try? await Task.sleep(for: .milliseconds(debounceTime))
 
                 // スワイプ継続中ならキャンセルされている
                 guard !Task.isCancelled else {

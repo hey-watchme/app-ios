@@ -96,7 +96,12 @@ class DeviceManager: ObservableObject {
 
     @Published var registrationError: String? = nil
     @Published var isLoading: Bool = false
-    
+
+    // Performance optimization: Prevent duplicate initialization
+    private var lastInitializedUserId: String? = nil
+    private var lastInitializedTime: Date? = nil
+    private var isInitializing = false
+
     // Supabase設定（URLとキーは参照用に残しておく）
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
     private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
@@ -246,14 +251,36 @@ class DeviceManager: ObservableObject {
     // MARK: - デバイス初期化処理（権限ベース設計 - 統一版）
     @MainActor
     func initializeDevices(for userId: String) async {
+        // Performance optimization: Skip if already initializing for the same user
+        if isInitializing && lastInitializedUserId == userId {
+            #if DEBUG
+            print("🔄 Already initializing for user: \(userId)")
+            #endif
+            return
+        }
+
+        // Performance optimization: Skip if recently initialized (within 10 seconds) for the same user
+        if lastInitializedUserId == userId,
+           let lastInit = lastInitializedTime,
+           Date().timeIntervalSince(lastInit) < 10 {
+            #if DEBUG
+            print("⏭️ Skipping re-initialization for \(userId) (too soon: \(Date().timeIntervalSince(lastInit))s)")
+            #endif
+            return
+        }
+
         // 処理中なら何もしない（重複防止）
         if case .loading = state {
+            #if DEBUG
             print("⚠️ DeviceManager: Already loading, skipping")
+            #endif
             return
         }
 
         print("🚀 DeviceManager: デバイス初期化開始: \(userId)")
         self.state = .loading
+        self.isInitializing = true
+        self.lastInitializedUserId = userId
 
         do {
             // Get all user devices (including sample devices from user_devices table)
@@ -261,6 +288,8 @@ class DeviceManager: ObservableObject {
 
             // Set device list
             self.state = .available(fetchedDevices)
+            self.isInitializing = false
+            self.lastInitializedTime = Date()
 
             if fetchedDevices.isEmpty {
                 print("📱 ユーザーデバイスなし（サンプルのみ）")
@@ -274,6 +303,8 @@ class DeviceManager: ObservableObject {
         } catch {
             print("❌ デバイス取得エラー: \(error)")
             self.state = .error(error.localizedDescription)
+            self.isInitializing = false
+            self.lastInitializedTime = Date()
         }
     }
 

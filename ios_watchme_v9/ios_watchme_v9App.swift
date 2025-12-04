@@ -29,6 +29,9 @@ struct ios_watchme_v9App: App {
         let startTime = Date()
         print("⏱️ [APP-INIT] アプリ初期化開始: \(startTime)")
 
+        // ⚡ キーボード最適化は個別のTextFieldで実施
+        // UIAppearanceは使用しない（スレッド安全性の問題を回避）
+
         // ✅ Supabaseクライアントを非同期で事前初期化（UIをブロックしない）
         Task.detached(priority: .high) {
             let initStart = Date()
