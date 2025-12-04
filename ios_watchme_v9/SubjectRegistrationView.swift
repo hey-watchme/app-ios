@@ -314,9 +314,9 @@ struct SubjectRegistrationView: View {
                         Spacer()
                     }
                     
-                    // Use unified SimpleTextField for consistency
-                    SimpleTextField(text: $name, placeholder: "例：田中太郎", isEnabled: !isViewOnly)
-                        .frame(height: 36)
+                    TextField("例：田中太郎", text: $name)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disabled(isViewOnly)
                 }
                 
                 // 年齢（任意）
@@ -326,8 +326,10 @@ struct SubjectRegistrationView: View {
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    SimpleTextField(text: $age, placeholder: "例：25", keyboardType: .numberPad, isEnabled: !isViewOnly)
-                        .frame(height: 36)
+                    TextField("例：25", text: $age)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .keyboardType(.numberPad)
+                        .disabled(isViewOnly)
                 }
                 
                 // 性別（任意）
@@ -403,8 +405,9 @@ struct SubjectRegistrationView: View {
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    SimpleTextField(text: $city, placeholder: "例：横浜市", isEnabled: !isViewOnly)
-                        .frame(height: 36)
+                    TextField("例：横浜市", text: $city)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .disabled(isViewOnly)
                 }
             }
         }
@@ -422,8 +425,10 @@ struct SubjectRegistrationView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                SimpleTextEditor(text: $notes, placeholder: "例：趣味はランニング、朝型の生活リズム", isEnabled: !isViewOnly)
-                    .frame(minHeight: 80, maxHeight: 120)
+                TextField("例：趣味はランニング、朝型の生活リズム", text: $notes, axis: .vertical)
+                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                    .lineLimit(3...6)
+                    .disabled(isViewOnly)
             }
         }
     }
