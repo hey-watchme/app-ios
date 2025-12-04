@@ -472,6 +472,7 @@ class SupabaseDataManager: ObservableObject {
         name: String,
         age: Int?,
         gender: String?,
+        cognitiveType: String?,
         prefecture: String?,
         city: String?,
         avatarUrl: String?,
@@ -484,6 +485,7 @@ class SupabaseDataManager: ObservableObject {
             let name: String
             let age: Int?
             let gender: String?
+            let cognitive_type: String?
             let prefecture: String?
             let city: String?
             let avatar_url: String?
@@ -495,6 +497,7 @@ class SupabaseDataManager: ObservableObject {
             name: name,
             age: age,
             gender: gender,
+            cognitive_type: cognitiveType,
             prefecture: prefecture,
             city: city,
             avatar_url: avatarUrl,
@@ -889,19 +892,21 @@ class SupabaseDataManager: ObservableObject {
         name: String,
         age: Int?,
         gender: String?,
+        cognitiveType: String?,
         prefecture: String?,
         city: String?,
         avatarUrl: String?,
         notes: String?
     ) async throws {
         print("👤 Updating subject: \(subjectId) for device: \(deviceId)")
-        print("📝 Update data: name=\(name), age=\(age?.description ?? "nil"), gender=\(gender ?? "nil"), prefecture=\(prefecture ?? "nil"), city=\(city ?? "nil"), avatarUrl=\(avatarUrl ?? "nil"), notes=\(notes ?? "nil")")
+        print("📝 Update data: name=\(name), age=\(age?.description ?? "nil"), gender=\(gender ?? "nil"), cognitiveType=\(cognitiveType ?? "nil"), prefecture=\(prefecture ?? "nil"), city=\(city ?? "nil"), avatarUrl=\(avatarUrl ?? "nil"), notes=\(notes ?? "nil")")
 
         // Custom Encodable struct that includes nil values in JSON
         struct SubjectUpdate: Encodable {
             let name: String
             let age: Int?
             let gender: String?
+            let cognitive_type: String?
             let prefecture: String?
             let city: String?
             let avatar_url: String?
@@ -913,6 +918,7 @@ class SupabaseDataManager: ObservableObject {
                 try container.encode(name, forKey: .name)
                 try container.encode(age, forKey: .age)
                 try container.encode(gender, forKey: .gender)
+                try container.encode(cognitive_type, forKey: .cognitive_type)
                 try container.encode(prefecture, forKey: .prefecture)
                 try container.encode(city, forKey: .city)
                 try container.encode(avatar_url, forKey: .avatar_url)
@@ -924,6 +930,7 @@ class SupabaseDataManager: ObservableObject {
                 case name
                 case age
                 case gender
+                case cognitive_type
                 case prefecture
                 case city
                 case avatar_url
@@ -937,6 +944,7 @@ class SupabaseDataManager: ObservableObject {
             name: name,
             age: age,
             gender: gender,
+            cognitive_type: cognitiveType,
             prefecture: prefecture,
             city: city,
             avatar_url: avatarUrl,

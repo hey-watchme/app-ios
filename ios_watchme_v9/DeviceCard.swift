@@ -457,6 +457,7 @@ struct DeviceCard_Previews: PreviewProvider {
             notes: nil,
             prefecture: "東京都",
             city: "渋谷区",
+            cognitiveType: nil,
             createdByUserId: "user1",
             createdAt: "2025-08-02T00:00:00Z",
             updatedAt: "2025-08-02T00:00:00Z"

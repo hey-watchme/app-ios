@@ -22,6 +22,7 @@ struct SubjectRegistrationView: View {
     @State private var name: String = ""
     @State private var age: String = ""
     @State private var gender: String = ""
+    @State private var cognitiveType: String = ""
     @State private var prefecture: String = ""
     @State private var city: String = ""
     @State private var notes: String = ""
@@ -365,6 +366,44 @@ struct SubjectRegistrationView: View {
                     .disabled(isViewOnly)
                 }
 
+                // Cognitive Type (optional) - 一旦非表示
+                // VStack(alignment: .leading, spacing: 8) {
+                //     Text("タイプ")
+                //         .font(.subheadline)
+                //         .fontWeight(.medium)
+                //         .frame(maxWidth: .infinity, alignment: .leading)
+                //
+                //     Menu {
+                //         Button("選択しない") {
+                //             cognitiveType = ""
+                //         }
+                //
+                //         ForEach(CognitiveTypeOption.allCases) { option in
+                //             Button(option.displayName) {
+                //                 cognitiveType = option.rawValue
+                //             }
+                //         }
+                //     } label: {
+                //         HStack {
+                //             if cognitiveType.isEmpty {
+                //                 Text("選択してください")
+                //                     .foregroundColor(.secondary)
+                //             } else if let selectedType = CognitiveTypeOption.allCases.first(where: { $0.rawValue == cognitiveType }) {
+                //                 Text(selectedType.displayName)
+                //                     .foregroundColor(.primary)
+                //             }
+                //             Spacer()
+                //             Image(systemName: "chevron.down")
+                //                 .foregroundColor(.secondary)
+                //         }
+                //         .padding(.horizontal, 12)
+                //         .padding(.vertical, 8)
+                //         .background(Color(.systemGray6))
+                //         .cornerRadius(8)
+                //     }
+                //     .disabled(isViewOnly)
+                // }
+
                 // Prefecture (optional)
                 VStack(alignment: .leading, spacing: 8) {
                     Text("都道府県")
@@ -474,11 +513,12 @@ struct SubjectRegistrationView: View {
             name = subject.name ?? ""
             age = subject.age != nil ? String(subject.age!) : ""
             gender = subject.gender ?? ""
+            cognitiveType = subject.cognitiveType ?? ""
             prefecture = subject.prefecture ?? ""
             city = subject.city ?? ""
             notes = subject.notes ?? ""
 
-            print("📖 Form initialized: name=\(name), age=\(age), gender=\(gender), prefecture=\(prefecture), city=\(city), notes=\(notes)")
+            print("📖 Form initialized: name=\(name), age=\(age), gender=\(gender), cognitiveType=\(cognitiveType), prefecture=\(prefecture), city=\(city), notes=\(notes)")
 
             // S3からのアバター画像は、profileImageSectionのAsyncImageで直接表示されるため、
             // ここでは何もロードしない
@@ -526,6 +566,7 @@ struct SubjectRegistrationView: View {
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
+                cognitiveType: cognitiveType.isEmpty ? nil : cognitiveType,
                 prefecture: prefecture.isEmpty ? nil : prefecture,
                 city: city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : city.trimmingCharacters(in: .whitespacesAndNewlines),
                 avatarUrl: nil, // S3アップロード後に更新するため、一旦null
@@ -627,6 +668,7 @@ struct SubjectRegistrationView: View {
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
+                cognitiveType: cognitiveType.isEmpty ? nil : cognitiveType,
                 prefecture: prefecture.isEmpty ? nil : prefecture,
                 city: city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : city.trimmingCharacters(in: .whitespacesAndNewlines),
                 avatarUrl: nil, // S3のURLを使うため、DBにはnullを設定

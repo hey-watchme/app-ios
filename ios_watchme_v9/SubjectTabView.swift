@@ -15,6 +15,8 @@ struct SubjectTabView: View {
     @State private var showSubjectEdit = false
     @State private var showNeuralInfo = false
     @State private var showIntelligenceInfo = false
+    @State private var selectedCognitiveType: CognitiveTypeOption = .behavioralImpulsive
+    @State private var isUpdatingType = false
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -122,20 +124,20 @@ struct SubjectTabView: View {
                         .padding(.horizontal, 0)
                         .padding(.top, 0)
 
-                        // 認知スタイル（行動系を最も当てはまるものとして表示）
-                        primaryCognitiveStyleSection
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
+                        // 認知タイプセクション - 一旦非表示
+                        // cognitiveTypeSection
+                        //     .padding(.horizontal, 20)
+                        //     .padding(.top, 20)
 
-                        // 神経機能モデル（レーダーチャート）
-                        neuralFunctionSection
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
+                        // 神経機能モデル（レーダーチャート）- 一旦非表示
+                        // neuralFunctionSection
+                        //     .padding(.horizontal, 20)
+                        //     .padding(.top, 20)
 
-                        // 知性の形式モデル
-                        intelligenceSection
-                            .padding(.horizontal, 20)
-                            .padding(.top, 20)
+                        // 知性の形式モデル - 一旦非表示
+                        // intelligenceSection
+                        //     .padding(.horizontal, 20)
+                        //     .padding(.top, 20)
 
                         Spacer(minLength: 50)
                     }
@@ -232,39 +234,126 @@ struct SubjectTabView: View {
         }
     }
 
-    // MARK: - 主要な認知スタイル（行動系）
-    private var primaryCognitiveStyleSection: some View {
+    // MARK: - 認知タイプセクション
+    private var cognitiveTypeSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             // セクションヘッダー
             Text("タイプ")
                 .font(.title2)
                 .fontWeight(.semibold)
 
-            // 行動系を大きく表示
-            VStack(spacing: 12) {
-                Text("⚡")
-                    .font(.system(size: 60))
+            if let subject = deviceManager.selectedSubject, let cognitiveTypeData = subject.cognitiveTypeData {
+                // タイプ選択済み - カードのみ表示
+                cognitiveTypeCard(for: cognitiveTypeData)
+            } else {
+                // タイプ未選択 - カルーセル + 選択ボタン
+                VStack(spacing: 16) {
+                    Text("観測対象のタイプを選択")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
 
-                Text("行動系")
-                    .font(.title)
-                    .fontWeight(.bold)
+                    // カルーセル
+                    TabView(selection: $selectedCognitiveType) {
+                        ForEach(CognitiveTypeOption.allCases) { type in
+                            cognitiveTypeCard(for: type)
+                                .tag(type)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: .always))
+                    .frame(height: 200)
 
-                Text("衝動型")
-                    .font(.title3)
-                    .foregroundColor(.secondary)
-
-                Text("この観測対象は、素早く行動に移すタイプです")
-                    .font(.callout)
-                    .foregroundColor(.secondary)
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
+                    // 選択ボタン
+                    Button(action: {
+                        selectCognitiveType()
+                    }) {
+                        HStack {
+                            if isUpdatingType {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .scaleEffect(0.8)
+                            } else {
+                                Image(systemName: "checkmark.circle.fill")
+                                Text("このタイプを選択")
+                            }
+                        }
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(Color.safeColor("AppAccentColor"))
+                        .cornerRadius(12)
+                    }
+                    .disabled(isUpdatingType)
+                }
             }
-            .frame(maxWidth: .infinity)
-            .padding(24)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.secondarySystemBackground))
-            )
+        }
+    }
+
+    // MARK: - 認知タイプカード
+    private func cognitiveTypeCard(for type: CognitiveTypeOption) -> some View {
+        VStack(spacing: 12) {
+            Text(type.emoji)
+                .font(.system(size: 60))
+
+            Text(type.categoryName)
+                .font(.title)
+                .fontWeight(.bold)
+
+            Text(type.typeName)
+                .font(.title3)
+                .foregroundColor(.secondary)
+
+            Text(type.description)
+                .font(.callout)
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 20)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(24)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    // MARK: - タイプ選択処理
+    private func selectCognitiveType() {
+        guard let subject = deviceManager.selectedSubject,
+              let deviceId = deviceManager.selectedDeviceID else { return }
+
+        isUpdatingType = true
+
+        Task {
+            do {
+                // Update subject using existing updateSubject method
+                try await dataManager.updateSubject(
+                    subjectId: subject.subjectId,
+                    deviceId: deviceId,
+                    name: subject.name ?? "",
+                    age: subject.age,
+                    gender: subject.gender,
+                    cognitiveType: selectedCognitiveType.rawValue,
+                    prefecture: subject.prefecture,
+                    city: subject.city,
+                    avatarUrl: nil,
+                    notes: subject.notes
+                )
+
+                // Update local subject data
+                if let userId = userAccountManager.currentUser?.id {
+                    await deviceManager.initializeDevices(for: userId)
+                }
+
+                await MainActor.run {
+                    isUpdatingType = false
+                }
+            } catch {
+                print("Error updating cognitive type: \(error)")
+                await MainActor.run {
+                    isUpdatingType = false
+                }
+            }
         }
     }
 
