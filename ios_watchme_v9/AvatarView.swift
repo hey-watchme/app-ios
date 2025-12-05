@@ -25,7 +25,6 @@ struct AvatarView: View {
     let id: String?
     let size: CGFloat
     let providedAvatarUrl: String? // SSOT: Subject.avatarUrl or User.avatarUrl from parent
-    let useS3: Bool = true // ✅ Avatar Uploader APIを使用してS3に保存
 
     // 互換性のための初期化（既存のuser用）
     init(userId: String?, size: CGFloat = 80, avatarUrl: String? = nil) {
@@ -102,33 +101,15 @@ struct AvatarView: View {
     
     private func loadAvatar() {
         Task {
-            guard let id = id else {
-                isLoadingAvatar = false
-                return
-            }
-
             isLoadingAvatar = true
 
-            // SSOT: providedAvatarUrl を優先使用
+            // providedAvatarUrl が存在する場合のみ使用
             if let providedUrl = providedAvatarUrl, !providedUrl.isEmpty {
-                // Parent component から渡された avatar_url を使用（Subject.avatarUrl など）
                 let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
                 self.avatarUrl = URL(string: "\(providedUrl)?t=\(timestamp)")
-                print("✅ [AvatarView] Using provided avatarUrl from SSOT: \(providedUrl)")
-            } else if useS3 {
-                // Fallback: S3のURLを設定（Avatar Uploader API経由でアップロード済み）
-                let baseURL = AWSManager.shared.getAvatarURL(type: type.s3Type, id: id)
-                let timestamp = Int(lastUpdateTime.timeIntervalSince1970)
-                self.avatarUrl = URL(string: "\(baseURL.absoluteString)?t=\(timestamp)")
-                print("⚠️ [AvatarView] Using S3 fallback URL (providedAvatarUrl was nil)")
             } else {
-                // Supabaseから取得（既存の実装、userのみ対応）
-                if type == .user {
-                    self.avatarUrl = await dataManager.fetchAvatarUrl(for: id)
-                } else {
-                    // subjectの場合はS3のみ対応
-                    self.avatarUrl = nil
-                }
+                // avatarUrl がない場合はデフォルトアイコンを表示
+                self.avatarUrl = nil
             }
 
             self.isLoadingAvatar = false
