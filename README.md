@@ -66,6 +66,28 @@ WatchMeプラットフォームのiOSアプリケーション。
 - **リアルタイム更新**: プッシュ通知によるデータ自動更新
 - **コメント機能**: 観測対象に対する日別コメント投稿
 - **サンプルデバイス**: 初回体験の向上と事例カタログ
+- **✅ QRコード共有機能**: デバイスをQRコードで他ユーザーと共有（2025-12-06実装完了）
+
+### QRコード共有機能（2025-12-06実装完了）
+
+デバイスの共有をQRコードで簡単に行える機能です。
+
+**機能詳細**:
+- デバイス詳細画面から「QRコードを表示」ボタンでQRコード生成
+- 自動的にS3にアップロードされ、永続的な公開URLを取得
+- QRコード画像の共有・保存が可能
+- API: `https://api.hey-watch.me/qrcode/v1/devices/{device_id}/qrcode`
+
+**実装ファイル**:
+- `QRCodeService.swift` - QRコード生成APIクライアント
+- `DeviceEditView.swift` - QRコード表示UI
+
+**技術スタック**:
+- QR Code Generator API（FastAPI）
+- S3バケット: `watchme-qrcodes`（公開アクセス可）
+- 画像形式: PNG（512x512px）
+
+**詳細**: [QR Code Generator API仕様](../projects/watchme/api/qr-code-generator/README.md)
 
 ### サンプルデバイス機能
 
