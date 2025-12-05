@@ -53,6 +53,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let localTime: String?  // local_time (YYYY-MM-DD HH:MM:SS) - ✅ ユニークキー
     let summary: String?    // その録音の詳細説明
     let behavior: String?   // その録音の行動
+    let emotion: String?    // LLM抽出の有意な感情（1-2個、カンマ区切り）
     let vibeScore: Double?
     let createdAt: String?
     let updatedAt: String?
@@ -75,6 +76,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         case localTime = "local_time"
         case summary
         case behavior
+        case emotion
         case vibeScore = "vibe_score"
         case createdAt = "created_at"
         case updatedAt = "updated_at"
@@ -90,6 +92,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         localTime = try container.decodeIfPresent(String.self, forKey: .localTime)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
         behavior = try container.decodeIfPresent(String.self, forKey: .behavior)
+        emotion = try container.decodeIfPresent(String.self, forKey: .emotion)
         vibeScore = try container.decodeIfPresent(Double.self, forKey: .vibeScore)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
@@ -232,6 +235,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          localTime: String?,
          summary: String?,
          behavior: String?,
+         emotion: String?,
          vibeScore: Double?,
          createdAt: String?,
          updatedAt: String? = nil,
@@ -243,6 +247,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.localTime = localTime
         self.summary = summary
         self.behavior = behavior
+        self.emotion = emotion
         self.vibeScore = vibeScore
         self.createdAt = createdAt
         self.updatedAt = updatedAt

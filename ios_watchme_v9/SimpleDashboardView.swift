@@ -1020,57 +1020,31 @@ struct SpotAnalysisCard: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
 
-                // Behavior (from SED analysis)
-                let topBehaviors = timeBlock.topBehaviors
-                if !topBehaviors.isEmpty {
+                // Behavior (from spot_results.behavior)
+                if let behavior = timeBlock.behavior, !behavior.isEmpty {
                     HStack(spacing: 4) {
                         Text("[行動]")
                             .font(.system(size: 13))
                             .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
 
-                        ForEach(Array(topBehaviors.prefix(3).enumerated()), id: \.offset) { index, behavior in
-                            HStack(spacing: 4) {
-                                Text(behavior.label)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                Text(String(format: "(%.2f)", behavior.score))
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                            }
-
-                            if index < topBehaviors.prefix(3).count - 1 {
-                                Text("・")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                            }
-                        }
+                        Text(behavior)
+                            .font(.system(size: 13))
+                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                            .lineLimit(1)
                     }
                 }
 
-                // Emotion (from SER analysis)
-                let topEmotions = timeBlock.topEmotions
-                if !topEmotions.isEmpty {
+                // Emotion (from spot_results.emotion)
+                if let emotion = timeBlock.emotion, !emotion.isEmpty {
                     HStack(spacing: 4) {
                         Text("[感情]")
                             .font(.system(size: 13))
                             .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
 
-                        ForEach(Array(topEmotions.prefix(3).enumerated()), id: \.offset) { index, emotion in
-                            HStack(spacing: 4) {
-                                Text(emotion.name)
-                                    .font(.system(size: 13))
-                                    .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                                Text(String(format: "(%.2f)", emotion.score))
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                            }
-
-                            if index < topEmotions.prefix(3).count - 1 {
-                                Text("・")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
-                            }
-                        }
+                        Text(emotion)
+                            .font(.system(size: 13))
+                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
+                            .lineLimit(1)
                     }
                 }
 
@@ -1104,6 +1078,9 @@ struct AnalysisListView: View {
     let timeBlocks: [DashboardTimeBlock]
     let selectedDate: Date
     @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
+
+    @State private var selectedSpotForDetail: DashboardTimeBlock?
 
     var body: some View {
         ScrollView {
@@ -1119,7 +1096,12 @@ struct AnalysisListView: View {
                     // 時系列順（古い→新しい）で全件表示
                     VStack(spacing: 20) {
                         ForEach(timeBlocks, id: \.localTime) { block in
-                            SpotAnalysisCard(timeBlock: block)
+                            SpotAnalysisCard(
+                                timeBlock: block,
+                                onTapDetail: {
+                                    selectedSpotForDetail = block
+                                }
+                            )
                         }
                     }
                     .padding(.horizontal, 20)
@@ -1130,6 +1112,12 @@ struct AnalysisListView: View {
             .padding(.top, 20)
         }
         .background(Color.white)
+        .sheet(item: $selectedSpotForDetail) { spot in
+            if let deviceId = deviceManager.selectedDeviceID {
+                SpotDetailView(deviceId: deviceId, spotData: spot)
+                    .environmentObject(dataManager)
+            }
+        }
     }
 }
 

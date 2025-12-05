@@ -33,6 +33,11 @@ struct SpotDetailView: View {
                         contentCard(title: "行動", content: behavior, icon: "figure.walk")
                     }
 
+                    // Emotion
+                    if let emotion = spotData.emotion, !emotion.isEmpty {
+                        contentCard(title: "感情", content: emotion, icon: "face.smiling")
+                    }
+
                     Spacer()
                         .frame(height: 40)
                 }
