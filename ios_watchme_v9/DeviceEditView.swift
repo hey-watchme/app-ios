@@ -26,6 +26,8 @@ struct DeviceEditView: View {
     @State private var showUnlinkSuccess = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
+    @State private var isGeneratingQR = false
+    @State private var qrCodeUrl: String?
 
     var body: some View {
         NavigationView {
@@ -96,7 +98,7 @@ struct DeviceEditView: View {
                             Label("登録日時", systemImage: "calendar")
                                 .font(.headline)
                                 .foregroundColor(.primary)
-                            
+
                             Text(formatCreatedDate(createdAt))
                                 .padding()
                                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -105,7 +107,86 @@ struct DeviceEditView: View {
                                 .foregroundColor(.secondary)
                         }
                     }
-                    
+
+                    // QRコード共有セクション
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("デバイス共有用QRコード", systemImage: "qrcode")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+
+                        if let qrUrl = qrCodeUrl {
+                            // QRコード画像を表示
+                            VStack(spacing: 12) {
+                                AsyncImage(url: URL(string: qrUrl)) { phase in
+                                    switch phase {
+                                    case .empty:
+                                        ProgressView()
+                                            .frame(width: 200, height: 200)
+                                    case .success(let image):
+                                        image
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 200, height: 200)
+                                            .cornerRadius(12)
+                                    case .failure:
+                                        Image(systemName: "exclamationmark.triangle")
+                                            .resizable()
+                                            .scaledToFit()
+                                            .frame(width: 200, height: 200)
+                                            .foregroundColor(.gray)
+                                    @unknown default:
+                                        EmptyView()
+                                    }
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding()
+                                .background(Color.white)
+                                .cornerRadius(12)
+
+                                // 共有ボタン
+                                if let url = URL(string: qrUrl) {
+                                    ShareLink(item: url) {
+                                        Label("QRコードを共有", systemImage: "square.and.arrow.up")
+                                            .font(.body)
+                                            .fontWeight(.medium)
+                                            .foregroundColor(.white)
+                                            .frame(maxWidth: .infinity)
+                                            .padding(.vertical, 12)
+                                            .background(Color.blue)
+                                            .cornerRadius(12)
+                                    }
+                                }
+                            }
+                        } else {
+                            // QRコード生成ボタン
+                            Button(action: {
+                                Task {
+                                    await generateQRCode()
+                                }
+                            }) {
+                                HStack {
+                                    if isGeneratingQR {
+                                        ProgressView()
+                                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                            .scaleEffect(0.8)
+                                        Text("生成中...")
+                                    } else {
+                                        Image(systemName: "qrcode")
+                                        Text("QRコードを生成")
+                                    }
+                                }
+                                .font(.body)
+                                .fontWeight(.medium)
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(Color.blue.opacity(isGeneratingQR ? 0.6 : 1.0))
+                                .cornerRadius(12)
+                            }
+                            .disabled(isGeneratingQR)
+                        }
+                    }
+                    .padding(.top, 8)
 
 
                     // Unlink device button (always visible if user can unlink)
@@ -228,9 +309,45 @@ struct DeviceEditView: View {
     }
     
     private func loadDeviceInfo() {
-        // 将来的にデバイス名などを読み込む場合はここで実装
+        // Load device info
         deviceType = device.device_type
         timezone = device.timezone ?? "未設定"
+        qrCodeUrl = device.qr_code_url
+    }
+
+    private func generateQRCode() async {
+        print("🔵 [DeviceEditView] QRコード生成開始")
+        print("   - Device ID: \(device.device_id)")
+
+        await MainActor.run {
+            isGeneratingQR = true
+        }
+
+        do {
+            print("📡 [DeviceEditView] QRCodeService呼び出し中...")
+            let generatedUrl = try await QRCodeService.shared.generateQRCode(for: device.device_id)
+
+            await MainActor.run {
+                qrCodeUrl = generatedUrl
+                isGeneratingQR = false
+            }
+
+            print("✅ [DeviceEditView] QR code generated: \(generatedUrl)")
+
+            // Refresh device list to update qr_code_url in DeviceManager
+            if let userId = userAccountManager.currentUser?.profile?.userId {
+                await deviceManager.fetchUserDevices(for: userId)
+            }
+        } catch {
+            await MainActor.run {
+                isGeneratingQR = false
+                errorMessage = "QRコードの生成に失敗しました: \(error.localizedDescription)"
+                showErrorAlert = true
+            }
+            print("❌ [DeviceEditView] QR code generation error: \(error)")
+            print("   - Device ID: \(device.device_id)")
+            print("   - Error details: \(error)")
+        }
     }
     
     private func saveDeviceInfo() async {

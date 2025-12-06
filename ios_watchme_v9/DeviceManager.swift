@@ -232,6 +232,18 @@ class DeviceManager: ObservableObject {
             // Reload user devices
             await self.fetchUserDevices(for: userId)
 
+            // Step 4: Generate QR code for the new device (best-effort, non-blocking)
+            print("📱 Step 4: Generating QR code for device: \(newDeviceId)")
+            Task {
+                do {
+                    let qrCodeUrl = try await QRCodeService.shared.generateQRCode(for: newDeviceId)
+                    print("✅ Step 4: QR code generated: \(qrCodeUrl)")
+                } catch {
+                    print("⚠️ Step 4: QR code generation failed (non-critical): \(error)")
+                    // QR code generation failure is not critical - user can generate later
+                }
+            }
+
             // Registration complete
             await MainActor.run {
                 self.isLoading = false
@@ -831,6 +843,7 @@ struct Device: Codable, Equatable {
     let subject_id: String?
     let created_at: String? // デバイス登録日時
     let status: String? // デバイスステータス（active, inactive等）
+    let qr_code_url: String? // QRコード画像のS3 URL
     // user_devicesテーブルから取得した場合のrole情報を保持
     var role: String?
     // JOIN取得した場合のsubject情報を保持（パフォーマンス最適化）
@@ -885,7 +898,7 @@ struct Device: Codable, Equatable {
     // Custom decoding to handle Supabase JOIN response
     enum CodingKeys: String, CodingKey {
         case device_id, device_type, timezone, owner_user_id, subject_id
-        case created_at, status, role
+        case created_at, status, qr_code_url, role
         case subjects  // Supabase returns this as an array
     }
 
@@ -898,6 +911,7 @@ struct Device: Codable, Equatable {
         subject_id = try container.decodeIfPresent(String.self, forKey: .subject_id)
         created_at = try container.decodeIfPresent(String.self, forKey: .created_at)
         status = try container.decodeIfPresent(String.self, forKey: .status)
+        qr_code_url = try container.decodeIfPresent(String.self, forKey: .qr_code_url)
         role = try container.decodeIfPresent(String.self, forKey: .role)
 
         // Decode subjects (many-to-one relationship returns single object, not array)
@@ -923,6 +937,7 @@ struct Device: Codable, Equatable {
         try container.encodeIfPresent(subject_id, forKey: .subject_id)
         try container.encodeIfPresent(created_at, forKey: .created_at)
         try container.encodeIfPresent(status, forKey: .status)
+        try container.encodeIfPresent(qr_code_url, forKey: .qr_code_url)
         try container.encodeIfPresent(role, forKey: .role)
         if let subject = subject {
             try container.encode([subject], forKey: .subjects)
@@ -930,7 +945,7 @@ struct Device: Codable, Equatable {
     }
 
     // Manual initializer for non-JOIN cases
-    init(device_id: String, device_type: String, timezone: String?, owner_user_id: String?, subject_id: String?, created_at: String?, status: String?, role: String? = nil, subject: Subject? = nil) {
+    init(device_id: String, device_type: String, timezone: String?, owner_user_id: String?, subject_id: String?, created_at: String?, status: String?, qr_code_url: String? = nil, role: String? = nil, subject: Subject? = nil) {
         self.device_id = device_id
         self.device_type = device_type
         self.timezone = timezone
@@ -938,6 +953,7 @@ struct Device: Codable, Equatable {
         self.subject_id = subject_id
         self.created_at = created_at
         self.status = status
+        self.qr_code_url = qr_code_url
         self.role = role
         self.subject = subject
     }

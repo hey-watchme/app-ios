@@ -428,43 +428,6 @@ class SupabaseDataManager: ObservableObject {
     }
     
     
-    // MARK: - Avatar Management
-    
-    func fetchAvatarUrl(for userId: String) async -> URL? {
-        print("👤 Fetching avatar URL for user: \(userId)")
-        
-        // 1. ファイルパスを構築
-        let path = "\(userId)/avatar.webp"
-        
-        do {
-            // 2. ファイルの存在を確認 (任意だが推奨)
-            //    Web側の実装に合わせて、listで存在確認を行う
-            let files = try await supabase.storage
-                .from("avatars")
-                .list(path: userId)
-            
-            // ファイルが見つからなければ、URLは存在しないのでnilを返す
-            guard !files.isEmpty else {
-                print("🤷‍♂️ Avatar file not found at path: \(path)")
-                return nil
-            }
-            print("✅ Avatar file found. Proceeding to get signed URL.")
-            
-            // 3. 署名付きURLを生成 (Web側と同じく1時間有効)
-            let signedURL = try await supabase.storage
-                .from("avatars")
-                .createSignedURL(path: path, expiresIn: 3600)
-            
-            print("🔗 Successfully created signed URL: \(signedURL)")
-            return signedURL
-            
-        } catch {
-            // エラーログを出力
-            print("❌ Failed to fetch avatar URL: \(error.localizedDescription)")
-            return nil
-        }
-    }
-
     // MARK: - Subject Management Methods
 
     /// 新しい観測対象を登録
@@ -970,7 +933,31 @@ class SupabaseDataManager: ObservableObject {
         print("📊 Update response status: \(response.status)")
         print("📊 Update response data: \(String(describing: response.data))")
     }
-    
+
+    /// Update subject avatar URL only
+    func updateSubjectAvatarUrl(subjectId: String, avatarUrl: String) async throws {
+        print("👤 Updating subject avatar URL: \(subjectId)")
+
+        struct AvatarUpdate: Encodable {
+            let avatar_url: String
+            let updated_at: String
+        }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        let avatarUpdate = AvatarUpdate(
+            avatar_url: avatarUrl,
+            updated_at: now
+        )
+
+        try await supabase
+            .from("subjects")
+            .update(avatarUpdate)
+            .eq("subject_id", value: subjectId)
+            .execute()
+
+        print("✅ Subject avatar URL updated successfully: \(avatarUrl)")
+    }
+
     // MARK: - Notification Methods
     
     /// 通知を取得（イベント通知、パーソナル通知、グローバル通知を統合）

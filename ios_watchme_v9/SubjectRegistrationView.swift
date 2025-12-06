@@ -583,7 +583,7 @@ struct SubjectRegistrationView: View {
                 do {
                     // Supabase認証トークンを取得
                     let authToken = userAccountManager.getAccessToken()
-                    
+
                     // ✅ Avatar Uploader APIを使用してS3にアップロード
                     let avatarUrl = try await AWSManager.shared.uploadAvatar(
                         image: image,
@@ -592,7 +592,14 @@ struct SubjectRegistrationView: View {
                         authToken: authToken
                     )
                     print("✅ Subject avatar uploaded to S3: \(avatarUrl)")
-                    
+
+                    // データベースのavatar_urlを更新
+                    try await dataManager.updateSubjectAvatarUrl(
+                        subjectId: subjectId,
+                        avatarUrl: avatarUrl.absoluteString
+                    )
+                    print("✅ Subject avatar_url updated in database: \(avatarUrl.absoluteString)")
+
                     // AvatarViewを更新
                     await MainActor.run {
                         NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
@@ -684,7 +691,7 @@ struct SubjectRegistrationView: View {
                 do {
                     // Supabase認証トークンを取得
                     let authToken = userAccountManager.getAccessToken()
-                    
+
                     // ✅ Avatar Uploader APIを使用してS3にアップロード
                     let avatarUrl = try await AWSManager.shared.uploadAvatar(
                         image: image,
@@ -693,7 +700,14 @@ struct SubjectRegistrationView: View {
                         authToken: authToken
                     )
                     print("✅ Subject avatar updated on S3: \(avatarUrl)")
-                    
+
+                    // データベースのavatar_urlを更新
+                    try await dataManager.updateSubjectAvatarUrl(
+                        subjectId: subject.subjectId,
+                        avatarUrl: avatarUrl.absoluteString
+                    )
+                    print("✅ Subject avatar_url updated in database: \(avatarUrl.absoluteString)")
+
                     // AvatarViewを更新
                     await MainActor.run {
                         NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
