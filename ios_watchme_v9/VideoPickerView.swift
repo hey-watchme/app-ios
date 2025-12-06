@@ -18,6 +18,9 @@ struct VideoPickerView: View {
 
     @State private var selectedVideoURL: URL? = nil
     @State private var showPicker = false
+    @State private var videoConfirmed = false  // 動画選択確認フラグ
+
+    var onVideoProcessingStarted: (() -> Void)?
 
     var body: some View {
         Color.clear
@@ -36,6 +39,10 @@ struct VideoPickerView: View {
                     },
                     onCancel: {
                         dismiss()
+                    },
+                    onVideoConfirmed: {
+                        // 動画選択が確認された瞬間にコールバックを呼ぶ（「はい」を押した瞬間）
+                        onVideoProcessingStarted?()
                     }
                 )
                 .ignoresSafeArea()

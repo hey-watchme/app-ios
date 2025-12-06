@@ -22,7 +22,6 @@ struct ContentView: View {
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
     @State private var showMyPage = false  // マイページ表示制御
-    @State private var showVideoPickerSheet = false  // 動画選択モーダル
 
     // 録音機能は新しいRecordingStoreが内部で管理
 
@@ -180,20 +179,12 @@ struct ContentView: View {
                     HStack {
                         Spacer()
 
-                        VStack(spacing: 16) {
-                            // FAB: Video to audio extraction
-                            FloatingActionButton(icon: "film", action: {
-                                print("🎬 FAB: 動画選択ボタン押下")
-                                showVideoPickerSheet = true
-                            })
-
-                            // FAB: Recording
-                            FloatingActionButton(icon: "mic.fill", action: {
-                                print("🔘 FAB: 録音ボタン押下")
-                                print("✅ 録音シート表示（権限チェックは録音開始時に実行）")
-                                showRecordingSheet = true
-                            })
-                        }
+                        // FAB: Recording only (mic icon)
+                        FloatingActionButton(icon: "mic.fill", action: {
+                            print("🔘 FAB: 録音ボタン押下")
+                            print("✅ 録音シート表示（権限チェックは録音開始時に実行）")
+                            showRecordingSheet = true
+                        })
                         .padding(.trailing, 20)
                         .padding(.bottom, 20)
                     }
@@ -208,12 +199,20 @@ struct ContentView: View {
             }
         }
         .sheet(isPresented: $showRecordingSheet) {
-            FullScreenRecordingView()
-                .environmentObject(deviceManager)
-                .environmentObject(userAccountManager)
-                .environmentObject(recordingStore)
-                .presentationDetents([.large])
-                .presentationDragIndicator(.visible)
+            ZStack {
+                FullScreenRecordingView()
+                    .environmentObject(deviceManager)
+                    .environmentObject(userAccountManager)
+                    .environmentObject(recordingStore)
+
+                // モーダル内でもトーストを表示
+                VStack {
+                    ToastOverlay(toastManager: ToastManager.shared)
+                    Spacer()
+                }
+            }
+            .presentationDetents([.large])
+            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showQRScanner) {
             QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in
@@ -248,12 +247,6 @@ struct ContentView: View {
             UserInfoView(userAccountManager: userAccountManager)
                 .environmentObject(deviceManager)
                 .environmentObject(dataManager)
-        }
-        .sheet(isPresented: $showVideoPickerSheet) {
-            VideoPickerView()
-                .environmentObject(deviceManager)
-                .environmentObject(userAccountManager)
-                .environmentObject(recordingStore)
         }
         .onAppear {
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み

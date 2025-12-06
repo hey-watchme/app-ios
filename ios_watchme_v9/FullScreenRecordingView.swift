@@ -21,6 +21,8 @@ struct FullScreenRecordingView: View {
     // UI状態
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false
+    @State private var showVideoPicker = false
+    @State private var videoProcessingStarted = false  // 動画処理開始フラグ
 
     // MARK: - Body
     var body: some View {
@@ -59,11 +61,40 @@ struct FullScreenRecordingView: View {
 
                 Spacer()
 
-                // 録音制御ボタン
-                RecordingButton(
-                    isRecording: store.state.isRecording,
-                    action: handleRecordingButtonTapped
-                )
+                // 録音制御ボタンとビデオ選択ボタン
+                VStack(spacing: 20) {
+                    // ビデオ選択ボタン（録音していない時のみ表示）
+                    if !store.state.isRecording {
+                        Button(action: {
+                            showVideoPicker = true
+                        }) {
+                            HStack {
+                                Image(systemName: "photo.on.rectangle")
+                                    .font(.system(size: 20, weight: .medium))
+                                Text("カメラロールの動画の音声からも分析できます")
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 14)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.2))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .transition(.scale.combined(with: .opacity))
+                    }
+
+                    // 録音制御ボタン
+                    RecordingButton(
+                        isRecording: store.state.isRecording,
+                        action: handleRecordingButtonTapped
+                    )
+                }
                 .padding(.bottom, 60)
             }
 
@@ -106,6 +137,21 @@ struct FullScreenRecordingView: View {
             Button("キャンセル", role: .cancel) { }
         } message: {
             Text("このデバイスのマイクを使って音声情報を分析します")
+        }
+        .sheet(isPresented: $showVideoPicker) {
+            VideoPickerView(onVideoProcessingStarted: {
+                // ビデオ処理開始フラグを立てる
+                videoProcessingStarted = true
+            })
+                .environmentObject(deviceManager)
+                .environmentObject(userAccountManager)
+                .environmentObject(store)
+        }
+        .onChange(of: videoProcessingStarted) { oldValue, newValue in
+            // 動画処理が開始されたら録音モーダルを閉じる
+            if newValue {
+                dismiss()
+            }
         }
     }
 

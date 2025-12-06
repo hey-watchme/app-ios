@@ -13,6 +13,7 @@ struct VideoPicker: UIViewControllerRepresentable {
     @Environment(\.dismiss) private var dismiss
     var onConfirm: (URL) -> Void
     var onCancel: () -> Void
+    var onVideoConfirmed: (() -> Void)? = nil  // 動画選択確認時のコールバック
 
     func makeUIViewController(context: Context) -> PHPickerViewController {
         var configuration = PHPickerConfiguration(photoLibrary: .shared())
@@ -63,6 +64,9 @@ struct VideoPicker: UIViewControllerRepresentable {
             )
 
             alert.addAction(UIAlertAction(title: "はい", style: .default) { _ in
+                // 即座に録音モーダルを閉じるためのコールバックを呼ぶ
+                self.parent.onVideoConfirmed?()
+
                 // Dismiss picker IMMEDIATELY
                 picker.dismiss(animated: true) {
                     // Start loading video in background

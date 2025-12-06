@@ -21,6 +21,7 @@ struct AuthFlowView: View {
     // Account selection state
     @State private var isProcessing = false
     @State private var showLogin = false
+    @State private var showSignUp = false  // メール登録画面表示フラグ
 
     enum AuthStep {
         case onboarding
@@ -163,12 +164,9 @@ struct AuthFlowView: View {
                     .cornerRadius(12)
                 }
 
-                // Email Sign Up (Mock)
+                // Email Sign Up
                 Button(action: {
-                    toastManager.showInfo(
-                        title: "メールアドレス登録",
-                        subtitle: "現在準備中です"
-                    )
+                    showSignUp = true
                 }) {
                     HStack {
                         Image(systemName: "envelope.fill")
@@ -231,6 +229,10 @@ struct AuthFlowView: View {
                 .environmentObject(userAccountManager)
                 .environmentObject(toastManager)
                 .environmentObject(deviceManager)
+        }
+        .sheet(isPresented: $showSignUp) {
+            SignUpView()
+                .environmentObject(userAccountManager)
         }
         .overlay(
             Group {
