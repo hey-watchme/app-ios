@@ -78,18 +78,6 @@ struct AvatarView: View {
             // Load avatar when providedAvatarUrl changes
             await loadAvatar()
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("AvatarUpdated"))) { _ in
-            // Reload avatar when update notification is received
-            Task {
-                await loadAvatar()
-            }
-        }
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SubjectUpdated"))) { _ in
-            // Reload avatar when Subject is updated (from DeviceManager)
-            Task {
-                await loadAvatar()
-            }
-        }
     }
 
     private func loadAvatar() async {
@@ -102,9 +90,8 @@ struct AvatarView: View {
             return
         }
 
-        // Add cache-busting timestamp to force refresh if needed
-        let timestamp = Int(Date().timeIntervalSince1970)
-        guard let url = URL(string: "\(providedUrl)?t=\(timestamp)") else {
+        // Use URL directly (cache will be managed by ImageCacheManager)
+        guard let url = URL(string: providedUrl) else {
             await MainActor.run {
                 self.displayImage = nil
                 self.isLoadingAvatar = false

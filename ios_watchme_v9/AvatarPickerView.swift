@@ -7,25 +7,24 @@
 //
 
 import SwiftUI
-import PhotosUI
 import Mantis
 
 struct AvatarPickerView: View {
     @ObservedObject var viewModel: AvatarUploadViewModel
     let currentAvatarURL: URL?
     @Environment(\.dismiss) private var dismiss
-    
+
     // 写真選択
-    @State private var selectedItem: PhotosPickerItem? = nil
     @State private var selectedImage: UIImage? = nil
-    
+    @State private var showingPhotoLibrary = false
+
     // カメラ
     @State private var showingCamera = false
     @State private var cameraImage: UIImage? = nil
-    
+
     // トリミング（Mantis用）
     @State private var imageToEdit: ImageWrapper? = nil
-    
+
     // UI状態
     @State private var isProcessing = false
     @State private var errorMessage: String? = nil
@@ -54,12 +53,10 @@ struct AvatarPickerView: View {
                     .cornerRadius(12)
                 }
                 
-                // PhotosPicker（ビューとして埋め込み、別シートではない）
-                PhotosPicker(
-                    selection: $selectedItem,
-                    matching: .images,
-                    photoLibrary: .shared()
-                ) {
+                // Photo Library Button
+                Button(action: {
+                    showingPhotoLibrary = true
+                }) {
                     HStack {
                         Image(systemName: "photo.on.rectangle")
                             .frame(width: 30)
@@ -69,11 +66,6 @@ struct AvatarPickerView: View {
                     .padding()
                     .background(Color(.secondarySystemBackground))
                     .cornerRadius(12)
-                }
-                .onChange(of: selectedItem) { newItem in
-                    Task {
-                        await loadImage(from: newItem)
-                    }
                 }
             }
             .padding(.horizontal)
@@ -96,9 +88,44 @@ struct AvatarPickerView: View {
             }
         }
         .disabled(isProcessing || viewModel.phase == .uploading)
+        .overlay {
+            // Loading overlay when processing image from PhotosPicker
+            if isProcessing {
+                ZStack {
+                    Color.black.opacity(0.4)
+                        .ignoresSafeArea()
+
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+
+                        Text("画像を読み込んでいます...")
+                            .font(.subheadline)
+                            .foregroundColor(.white)
+                    }
+                    .padding(32)
+                    .background(Color.black.opacity(0.7))
+                    .cornerRadius(16)
+                }
+            }
+        }
         .fullScreenCover(isPresented: $showingCamera) {
-            CameraView(selectedImage: $cameraImage)
+            ImagePickerController(selectedImage: $cameraImage, sourceType: .camera)
                 .ignoresSafeArea()
+        }
+        .fullScreenCover(isPresented: $showingPhotoLibrary) {
+            ImagePickerController(selectedImage: Binding(
+                get: { selectedImage },
+                set: { newImage in
+                    if let newImage = newImage {
+                        selectedImage = newImage
+                        imageToEdit = ImageWrapper(image: newImage)
+                        showingPhotoLibrary = false
+                    }
+                }
+            ), sourceType: .photoLibrary)
+            .ignoresSafeArea()
         }
         .fullScreenCover(item: $imageToEdit) { wrapper in
             MantisCropper(
@@ -146,27 +173,43 @@ struct AvatarPickerView: View {
                             .stroke(Color.safeColor("PrimaryActionColor"), lineWidth: 3)
                     )
             } else if let url = currentAvatarURL {
-                AsyncImage(url: url) { image in
-                    image
-                        .resizable()
-                        .scaledToFill()
-                } placeholder: {
-                    Image(systemName: "person.circle.fill")
-                        .resizable()
-                        .foregroundColor(Color.safeColor("BorderLight"))
-                }
-                .frame(width: 120, height: 120)
-                .clipShape(Circle())
+                // Use ImageCacheManager for consistent caching behavior
+                AvatarImageView(url: url)
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
             } else {
                 Image(systemName: "person.circle.fill")
                     .resizable()
                     .foregroundColor(Color.safeColor("BorderLight"))
                     .frame(width: 120, height: 120)
             }
-            
+
             Text(currentAvatarURL != nil ? "現在のアバター" : "アバター未設定")
                 .font(.caption)
                 .foregroundColor(.secondary)
+        }
+    }
+
+    // Simple avatar image view using ImageCacheManager
+    private struct AvatarImageView: View {
+        let url: URL
+        @State private var image: UIImage?
+
+        var body: some View {
+            Group {
+                if let image = image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: "person.circle.fill")
+                        .resizable()
+                        .foregroundColor(Color.safeColor("BorderLight"))
+                }
+            }
+            .task {
+                self.image = await ImageCacheManager.shared.getImage(for: url)
+            }
         }
     }
     
@@ -221,29 +264,6 @@ struct AvatarPickerView: View {
     }
     
     // MARK: - Helper Functions
-    private func loadImage(from item: PhotosPickerItem?) async {
-        guard let item = item else { return }
-        
-        isProcessing = true
-        errorMessage = nil
-        
-        do {
-            if let data = try await item.loadTransferable(type: Data.self),
-               let uiImage = UIImage(data: data) {
-                await MainActor.run {
-                    self.imageToEdit = ImageWrapper(image: uiImage)
-                    self.selectedImage = uiImage
-                    self.isProcessing = false
-                }
-            }
-        } catch {
-            await MainActor.run {
-                self.errorMessage = "画像の読み込みに失敗しました"
-                self.isProcessing = false
-            }
-        }
-    }
-    
     private func uploadImage(_ image: UIImage) async {
         selectedImage = image
         errorMessage = nil
@@ -251,39 +271,40 @@ struct AvatarPickerView: View {
     }
 }
 
-// MARK: - Camera View
-struct CameraView: UIViewControllerRepresentable {
+// MARK: - UIImagePickerController Wrapper
+struct ImagePickerController: UIViewControllerRepresentable {
     @Binding var selectedImage: UIImage?
+    let sourceType: UIImagePickerController.SourceType
     @Environment(\.dismiss) private var dismiss
-    
+
     func makeUIViewController(context: Context) -> UIImagePickerController {
         let picker = UIImagePickerController()
-        picker.sourceType = .camera
+        picker.sourceType = sourceType
         picker.delegate = context.coordinator
         picker.allowsEditing = false
         return picker
     }
-    
+
     func updateUIViewController(_ uiViewController: UIImagePickerController, context: Context) {}
-    
+
     func makeCoordinator() -> Coordinator {
         Coordinator(self)
     }
-    
+
     class Coordinator: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
-        let parent: CameraView
-        
-        init(_ parent: CameraView) {
+        let parent: ImagePickerController
+
+        init(_ parent: ImagePickerController) {
             self.parent = parent
         }
-        
+
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             if let image = info[.originalImage] as? UIImage {
                 parent.selectedImage = image
             }
             parent.dismiss()
         }
-        
+
         func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
             parent.dismiss()
         }

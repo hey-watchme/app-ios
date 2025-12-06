@@ -12,6 +12,7 @@ WatchMeプラットフォームのiOSアプリケーション。
 >
 > **技術仕様**:
 > - [TECHNICAL.md](./docs/technical/TECHNICAL.md) - アーキテクチャ・データベース設計
+> - [ARCHITECTURE.md](./docs/technical/ARCHITECTURE.md) - 現在のアーキテクチャと構造分析
 > - [COLOR_SYSTEM.md](./docs/technical/COLOR_SYSTEM.md) - カラーシステム
 >
 > **セットアップガイド**:
@@ -21,6 +22,8 @@ WatchMeプラットフォームのiOSアプリケーション。
 >
 > **開発ガイド**:
 > - [TODO.md](./docs/development/TODO.md) - 開発タスク管理
+> - [PERFORMANCE.md](./docs/development/PERFORMANCE.md) - パフォーマンス改善計画
+> - [REFACTORING_PLAN.md](./docs/development/REFACTORING_PLAN.md) - リファクタリング実行計画
 > - [COLOR_GUIDE.md](./docs/development/COLOR_GUIDE.md) - カラー管理ガイド
 >
 > **運用**:
@@ -39,11 +42,14 @@ WatchMeプラットフォームのiOSアプリケーション。
 | やりたいこと | 参照先 |
 |------------|--------|
 | 📱 **アプリの全体像を理解したい** | このREADME |
+| 🏗️ **現在のアーキテクチャを理解** | [ARCHITECTURE.md](./docs/technical/ARCHITECTURE.md) |
 | 🔐 **認証機能の実装・修正** | [AUTHENTICATION.md](./docs/features/AUTHENTICATION.md) |
 | 🗄️ **データベース設計を確認・変更** | [TECHNICAL.md](./docs/technical/TECHNICAL.md)<br>`/Users/kaya.matsumoto/projects/watchme/server-configs/database/` |
 | 🔌 **API仕様を確認・変更** | [TECHNICAL.md](./docs/technical/TECHNICAL.md) |
 | 📡 **プッシュ通知の仕組みを理解** | [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/features/PUSH_NOTIFICATION_ARCHITECTURE.md) |
 | 🎙️ **録音機能の仕様を確認** | [RECORDING_SPECIFICATION.md](./docs/features/RECORDING_SPECIFICATION.md) |
+| ⚡ **パフォーマンス問題を解決** | [PERFORMANCE.md](./docs/development/PERFORMANCE.md) |
+| 🔄 **リファクタリング計画を確認** | [REFACTORING_PLAN.md](./docs/development/REFACTORING_PLAN.md) |
 | 🎨 **カラーを変更したい** | [COLOR_GUIDE.md](./docs/development/COLOR_GUIDE.md) |
 | 🔧 **環境構築・ライブラリセットアップ** | [docs/setup/](./docs/setup/) |
 | 📝 **開発タスクを確認** | [TODO.md](./docs/development/TODO.md) |

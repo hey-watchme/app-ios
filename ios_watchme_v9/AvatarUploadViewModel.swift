@@ -40,6 +40,7 @@ class AvatarUploadViewModel: ObservableObject {
     let avatarType: AvatarType
     var entityId: String?
     var authToken: String?
+    var dataManager: SupabaseDataManager?
     var onSuccess: ((URL) -> Void)?
     var onCancel: (() -> Void)?
     
@@ -116,40 +117,56 @@ class AvatarUploadViewModel: ObservableObject {
     /// トリミングされた画像をアップロード
     func uploadCroppedImage(_ image: UIImage) {
         guard let entityId = entityId else {
+            print("❌ [AvatarUploadViewModel] entityId is nil")
             phase = .error("IDが指定されていません")
             return
         }
-        
-        print("🚀 Starting upload for \(avatarType.s3Type)/\(entityId)")
+
+        guard let dataManager = dataManager else {
+            print("❌ [AvatarUploadViewModel] dataManager is nil - cannot save to database")
+            phase = .error("データマネージャーが設定されていません")
+            return
+        }
+
+        print("🚀 [AvatarUploadViewModel] Starting upload for \(avatarType.s3Type)/\(entityId)")
+        print("   - authToken: \(authToken != nil ? "SET" : "NIL")")
+        print("   - dataManager: SET")
         phase = .uploading
         progressMessage = "アバターをアップロードしています..."
-        
+
         Task {
             do {
-                let url = try await AWSManager.shared.uploadAvatar(
-                    image: image,
-                    type: avatarType.s3Type,
-                    id: entityId,
-                    authToken: authToken
-                )
-                
+                let url: URL
+
+                // Use AvatarService for complete upload flow (S3 + DB + cache)
+                switch avatarType {
+                case .user:
+                    url = try await AvatarService.shared.uploadUserAvatar(
+                        image: image,
+                        userId: entityId,
+                        authToken: authToken,
+                        dataManager: dataManager
+                    )
+                case .subject:
+                    url = try await AvatarService.shared.uploadSubjectAvatar(
+                        image: image,
+                        subjectId: entityId,
+                        authToken: authToken,
+                        dataManager: dataManager
+                    )
+                }
+
                 print("✅ Upload successful: \(url)")
                 phase = .success(url)
                 progressMessage = "アップロードが完了しました"
-                
+
                 // 成功コールバック
                 onSuccess?(url)
-                
-                // NotificationCenterで通知（既存の実装との互換性）
-                NotificationCenter.default.post(
-                    name: NSNotification.Name("AvatarUpdated"),
-                    object: nil
-                )
-                
+
                 // 2秒後にシートを閉じる
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 reset()
-                
+
             } catch {
                 print("❌ Upload failed: \(error)")
                 phase = .error(error.localizedDescription)

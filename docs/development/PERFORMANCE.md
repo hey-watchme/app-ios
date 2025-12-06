@@ -829,6 +829,8 @@ main
 ## 🔗 関連ドキュメント
 
 - [README.md](../../README.md): アプリ全体の構成
+- [ARCHITECTURE.md](../technical/ARCHITECTURE.md): 現在のアーキテクチャ
+- [REFACTORING_PLAN.md](./REFACTORING_PLAN.md): 詳細なリファクタリング手順
 - [TECHNICAL.md](../technical/TECHNICAL.md): 技術仕様
 - [TROUBLESHOOTING.md](../operations/TROUBLESHOOTING.md): トラブルシューティング
 

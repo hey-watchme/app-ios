@@ -958,6 +958,29 @@ class SupabaseDataManager: ObservableObject {
         print("✅ Subject avatar URL updated successfully: \(avatarUrl)")
     }
 
+    func updateUserAvatarUrl(userId: String, avatarUrl: String) async throws {
+        print("👤 Updating user avatar URL: \(userId)")
+
+        struct AvatarUpdate: Encodable {
+            let avatar_url: String
+            let updated_at: String
+        }
+
+        let now = ISO8601DateFormatter().string(from: Date())
+        let avatarUpdate = AvatarUpdate(
+            avatar_url: avatarUrl,
+            updated_at: now
+        )
+
+        try await supabase
+            .from("users")
+            .update(avatarUpdate)
+            .eq("user_id", value: userId)
+            .execute()
+
+        print("✅ User avatar URL updated successfully: \(avatarUrl)")
+    }
+
     // MARK: - Notification Methods
     
     /// 通知を取得（イベント通知、パーソナル通知、グローバル通知を統合）

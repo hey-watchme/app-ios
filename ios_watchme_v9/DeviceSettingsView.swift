@@ -125,14 +125,7 @@ struct DeviceSettingsView: View {
         }
         // 📊 パフォーマンス最適化: デバイス選択時のstate変更による不要なリロードを防止
         // デバイスデータは既にDeviceManagerで管理されているため、特別な処理は不要
-        .onReceive(NotificationCenter.default.publisher(for: NSNotification.Name("SubjectUpdated"))) { _ in
-            // Subjectが更新されたら、DeviceManagerの再初期化をトリガー
-            Task {
-                if let userId = userAccountManager.currentUser?.profile?.userId {
-                    await deviceManager.initializeDevices(for: userId)
-                }
-            }
-        }
+        // SubjectUpdated通知は削除（selectedSubjectが計算プロパティになったため不要）
         .sheet(isPresented: $showQRScanner) {
             QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in
                 Task { await handleQRCodeScanned(scannedCode) }

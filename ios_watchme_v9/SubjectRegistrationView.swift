@@ -26,18 +26,17 @@ struct SubjectRegistrationView: View {
     @State private var prefecture: String = ""
     @State private var city: String = ""
     @State private var notes: String = ""
-    @State private var selectedItem: PhotosPickerItem? = nil
-    @State private var selectedImageData: Data? = nil
-    @State private var selectedImage: UIImage? = nil
     @State private var showingAvatarPicker = false
-    
+    @State private var currentAvatarUrl: String? = nil // アバターURL（アップロード後の即時更新用）
+
     // UI状態
     @State private var isLoading = false
     @State private var errorMessage: String? = nil
     @State private var showingSuccessAlert = false
-    @State private var isUploadingAvatar = false
     @State private var showingDeleteConfirmation = false
     @State private var showingDeleteSuccessAlert = false
+    @State private var hasUnsavedChanges = false // 未保存の変更があるか
+    @State private var showingDiscardAlert = false // 破棄確認ダイアログ
     
     // Avatar ViewModel
     @StateObject private var avatarViewModel = AvatarUploadViewModel(
@@ -59,6 +58,24 @@ struct SubjectRegistrationView: View {
         "徳島県", "香川県", "愛媛県", "高知県", "福岡県", "佐賀県", "長崎県",
         "熊本県", "大分県", "宮崎県", "鹿児島県", "沖縄県"
     ]
+
+    // Computed property: check if form has unsaved changes
+    private var formHasChanges: Bool {
+        guard let subject = editingSubject else { return false }
+
+        let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedCity = city.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedNotes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return trimmedName != (subject.name ?? "") ||
+               age != (subject.age != nil ? String(subject.age!) : "") ||
+               gender != (subject.gender ?? "") ||
+               cognitiveType != (subject.cognitiveType ?? "") ||
+               prefecture != (subject.prefecture ?? "") ||
+               trimmedCity != (subject.city ?? "") ||
+               trimmedNotes != (subject.notes ?? "") ||
+               currentAvatarUrl != subject.avatarUrl
+    }
     
     // 編集モードかどうかの判定
     private var isEditing: Bool {
@@ -99,7 +116,11 @@ struct SubjectRegistrationView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button(isViewOnly ? "閉じる" : "キャンセル") {
-                        dismiss()
+                        if formHasChanges {
+                            showingDiscardAlert = true
+                        } else {
+                            dismiss()
+                        }
                     }
                 }
 
@@ -124,6 +145,23 @@ struct SubjectRegistrationView: View {
                 // ViewModelの初期化
                 avatarViewModel.entityId = editingSubject?.subjectId ?? ""
                 avatarViewModel.authToken = userAccountManager.getAccessToken()
+                avatarViewModel.dataManager = dataManager
+
+                // Hybrid update: immediate UI feedback + data consistency
+                avatarViewModel.onSuccess = { url in
+                    Task { @MainActor in
+                        // Clear old cache first (important: same URL, different image)
+                        if let oldUrl = currentAvatarUrl ?? editingSubject?.avatarUrl,
+                           let urlToClean = URL(string: oldUrl) {
+                            ImageCacheManager.shared.removeImage(for: urlToClean)
+                            URLCache.shared.removeCachedResponse(for: URLRequest(url: urlToClean))
+                        }
+
+                        // Force UI update with cache-busting timestamp
+                        let timestamp = Date().timeIntervalSince1970
+                        currentAvatarUrl = "\(url.absoluteString)?t=\(timestamp)"
+                    }
+                }
 
                 // Calculate isViewOnly once on appear to avoid repeated array searches
                 if let device = deviceManager.devices.first(where: { $0.device_id == deviceID }) {
@@ -155,6 +193,24 @@ struct SubjectRegistrationView: View {
                 }
             } message: {
                 Text("この観測対象を完全に削除します。この操作は取り消せません。")
+            }
+            .alert("変更内容を破棄しますか？", isPresented: $showingDiscardAlert) {
+                Button("キャンセル", role: .cancel) { }
+                Button("保存して閉じる") {
+                    Task {
+                        if isEditing {
+                            await updateSubject()
+                        } else {
+                            await registerSubject()
+                        }
+                        // Success alert will trigger dismiss
+                    }
+                }
+                Button("破棄", role: .destructive) {
+                    dismiss()
+                }
+            } message: {
+                Text("編集した内容が保存されていません。")
             }
             .alert("エラー", isPresented: .init(
                 get: { errorMessage != nil },
@@ -190,41 +246,14 @@ struct SubjectRegistrationView: View {
     // MARK: - Avatar Image View
     @ViewBuilder
     private var avatarImageView: some View {
-        if let image = selectedImage {
-            // 新規選択した画像を優先表示
-            Image(uiImage: image)
-                .resizable()
-                .scaledToFill()
-        } else if let subject = editingSubject {
-            // 編集時：S3から表示（AvatarViewと同じロジック）
-            let baseURL = AWSManager.shared.getAvatarURL(type: "subjects", id: subject.subjectId)
-            // Use fixed timestamp to avoid recalculation on every render
-            AsyncImage(url: baseURL) { phase in
-                switch phase {
-                case .success(let image):
-                    image
-                        .resizable()
-                        .scaledToFill()
-                case .failure(_), .empty:
-                    // デフォルトアイコン（グレー）
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundColor(Color.safeColor("BorderLight"))
-                @unknown default:
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundColor(Color.safeColor("BorderLight"))
-                }
-            }
-        } else {
-            // 新規登録時：デフォルトアイコン（グレー）
-            Image(systemName: "person.crop.circle.fill")
-                .resizable()
-                .scaledToFit()
-                .foregroundColor(Color.safeColor("BorderLight"))
-        }
+        // Use AvatarView to ensure consistent caching behavior
+        // Display currentAvatarUrl if available (after upload), otherwise use editingSubject.avatarUrl
+        AvatarView(
+            type: .subject,
+            id: editingSubject?.subjectId,
+            size: 120,
+            avatarUrl: currentAvatarUrl ?? editingSubject?.avatarUrl
+        )
     }
     // MARK: - Profile Image Section
     private var profileImageSection: some View {
@@ -280,7 +309,7 @@ struct SubjectRegistrationView: View {
             NavigationStack {
                 AvatarPickerView(
                     viewModel: avatarViewModel,
-                    currentAvatarURL: editingSubject != nil ? AWSManager.shared.getAvatarURL(type: "subjects", id: editingSubject!.subjectId) : nil
+                    currentAvatarURL: editingSubject?.avatarUrl != nil && !editingSubject!.avatarUrl!.isEmpty ? URL(string: editingSubject!.avatarUrl!) : nil
                 )
                 .navigationTitle("アバターを選択")
                 .navigationBarTitleDisplayMode(.inline)
@@ -517,11 +546,9 @@ struct SubjectRegistrationView: View {
             prefecture = subject.prefecture ?? ""
             city = subject.city ?? ""
             notes = subject.notes ?? ""
+            currentAvatarUrl = subject.avatarUrl // Initialize with existing avatar URL
 
             print("📖 Form initialized: name=\(name), age=\(age), gender=\(gender), cognitiveType=\(cognitiveType), prefecture=\(prefecture), city=\(city), notes=\(notes)")
-
-            // S3からのアバター画像は、profileImageSectionのAsyncImageで直接表示されるため、
-            // ここでは何もロードしない
         }
     }
     
@@ -561,7 +588,7 @@ struct SubjectRegistrationView: View {
                 return
             }
             
-            // 観測対象を登録（アバターURL無しで）
+            // 観測対象を登録（アバターはAvatarPickerView経由で別途アップロード）
             let subjectId = try await dataManager.registerSubject(
                 name: trimmedName,
                 age: ageInt,
@@ -569,54 +596,11 @@ struct SubjectRegistrationView: View {
                 cognitiveType: cognitiveType.isEmpty ? nil : cognitiveType,
                 prefecture: prefecture.isEmpty ? nil : prefecture,
                 city: city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : city.trimmingCharacters(in: .whitespacesAndNewlines),
-                avatarUrl: nil, // S3アップロード後に更新するため、一旦null
+                avatarUrl: nil,
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
                 createdByUserId: currentUser.id
             )
-            
-            // アバター画像をアップロード
-            if let image = selectedImage {
-                await MainActor.run {
-                    isUploadingAvatar = true
-                }
-                
-                do {
-                    // Supabase認証トークンを取得
-                    let authToken = userAccountManager.getAccessToken()
 
-                    // ✅ Avatar Uploader APIを使用してS3にアップロード
-                    let avatarUrl = try await AWSManager.shared.uploadAvatar(
-                        image: image,
-                        type: "subjects",
-                        id: subjectId,
-                        authToken: authToken
-                    )
-                    print("✅ Subject avatar uploaded to S3: \(avatarUrl)")
-
-                    // データベースのavatar_urlを更新
-                    try await dataManager.updateSubjectAvatarUrl(
-                        subjectId: subjectId,
-                        avatarUrl: avatarUrl.absoluteString
-                    )
-                    print("✅ Subject avatar_url updated in database: \(avatarUrl.absoluteString)")
-
-                    // AvatarViewを更新
-                    await MainActor.run {
-                        NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
-                        // アップロード成功後、選択画像をクリア（S3の画像を表示するため）
-                        self.selectedImage = nil
-                        self.selectedImageData = nil
-                    }
-                } catch {
-                    print("❌ Avatar upload failed: \(error)")
-                    // アバターアップロードに失敗しても、観測対象の登録は成功とする
-                }
-                
-                await MainActor.run {
-                    isUploadingAvatar = false
-                }
-            }
-            
             // デバイスにsubject_idを設定
             try await dataManager.updateDeviceSubjectId(deviceId: deviceID, subjectId: subjectId)
 
@@ -668,7 +652,7 @@ struct SubjectRegistrationView: View {
                 }
             }
             
-            // 観測対象を更新（アバターURL無しで）
+            // 観測対象を更新（アバターはAvatarPickerView経由で別途アップロード）
             try await dataManager.updateSubject(
                 subjectId: subject.subjectId,
                 deviceId: deviceID,
@@ -678,52 +662,9 @@ struct SubjectRegistrationView: View {
                 cognitiveType: cognitiveType.isEmpty ? nil : cognitiveType,
                 prefecture: prefecture.isEmpty ? nil : prefecture,
                 city: city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : city.trimmingCharacters(in: .whitespacesAndNewlines),
-                avatarUrl: nil, // S3のURLを使うため、DBにはnullを設定
+                avatarUrl: subject.avatarUrl,
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             )
-            
-            // アバター画像をアップロード
-            if let image = selectedImage {
-                await MainActor.run {
-                    isUploadingAvatar = true
-                }
-                
-                do {
-                    // Supabase認証トークンを取得
-                    let authToken = userAccountManager.getAccessToken()
-
-                    // ✅ Avatar Uploader APIを使用してS3にアップロード
-                    let avatarUrl = try await AWSManager.shared.uploadAvatar(
-                        image: image,
-                        type: "subjects",
-                        id: subject.subjectId,
-                        authToken: authToken
-                    )
-                    print("✅ Subject avatar updated on S3: \(avatarUrl)")
-
-                    // データベースのavatar_urlを更新
-                    try await dataManager.updateSubjectAvatarUrl(
-                        subjectId: subject.subjectId,
-                        avatarUrl: avatarUrl.absoluteString
-                    )
-                    print("✅ Subject avatar_url updated in database: \(avatarUrl.absoluteString)")
-
-                    // AvatarViewを更新
-                    await MainActor.run {
-                        NotificationCenter.default.post(name: NSNotification.Name("AvatarUpdated"), object: nil)
-                        // アップロード成功後、選択画像をクリア（S3の画像を表示するため）
-                        self.selectedImage = nil
-                        self.selectedImageData = nil
-                    }
-                } catch {
-                    print("❌ Avatar upload failed: \(error)")
-                    // アバターアップロードに失敗しても、観測対象の更新は成功とする
-                }
-                
-                await MainActor.run {
-                    isUploadingAvatar = false
-                }
-            }
 
             // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
             if let userId = userAccountManager.currentUser?.id {
@@ -767,10 +708,8 @@ struct SubjectRegistrationView: View {
                 print("✅ DeviceManager refreshed after subject deletion")
             }
 
-            // 親ビューに観測対象が削除されたことを通知
-            await MainActor.run {
-                NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
-            }
+            // DeviceManagerのinitializeDevicesが呼ばれたため、
+            // selectedSubjectは自動的に更新される（計算プロパティのため）
 
             print("✅ Subject deletion completed - subjectId: \(subject.subjectId)")
 

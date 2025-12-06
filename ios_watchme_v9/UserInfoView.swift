@@ -11,11 +11,12 @@ import PhotosUI
 // MARK: - ユーザー情報ビュー
 struct UserInfoView: View {
     let userAccountManager: UserAccountManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showAccountSettings = false  // アカウント設定画面
     @State private var showingAvatarPicker = false  // アバター選択画面
     @State private var showSignUp = false  // 新規ユーザー登録画面
     @Environment(\.dismiss) private var dismiss
-    
+
     // Avatar ViewModel
     @StateObject private var avatarViewModel = AvatarUploadViewModel(
         avatarType: .user,
@@ -305,6 +306,17 @@ struct UserInfoView: View {
             if let userId = userAccountManager.currentUser?.profile?.userId {
                 avatarViewModel.entityId = userId
                 avatarViewModel.authToken = userAccountManager.getAccessToken()
+                avatarViewModel.dataManager = dataManager
+
+                // アップロード成功時のコールバック（UserAccountManager再読み込み）
+                avatarViewModel.onSuccess = { [weak userAccountManager] _ in
+                    Task { @MainActor in
+                        // Refresh user profile to get updated avatar URL
+                        if let userId = userAccountManager?.currentUser?.id {
+                            await userAccountManager?.fetchUserProfile(userId: userId)
+                        }
+                    }
+                }
             } else {
                 print("❌ ユーザープロファイルが読み込まれていません")
             }

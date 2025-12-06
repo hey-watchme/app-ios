@@ -23,19 +23,15 @@ class DeviceManager: ObservableObject {
         case error(String)              // エラー
     }
 
-    @Published var state: DeviceState = .idle {
-        didSet {
-            updateSelectedSubject()
-        }
-    }
-    @Published var selectedDeviceID: String? = nil {
-        didSet {
-            updateSelectedSubject()
-        }
-    }
+    @Published var state: DeviceState = .idle
 
-    // Selected device's subject (Single Source of Truth for UI)
-    @Published private(set) var selectedSubject: Subject? = nil
+    @Published var selectedDeviceID: String? = nil
+
+    // Selected device's subject (computed from selectedDeviceID - Single Source of Truth)
+    var selectedSubject: Subject? {
+        guard let selectedDeviceID = selectedDeviceID else { return nil }
+        return devices.first(where: { $0.device_id == selectedDeviceID })?.subject
+    }
 
     // デバイスリストを状態から取得
     var devices: [Device] {
@@ -45,33 +41,7 @@ class DeviceManager: ObservableObject {
         return []
     }
 
-    // Update selectedSubject when selectedDeviceID or devices change
-    private func updateSelectedSubject() {
-        guard let selectedDeviceID = selectedDeviceID else {
-            selectedSubject = nil
-            return
-        }
 
-        let foundDevice = devices.first(where: { $0.device_id == selectedDeviceID })
-        let newSubject = foundDevice?.subject
-
-        // Only update if the subject actually changed (avoid unnecessary UI updates)
-        if selectedSubject?.subjectId != newSubject?.subjectId ||
-           selectedSubject?.avatarUrl != newSubject?.avatarUrl {
-            selectedSubject = newSubject
-
-            // Notify AvatarView instances to reload
-            if newSubject != nil {
-                NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
-            }
-        }
-    }
-
-    // Public method to manually refresh selectedSubject (for external updates)
-    @MainActor
-    func refreshSelectedSubject() {
-        updateSelectedSubject()
-    }
 
     var hasDevices: Bool {
         !devices.isEmpty
