@@ -147,7 +147,12 @@ struct AccountSelectionView: View {
                 Task {
                     // Auto-register device
                     if let userId = userAccountManager.currentUser?.profile?.userId {
-                        await deviceManager.registerDevice(userId: userId)
+                        do {
+                            let _ = try await deviceManager.registerDevice(userId: userId)
+                            await deviceManager.loadDevices(for: userId)
+                        } catch {
+                            print("❌ デバイス自動登録エラー: \(error)")
+                        }
                     }
 
                     await MainActor.run {
@@ -184,7 +189,12 @@ struct AccountSelectionView: View {
             if userAccountManager.isAuthenticated {
                 // Auto-register device
                 if let userId = userAccountManager.currentUser?.profile?.userId {
-                    await deviceManager.registerDevice(userId: userId)
+                    do {
+                        let _ = try await deviceManager.registerDevice(userId: userId)
+                        await deviceManager.loadDevices(for: userId)
+                    } catch {
+                        print("❌ デバイス自動登録エラー: \(error)")
+                    }
                 }
 
                 await MainActor.run {

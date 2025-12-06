@@ -429,14 +429,10 @@ struct SimpleDashboardView: View {
                 }
             } else {
                 // エンプティーステート：ナビゲーションボタンを非表示
-                UnifiedCard(
-                    title: "気分"
-                ) {
-                    GraphEmptyStateView(
-                        graphType: .vibe,
-                        isDeviceLinked: !deviceManager.devices.isEmpty,
-                        isCompact: true
-                    )
+                if deviceManager.selectedDeviceID == nil {
+                    DeviceNotSelectedView(graphType: .vibe, isCompact: true)
+                } else {
+                    GraphEmptyStateView(graphType: .vibe, isCompact: true)
                 }
             }
         }
@@ -495,11 +491,11 @@ struct SimpleDashboardView: View {
                     behaviorReportContent(behaviorReport)
                 }
             } else {
-                GraphEmptyStateView(
-                    graphType: .behavior,
-                    isDeviceLinked: !deviceManager.devices.isEmpty,
-                    isCompact: true
-                )
+                if deviceManager.selectedDeviceID == nil {
+                    DeviceNotSelectedView(graphType: .behavior, isCompact: true)
+                } else {
+                    GraphEmptyStateView(graphType: .behavior, isCompact: true)
+                }
             }
         }
         .onTapGesture {
@@ -517,11 +513,11 @@ struct SimpleDashboardView: View {
             if let emotionReport = emotionReport {
                 emotionReportContent(emotionReport)
             } else {
-                GraphEmptyStateView(
-                    graphType: .emotion,
-                    isDeviceLinked: !deviceManager.devices.isEmpty,
-                    isCompact: true
-                )
+                if deviceManager.selectedDeviceID == nil {
+                    DeviceNotSelectedView(graphType: .emotion, isCompact: true)
+                } else {
+                    GraphEmptyStateView(graphType: .emotion, isCompact: true)
+                }
             }
         }
         .onTapGesture {
@@ -1087,10 +1083,13 @@ struct AnalysisListView: View {
             VStack(spacing: 20) {
                 if timeBlocks.isEmpty {
                     // Empty state
-                    GraphEmptyStateView(
-                        graphType: .vibe,
-                        isDeviceLinked: !deviceManager.devices.isEmpty
-                    )
+                    Group {
+                        if deviceManager.selectedDeviceID == nil {
+                            DeviceNotSelectedView(graphType: .vibe)
+                        } else {
+                            GraphEmptyStateView(graphType: .vibe)
+                        }
+                    }
                     .padding(.horizontal)
                 } else {
                     // 時系列順（古い→新しい）で全件表示

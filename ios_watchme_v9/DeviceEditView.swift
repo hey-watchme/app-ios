@@ -336,7 +336,7 @@ struct DeviceEditView: View {
 
             // Refresh device list to update qr_code_url in DeviceManager
             if let userId = userAccountManager.currentUser?.profile?.userId {
-                await deviceManager.fetchUserDevices(for: userId)
+                await deviceManager.loadDevices(for: userId)
             }
         } catch {
             await MainActor.run {
@@ -434,7 +434,7 @@ struct DeviceEditView: View {
 
             // デバイスリストを再読み込み
             if let userId = userAccountManager.currentUser?.profile?.userId {
-                await deviceManager.initializeDevices(for: userId)
+                await deviceManager.loadDevices(for: userId)
             }
         } catch {
             await MainActor.run {

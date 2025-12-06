@@ -251,7 +251,7 @@ struct ReportTestView: View {
             if deviceManager.devices.isEmpty, let userId = userAccountManager.currentUser?.profile?.userId {
                 print("🔄 デバイスが未取得のため再取得を実行")
                 Task {
-                    await deviceManager.fetchUserDevices(for: userId)
+                    await deviceManager.loadDevices(for: userId)
                 }
             }
         }

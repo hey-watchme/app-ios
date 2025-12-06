@@ -606,7 +606,7 @@ struct SubjectRegistrationView: View {
 
             // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
             if let userId = userAccountManager.currentUser?.id {
-                await deviceManager.initializeDevices(for: userId)
+                await deviceManager.loadDevices(for: userId)
             }
 
             await MainActor.run {
@@ -668,7 +668,7 @@ struct SubjectRegistrationView: View {
 
             // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
             if let userId = userAccountManager.currentUser?.id {
-                await deviceManager.initializeDevices(for: userId)
+                await deviceManager.loadDevices(for: userId)
             }
 
             print("✅ Subject update completed - name: \(trimmedName), age: \(ageInt?.description ?? "nil"), gender: \(gender.isEmpty ? "nil" : gender), notes: \(notes.isEmpty ? "nil" : notes)")
@@ -704,7 +704,7 @@ struct SubjectRegistrationView: View {
 
             // DeviceManagerのデータを強制的に再取得
             if let userId = userAccountManager.currentUser?.id {
-                await deviceManager.initializeDevices(for: userId)
+                await deviceManager.loadDevices(for: userId)
                 print("✅ DeviceManager refreshed after subject deletion")
             }
 

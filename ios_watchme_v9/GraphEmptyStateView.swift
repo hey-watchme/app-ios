@@ -7,17 +7,16 @@
 
 import SwiftUI
 
-/// グラフビューのエンプティステート（データなし/デバイス未連携）を表示する共通コンポーネント
+/// グラフビューのエンプティステート（データなし）を表示する共通コンポーネント
 struct GraphEmptyStateView: View {
     let graphType: GraphType
-    let isDeviceLinked: Bool
     let isCompact: Bool
-    
+
     enum GraphType {
         case vibe       // 心理グラフ
         case behavior   // 行動グラフ
         case emotion    // 感情グラフ
-        
+
         var defaultIcon: String {
             switch self {
             case .vibe:
@@ -28,7 +27,7 @@ struct GraphEmptyStateView: View {
                 return "heart.text.square"
             }
         }
-        
+
         var dataTypeName: String {
             switch self {
             case .vibe:
@@ -40,55 +39,72 @@ struct GraphEmptyStateView: View {
             }
         }
     }
-    
-    init(graphType: GraphType, isDeviceLinked: Bool, isCompact: Bool = false) {
+
+    init(graphType: GraphType, isCompact: Bool = false) {
         self.graphType = graphType
-        self.isDeviceLinked = isDeviceLinked
         self.isCompact = isCompact
     }
     
     var body: some View {
-        VStack(spacing: isCompact ? 16 : 20) {
-            // アイコン
-            Image(systemName: isDeviceLinked ? graphType.defaultIcon : "iphone.slash")
-                .font(isCompact ? .largeTitle : .system(size: 60))
-                .foregroundColor(isDeviceLinked ? Color.safeColor("BorderLight").opacity(0.5) : Color.safeColor("WarningColor"))
-
-            // メッセージ
-            if isCompact {
-                // ダッシュボード用の説明的な表示
+        if isCompact {
+            // ダッシュボード用: ModernVibeCardと同じフォーマット
+            VStack(spacing: 16) {
                 VStack(spacing: 8) {
-                    Text(isDeviceLinked ? emptyStateTitle : "デバイス未連携")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .foregroundColor(isDeviceLinked ? .primary : Color.safeColor("WarningColor"))
+                    // 絵文字（無表情）
+                    Text("😑")
+                        .font(.system(size: 108))
 
-                    if isDeviceLinked {
-                        Text(emptyStateMessage)
+                    // ステータステキスト（黒・太字・20px）
+                    Text("NO DATA")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                        .textCase(.uppercase)
+                        .tracking(1.0)
+
+                    // スコア表示（-- pt）
+                    HStack(spacing: 4) {
+                        Text("気分")
+                            .font(.caption2)
+                            .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
+
+                        Text("-- pt")
                             .font(.caption)
-                            .foregroundColor(.secondary)
-                            .multilineTextAlignment(.center)
-                            .padding(.horizontal, 20)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(Color.gray.opacity(0.8))
                     }
                 }
-            } else {
-                // 通常のグラフビュー用の詳細な表示
-                VStack(spacing: 8) {
-                    Text(isDeviceLinked ? "指定した日付のデータがありません" : "デバイスが連携されていません")
-                        .font(.headline)
-                        .foregroundColor(.primary)
+                .padding(.bottom, 24)
 
-                    Text(isDeviceLinked ?
-                        "この日は\(graphType.dataTypeName)が\n収集されていません" :
-                        "ユーザー情報画面から\nデバイスを連携してください")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .multilineTextAlignment(.center)
-                }
+                // 空のグラフエリア（薄いグレーの背景）
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.safeColor("BorderLight").opacity(0.05))
+                    .frame(height: 120)
+
+                // サマリーテキスト（同じフォーマット）
+                Text("この日の分析データが存在しないようです。")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .multilineTextAlignment(.leading)
+                    .lineSpacing(18 * 0.6)
+                    .padding(.top, 24)
+                    .padding(.bottom, 16)
             }
+        } else {
+            // 通常のグラフビュー用の詳細な表示
+            VStack(spacing: 8) {
+                Text("指定した日付のデータがありません")
+                    .font(.headline)
+                    .foregroundColor(.primary)
+
+                Text("この日は\(graphType.dataTypeName)が\n収集されていません")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+            }
+            .frame(maxWidth: .infinity, minHeight: 300)
+            .padding(.all, 50)
         }
-        .frame(maxWidth: .infinity, minHeight: isCompact ? 120 : 300)
-        .padding(isCompact ? .vertical : .all, isCompact ? 20 : 50)
     }
 
     private var emptyStateTitle: String {
@@ -114,21 +130,64 @@ struct GraphEmptyStateView: View {
     }
 }
 
+/// デバイス未選択状態を表示するビュー
+struct DeviceNotSelectedView: View {
+    let graphType: GraphEmptyStateView.GraphType
+    let isCompact: Bool
+
+    init(graphType: GraphEmptyStateView.GraphType, isCompact: Bool = false) {
+        self.graphType = graphType
+        self.isCompact = isCompact
+    }
+
+    var body: some View {
+        VStack(spacing: isCompact ? 16 : 20) {
+            // アイコン
+            Image(systemName: "square.stack.3d.up.slash")
+                .font(isCompact ? .largeTitle : .system(size: 60))
+                .foregroundColor(Color.safeColor("BorderLight").opacity(0.5))
+
+            // メッセージ
+            VStack(spacing: 8) {
+                Text("デバイスが選択されていません")
+                    .font(isCompact ? .subheadline : .headline)
+                    .fontWeight(isCompact ? .medium : .regular)
+                    .foregroundColor(.primary)
+
+                if !isCompact {
+                    Text("デバイス選択画面から\nデバイスを選択してください")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: isCompact ? 120 : 300)
+        .padding(isCompact ? .vertical : .all, isCompact ? 20 : 50)
+    }
+}
+
 // MARK: - Preview
 struct GraphEmptyStateView_Previews: PreviewProvider {
     static var previews: some View {
         Group {
-            // 通常サイズ - デバイス未連携
-            GraphEmptyStateView(graphType: .vibe, isDeviceLinked: false)
-                .previewDisplayName("Vibe - No Device")
-            
             // 通常サイズ - データなし
-            GraphEmptyStateView(graphType: .behavior, isDeviceLinked: true)
-                .previewDisplayName("Behavior - No Data")
-            
-            // コンパクトサイズ - デバイス未連携
-            GraphEmptyStateView(graphType: .emotion, isDeviceLinked: false, isCompact: true)
-                .previewDisplayName("Emotion - Compact No Device")
+            GraphEmptyStateView(graphType: .vibe)
+                .previewDisplayName("Vibe - No Data")
+
+            // コンパクトサイズ - データなし
+            GraphEmptyStateView(graphType: .behavior, isCompact: true)
+                .previewDisplayName("Behavior - Compact No Data")
+                .frame(height: 200)
+                .background(Color.safeColor("BorderLight").opacity(0.1))
+
+            // デバイス未選択
+            DeviceNotSelectedView(graphType: .emotion)
+                .previewDisplayName("Device Not Selected")
+
+            // デバイス未選択 - コンパクト
+            DeviceNotSelectedView(graphType: .vibe, isCompact: true)
+                .previewDisplayName("Device Not Selected - Compact")
                 .frame(height: 200)
                 .background(Color.safeColor("BorderLight").opacity(0.1))
         }

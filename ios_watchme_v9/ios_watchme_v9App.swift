@@ -149,101 +149,13 @@ struct MainAppView: View {
     }
 
     private var mainContent: some View {
-        Group {
+        ZStack {
             if userAccountManager.isCheckingAuthStatus {
-                // 認証状態確認中：ローディング画面
-                VStack {
-                    Spacer()
-
-                    // ロゴを表示
-                    Image("WatchMeLogo")
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: 200, height: 70)
-
-                    // ローディングインジケーター
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle())
-                        .scaleEffect(1.5)
-                        .padding(.top, 40)
-
-                    Text("認証状態を確認中...")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .padding(.top, 10)
-
-                    Spacer()
-                }
-                .onAppear {
-                    // 認証チェック完了後にオンボーディング表示判定
-                    print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
-                }
+                loadingView
             } else if userAccountManager.authState.isAuthenticated {
-                // 全権限モード：メイン機能画面
-                mainTabView
-                    .onAppear {
-                        print("📱 MainAppView: 全権限モード - メイン画面表示")
-                        // デバイス取得は認証成功時（onChange）で実行済み
-                    }
+                authenticatedView
             } else {
-                // 閲覧専用モード（Read-Only Mode）
-                if authFlowCompleted {
-                    // 認証フロー完了後：ガイド画面（ダッシュボード）
-                    mainTabView
-                        .onAppear {
-                            print("📱 MainAppView: 閲覧専用モード - ガイド画面表示")
-                        }
-                } else {
-                    // 初期画面（「はじめる」「ログイン」）
-                    VStack(spacing: 0) {
-                        Spacer()
-
-                        // ロゴを中央に配置
-                        Image("WatchMeLogo")
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                            .frame(width: 200, height: 70)
-
-                        Spacer()
-
-                        // ボタンを最下部に配置
-                        VStack(spacing: 16) {
-                            // はじめるボタン → 認証フロー表示
-                            Button(action: {
-                                showAuthFlow = true
-                            }) {
-                                Text("はじめる")
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
-                                    .background(Color.safeColor("AppAccentColor"))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(10)
-                            }
-
-                            // ログインボタン
-                            Button(action: {
-                                showLogin = true
-                            }) {
-                                Text("ログイン")
-                                    .fontWeight(.semibold)
-                                    .frame(maxWidth: .infinity)
-                                    .frame(height: 44)
-                                    .background(Color.clear)
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .stroke(Color.safeColor("AppAccentColor"), lineWidth: 1.5)
-                                    )
-                                    .foregroundColor(Color.safeColor("AppAccentColor"))
-                            }
-                        }
-                        .padding(.horizontal, 40)
-                        .padding(.bottom, 50)
-                    }
-                    .onAppear {
-                        print("⏱️ [VIEW] 初期画面表示（はじめる/ログイン）: \(Date().timeIntervalSince(viewStartTime))秒")
-                    }
-                }
+                unauthenticatedView
             }
         }
         .fullScreenCover(isPresented: $showAuthFlow) {
@@ -257,14 +169,12 @@ struct MainAppView: View {
                 .environmentObject(userAccountManager)
         }
         .onChange(of: showAuthFlow) { oldValue, newValue in
-            // 認証フローが閉じられた時
             if oldValue == true && newValue == false {
                 print("✅ 認証フロー完了")
                 authFlowCompleted = true
             }
         }
         .task {
-            // アプリ起動時に非同期で認証チェック
             viewStartTime = Date()
             print("⏱️ [VIEW] MainAppView表示開始 - 認証チェック呼び出し")
             userAccountManager.checkAuthStatus()
@@ -272,59 +182,135 @@ struct MainAppView: View {
         .onChange(of: userAccountManager.authState) { oldValue, newValue in
             print("🔄 MainAppView: 権限レベル変化 \(oldValue) → \(newValue)")
             if newValue.isAuthenticated {
-                // 全権限モードへ移行（ログイン/サインアップ成功時）
-                // すべてのモーダルを閉じる
                 showLogin = false
-                showAuthFlow = false  // 認証フロー成功時にモーダルを閉じる
-                authFlowCompleted = true  // 認証フロー完了フラグを設定
-                // ホーム画面にリセット
+                showAuthFlow = false
+                authFlowCompleted = true
                 selectedTab = .home
                 print("✅ 全権限モード - すべてのモーダルを閉じてホーム画面に遷移")
-
-                // 📊 Phase 2-B: デバイス取得の重複を排除
-                // UserAccountManager内で既にfetchUserDevicesが実行されているため、ここでは不要
-                // L239-245を削除（重複処理）
             } else {
-                // 閲覧専用モードに移行（ログアウト時）
                 selectedTab = .home
-                authFlowCompleted = false  // 認証フロー完了フラグをリセット
+                authFlowCompleted = false
                 print("🔄 閲覧専用モード - 初期状態にリセット")
             }
         }
         .onChange(of: userAccountManager.shouldResetToWelcome) { oldValue, newValue in
-            // 閲覧専用モードの「ログアウト」処理
-            // 注意：ユーザーには「ログアウト」と表示されるが、内部的には初期画面へのリセット
             if newValue == true {
                 print("🔄 閲覧専用モード - 初期画面に戻る")
                 selectedTab = .home
                 authFlowCompleted = false
-                // フラグをリセット
                 userAccountManager.shouldResetToWelcome = false
             }
         }
         .onChange(of: userAccountManager.authError) { oldValue, newValue in
-            // 認証エラーをToastで表示（エラーメッセージ統一）
             if let error = newValue, !error.isEmpty {
                 toastManager.showError(title: "認証エラー", subtitle: error)
                 print("🍞 [Toast] 認証エラー表示: \(error)")
             }
         }
-        .onChange(of: deviceManager.registrationError) { oldValue, newValue in
-            // デバイス登録エラーをToastで表示（エラーメッセージ統一）
-            if let error = newValue, !error.isEmpty {
-                toastManager.showError(title: "デバイス登録エラー", subtitle: error)
-                print("🍞 [Toast] デバイス登録エラー表示: \(error)")
-            }
-        }
         .onOpenURL { url in
-            // Handle OAuth callback from browser
-            // Note: AuthFlowView will also handle this callback, but we keep this
-            // as a fallback for edge cases where the view might not be active
             print("🔗 [MainAppView] URL受信: \(url)")
-
             Task {
                 await userAccountManager.handleOAuthCallback(url: url)
             }
+        }
+    }
+
+    private var loadingView: some View {
+        VStack {
+            Spacer()
+
+            // ロゴを表示
+            Image("WatchMeLogo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 200, height: 70)
+
+            // ローディングインジケーター
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle())
+                .scaleEffect(1.5)
+                .padding(.top, 40)
+
+            Text("認証状態を確認中...")
+                .font(.caption)
+                .foregroundColor(.secondary)
+                .padding(.top, 10)
+
+            Spacer()
+        }
+        .onAppear {
+            print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
+        }
+    }
+
+    private var authenticatedView: some View {
+        mainTabView
+            .onAppear {
+                print("📱 MainAppView: 全権限モード - メイン画面表示")
+            }
+    }
+
+    private var unauthenticatedView: some View {
+        Group {
+            if authFlowCompleted {
+                mainTabView
+                    .onAppear {
+                        print("📱 MainAppView: 閲覧専用モード - ガイド画面表示")
+                    }
+            } else {
+                initialView
+            }
+        }
+    }
+
+    private var initialView: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            // ロゴを中央に配置
+            Image("WatchMeLogo")
+                .resizable()
+                .aspectRatio(contentMode: .fit)
+                .frame(width: 200, height: 70)
+
+            Spacer()
+
+            // ボタンを最下部に配置
+            VStack(spacing: 16) {
+                // はじめるボタン → 認証フロー表示
+                Button(action: {
+                    showAuthFlow = true
+                }) {
+                    Text("はじめる")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color.safeColor("AppAccentColor"))
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+
+                // ログインボタン
+                Button(action: {
+                    showLogin = true
+                }) {
+                    Text("ログイン")
+                        .fontWeight(.semibold)
+                        .frame(maxWidth: .infinity)
+                        .frame(height: 44)
+                        .background(Color.clear)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color.safeColor("AppAccentColor"), lineWidth: 1.5)
+                        )
+                        .foregroundColor(Color.safeColor("AppAccentColor"))
+                }
+            }
+            .padding(.horizontal, 40)
+            .padding(.bottom, 50)
+        }
+        .onAppear {
+            print("⏱️ [VIEW] 初期画面表示（はじめる/ログイン）: \(Date().timeIntervalSince(viewStartTime))秒")
         }
     }
 

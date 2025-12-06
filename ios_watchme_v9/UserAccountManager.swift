@@ -1001,12 +1001,19 @@ class UserAccountManager: ObservableObject {
                 await requestAPNsRegistration()
             }
 
-            await deviceManager.initializeDevices(for: userId)
+            // デバイス一覧を読み込み
+            await deviceManager.loadDevices(for: userId)
 
-            // 3. デバイスが0件の場合は自動登録
+            // デバイスが0件の場合は自動登録
             if !deviceManager.hasRealDevices {
                 print("📱 デバイスが0件のため、自動登録を実行")
-                await deviceManager.registerDevice(userId: userId)
+                do {
+                    let _ = try await deviceManager.registerDevice(userId: userId)
+                    // 再度デバイス一覧を読み込み
+                    await deviceManager.loadDevices(for: userId)
+                } catch {
+                    print("❌ デバイス自動登録に失敗: \(error)")
+                }
             } else {
                 print("✅ 既存デバイスあり（\(deviceManager.devices.count)件）")
             }

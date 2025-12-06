@@ -342,7 +342,7 @@ struct SubjectTabView: View {
 
                 // Update local subject data
                 if let userId = userAccountManager.currentUser?.id {
-                    await deviceManager.initializeDevices(for: userId)
+                    await deviceManager.loadDevices(for: userId)
                 }
 
                 await MainActor.run {

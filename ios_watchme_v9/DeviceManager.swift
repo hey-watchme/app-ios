@@ -81,18 +81,6 @@ class DeviceManager: ObservableObject {
         return false
     }
 
-    @Published var registrationError: String? = nil
-    @Published var isLoading: Bool = false
-
-    // Performance optimization: Prevent duplicate initialization
-    private var lastInitializedUserId: String? = nil
-    private var lastInitializedTime: Date? = nil
-    private var isInitializing = false
-
-    // Supabase設定（URLとキーは参照用に残しておく）
-    private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
-    private let supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InF2dGx3b3R6dXpiYXZyenFoeXZ0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTEzODAzMzAsImV4cCI6MjA2Njk1NjMzMH0.g5rqrbxHPw1dKlaGqJ8miIl9gCXyamPajinGCauEI3k"
-    
     // UserDefaults キー
     private let selectedDeviceIDKey = "watchme_selected_device_id"  // 選択中のデバイスID永続化用
 
@@ -117,240 +105,203 @@ class DeviceManager: ObservableObject {
 
         print("⏱️ [DM-INIT] DeviceManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
     }
-    
-    // MARK: - デバイス登録処理（ユーザーが明示的に登録する場合のみ使用）
-    func registerDevice(userId: String) async {
+
+    // MARK: - Public API (Simplified Design)
+
+    /// Load devices for a user and update state
+    func loadDevices(for userId: String) async {
         await MainActor.run {
-            isLoading = true
-            registrationError = nil
+            state = .loading
         }
 
-        print("📱 Supabaseデバイス登録開始（ユーザーの明示的な操作による）")
-        print("   - User ID: \(userId)")
+        print("🚀 DeviceManager: Loading devices for user \(userId)")
 
-        // Supabase直接Insert実装（完了まで待機）
-        await registerDeviceToSupabase(userId: userId)
+        do {
+            // Fetch devices from Supabase
+            let devices = try await fetchDevicesFromSupabase(userId: userId)
+
+            // Update state
+            await MainActor.run {
+                state = .available(devices)
+            }
+
+            print("✅ Loaded \(devices.count) device(s)")
+
+            // Determine selected device if not set or invalid
+            await MainActor.run {
+                if selectedDeviceID == nil || !devices.contains(where: { $0.device_id == selectedDeviceID }) {
+                    selectedDeviceID = determineDefaultDevice(from: devices)
+                    print("📱 Selected device: \(selectedDeviceID ?? "none")")
+                }
+            }
+
+        } catch {
+            print("❌ Failed to load devices: \(error)")
+            await MainActor.run {
+                state = .error(error.localizedDescription)
+            }
+        }
+    }
+
+    /// Register a new device and return its ID
+    @discardableResult
+    func registerDevice(userId: String) async throws -> String {
+        print("📱 DeviceManager: Registering new device for user \(userId)")
+
+        let deviceId = try await registerDeviceToSupabase(userId: userId)
+
+        print("✅ Device registered: \(deviceId)")
+        return deviceId
+    }
+
+    /// Select a device by ID
+    func selectDevice(_ deviceId: String?) {
+        selectedDeviceID = deviceId
+        if let deviceId = deviceId {
+            UserDefaults.standard.set(deviceId, forKey: selectedDeviceIDKey)
+            print("📱 Device selected: \(deviceId)")
+        } else {
+            UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
+            print("📱 Device selection cleared")
+        }
     }
     
-    // MARK: - Supabase UPSERT登録（改善版）
-    private func registerDeviceToSupabase(userId: String) async {
+    // MARK: - Private Helper Functions
+
+    /// Register device to Supabase and return device ID
+    private func registerDeviceToSupabase(userId: String) async throws -> String {
+        // Step 1: Register to devices table
+        let timezone = TimeZone.current.identifier
+        print("🌍 Device timezone: \(timezone)")
+
+        let deviceData = DeviceInsert(
+            device_type: "ios",
+            timezone: timezone
+        )
+
+        let response: [Device] = try await supabase
+            .from("devices")
+            .upsert(deviceData)
+            .select()
+            .execute()
+            .value
+
+        guard let device = response.first else {
+            throw DeviceRegistrationError.noDeviceReturned
+        }
+
+        let deviceId = device.device_id
+        print("✅ Step 1: Device registered: \(deviceId)")
+
+        // Step 2: Register user-device relationship
+        let userDeviceRelation = UserDeviceInsert(
+            user_id: userId,
+            device_id: deviceId,
+            role: "owner"
+        )
+
+        try await supabase
+            .from("user_devices")
+            .insert(userDeviceRelation, returning: .minimal)
+            .execute()
+
+        print("✅ Step 2: User-device relationship registered")
+
+        // Step 3: Add sample device (best-effort)
+        let sampleDeviceRelation = UserDeviceInsert(
+            user_id: userId,
+            device_id: DeviceManager.sampleDeviceID,
+            role: "viewer"
+        )
+
         do {
-            // --- ステップ1: devicesテーブルにデバイスを登録 ---
-            // iOSのIANAタイムゾーン識別子を取得
-            let timezone = TimeZone.current.identifier // 例: "Asia/Tokyo"
-            print("🌍 デバイスタイムゾーン: \(timezone)")
-
-            let deviceData = DeviceInsert(
-                device_type: "ios",
-                timezone: timezone
-            )
-
-            // UPSERT: INSERT ON CONFLICT DO UPDATE を使用
-            let response: [Device] = try await supabase
-                .from("devices")
-                .upsert(deviceData)
-                .select()
+            try await supabase
+                .from("user_devices")
+                .insert(sampleDeviceRelation, returning: .minimal)
                 .execute()
-                .value
-
-            guard let device = response.first else {
-                throw DeviceRegistrationError.noDeviceReturned
-            }
-
-            let newDeviceId = device.device_id
-            print("✅ Step 1: Device registered/fetched: \(newDeviceId)")
-
-            // --- ステップ2: user_devicesテーブルに所有関係を登録 ---
-            let userDeviceRelation = UserDeviceInsert(
-                user_id: userId,
-                device_id: newDeviceId,
-                role: "owner"
-            )
-
-            // 競合した場合は何もしない (ON CONFLICT DO NOTHING相当)
-            do {
-                try await supabase
-                    .from("user_devices")
-                    .insert(userDeviceRelation, returning: .minimal)
-                    .execute()
-
-                print("✅ Step 2: User-Device ownership registered for user: \(userId)")
-            } catch {
-                // エラーの詳細を確認
-                print("❌ User-Device relation insert failed: \(error)")
-
-                if let postgrestError = error as? PostgrestError {
-                    print("   - Code: \(postgrestError.code ?? "unknown")")
-                    print("   - Message: \(postgrestError.message)")
-                    print("   - Detail: \(postgrestError.detail ?? "none")")
-                    print("   - Hint: \(postgrestError.hint ?? "none")")
-
-                    // RLSエラーの場合の対処法を提案
-                    if postgrestError.code == "42501" {
-                        print("   ⚠️ RLS Policy Error: user_devicesテーブルのRLSポリシーを確認してください")
-                        print("   💡 解決方法: Supabaseダッシュボードで以下のSQLを実行してください:")
-                        print("      CREATE POLICY \"Users can insert their own device associations\"")
-                        print("      ON user_devices FOR INSERT")
-                        print("      WITH CHECK (auth.uid() = user_id);")
-                    }
-                }
-            }
-
-            // --- Step 3: Add default sample device ---
-            print("📱 Step 3: Adding default sample device")
-            let sampleDeviceRelation = UserDeviceInsert(
-                user_id: userId,
-                device_id: DeviceManager.sampleDeviceID,
-                role: "viewer"
-            )
-
-            do {
-                try await supabase
-                    .from("user_devices")
-                    .insert(sampleDeviceRelation, returning: .minimal)
-                    .execute()
-
-                print("✅ Step 3: Default sample device added for user: \(userId)")
-            } catch {
-                print("⚠️ Sample device insert failed (may already exist): \(error)")
-                // Sample device insertion failure is not critical - continue
-            }
-
-            // Reload user devices
-            await self.fetchUserDevices(for: userId)
-
-            // Step 4: Generate QR code for the new device (best-effort, non-blocking)
-            print("📱 Step 4: Generating QR code for device: \(newDeviceId)")
-            Task {
-                do {
-                    let qrCodeUrl = try await QRCodeService.shared.generateQRCode(for: newDeviceId)
-                    print("✅ Step 4: QR code generated: \(qrCodeUrl)")
-                } catch {
-                    print("⚠️ Step 4: QR code generation failed (non-critical): \(error)")
-                    // QR code generation failure is not critical - user can generate later
-                }
-            }
-
-            // Registration complete
-            await MainActor.run {
-                self.isLoading = false
-                self.registrationError = nil
-            }
-
+            print("✅ Step 3: Sample device added")
         } catch {
-            print("❌ デバイス登録処理全体でエラー: \(error)")
-            await MainActor.run {
-                self.registrationError = "デバイス登録に失敗しました: \(error.localizedDescription)"
-                self.isLoading = false
+            print("⚠️ Step 3: Sample device already exists (skipped)")
+        }
+
+        // Step 4: Generate QR code (non-blocking)
+        Task {
+            do {
+                let qrCodeUrl = try await QRCodeService.shared.generateQRCode(for: deviceId)
+                print("✅ QR code generated: \(qrCodeUrl)")
+            } catch {
+                print("⚠️ QR code generation failed: \(error)")
             }
         }
+
+        return deviceId
     }
-    
-    
-    // MARK: - デバイス初期化処理（権限ベース設計 - 統一版）
-    @MainActor
-    func initializeDevices(for userId: String) async {
-        // Performance optimization: Skip if already initializing for the same user
-        if isInitializing && lastInitializedUserId == userId {
-            #if DEBUG
-            print("🔄 Already initializing for user: \(userId)")
-            #endif
-            return
+
+    /// Fetch devices from Supabase
+    private func fetchDevicesFromSupabase(userId: String) async throws -> [Device] {
+        print("📡 Fetching devices from Supabase for user: \(userId)")
+
+        // Fetch user-device relationships
+        let userDevices: [UserDevice] = try await supabase
+            .from("user_devices")
+            .select("*")
+            .eq("user_id", value: userId)
+            .execute()
+            .value
+
+        print("📊 Found \(userDevices.count) user-device relationship(s)")
+
+        guard !userDevices.isEmpty else {
+            return []
         }
 
-        // Performance optimization: Skip if recently initialized (within 10 seconds) for the same user
-        if lastInitializedUserId == userId,
-           let lastInit = lastInitializedTime,
-           Date().timeIntervalSince(lastInit) < 10 {
-            #if DEBUG
-            print("⏭️ Skipping re-initialization for \(userId) (too soon: \(Date().timeIntervalSince(lastInit))s)")
-            #endif
-            return
-        }
+        let deviceIds = userDevices.map { $0.device_id }
 
-        // 処理中なら何もしない（重複防止）
-        if case .loading = state {
-            #if DEBUG
-            print("⚠️ DeviceManager: Already loading, skipping")
-            #endif
-            return
-        }
+        // Fetch devices with subjects
+        var devices: [Device] = try await supabase
+            .from("devices")
+            .select("*, subjects(*)")
+            .in("device_id", values: deviceIds)
+            .execute()
+            .value
 
-        print("🚀 DeviceManager: デバイス初期化開始: \(userId)")
-        self.state = .loading
-        self.isInitializing = true
-        self.lastInitializedUserId = userId
-
-        do {
-            // Get all user devices (including sample devices from user_devices table)
-            let fetchedDevices = try await fetchUserDevicesInternal(for: userId)
-
-            // IMPORTANT: 状態を先に更新（updateSelectedSubject()がdevices配列を参照できるように）
-            self.state = .available(fetchedDevices)
-
-            if fetchedDevices.isEmpty {
-                print("📱 ユーザーデバイスなし（サンプルのみ）")
-                selectedDeviceID = nil
-                UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
-            } else {
-                print("✅ \(fetchedDevices.count)個のユーザーデバイスを取得")
-                // 選択デバイスを決定（これでselectedSubjectも設定される）
-                determineSelectedDevice(from: fetchedDevices)
+        // Attach roles to devices
+        for i in 0..<devices.count {
+            if let userDevice = userDevices.first(where: { $0.device_id == devices[i].device_id }) {
+                devices[i].role = userDevice.role
             }
-
-            self.isInitializing = false
-            self.lastInitializedTime = Date()
-
-        } catch {
-            print("❌ デバイス取得エラー: \(error)")
-            self.state = .error(error.localizedDescription)
-            self.isInitializing = false
-            self.lastInitializedTime = Date()
         }
+
+        print("✅ Fetched \(devices.count) device(s)")
+        return devices
     }
 
-    // 後方互換性のため（非推奨）
-    @available(*, deprecated, message: "Use initializeDevices(for:) instead")
-    func initializeDeviceState(for userId: String) async {
-        await initializeDevices(for: userId)
+    /// Determine default device from a list
+    private func determineDefaultDevice(from devices: [Device]) -> String? {
+        // 1. Check saved selection
+        if let saved = UserDefaults.standard.string(forKey: selectedDeviceIDKey),
+           devices.contains(where: { $0.device_id == saved }) {
+            print("📱 Using saved device selection: \(saved)")
+            return saved
+        }
+
+        // 2. Prefer owner device
+        if let owner = devices.first(where: { $0.role == "owner" }) {
+            print("📱 Selected owner device: \(owner.device_id)")
+            return owner.device_id
+        }
+
+        // 3. Use first device
+        if let first = devices.first {
+            print("📱 Selected first device: \(first.device_id)")
+            return first.device_id
+        }
+
+        return nil
     }
     
-    // デバイス選択ロジック
-    private func determineSelectedDevice(from devices: [Device]) {
-        // 1. 保存された選択デバイスがある場合はそれを優先
-        if let savedDeviceId = UserDefaults.standard.string(forKey: selectedDeviceIDKey),
-           devices.contains(where: { $0.device_id == savedDeviceId }) {
-            self.selectedDeviceID = savedDeviceId
-            print("🔍 Restored previously selected device: \(savedDeviceId)")
-            return
-        }
 
-        // 2. ownerロールのデバイスを優先
-        let ownerDevices = devices.filter { $0.role == "owner" }
-        if let firstOwnerDevice = ownerDevices.first {
-            self.selectedDeviceID = firstOwnerDevice.device_id
-            UserDefaults.standard.set(firstOwnerDevice.device_id, forKey: selectedDeviceIDKey)
-            print("🔍 Auto-selected owner device: \(firstOwnerDevice.device_id)")
-            return
-        }
-
-        // 3. viewerロールのデバイス
-        let viewerDevices = devices.filter { $0.role == "viewer" }
-        if let firstViewerDevice = viewerDevices.first {
-            self.selectedDeviceID = firstViewerDevice.device_id
-            UserDefaults.standard.set(firstViewerDevice.device_id, forKey: selectedDeviceIDKey)
-            print("🔍 Auto-selected viewer device: \(firstViewerDevice.device_id)")
-            return
-        }
-
-        // 4. 最後の手段：リストの最初のデバイス
-        if let firstDevice = devices.first {
-            self.selectedDeviceID = firstDevice.device_id
-            UserDefaults.standard.set(firstDevice.device_id, forKey: selectedDeviceIDKey)
-            print("🔍 Auto-selected first device: \(firstDevice.device_id)")
-        }
-    }
-
+    // MARK: - Deprecated (Old initialization logic removed)
     // MARK: - サンプルデバイス選択（Read-Only Mode用）
     func selectSampleDevice() {
         print("👤 Read-Only Mode: サンプルデバイスを選択")
@@ -392,8 +343,6 @@ class DeviceManager: ObservableObject {
 
         state = .idle
         selectedDeviceID = nil
-        registrationError = nil
-        isLoading = false
 
         // UserDefaultsに保存されたデバイスIDもクリア
         UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
@@ -485,37 +434,13 @@ class DeviceManager: ObservableObject {
     }
     
     // MARK: - ユーザーのデバイスを取得（後方互換性）
+    // Deprecated: Use loadDevices(for:) instead
+    @available(*, deprecated, message: "Use loadDevices(for:) instead")
     func fetchUserDevices(for userId: String) async {
-        print("🔄 DeviceManager: fetchUserDevices called for user \(userId)")
-
-        await initializeDevices(for: userId)
-
-        await MainActor.run {
-            self.isLoading = false
-        }
-
-        print("✅ fetchUserDevices completed")
+        await loadDevices(for: userId)
     }
-    
-    // MARK: - Device Selection
-    func selectDevice(_ deviceId: String?) {
-        // Clear selection if nil
-        guard let deviceId = deviceId else {
-            selectedDeviceID = nil
-            UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
-            print("📱 Device selection cleared")
-            return
-        }
 
-        // Only allow selection of devices in the user's device list
-        if devices.contains(where: { $0.device_id == deviceId }) {
-            selectedDeviceID = deviceId
-            UserDefaults.standard.set(deviceId, forKey: selectedDeviceIDKey)
-            print("📱 Selected device saved: \(deviceId)")
-        } else {
-            print("⚠️ Device not found in user's device list: \(deviceId)")
-        }
-    }
+    // MARK: - Device Selection (removed duplicate, using simplified version from Public API)
     
     // 後方互換性のため（非推奨）
     @available(*, deprecated, message: "Use resetState() instead")
@@ -563,7 +488,7 @@ class DeviceManager: ObservableObject {
     /// 選択中のデバイスタイプがobserverの場合はFABを非表示
     var shouldShowFAB: Bool {
         guard let deviceId = selectedDeviceID else {
-            return true  // デバイス未選択の場合はデフォルトで表示
+            return false  // デバイス未選択の場合はFABを非表示
         }
 
         // サンプルデバイスの場合（device_type = "observer"）
@@ -573,7 +498,7 @@ class DeviceManager: ObservableObject {
 
         // devicesから選択中のデバイスを取得
         guard let device = devices.first(where: { $0.device_id == deviceId }) else {
-            return true  // デバイスが見つからない場合はデフォルトで表示
+            return false  // デバイスが見つからない場合はFABを非表示
         }
 
         // device_typeが "observer" の場合のみFABを非表示

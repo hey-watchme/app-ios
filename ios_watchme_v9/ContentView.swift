@@ -156,7 +156,7 @@ struct ContentView: View {
                             Task {
                                 // ✅ CLAUDE.md: public.usersのuser_idを使用
                                 if let userId = userAccountManager.currentUser?.profile?.userId {
-                                    await deviceManager.initializeDevices(for: userId)
+                                    await deviceManager.loadDevices(for: userId)
                                 }
                             }
                         }) {
@@ -277,19 +277,16 @@ struct ContentView: View {
         }
 
         Task {
-            // DeviceManagerのregisterDeviceメソッドを呼び出す（完了まで待機）
-            await deviceManager.registerDevice(userId: userId)
+            do {
+                // DeviceManagerのregisterDeviceメソッドを呼び出す（完了まで待機）
+                let _ = try await deviceManager.registerDevice(userId: userId)
 
-            await MainActor.run {
-                // エラーチェック
-                if let error = deviceManager.registrationError {
-                    print("❌ デバイス登録エラー: \(error)")
-                } else if !deviceManager.devices.isEmpty {
-                    // 登録成功 - デバイスが追加されたのでUIが自動的に更新される
-                    print("✅ デバイス登録成功")
-                } else {
-                    print("❌ デバイスの登録に失敗しました")
-                }
+                // デバイスリストを再読み込み
+                await deviceManager.loadDevices(for: userId)
+
+                print("✅ デバイス登録成功")
+            } catch {
+                print("❌ デバイス登録エラー: \(error)")
             }
         }
     }

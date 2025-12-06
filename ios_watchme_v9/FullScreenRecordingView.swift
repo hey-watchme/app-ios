@@ -143,13 +143,16 @@ struct FullScreenRecordingView: View {
             return
         }
 
-        await deviceManager.registerDevice(userId: userId)
+        do {
+            let _ = try await deviceManager.registerDevice(userId: userId)
+            await deviceManager.loadDevices(for: userId)
 
-        if deviceManager.registrationError == nil {
             // 登録成功後、録音を開始
             Task {
                 await store.startRecording()
             }
+        } catch {
+            print("❌ デバイス登録エラー: \(error)")
         }
     }
 

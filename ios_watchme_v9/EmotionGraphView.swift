@@ -215,10 +215,13 @@ struct EmotionGraphView: View {
                         
                     } else {
                         // エンプティステート表示（共通コンポーネント使用）
-                        GraphEmptyStateView(
-                            graphType: .emotion,
-                            isDeviceLinked: !deviceManager.devices.isEmpty
-                        )
+                        Group {
+                            if deviceManager.selectedDeviceID == nil {
+                                DeviceNotSelectedView(graphType: .emotion)
+                            } else {
+                                GraphEmptyStateView(graphType: .emotion)
+                            }
+                        }
                         .padding(.top, 50)
                     }
                 }

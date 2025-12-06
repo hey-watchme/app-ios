@@ -123,10 +123,13 @@ struct BehaviorGraphView: View {
                         
                     } else {
                         // エンプティステート表示（共通コンポーネント使用）
-                        GraphEmptyStateView(
-                            graphType: .behavior,
-                            isDeviceLinked: !deviceManager.devices.isEmpty
-                        )
+                        Group {
+                            if deviceManager.selectedDeviceID == nil {
+                                DeviceNotSelectedView(graphType: .behavior)
+                            } else {
+                                GraphEmptyStateView(graphType: .behavior)
+                            }
+                        }
                         .padding(.top, 50)
                     }
                 }
