@@ -53,7 +53,24 @@ class DeviceManager: ObservableObject {
         }
 
         let foundDevice = devices.first(where: { $0.device_id == selectedDeviceID })
-        selectedSubject = foundDevice?.subject
+        let newSubject = foundDevice?.subject
+
+        // Only update if the subject actually changed (avoid unnecessary UI updates)
+        if selectedSubject?.subjectId != newSubject?.subjectId ||
+           selectedSubject?.avatarUrl != newSubject?.avatarUrl {
+            selectedSubject = newSubject
+
+            // Notify AvatarView instances to reload
+            if newSubject != nil {
+                NotificationCenter.default.post(name: NSNotification.Name("SubjectUpdated"), object: nil)
+            }
+        }
+    }
+
+    // Public method to manually refresh selectedSubject (for external updates)
+    @MainActor
+    func refreshSelectedSubject() {
+        updateSelectedSubject()
     }
 
     var hasDevices: Bool {
@@ -298,10 +315,8 @@ class DeviceManager: ObservableObject {
             // Get all user devices (including sample devices from user_devices table)
             let fetchedDevices = try await fetchUserDevicesInternal(for: userId)
 
-            // Set device list
+            // IMPORTANT: 状態を先に更新（updateSelectedSubject()がdevices配列を参照できるように）
             self.state = .available(fetchedDevices)
-            self.isInitializing = false
-            self.lastInitializedTime = Date()
 
             if fetchedDevices.isEmpty {
                 print("📱 ユーザーデバイスなし（サンプルのみ）")
@@ -309,9 +324,13 @@ class DeviceManager: ObservableObject {
                 UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
             } else {
                 print("✅ \(fetchedDevices.count)個のユーザーデバイスを取得")
-                // 選択デバイスを決定
+                // 選択デバイスを決定（これでselectedSubjectも設定される）
                 determineSelectedDevice(from: fetchedDevices)
             }
+
+            self.isInitializing = false
+            self.lastInitializedTime = Date()
+
         } catch {
             print("❌ デバイス取得エラー: \(error)")
             self.state = .error(error.localizedDescription)
