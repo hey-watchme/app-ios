@@ -11,6 +11,7 @@ import SwiftUI
 struct LoadDataTrigger: Equatable {
     let date: Date
     let deviceId: String?
+    let refreshTrigger: Int  // Pull-to-Refresh用
 }
 
 // 📊 パフォーマンス最適化: キャッシュデータ構造（Phase 1-A）
@@ -176,7 +177,7 @@ struct SimpleDashboardView: View {
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .task(id: LoadDataTrigger(date: date, deviceId: deviceManager.selectedDeviceID)) {
+        .task(id: LoadDataTrigger(date: date, deviceId: deviceManager.selectedDeviceID, refreshTrigger: refreshTrigger)) {
             // 📊 パフォーマンス最適化: データ取得を一元化（Phase 1-A: デバウンス + キャッシュ）
             guard deviceManager.isReady else {
                 #if DEBUG
@@ -201,6 +202,13 @@ struct SimpleDashboardView: View {
             formatter.timeZone = deviceManager.getTimezone(for: deviceId)
             let dateString = formatter.string(from: date)
             let cacheKey = "\(deviceId)_\(dateString)"
+
+            // Pull-to-Refresh: Clear cache if triggered
+            if refreshTrigger > 0 {
+                dataCache.removeValue(forKey: cacheKey)
+                cacheKeys.removeAll { $0 == cacheKey }
+                print("🔄 [Pull-to-Refresh] Cache cleared for \(dateString)")
+            }
 
             // ✅ キャッシュヒット → 即座に表示（スワイプ超高速）
             if let cached = dataCache[cacheKey] {
@@ -292,23 +300,6 @@ struct SimpleDashboardView: View {
                     let oldKey = cacheKeys.removeFirst()
                     dataCache.removeValue(forKey: oldKey)
                 }
-            }
-        }
-        .onChange(of: refreshTrigger) { oldValue, newValue in
-            // Pull-to-Refresh: Clear cache when trigger changes
-            guard newValue > 0 else { return }
-
-            if let deviceId = deviceManager.selectedDeviceID {
-                let formatter = DateFormatter()
-                formatter.dateFormat = "yyyy-MM-dd"
-                formatter.timeZone = deviceManager.getTimezone(for: deviceId)
-                let dateString = formatter.string(from: date)
-                let cacheKey = "\(deviceId)_\(dateString)"
-
-                dataCache.removeValue(forKey: cacheKey)
-                cacheKeys.removeAll { $0 == cacheKey }
-
-                print("🔄 [Pull-to-Refresh] Cache cleared for \(dateString), will reload via .task()")
             }
         }
         .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
