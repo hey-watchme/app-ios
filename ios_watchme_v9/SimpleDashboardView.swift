@@ -150,6 +150,10 @@ struct SimpleDashboardView: View {
                     }
                 }
             }
+            .refreshable {
+                // Pull-to-Refresh: Clear cache and force reload
+                await refreshData()
+            }
             .background(
                 Color.white
                     .ignoresSafeArea()
@@ -692,7 +696,59 @@ struct SimpleDashboardView: View {
         timeBlocks = []  // グラフ用データもクリア
         subjectComments = []  // コメントもクリア
     }
-    
+
+    // MARK: - Pull-to-Refresh
+
+    private func refreshData() async {
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            print("⚠️ [Refresh] No device selected")
+            return
+        }
+
+        // Generate cache key for current date
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = deviceManager.getTimezone(for: deviceId)
+        let dateString = formatter.string(from: date)
+        let cacheKey = "\(deviceId)_\(dateString)"
+
+        print("🔄 [Refresh] Manual refresh initiated for \(dateString)")
+
+        // Clear cache for current date
+        dataCache.removeValue(forKey: cacheKey)
+        cacheKeys.removeAll { $0 == cacheKey }
+
+        print("🗑️ [Refresh] Cache cleared: \(cacheKey)")
+
+        // Reload data (will skip cache and fetch fresh data from API)
+        await loadAllData()
+
+        // Update cache with fresh data
+        await MainActor.run {
+            let cached = CachedDashboardData(
+                dashboardSummary: self.dashboardSummary,
+                behaviorReport: self.behaviorReport,
+                emotionReport: self.emotionReport,
+                subject: self.subject,
+                timeBlocks: self.timeBlocks,
+                subjectComments: self.subjectComments,
+                cachedEmotionPercentages: self.cachedEmotionPercentages,
+                timestamp: Date()
+            )
+
+            dataCache[cacheKey] = cached
+            cacheKeys.append(cacheKey)
+
+            // LRU cleanup
+            if cacheKeys.count > maxCacheSize {
+                let oldKey = cacheKeys.removeFirst()
+                dataCache.removeValue(forKey: oldKey)
+            }
+
+            print("✅ [Refresh] Data refreshed and cache updated")
+        }
+    }
+
     private func loadAllData() async {
         // 📊 パフォーマンス最適化: 詳細ログを削減
         guard let deviceId = deviceManager.selectedDeviceID else {
