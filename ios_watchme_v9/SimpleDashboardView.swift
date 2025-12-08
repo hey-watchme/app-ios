@@ -59,6 +59,9 @@ struct SimpleDashboardView: View {
     // 📊 パフォーマンス最適化: デバイス選択直後フラグ（Phase 5-A）
     @State private var isInitialLoad = false
 
+    // Pull-to-Refresh trigger (simple approach)
+    @State private var refreshTrigger = 0
+
     // コメント入力用
     @State private var newCommentText = ""
     @State private var isAddingComment = false
@@ -151,8 +154,8 @@ struct SimpleDashboardView: View {
                 }
             }
             .refreshable {
-                // Pull-to-Refresh: Clear cache and force reload
-                await refreshData()
+                // Pull-to-Refresh: Simple trigger approach to avoid Task cancellation
+                refreshTrigger += 1
             }
             .background(
                 Color.white
@@ -289,6 +292,23 @@ struct SimpleDashboardView: View {
                     let oldKey = cacheKeys.removeFirst()
                     dataCache.removeValue(forKey: oldKey)
                 }
+            }
+        }
+        .onChange(of: refreshTrigger) { oldValue, newValue in
+            // Pull-to-Refresh: Clear cache when trigger changes
+            guard newValue > 0 else { return }
+
+            if let deviceId = deviceManager.selectedDeviceID {
+                let formatter = DateFormatter()
+                formatter.dateFormat = "yyyy-MM-dd"
+                formatter.timeZone = deviceManager.getTimezone(for: deviceId)
+                let dateString = formatter.string(from: date)
+                let cacheKey = "\(deviceId)_\(dateString)"
+
+                dataCache.removeValue(forKey: cacheKey)
+                cacheKeys.removeAll { $0 == cacheKey }
+
+                print("🔄 [Pull-to-Refresh] Cache cleared for \(dateString), will reload via .task()")
             }
         }
         .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
@@ -697,57 +717,6 @@ struct SimpleDashboardView: View {
         subjectComments = []  // コメントもクリア
     }
 
-    // MARK: - Pull-to-Refresh
-
-    private func refreshData() async {
-        guard let deviceId = deviceManager.selectedDeviceID else {
-            print("⚠️ [Refresh] No device selected")
-            return
-        }
-
-        // Generate cache key for current date
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = deviceManager.getTimezone(for: deviceId)
-        let dateString = formatter.string(from: date)
-        let cacheKey = "\(deviceId)_\(dateString)"
-
-        print("🔄 [Refresh] Manual refresh initiated for \(dateString)")
-
-        // Clear cache for current date
-        dataCache.removeValue(forKey: cacheKey)
-        cacheKeys.removeAll { $0 == cacheKey }
-
-        print("🗑️ [Refresh] Cache cleared: \(cacheKey)")
-
-        // Reload data (will skip cache and fetch fresh data from API)
-        await loadAllData()
-
-        // Update cache with fresh data
-        await MainActor.run {
-            let cached = CachedDashboardData(
-                dashboardSummary: self.dashboardSummary,
-                behaviorReport: self.behaviorReport,
-                emotionReport: self.emotionReport,
-                subject: self.subject,
-                timeBlocks: self.timeBlocks,
-                subjectComments: self.subjectComments,
-                cachedEmotionPercentages: self.cachedEmotionPercentages,
-                timestamp: Date()
-            )
-
-            dataCache[cacheKey] = cached
-            cacheKeys.append(cacheKey)
-
-            // LRU cleanup
-            if cacheKeys.count > maxCacheSize {
-                let oldKey = cacheKeys.removeFirst()
-                dataCache.removeValue(forKey: oldKey)
-            }
-
-            print("✅ [Refresh] Data refreshed and cache updated")
-        }
-    }
 
     private func loadAllData() async {
         // 📊 パフォーマンス最適化: 詳細ログを削減
