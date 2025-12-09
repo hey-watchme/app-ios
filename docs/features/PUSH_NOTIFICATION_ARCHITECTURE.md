@@ -229,12 +229,22 @@ aws logs tail /aws/lambda/watchme-dashboard-analysis-worker --since 1h --filter-
 
 #### 4. APNs環境の一致を確認
 
-| アプリインストール方法 | 必要な環境 | Lambda設定 |
+| アプリインストール方法 | 必要な環境 | Lambda環境変数 |
 |---------------------|-----------|-----------|
-| Xcode直接インストール | Sandbox | `APNS_SANDBOX` |
-| TestFlight/App Store | Production | `APNS` |
+| Xcode直接インストール | Sandbox | `APNS_ENVIRONMENT=sandbox` |
+| TestFlight/App Store | Production | `APNS_ENVIRONMENT=production` |
 
-**環境不一致の場合**: Lambda関数の`SNS_PLATFORM_APP_ARN`を修正
+**現在の本番設定**: `APNS_ENVIRONMENT=production`（TestFlight/App Store用に固定）
+
+**Xcode直接インストールでテストする場合**:
+```bash
+aws lambda update-function-configuration \
+  --function-name watchme-dashboard-analysis-worker \
+  --environment "Variables={APNS_ENVIRONMENT=sandbox,SUPABASE_URL=...,SUPABASE_KEY=...,API_BASE_URL=...}" \
+  --region ap-southeast-2
+```
+
+**注意**: 本番環境では常に `production` を使用することを推奨します。Xcode版のテストはTestFlightを使用してください。
 
 ---
 
@@ -262,7 +272,32 @@ aws logs tail /aws/lambda/watchme-dashboard-analysis-worker --since 1h --filter-
 
 ---
 
-#### 6. APNs証明書の有効期限確認
+#### 6. AWS SNS Platform Application のステータス確認
+
+**重要**: Platform Applicationが無効になっているとプッシュ通知が送信されません。
+
+**AWS Console確認手順**:
+1. AWS Console → SNS → Applications
+2. `watchme-ios-app` (Production) または `watchme-ios-app-sandbox` (Sandbox) を選択
+3. **ステータスが「有効」になっているか確認**
+
+**無効の場合**:
+- 「編集」ボタン → ステータスを「有効」に変更 → 保存
+
+**CLI確認**:
+```bash
+aws sns get-platform-application-attributes \
+  --platform-application-arn arn:aws:sns:ap-southeast-2:754724220380:app/APNS/watchme-ios-app \
+  --region ap-southeast-2
+```
+
+**無効になる原因**:
+- 証明書が期限切れ
+- APNsサーバーへの接続が連続で失敗
+
+---
+
+#### 7. APNs証明書の有効期限確認
 
 **Apple Developer Portal**: https://developer.apple.com/account/resources/certificates/list
 
@@ -273,7 +308,7 @@ aws logs tail /aws/lambda/watchme-dashboard-analysis-worker --since 1h --filter-
 
 ---
 
-#### 7. Supabaseのトークン確認
+#### 8. Supabaseのトークン確認
 
 ```sql
 SELECT user_id, apns_token FROM users WHERE user_id = '<user_id>';
