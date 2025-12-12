@@ -113,3 +113,6 @@ config.plist
 *.mov
 *.mp4*-CSR/
 docs/*証明書*/
+
+# APNs Token (機密情報)
+docs/APNs_token_p8/

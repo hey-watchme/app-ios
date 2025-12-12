@@ -712,17 +712,27 @@ class DeviceManager: ObservableObject {
             return
         }
 
+        // Determine APNs environment based on build configuration
+        #if DEBUG
+        let environment = "sandbox"
+        #else
+        let environment = "production"
+        #endif
+
         Task {
             do {
                 let supabase = SupabaseClientManager.shared.client
 
                 try await supabase
                     .from("users")
-                    .update(["apns_token": token])
+                    .update([
+                        "apns_token": token,
+                        "apns_environment": environment
+                    ])
                     .eq("user_id", value: userId)
                     .execute()
 
-                print("✅ [PUSH] APNsトークン保存成功: userId=\(userId), token=\(token.prefix(20))...")
+                print("✅ [PUSH] APNsトークン保存成功: userId=\(userId), token=\(token.prefix(20))..., environment=\(environment)")
 
                 // 一時保存を削除
                 UserDefaults.standard.removeObject(forKey: "pending_apns_token")
