@@ -49,6 +49,11 @@ struct SimpleDashboardView: View {
     @State private var isLoading = false
     @State private var lastLoadedDeviceID: String? = nil  // 最後に読み込んだデバイスID
 
+    // Phase 2: フィルタ結果を@State変数で明示的に管理
+    @State private var conversationBlocks: [DashboardTimeBlock] = []  // 会話があるブロック
+    @State private var highlightBlocks: [DashboardTimeBlock] = []  // ハイライト表示用
+    @State private var showHighlightSection = false  // ハイライトセクション表示判定
+
     // 📊 パフォーマンス最適化: 計算結果のキャッシュ
     @State private var cachedEmotionPercentages: [(String, Double, String, Color)] = []
 
@@ -118,7 +123,7 @@ struct SimpleDashboardView: View {
                             }
 
                             // Priority 3: Highlight section (conversation-focused, only show if has conversation)
-                            if shouldShowHighlightSection {
+                            if showHighlightSection {
                                 highlightSection
                                     .padding(.horizontal, 20)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
@@ -229,6 +234,9 @@ struct SimpleDashboardView: View {
                         self.timeBlocks = cached.timeBlocks  // グラフ用データ
                         self.subjectComments = cached.subjectComments
                         self.cachedEmotionPercentages = cached.cachedEmotionPercentages
+
+                        // Phase 2: キャッシュ復元時もフィルタリング実行
+                        self.updateFilteredData()
                     }
                     print("✅ [Cache HIT] Data loaded from cache for \(dateString)")
                     return
@@ -320,6 +328,10 @@ struct SimpleDashboardView: View {
                 // 📊 Phase 5-A: 初回読み込みフラグを設定（デバウンススキップ）
                 isInitialLoad = true
             }
+        }
+        .onChange(of: timeBlocks) { oldValue, newValue in
+            // Phase 2: timeBlocksが更新されたら自動的にフィルタリング実行
+            updateFilteredData()
         }
         .onChange(of: pushManager.latestUpdate) { oldValue, newValue in
             // Handle push notification updates from centralized manager
@@ -474,29 +486,29 @@ struct SimpleDashboardView: View {
         )
     }
 
-    // Check if highlight section should be shown
-    private var shouldShowHighlightSection: Bool {
-        !timeBlocks.isEmpty && conversationBlocks.count > 0
-    }
-
-    // Get conversation blocks (cached computation)
-    private var conversationBlocks: [DashboardTimeBlock] {
-        timeBlocks.filter { block in
+    // Phase 2: フィルタリングロジック（明示的な更新）
+    private func updateFilteredData() {
+        // 会話があるブロックをフィルタリング
+        conversationBlocks = timeBlocks.filter { block in
             guard let transcription = block.vibeTranscriberResult else {
                 return false
             }
             return transcription != "発話なし"
         }
+
+        // ハイライト表示の判定
+        showHighlightSection = !conversationBlocks.isEmpty
+
+        // ハイライト表示用データの準備（新しい順）
+        highlightBlocks = conversationBlocks.reversed()
     }
 
     // Highlight section (conversation-focused, no fallback)
     private var highlightSection: some View {
-        // Use already filtered conversation blocks (newest first)
-        let displayBlocks = conversationBlocks.reversed()
-
-        return SpotAnalysisListSection(
+        // Use @State variable (already filtered and sorted)
+        SpotAnalysisListSection(
             title: "ハイライト",
-            spotResults: displayBlocks,
+            spotResults: highlightBlocks,
             showMoreButton: true,
             onTapSpot: { block in
                 selectedSpotForDetail = block
@@ -810,6 +822,9 @@ struct SimpleDashboardView: View {
             } else {
                 self.cachedEmotionPercentages = []
             }
+
+            // Phase 2: データ取得後にフィルタリングを明示的に実行
+            self.updateFilteredData()
         }
     }
     
@@ -1134,6 +1149,9 @@ struct AnalysisListView: View {
     @State private var filterType: AnalysisFilterType = .all
     @State private var sortOrder: AnalysisSortOrder = .newest
 
+    // Phase 2: フィルタ・ソート結果を@State変数で明示的に管理
+    @State private var filteredAndSortedBlocks: [DashboardTimeBlock] = []
+
     // Filter types
     enum AnalysisFilterType: String, CaseIterable {
         case all = "すべての分析"
@@ -1146,8 +1164,8 @@ struct AnalysisListView: View {
         case oldest = "最も古い分析"
     }
 
-    // Filtered and sorted timeBlocks
-    private var filteredAndSortedBlocks: [DashboardTimeBlock] {
+    // Phase 2: フィルタリングとソートロジック（明示的な更新）
+    private func updateFilteredAndSortedData() {
         var blocks = timeBlocks
 
         // Apply filter
@@ -1166,7 +1184,7 @@ struct AnalysisListView: View {
         }
         // For .oldest, keep original order (oldest first)
 
-        return blocks
+        filteredAndSortedBlocks = blocks
     }
 
     var body: some View {
@@ -1298,6 +1316,22 @@ struct AnalysisListView: View {
                 SpotDetailView(deviceId: deviceId, spotData: spot)
                     .environmentObject(dataManager)
             }
+        }
+        .onAppear {
+            // Phase 2: 初回表示時にフィルタリング実行
+            updateFilteredAndSortedData()
+        }
+        .onChange(of: timeBlocks) { oldValue, newValue in
+            // Phase 2: timeBlocksが更新されたら自動的にフィルタリング実行
+            updateFilteredAndSortedData()
+        }
+        .onChange(of: filterType) { oldValue, newValue in
+            // Phase 2: フィルター変更時にフィルタリング実行
+            updateFilteredAndSortedData()
+        }
+        .onChange(of: sortOrder) { oldValue, newValue in
+            // Phase 2: ソート順変更時にソート実行
+            updateFilteredAndSortedData()
         }
     }
 }
