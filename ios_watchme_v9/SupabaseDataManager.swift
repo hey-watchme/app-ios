@@ -732,6 +732,7 @@ class SupabaseDataManager: ObservableObject {
             struct SpotFeature: Codable {
                 let device_id: String
                 let local_time: String?  // ✅ local_timeで結合
+                let vibe_transcriber_result: String?  // 文字起こし結果
                 let behavior_extractor_result: [SEDBehaviorTimePoint]?
                 let emotion_extractor_result: [EmotionChunk]?
             }
@@ -746,7 +747,7 @@ class SupabaseDataManager: ObservableObject {
 
             let spotFeaturesQuery = supabase
                 .from("spot_features")
-                .select("device_id, local_time, behavior_extractor_result, emotion_extractor_result")
+                .select("device_id, local_time, vibe_transcriber_result, behavior_extractor_result, emotion_extractor_result")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
 
@@ -779,6 +780,7 @@ class SupabaseDataManager: ObservableObject {
                     vibeScore: result.vibe_score,
                     createdAt: result.created_at,
                     updatedAt: nil,
+                    vibeTranscriberResult: feature?.vibe_transcriber_result,
                     behaviorTimePoints: feature?.behavior_extractor_result ?? [],
                     emotionChunks: feature?.emotion_extractor_result ?? []
                 )

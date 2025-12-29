@@ -110,9 +110,16 @@ struct SimpleDashboardView: View {
                                 .padding(.horizontal, 20)
                                 .transition(.opacity.combined(with: .scale(scale: 0.95)))
 
-                            // Priority 2: Recent analysis (show when timeBlocks is available)
+                            // Priority 2: Latest analysis (show when timeBlocks is available)
                             if !timeBlocks.isEmpty {
-                                spotAnalysisSection
+                                latestAnalysisSection
+                                    .padding(.horizontal, 20)
+                                    .transition(.opacity.combined(with: .move(edge: .top)))
+                            }
+
+                            // Priority 3: Highlight section (conversation-focused, only show if has conversation)
+                            if shouldShowHighlightSection {
+                                highlightSection
                                     .padding(.horizontal, 20)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                             }
@@ -125,7 +132,7 @@ struct SimpleDashboardView: View {
                             // emotionGraphCard
                             //     .padding(.horizontal, 20)
 
-                            // Priority 3: Comments (show when subject and comments are available)
+                            // Priority 4: Comments (show when subject and comments are available)
                             if let subject = subject, (!subjectComments.isEmpty || dashboardSummary != nil) {
                                 commentSection(subject: subject)
                                     .padding(.horizontal, 20)
@@ -453,12 +460,43 @@ struct SimpleDashboardView: View {
         }
     }
 
-    private var spotAnalysisSection: some View {
-        let latestBlocks = Array(timeBlocks.suffix(3).reversed())
+    // Latest 1 analysis (newest)
+    private var latestAnalysisSection: some View {
+        let latestBlock = Array(timeBlocks.suffix(1))
 
         return SpotAnalysisListSection(
             title: "最新情報",
-            spotResults: latestBlocks,
+            spotResults: latestBlock,
+            showMoreButton: false,
+            onTapSpot: { block in
+                selectedSpotForDetail = block
+            }
+        )
+    }
+
+    // Check if highlight section should be shown
+    private var shouldShowHighlightSection: Bool {
+        !timeBlocks.isEmpty && conversationBlocks.count > 0
+    }
+
+    // Get conversation blocks (cached computation)
+    private var conversationBlocks: [DashboardTimeBlock] {
+        timeBlocks.filter { block in
+            guard let transcription = block.vibeTranscriberResult else {
+                return false
+            }
+            return transcription != "発話なし"
+        }
+    }
+
+    // Highlight section (conversation-focused, no fallback)
+    private var highlightSection: some View {
+        // Use already filtered conversation blocks (newest first)
+        let displayBlocks = conversationBlocks.reversed()
+
+        return SpotAnalysisListSection(
+            title: "ハイライト",
+            spotResults: displayBlocks,
             showMoreButton: true,
             onTapSpot: { block in
                 selectedSpotForDetail = block
@@ -1093,10 +1131,127 @@ struct AnalysisListView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
 
     @State private var selectedSpotForDetail: DashboardTimeBlock?
+    @State private var filterType: AnalysisFilterType = .all
+    @State private var sortOrder: AnalysisSortOrder = .newest
+
+    // Filter types
+    enum AnalysisFilterType: String, CaseIterable {
+        case all = "すべての分析"
+        case withConversation = "会話あり"
+    }
+
+    // Sort order
+    enum AnalysisSortOrder: String, CaseIterable {
+        case newest = "最新の分析"
+        case oldest = "最も古い分析"
+    }
+
+    // Filtered and sorted timeBlocks
+    private var filteredAndSortedBlocks: [DashboardTimeBlock] {
+        var blocks = timeBlocks
+
+        // Apply filter
+        if filterType == .withConversation {
+            blocks = blocks.filter { block in
+                guard let transcription = block.vibeTranscriberResult else {
+                    return false
+                }
+                return transcription != "発話なし"
+            }
+        }
+
+        // Apply sort
+        if sortOrder == .newest {
+            blocks = blocks.reversed() // newest first
+        }
+        // For .oldest, keep original order (oldest first)
+
+        return blocks
+    }
 
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
+                // Filter and Sort controls
+                if !timeBlocks.isEmpty {
+                    VStack(spacing: 12) {
+                        HStack(spacing: 16) {
+                            // Filter
+                            Menu {
+                                ForEach(AnalysisFilterType.allCases, id: \.self) { type in
+                                    Button(action: {
+                                        filterType = type
+                                    }) {
+                                        HStack {
+                                            Text(type.rawValue)
+                                            if filterType == type {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "line.3.horizontal.decrease.circle")
+                                        .font(.system(size: 14))
+                                    Text(filterType.rawValue)
+                                        .font(.system(size: 14))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 11))
+                                }
+                                .foregroundStyle(Color.safeColor("AppAccentColor"))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.safeColor("CardBackground"))
+                                .cornerRadius(8)
+                            }
+
+                            // Sort
+                            Menu {
+                                ForEach(AnalysisSortOrder.allCases, id: \.self) { order in
+                                    Button(action: {
+                                        sortOrder = order
+                                    }) {
+                                        HStack {
+                                            Text(order.rawValue)
+                                            if sortOrder == order {
+                                                Image(systemName: "checkmark")
+                                            }
+                                        }
+                                    }
+                                }
+                            } label: {
+                                HStack {
+                                    Image(systemName: "arrow.up.arrow.down.circle")
+                                        .font(.system(size: 14))
+                                    Text(sortOrder.rawValue)
+                                        .font(.system(size: 14))
+                                    Image(systemName: "chevron.down")
+                                        .font(.system(size: 11))
+                                }
+                                .foregroundStyle(Color.safeColor("AppAccentColor"))
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 8)
+                                .background(Color.safeColor("CardBackground"))
+                                .cornerRadius(8)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+
+                        // Result count
+                        HStack {
+                            Text("\(filteredAndSortedBlocks.count)件の分析結果")
+                                .font(.system(size: 13))
+                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
+                            Spacer()
+                        }
+                        .padding(.horizontal, 20)
+                    }
+                    .padding(.top, 20)
+                }
+
                 if timeBlocks.isEmpty {
                     // Empty state
                     Group {
@@ -1107,10 +1262,22 @@ struct AnalysisListView: View {
                         }
                     }
                     .padding(.horizontal)
+                } else if filteredAndSortedBlocks.isEmpty {
+                    // Filtered but no results
+                    VStack(spacing: 12) {
+                        Image(systemName: "tray")
+                            .font(.system(size: 48))
+                            .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
+                        Text("条件に一致する分析結果がありません")
+                            .font(.caption)
+                            .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 60)
                 } else {
-                    // 時系列順（古い→新しい）で全件表示
+                    // Display filtered and sorted results
                     VStack(spacing: 20) {
-                        ForEach(timeBlocks, id: \.localTime) { block in
+                        ForEach(filteredAndSortedBlocks, id: \.localTime) { block in
                             SpotAnalysisCard(
                                 timeBlock: block,
                                 onTapDetail: {
@@ -1124,7 +1291,6 @@ struct AnalysisListView: View {
 
                 Spacer(minLength: 50)
             }
-            .padding(.top, 20)
         }
         .background(Color.white)
         .sheet(item: $selectedSpotForDetail) { spot in
