@@ -9,7 +9,7 @@ import Foundation
 import SwiftUI
 
 // MARK: - Daily Vibe Report Data Model
-// vibe_whisper_summaryテーブルの構造に対応したデータモデル
+// Legacy data model - no longer actively used
 struct DailyVibeReport: Codable {
     let deviceId: String
     let date: String

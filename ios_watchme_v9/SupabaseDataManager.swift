@@ -19,7 +19,7 @@ struct DashboardData {
 }
 
 // MARK: - Supabaseデータ管理クラス
-// vibe_whisper_summaryテーブルからデータを取得・管理する責務を持つ
+// Supabase (daily_results, spot_results, etc.) からデータを取得・管理する責務を持つ
 @MainActor
 class SupabaseDataManager: ObservableObject {
     
