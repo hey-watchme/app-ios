@@ -726,6 +726,7 @@ class SupabaseDataManager: ObservableObject {
                 let behavior: String?
                 let emotion: String?
                 let vibe_score: Double?
+                let rating: Int?
                 let created_at: String?
             }
 
@@ -740,7 +741,7 @@ class SupabaseDataManager: ObservableObject {
             // 📊 Performance optimization: Parallel database queries
             let spotResultsQuery = supabase
                 .from("spot_results")
-                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, created_at")
+                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
                 .order("local_time", ascending: true)  // ✅ ローカルタイムでソート
@@ -778,6 +779,7 @@ class SupabaseDataManager: ObservableObject {
                     behavior: result.behavior,
                     emotion: result.emotion,
                     vibeScore: result.vibe_score,
+                    rating: result.rating,
                     createdAt: result.created_at,
                     updatedAt: nil,
                     vibeTranscriberResult: feature?.vibe_transcriber_result,
