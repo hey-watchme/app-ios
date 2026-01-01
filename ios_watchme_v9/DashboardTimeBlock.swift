@@ -55,6 +55,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let behavior: String?   // その録音の行動
     let emotion: String?    // LLM抽出の有意な感情（1-2個、カンマ区切り）
     let vibeScore: Double?
+    let rating: Int?        // Importance rating (0-5)
     let createdAt: String?
     let updatedAt: String?
 
@@ -79,6 +80,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         case behavior
         case emotion
         case vibeScore = "vibe_score"
+        case rating
         case createdAt = "created_at"
         case updatedAt = "updated_at"
         case vibeTranscriberResult = "vibe_transcriber_result"
@@ -96,6 +98,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         behavior = try container.decodeIfPresent(String.self, forKey: .behavior)
         emotion = try container.decodeIfPresent(String.self, forKey: .emotion)
         vibeScore = try container.decodeIfPresent(Double.self, forKey: .vibeScore)
+        rating = try container.decodeIfPresent(Int.self, forKey: .rating)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
 
@@ -240,6 +243,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          behavior: String?,
          emotion: String?,
          vibeScore: Double?,
+         rating: Int? = nil,
          createdAt: String?,
          updatedAt: String? = nil,
          vibeTranscriberResult: String? = nil,
@@ -253,6 +257,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.behavior = behavior
         self.emotion = emotion
         self.vibeScore = vibeScore
+        self.rating = rating
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.vibeTranscriberResult = vibeTranscriberResult

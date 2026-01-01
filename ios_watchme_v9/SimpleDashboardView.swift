@@ -488,12 +488,13 @@ struct SimpleDashboardView: View {
 
     // Phase 2: フィルタリングロジック（明示的な更新）
     private func updateFilteredData() {
-        // 会話があるブロックをフィルタリング
+        // rating > 0 のブロックをフィルタリング（rating == 0 または nil を除外）
         conversationBlocks = timeBlocks.filter { block in
-            guard let transcription = block.vibeTranscriberResult else {
+            guard let rating = block.rating else {
+                // rating が nil の場合は除外（古いデータ）
                 return false
             }
-            return transcription != "発話なし"
+            return rating > 0
         }
 
         // ハイライト表示の判定
@@ -1171,10 +1172,11 @@ struct AnalysisListView: View {
         // Apply filter
         if filterType == .withConversation {
             blocks = blocks.filter { block in
-                guard let transcription = block.vibeTranscriberResult else {
+                guard let rating = block.rating else {
+                    // rating が nil の場合は除外（古いデータ）
                     return false
                 }
-                return transcription != "発話なし"
+                return rating > 0
             }
         }
 
