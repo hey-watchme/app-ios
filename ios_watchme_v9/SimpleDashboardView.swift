@@ -490,12 +490,29 @@ struct SimpleDashboardView: View {
     private func updateFilteredData() {
         // rating > 0 のブロックをフィルタリング（rating == 0 または nil を除外）
         conversationBlocks = timeBlocks.filter { block in
+            #if DEBUG
+            print("📊 [FILTER DEBUG] block time: \(block.displayTime), rating: \(block.rating?.description ?? "nil"), summary: \(block.summary?.prefix(30) ?? "nil")")
+            #endif
+
             guard let rating = block.rating else {
                 // rating が nil の場合は除外（古いデータ）
+                #if DEBUG
+                print("   → EXCLUDED (rating is nil)")
+                #endif
                 return false
             }
-            return rating > 0
+
+            let shouldInclude = rating > 0
+            #if DEBUG
+            print("   → \(shouldInclude ? "INCLUDED" : "EXCLUDED") (rating: \(rating))")
+            #endif
+            return shouldInclude
         }
+
+        #if DEBUG
+        print("✅ [FILTER RESULT] conversationBlocks count: \(conversationBlocks.count)")
+        print("✅ [FILTER RESULT] highlightBlocks count (after reverse): \(conversationBlocks.count)")
+        #endif
 
         // ハイライト表示の判定
         showHighlightSection = !conversationBlocks.isEmpty
