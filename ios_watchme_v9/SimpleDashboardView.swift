@@ -27,11 +27,18 @@ struct CachedDashboardData {
 }
 
 struct SimpleDashboardView: View {
-    let date: Date  // このビューが表示する固有の日付
+    private let originalDate: Date  // 初期化時の日付（TabViewのtag用）
+    @State private var date: Date  // このビューが表示する日付（動的に更新）
     @Binding var selectedDate: Date  // TabViewの選択状態（ナビゲーション用）
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var userAccountManager: UserAccountManager
+
+    init(date: Date, selectedDate: Binding<Date>) {
+        self.originalDate = date
+        self._date = State(initialValue: date)
+        self._selectedDate = selectedDate
+    }
 
     // Push notification manager (centralized)
     @StateObject private var pushManager = PushNotificationManager.shared
@@ -328,6 +335,12 @@ struct SimpleDashboardView: View {
                 // 📊 Phase 5-A: 初回読み込みフラグを設定（デバウンススキップ）
                 isInitialLoad = true
             }
+        }
+        .onChange(of: selectedDate) { oldValue, newValue in
+            // TabViewで選択された日付が変更された場合、常にdateを更新
+            // 応急処置: すべてのビューのdateを選択日付に同期させる
+            date = newValue
+            print("📅 [Date Update] All views now showing \(newValue)")
         }
         .onChange(of: timeBlocks) { oldValue, newValue in
             // Phase 2: timeBlocksが更新されたら自動的にフィルタリング実行
