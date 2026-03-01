@@ -3,6 +3,17 @@
 WatchMeプラットフォームのiOSアプリケーション。
 音声録音とAI分析による心理・感情・行動の総合的なモニタリングを提供します。
 
+> **⚠️ データベース確認の前提**
+>
+> このプロジェクトではデータベースファースト開発を採用しています。
+> テーブル構造・カラム・データの確認は、**必ずSupabase MCP経由でリアルタイムに実行**してください。
+> SQLファイルやドキュメント内の定義は古くなっている可能性があるため、正とみなさないこと。
+>
+> - **プロジェクトID**: `qvtlwotzuzbavrzqhyvt`
+> - **テーブル一覧**: `mcp_supabase_list_tables`
+> - **構造確認**: `mcp_supabase_execute_sql` で `information_schema.columns` を参照
+> - **データ確認**: `mcp_supabase_execute_sql` で `SELECT * FROM public.xxx LIMIT 3`
+
 > **📚 関連ドキュメント**
 >
 > **機能仕様**:
