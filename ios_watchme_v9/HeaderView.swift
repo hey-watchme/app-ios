@@ -195,8 +195,8 @@ struct HeaderView: View {
     
     // 未読通知数を更新
     private func updateUnreadCount() async {
-        // ✅ CLAUDE.md: public.usersのuser_idを使用
-        guard let userId = userAccountManager.currentUser?.profile?.userId else { return }
+        // public.usersのuser_id優先、未取得時はauth user_idにフォールバック
+        guard let userId = userAccountManager.effectiveUserId else { return }
         unreadNotificationCount = await dataManager.fetchUnreadNotificationCount(userId: userId)
     }
 }

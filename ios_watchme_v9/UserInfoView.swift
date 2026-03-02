@@ -14,7 +14,7 @@ struct UserInfoView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showAccountSettings = false  // アカウント設定画面
     @State private var showingAvatarPicker = false  // アバター選択画面
-    @State private var showSignUp = false  // 新規ユーザー登録画面
+    @State private var showUpgradeAccount = false  // 匿名アップグレード画面
     @Environment(\.dismiss) private var dismiss
 
     // Avatar ViewModel
@@ -69,15 +69,20 @@ struct UserInfoView: View {
                                     Spacer()
                                         .frame(height: 60)
                                     
-                                    // 名前
-                                    if let profile = userAccountManager.currentUser?.profile,
-                                       let name = profile.name, !name.isEmpty {
+                                    // 名前（判定ロジックと表示を一致させる）
+                                    if userAccountManager.isAnonymousUser {
+                                        Text("ゲストユーザー")
+                                            .font(.title2)
+                                            .fontWeight(.bold)
+                                            .foregroundColor(.primary)
+                                    } else if let profile = userAccountManager.currentUser?.profile,
+                                              let name = profile.name, !name.isEmpty {
                                         Text(name)
                                             .font(.title2)
                                             .fontWeight(.bold)
                                             .foregroundColor(.primary)
                                     } else {
-                                        Text("ゲストユーザー")
+                                        Text("ユーザー")
                                             .font(.title2)
                                             .fontWeight(.bold)
                                             .foregroundColor(.primary)
@@ -109,7 +114,7 @@ struct UserInfoView: View {
                                 ZStack(alignment: .bottomTrailing) {
                                     // ✅ SSOT: UserProfile.avatarUrl を渡す
                                     AvatarView(
-                                        userId: userAccountManager.currentUser?.profile?.userId,
+                                        userId: userAccountManager.effectiveUserId,
                                         size: 100,
                                         avatarUrl: userAccountManager.currentUser?.profile?.avatarUrl
                                     )
@@ -157,14 +162,20 @@ struct UserInfoView: View {
                     InfoListSection(title: "ユーザーアカウント情報") {
                         if let user = userAccountManager.currentUser {
                             // ログインユーザー
-                            // 名前
-                            if let profile = user.profile, let name = profile.name {
-                                InfoListRow(label: "名前", value: name)
-                            }
+                            let isAnonymous = userAccountManager.isAnonymousUser
+                            let displayName: String = {
+                                if isAnonymous { return "ゲストユーザー" }
+                                if let name = user.profile?.name, !name.isEmpty { return name }
+                                return "未設定"
+                            }()
+                            let displayNameColor: Color = (displayName == "未設定") ? .secondary : .primary
 
-                            // メールアドレス（匿名の場合は「未設定」）
-                            let displayEmail = (user.email == "anonymous" || user.email.isEmpty) ? "未設定" : user.email
-                            let emailColor: Color = (user.email == "anonymous" || user.email.isEmpty) ? .secondary : .primary
+                            // 名前
+                            InfoListRow(label: "名前", value: displayName, valueColor: displayNameColor)
+
+                            // メールアドレス（匿名は常に未設定表示）
+                            let displayEmail = (isAnonymous || user.email.isEmpty) ? "未設定" : user.email
+                            let emailColor: Color = (displayEmail == "未設定") ? .secondary : .primary
                             InfoListRow(label: "メールアドレス", value: displayEmail, valueColor: emailColor)
 
                             // ニュースレター配信設定
@@ -251,8 +262,15 @@ struct UserInfoView: View {
 
                 // 匿名ユーザーの場合「アカウント登録」ボタンを表示
                 if userAccountManager.isAnonymousUser {
+                    Text("ゲストユーザーはログアウトすると、データが失われる可能性があります。")
+                        .font(.caption)
+                        .foregroundColor(Color.safeColor("WarningColor"))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 24)
+
                     Button(action: {
-                        showSignUp = true
+                        showUpgradeAccount = true
                     }) {
                         Text("アカウント登録")
                             .fontWeight(.semibold)
@@ -281,8 +299,10 @@ struct UserInfoView: View {
             NavigationStack {
                 AvatarPickerView(
                     viewModel: avatarViewModel,
-                    // ✅ CLAUDE.md: public.usersのuser_idを使用
-                    currentAvatarURL: userAccountManager.currentUser?.profile?.userId != nil ? AWSManager.shared.getAvatarURL(type: "users", id: userAccountManager.currentUser!.profile!.userId) : nil
+                    currentAvatarURL: {
+                        guard let userId = userAccountManager.effectiveUserId else { return nil }
+                        return AWSManager.shared.getAvatarURL(type: "users", id: userId)
+                    }()
                 )
                 .navigationTitle("アバターを選択")
                 .navigationBarTitleDisplayMode(.inline)
@@ -296,14 +316,14 @@ struct UserInfoView: View {
                 }
             }
         }
-        .sheet(isPresented: $showSignUp) {
-            SignUpView()
+        .sheet(isPresented: $showUpgradeAccount) {
+            UpgradeAccountView()
                 .environmentObject(userAccountManager)
+                .environmentObject(ToastManager.shared)
         }
         .onAppear {
             // ViewModelの初期化
-            // ✅ CLAUDE.md: public.usersのuser_idを使用
-            if let userId = userAccountManager.currentUser?.profile?.userId {
+            if let userId = userAccountManager.effectiveUserId {
                 avatarViewModel.entityId = userId
                 avatarViewModel.authToken = userAccountManager.getAccessToken()
                 avatarViewModel.dataManager = dataManager

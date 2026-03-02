@@ -977,7 +977,7 @@ struct SimpleDashboardView: View {
                     .fixedSize(horizontal: false, vertical: true)
 
                 // アクションボタン（削除・通報）
-                if let currentUserId = userAccountManager.currentUser?.profile?.userId {
+                if let currentUserId = userAccountManager.effectiveUserId {
                     HStack {
                         Spacer()
 
@@ -1024,7 +1024,7 @@ struct SimpleDashboardView: View {
     // コメント追加
     private func addComment(subjectId: String) async {
         guard !newCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let userId = userAccountManager.currentUser?.profile?.userId else {
+              let userId = userAccountManager.effectiveUserId else {
             return
         }
         

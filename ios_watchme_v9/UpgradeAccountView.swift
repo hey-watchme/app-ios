@@ -3,7 +3,7 @@
 //  ios_watchme_v9
 //
 //  Anonymous user upgrade screen
-//  Allows guest users to link their account to Google or Email
+//  Allows guest users to upgrade to a regular account via Google
 //
 
 import SwiftUI
@@ -14,6 +14,7 @@ struct UpgradeAccountView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var isProcessing = false
+    @State private var showSignUp = false
 
     var body: some View {
         NavigationView {
@@ -26,16 +27,40 @@ struct UpgradeAccountView: View {
                         .font(.system(size: 60))
                         .foregroundColor(Color.safeColor("AppAccentColor"))
 
-                    Text("アカウント登録")
+                    Text("通常アカウントへのアップグレード")
                         .font(.title2)
                         .fontWeight(.bold)
 
-                    Text("ゲストモードのデータを安全に保存しましょう。\nアカウント登録すると、データがクラウドに保存され、\n複数デバイスで同期できます。")
+                    Text("現在のゲストデータを引き継いだまま、通常アカウントへ移行します。")
                         .font(.subheadline)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 20)
                 }
+
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(Color.safeColor("WarningColor"))
+                        Text("注意")
+                            .font(.headline)
+                            .foregroundColor(Color.safeColor("WarningColor"))
+                    }
+
+                    Text("アカウントの移行はGoogle認証でのみ行うことができます。Googleアカウントを使った認証ができない場合は、新規アカウント登録をご利用ください。その際データの引き継ぎはできませんのでご注意ください。")
+                        .font(.footnote)
+                        .foregroundColor(.primary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(Color.safeColor("WarningColor").opacity(0.12))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.safeColor("WarningColor").opacity(0.45), lineWidth: 1)
+                )
+                .cornerRadius(12)
+                .padding(.horizontal, 24)
 
                 Spacer()
 
@@ -47,7 +72,7 @@ struct UpgradeAccountView: View {
                     }) {
                         HStack {
                             Image(systemName: "globe")
-                            Text("Google でログイン")
+                            Text("Google認証を使ってアップデート")
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
@@ -57,16 +82,12 @@ struct UpgradeAccountView: View {
                         .cornerRadius(12)
                     }
 
-                    // Email Sign Up (Mock)
                     Button(action: {
-                        toastManager.showInfo(
-                            title: "メールアドレス登録",
-                            subtitle: "現在準備中です"
-                        )
+                        showSignUp = true
                     }) {
                         HStack {
-                            Image(systemName: "envelope.fill")
-                            Text("メールアドレスでログイン")
+                            Image(systemName: "person.crop.circle.badge.plus")
+                            Text("新規アカウント登録")
                                 .fontWeight(.semibold)
                         }
                         .frame(maxWidth: .infinity)
@@ -91,7 +112,7 @@ struct UpgradeAccountView: View {
                 .disabled(isProcessing)
                 .opacity(isProcessing ? 0.6 : 1.0)
             }
-            .navigationTitle("アカウント登録")
+            .navigationTitle("アップグレード")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -110,7 +131,7 @@ struct UpgradeAccountView: View {
                                 ProgressView()
                                     .scaleEffect(1.5)
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                Text("アカウント登録中...")
+                                Text("アップグレード中...")
                                     .foregroundColor(.white)
                                     .font(.caption)
                             }
@@ -118,6 +139,10 @@ struct UpgradeAccountView: View {
                     }
                 }
             )
+            .sheet(isPresented: $showSignUp) {
+                SignUpView()
+                    .environmentObject(userAccountManager)
+            }
         }
     }
 
@@ -127,21 +152,42 @@ struct UpgradeAccountView: View {
         isProcessing = true
         Task {
             // Call UserAccountManager's upgrade method
-            let success = await userAccountManager.upgradeAnonymousToGoogle()
+            let result = await userAccountManager.upgradeAnonymousToGoogle()
 
             await MainActor.run {
                 isProcessing = false
 
-                if success {
+                switch result {
+                case .upgraded:
                     toastManager.showSuccess(
-                        title: "アカウント登録完了",
-                        subtitle: "ゲストデータをGoogleアカウントに移行しました"
+                        title: "アップグレード完了",
+                        subtitle: "ゲストデータを引き継いで通常アカウントへ移行しました"
                     )
                     dismiss()
-                } else if let error = userAccountManager.authError {
+                case .cancelled:
+                    toastManager.showInfo(
+                        title: "処理を中止しました",
+                        subtitle: "Google認証をキャンセルしました"
+                    )
+                case .notAnonymousUser:
                     toastManager.showError(
-                        title: "登録エラー",
-                        subtitle: error
+                        title: "アップグレードエラー",
+                        subtitle: "現在のユーザーは匿名ユーザーではありません"
+                    )
+                case .switchedToExistingGoogleAccount:
+                    toastManager.showError(
+                        title: "アップグレードエラー",
+                        subtitle: "既存のGoogleアカウントがあるためアップグレードに失敗しました。ログインから入り直してください。"
+                    )
+                case .oauthFailed(let message):
+                    toastManager.showError(
+                        title: "アップグレードエラー",
+                        subtitle: "Google連携に失敗しました: \(message)"
+                    )
+                case .unknownFailure:
+                    toastManager.showError(
+                        title: "アップグレードエラー",
+                        subtitle: "アップグレードに失敗しました。ログインから入り直してください。"
                     )
                 }
             }

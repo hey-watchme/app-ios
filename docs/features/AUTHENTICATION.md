@@ -56,6 +56,16 @@
       ┗━ 👤 ゲストとして続行（匿名認証・実装済み）
 ```
 
+### ゲスト開始時の動作仕様（確定）
+
+`ゲストとして続行` を押した時点で、以下を自動実行する：
+
+1. Supabase匿名アカウントを新規作成（`auth_provider = "anonymous"`）
+2. 現在利用中の端末を `devices` / `user_devices` に自動連携（`role = owner`）
+3. 必要に応じてサンプルデバイスを連携（`role = viewer`）
+
+これにより、ゲストは「デバイス連携済み」の状態で即利用開始する。
+
 ### 匿名ユーザーのアップグレードフロー
 
 ```
@@ -63,15 +73,29 @@
   ↓
 アカウント設定画面を開く
   ↓
-「アカウントを作成してデータを保護」セクションが表示
+「通常アカウントへのアップグレード（無料）」導線が表示
   ↓
 タップしてUpgradeAccountViewを表示
   ┃
-  ┣━ 🔵 Google でアカウント作成
-  ┗━ 📧 メールアドレスで登録（準備中）
+  ┣━ 🔵 Google認証を使ってアップデート（データ引き継ぎあり）
+  ┗━ 📧 新規アカウント登録（データ引き継ぎなし）
   ↓
-既存データを保持したままアカウントアップグレード完了
+選択した方法で認証フローを完了
 ```
+
+### 匿名→Googleアップグレード結果の定義（正規ルート）
+
+本機能は「フォールバック」前提ではなく、以下の結果を正規ルートとして扱う。
+
+1. `upgraded`
+2. `cancelled`
+3. `notAnonymousUser`
+4. `switchedToExistingGoogleAccount`
+5. `oauthFailed`
+6. `unknownFailure`
+
+`switchedToExistingGoogleAccount` は、既存Googleアカウントへ切り替わったケースを明示的に検出し、  
+アップグレード失敗として元のゲストセッションへ復帰させる。
 
 ---
 
@@ -84,7 +108,9 @@
 **特徴**:
 - アカウント登録不要で即座に全機能を利用可能
 - Supabaseの匿名認証機能を使用
-- **後でメールアドレスやGoogle認証にアップグレード可能**（UI実装済み）
+- **ゲスト開始時に現在端末を自動連携して即利用開始**
+- **アップグレードはGoogle連携のみデータ引き継ぎ対応**
+- **Google利用不可の場合は新規アカウント登録導線を提供**（引き継ぎなし）
 
 **制限事項**:
 - アプリ削除またはデータクリアでアカウント喪失
@@ -98,8 +124,8 @@
 - `UserAccountManager.swift:293-339` - `isAnonymousUser`, `userStatusLabel`
 - `UserAccountManager.swift:1403-1477` - `upgradeAnonymousToGoogle()`
 - `UserAccountManager.swift:599-669` - `createOrUpdateUserProfile()` (email/auth_provider更新処理)
-- `UpgradeAccountView.swift` - アカウント登録UI
-- `AccountSettingsView.swift:29-58` - アカウント登録ボタン
+- `UpgradeAccountView.swift` - 通常アカウントへのアップグレードUI（Google）
+- `AccountSettingsView.swift:29-58` - ゲスト向けアップグレード導線
 - `UserInfoView.swift:85-89` - ユーザーステータス表示
 
 ---
@@ -234,7 +260,8 @@ let userId = userAccountManager.currentUser?.profile?.userId
 
 ```swift
 var isAnonymousUser: Bool {
-    return currentUser?.email == "anonymous"
+    // 1) profile.authProvider == "anonymous" を優先
+    // 2) legacy互換として email == "anonymous" をフォールバック
 }
 ```
 
@@ -300,7 +327,7 @@ toastManager.showError(title: "認証エラー", subtitle: errorMessage)
 ### 匿名認証
 - [ ] 「ゲストとして続行」でログインできること
 - [ ] 全機能が利用できること
-- [ ] アカウント設定に「アカウントを作成してデータを保護」バナーが表示されること
+- [ ] アカウント設定に「通常アカウントへのアップグレード（無料）」導線が表示されること
 
 ### Google OAuth認証
 - [ ] 「Google でサインイン」でログインできること
@@ -310,10 +337,11 @@ toastManager.showError(title: "認証エラー", subtitle: errorMessage)
 
 ### アップグレードフロー
 - [ ] ゲストユーザーでログイン
-- [ ] 設定画面から「アカウントを作成してデータを保護」をタップ
+- [ ] 設定画面から「通常アカウントへのアップグレード（無料）」をタップ
 - [ ] Google認証が成功すること
 - [ ] 既存データが保持されていること（デバイス、録音データ等）
 - [ ] auth_providerが`anonymous` → `google`に更新されること
+- [ ] （将来）メールアドレス登録によるアップグレードが利用可能であること
 
 ### 認証状態の遷移
 - [ ] ログイン → ログアウトの状態遷移で問題がないこと

@@ -238,6 +238,12 @@ final class RecordingStore: ObservableObject {
         state.errorMessage = nil
     }
 
+    /// 任意のエラーメッセージを表示
+    func presentError(_ message: String) {
+        state.errorMessage = message
+        state.showError = true
+    }
+
     /// 録音ファイル削除
     func deleteRecording(_ recording: RecordingModel) async {
         // リストから即座に削除（UI更新）

@@ -302,37 +302,33 @@ class DeviceManager: ObservableObject {
     
 
     // MARK: - Deprecated (Old initialization logic removed)
-    // MARK: - サンプルデバイス選択（Read-Only Mode用）
-    func selectSampleDevice() {
-        print("👤 Read-Only Mode: サンプルデバイスを選択")
+    // MARK: - サンプルデバイス選択（DB連携済みのみ）
+    @discardableResult
+    func selectSampleDevice() -> Bool {
+        print("👤 サンプルデバイス選択開始（DB連携済みのみ）")
 
-        let sample = Device(
-            device_id: DeviceManager.sampleDeviceID,
-            device_type: "observer",
-            timezone: "Asia/Tokyo",
-            owner_user_id: nil,
-            subject_id: nil,
-            created_at: nil,
-            status: "active",
-            role: "viewer"
-        )
-
-        // 既存デバイスにサンプルを追加
-        var currentDevices = devices
-        if !currentDevices.contains(where: { $0.device_id == DeviceManager.sampleDeviceID }) {
-            currentDevices.append(sample)
+        // DB上で連携済みの demo デバイスのみ選択する（ローカル疑似注入はしない）
+        if let sample = devices.first(where: { $0.isDemo }) {
+            selectDevice(sample.device_id)
+            print("✅ サンプルデバイス選択完了: \(sample.device_id)")
+            return true
         }
 
-        self.state = .available(currentDevices)
-        self.selectedDeviceID = DeviceManager.sampleDeviceID
+        // 互換性のため、固定IDが存在する場合はそれを選択（型がdemoでないケースにも対応）
+        if devices.contains(where: { $0.device_id == DeviceManager.sampleDeviceID }) {
+            selectDevice(DeviceManager.sampleDeviceID)
+            print("✅ サンプルデバイス選択完了（固定ID）: \(DeviceManager.sampleDeviceID)")
+            return true
+        }
 
-        print("✅ サンプルデバイス選択完了")
+        print("⚠️ 連携済みのサンプルデバイスが見つかりません")
+        return false
     }
 
     // 後方互換性のため（非推奨）
     @available(*, deprecated, message: "Use selectSampleDevice() instead")
     func selectSampleDeviceForGuest() {
-        selectSampleDevice()
+        _ = selectSampleDevice()
     }
 
     // MARK: - 状態クリア（権限ベース設計）

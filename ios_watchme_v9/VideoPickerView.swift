@@ -311,7 +311,7 @@ struct VideoPickerView: View {
 
     private func uploadExtractedAudio(_ audioURL: URL) async throws {
         guard let deviceID = deviceManager.selectedDeviceID,
-              let userID = userAccountManager.currentUser?.profile?.userId else {
+              let userID = userAccountManager.effectiveUserId else {
             print("❌ Missing device ID or user ID")
             throw VideoProcessingError.missingRequiredData
         }

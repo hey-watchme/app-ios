@@ -118,8 +118,7 @@ struct NotificationView: View {
         isLoading = true
         errorMessage = nil
 
-        // ✅ CLAUDE.md: public.usersのuser_idを使用
-        guard let userId = userAccountManager.currentUser?.profile?.userId else {
+        guard let userId = userAccountManager.effectiveUserId else {
             // ゲストモードの場合はエラーではなく空の通知リストとして扱う
             notifications = []
             isLoading = false
@@ -132,8 +131,7 @@ struct NotificationView: View {
     
     // 通知を既読にする
     private func markAsRead(_ notification: Notification) async {
-        // ✅ CLAUDE.md: public.usersのuser_idを使用
-        guard let userId = userAccountManager.currentUser?.profile?.userId else { return }
+        guard let userId = userAccountManager.effectiveUserId else { return }
         
         // UIを即座に更新
         if let index = notifications.firstIndex(where: { $0.id == notification.id }) {
@@ -155,8 +153,7 @@ struct NotificationView: View {
     
     // すべての通知を既読にする
     private func markAllAsRead() async {
-        // ✅ CLAUDE.md: public.usersのuser_idを使用
-        guard let userId = userAccountManager.currentUser?.profile?.userId else { return }
+        guard let userId = userAccountManager.effectiveUserId else { return }
         
         // UIを即座に更新
         for index in notifications.indices {

@@ -9,6 +9,9 @@ import SwiftUI
 import Foundation
 import Supabase
 import AuthenticationServices
+#if canImport(Security)
+import Security
+#endif
 #if os(iOS)
 import UIKit
 #endif
@@ -99,6 +102,11 @@ class UserAccountManager: ObservableObject {
 
         // 認証チェックはMainAppViewの.taskで非同期に実行
         print("⏱️ [UAM-INIT] UserAccountManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
+    }
+
+    /// 実運用で利用するユーザーID（public.users優先、未取得時はauth.usersをフォールバック）
+    var effectiveUserId: String? {
+        currentUser?.profile?.userId ?? currentUser?.id
     }
     
     // MARK: - アクセストークン取得
@@ -325,17 +333,17 @@ class UserAccountManager: ObservableObject {
     var isAnonymousUser: Bool {
         guard let user = currentUser else { return false }
 
-        // Check both currentUser.email and profile.email
-        if user.email == "anonymous" {
+        // Check auth_provider first (most explicit signal)
+        if let authProvider = user.profile?.authProvider?.lowercased(), authProvider == "anonymous" {
             return true
         }
 
-        if let profileEmail = user.profile?.email, profileEmail == "anonymous" {
+        // Fallback to sentinel email used by legacy/current guest flows
+        if user.email.lowercased() == "anonymous" {
             return true
         }
 
-        // Check auth_provider
-        if let authProvider = user.profile?.authProvider, authProvider == "anonymous" {
+        if let profileEmail = user.profile?.email?.lowercased(), profileEmail == "anonymous" {
             return true
         }
 
@@ -346,11 +354,13 @@ class UserAccountManager: ObservableObject {
     var userStatusLabel: String {
         guard let user = currentUser else { return "未認証" }
 
+        if isAnonymousUser {
+            return "ゲストユーザー"
+        }
+
         // Check auth_provider from profile first
-        if let authProvider = user.profile?.authProvider {
+        if let authProvider = user.profile?.authProvider?.lowercased() {
             switch authProvider {
-            case "anonymous":
-                return "ゲストユーザー"
             case "google":
                 return "Googleアカウント連携"
             case "email":
@@ -360,11 +370,6 @@ class UserAccountManager: ObservableObject {
             default:
                 return authProvider.capitalized + "アカウント連携"
             }
-        }
-
-        // Fallback: check email
-        if user.email == "anonymous" {
-            return "ゲストユーザー"
         }
 
         return "認証済み"
@@ -458,6 +463,15 @@ class UserAccountManager: ObservableObject {
 
         print("🔐 匿名ログイン開始")
 
+        // 念のため端末内の既存セッションを破棄してから匿名ログインする。
+        // これによりログアウト直後でも同一ゲストが再開されるケースを防ぐ。
+        do {
+            try await supabase.auth.signOut(scope: .local)
+        } catch {
+            print("⚠️ 匿名ログイン前のローカルサインアウトに失敗: \(error)")
+        }
+        clearSupabaseSessionFromKeychain()
+
         do {
             let session = try await supabase.auth.signInAnonymously()
 
@@ -505,37 +519,85 @@ class UserAccountManager: ObservableObject {
 
     // Create anonymous user profile in public.users table
     private func createAnonymousUserProfile(userId: String) async {
+        struct AnonymousUserProfile: Encodable {
+            let user_id: String
+            let name: String
+            let email: String
+            let created_at: String
+            let auth_provider: String
+        }
+
+        struct AnonymousUserProfileWithRole: Encodable {
+            let user_id: String
+            let name: String
+            let email: String
+            let created_at: String
+            let auth_provider: String
+            let role: String
+        }
+
+        let createdAt = ISO8601DateFormatter().string(from: Date())
+        let baseProfile = AnonymousUserProfile(
+            user_id: userId,
+            name: "ゲストユーザー",
+            email: "anonymous",
+            created_at: createdAt,
+            auth_provider: "anonymous"
+        )
+
         do {
-            struct AnonymousUserProfile: Encodable {
-                let user_id: String
-                let name: String
-                let email: String
-                let created_at: String
-                let auth_provider: String
-            }
-
-            let profileData = AnonymousUserProfile(
-                user_id: userId,
-                name: "ゲストユーザー",
-                email: "anonymous",
-                created_at: ISO8601DateFormatter().string(from: Date()),
-                auth_provider: "anonymous"
-            )
-
             try await supabase
                 .from("users")
-                .insert(profileData)
+                .insert(baseProfile)
                 .execute()
 
             print("✅ 匿名ユーザープロファイル作成成功 (auth_provider: anonymous)")
-
-            // Fetch profile after creation
             await fetchUserProfile(userId: userId)
-
+            return
         } catch {
-            print("❌ 匿名ユーザープロファイル作成エラー: \(error)")
+            guard isUsersRoleConstraintError(error) else {
+                print("❌ 匿名ユーザープロファイル作成エラー: \(error)")
+                return
+            }
+
+            // 環境ごとに public.users.role のCHECK制約が異なるため候補を順番に試す
+            let roleCandidates = ["viewer", "individual", "user", "guest", "staff", "parent", "admin"]
+            for role in roleCandidates {
+                do {
+                    let profileWithRole = AnonymousUserProfileWithRole(
+                        user_id: userId,
+                        name: "ゲストユーザー",
+                        email: "anonymous",
+                        created_at: createdAt,
+                        auth_provider: "anonymous",
+                        role: role
+                    )
+
+                    try await supabase
+                        .from("users")
+                        .insert(profileWithRole)
+                        .execute()
+
+                    print("✅ 匿名ユーザープロファイル作成成功 (auth_provider: anonymous, role: \(role))")
+                    await fetchUserProfile(userId: userId)
+                    return
+                } catch {
+                    if !isUsersRoleConstraintError(error) {
+                        print("❌ 匿名ユーザープロファイル作成エラー（role=\(role)）: \(error)")
+                        return
+                    }
+                }
+            }
+
+            print("❌ 匿名ユーザープロファイル作成失敗: users_role_check に適合する role 値が見つかりません")
             // Continue even if profile creation fails
         }
+    }
+
+    private func isUsersRoleConstraintError(_ error: Error) -> Bool {
+        guard let postgrestError = error as? PostgrestError else { return false }
+        return postgrestError.code == "23514" &&
+            postgrestError.message.contains("users_role_check")
     }
 
     // MARK: - Google OAuth認証
@@ -879,59 +941,55 @@ class UserAccountManager: ObservableObject {
     // MARK: - ログアウト機能
     func signOut() async {
         print("🚪 ログアウト開始")
+        let wasAuthenticated = authState.isAuthenticated
 
-        // 認証済みユーザーの場合のみサーバー側ログアウトを実行
-        if authState.isAuthenticated {
-            // ✅ レイヤー1: OSレベルでプッシュ通知の登録を解除
-            #if os(iOS)
-            await MainActor.run {
-                UIApplication.shared.unregisterForRemoteNotifications()
-                print("✅ [PUSH] APNs通知の登録を解除しました")
-            }
-            #endif
-
-            // ✅ レイヤー2: DBからAPNsトークンを削除（セッション有効中に実行）
-            if let userId = currentUser?.profile?.userId {
-                await removeAPNsToken(userId: userId)
-            }
-
-            // トークンリフレッシュタイマーを停止
-            refreshTimer?.invalidate()
-            refreshTimer = nil
-
-            // サーバー側のログアウトを実行
-            do {
-                // Supabase SDKの標準メソッドを使用
-                try await supabase.auth.signOut()
-                print("✅ サーバー側ログアウト成功")
-            } catch {
-                print("❌ サーバー側ログアウトエラー: \(error)")
-                // エラーが発生してもローカルは既にクリア済み
-            }
-
-            // ローカル状態をクリア
-            await MainActor.run {
-                self.currentUser = nil
-                self.isAuthenticated = false
-                self.authState = .unauthenticated
-                self.authError = nil
-
-                print("👋 ログアウト完了: authState = unauthenticated")
-
-                // DeviceManagerの状態もクリア
-                self.deviceManager.clearState()
-            }
-
-            // 保存された認証情報を削除
-            UserDefaults.standard.removeObject(forKey: "supabase_user")
-            UserDefaults.standard.removeObject(forKey: "current_user_id")
-            print("💾 UserDefaultsクリア完了（supabase_user, current_user_id）")
-        } else {
-            // ゲストユーザーの場合：内部的には「初期画面に戻る」処理
-            // ユーザーには「ログアウト」と表示されるが、実際にはリセット処理
-            print("🔄 ゲストユーザーのログアウト（初期画面へリセット）")
-            self.resetToWelcomeScreen()
+        // ✅ レイヤー1: OSレベルでプッシュ通知の登録を解除
+        #if os(iOS)
+        await MainActor.run {
+            UIApplication.shared.unregisterForRemoteNotifications()
+            print("✅ [PUSH] APNs通知の登録を解除しました")
         }
+        #endif
+
+        // ✅ レイヤー2: DBからAPNsトークンを削除（ID解決可能な場合のみ）
+        if let userId = effectiveUserId {
+            await removeAPNsToken(userId: userId)
+        }
+
+        // トークンリフレッシュタイマーを停止
+        refreshTimer?.invalidate()
+        refreshTimer = nil
+
+        // Supabase SDKセッションを常に破棄（未認証表示中でも再利用を防ぐ）
+        do {
+            try await supabase.auth.signOut()
+            print("✅ Supabaseセッション破棄成功")
+        } catch {
+            print("⚠️ Supabaseセッション破棄エラー: \(error)")
+        }
+        clearSupabaseSessionFromKeychain()
+
+        // ローカル状態をクリア
+        await MainActor.run {
+            self.currentUser = nil
+            self.isAuthenticated = false
+            self.authState = .unauthenticated
+            self.authError = nil
+            self.deviceManager.clearState()
+
+            // 未認証モードからのログアウト操作時は、初期画面へ戻す
+            if !wasAuthenticated {
+                self.shouldResetToWelcome = true
+            }
+        }
+
+        // 保存された認証情報を削除
+        UserDefaults.standard.removeObject(forKey: "supabase_user")
+        UserDefaults.standard.removeObject(forKey: "current_user_id")
+        UserDefaults.standard.removeObject(forKey: "guest_id")
+        UserDefaults.standard.removeObject(forKey: "pending_apns_token")
+        print("💾 UserDefaultsクリア完了（supabase_user, current_user_id, guest_id, pending_apns_token）")
+        print("👋 ログアウト完了: authState = unauthenticated")
     }
 
     // ゲストユーザー用：初期画面に戻る処理
@@ -972,6 +1030,32 @@ class UserAccountManager: ObservableObject {
 
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
+        UserDefaults.standard.removeObject(forKey: "current_user_id")
+        UserDefaults.standard.removeObject(forKey: "guest_id")
+        UserDefaults.standard.removeObject(forKey: "pending_apns_token")
+        clearSupabaseSessionFromKeychain()
+    }
+
+    /// Supabase Swift SDKが既定で利用するKeychainセッションを削除する
+    /// service: "supabase.gotrue.swift"
+    /// keys: "supabase.auth.token" (現行), "supabase.session" (旧互換)
+    private func clearSupabaseSessionFromKeychain() {
+        #if canImport(Security)
+        let keys = ["supabase.auth.token", "supabase.session"]
+        for key in keys {
+            let query: [String: Any] = [
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: "supabase.gotrue.swift",
+                kSecAttrAccount as String: key
+            ]
+            let status = SecItemDelete(query as CFDictionary)
+            if status == errSecSuccess || status == errSecItemNotFound {
+                print("🔐 Keychainセッション削除: \(key)")
+            } else {
+                print("⚠️ Keychainセッション削除失敗(\(key)): \(status)")
+            }
+        }
+        #endif
     }
     
     // MARK: - 認証成功後の統一初期化フロー
@@ -983,9 +1067,20 @@ class UserAccountManager: ObservableObject {
         // 1. プロファイル取得
         await fetchUserProfile(userId: authUserId)
 
-        // 2. プロファイルからpublic.usersのuser_idを取得してデバイス取得
-        if let userId = currentUser?.profile?.userId {
-            print("✅ プロファイル取得成功 - デバイス一覧を取得: \(userId)")
+        // 匿名ユーザーでプロファイルが未作成の場合は再作成を試行
+        if currentUser?.profile?.userId == nil,
+           (currentUser?.email == "anonymous" || currentUser?.email.isEmpty == true) {
+            print("⚠️ 匿名ユーザープロファイルが未取得のため、作成を再試行します")
+            await createAnonymousUserProfile(userId: authUserId)
+        }
+
+        // 2. デバイス取得（public.usersのuser_id優先、未取得時はauth user_idにフォールバック）
+        if let userId = effectiveUserId {
+            if currentUser?.profile?.userId != nil {
+                print("✅ プロファイル取得成功 - デバイス一覧を取得: \(userId)")
+            } else {
+                print("⚠️ プロファイル未取得のためauth user_idでフォールバック: \(userId)")
+            }
 
             // ユーザーIDをUserDefaultsに保存（APNsトークン保存で使用）
             UserDefaults.standard.set(userId, forKey: "current_user_id")
@@ -1018,7 +1113,14 @@ class UserAccountManager: ObservableObject {
                 print("✅ 既存デバイスあり（\(deviceManager.devices.count)件）")
             }
         } else {
-            print("❌ プロファイル取得に失敗 - デバイス初期化をスキップ")
+            print("⚠️ プロファイル取得に失敗 - デバイス初期化をスキップしてフォールバックに移行")
+
+            // プロファイル未取得でもUIが無限ローディングにならないようにフォールバック
+            await MainActor.run {
+                self.deviceManager.clearState()
+                self.deviceManager.state = .available([])
+            }
+            UserDefaults.standard.removeObject(forKey: "current_user_id")
         }
 
         print("🎯 認証成功後の初期化フロー完了")
@@ -1478,6 +1580,15 @@ class WebAuthenticationPresentationContextProvider: NSObject, ASWebAuthenticatio
 }
 
 extension UserAccountManager {
+    enum AnonymousUpgradeResult: Equatable {
+        case upgraded
+        case cancelled
+        case notAnonymousUser
+        case switchedToExistingGoogleAccount
+        case oauthFailed(String)
+        case unknownFailure
+    }
+
     // Direct implementation using ASWebAuthenticationSession (Alternative to Supabase SDK)
     // This ensures that the OAuth callback URL is properly received by the app
     func signInWithGoogleDirect() async {
@@ -1535,20 +1646,23 @@ extension UserAccountManager {
     // MARK: - Anonymous User Upgrade
 
     /// Upgrade anonymous user to Google account
-    /// Returns true if successful, false otherwise
-    func upgradeAnonymousToGoogle() async -> Bool {
+    /// Returns explicit result for all expected routes
+    func upgradeAnonymousToGoogle() async -> AnonymousUpgradeResult {
         // Check if current user is anonymous
         guard isAnonymousUser else {
             await MainActor.run {
                 authError = "現在のユーザーは匿名ユーザーではありません"
             }
-            return false
+            return .notAnonymousUser
         }
 
         await MainActor.run {
             isLoading = true
             authError = nil
         }
+
+        let originalAnonymousUser = currentUser
+        let originalAnonymousUserId = originalAnonymousUser?.id
 
         print("🔐 匿名ユーザーアップグレード開始 (Google)")
 
@@ -1568,17 +1682,22 @@ extension UserAccountManager {
                 ) { callbackURL, error in
                     Task {
                         if let error = error {
+                            let isCancelled = (error as NSError).code == ASWebAuthenticationSessionError.canceledLogin.rawValue
                             await MainActor.run {
                                 self.isLoading = false
                                 // User cancelled or error occurred
-                                if (error as NSError).code != ASWebAuthenticationSessionError.canceledLogin.rawValue {
+                                if !isCancelled {
                                     self.authError = "Google連携に失敗しました: \(error.localizedDescription)"
                                     print("❌ Google連携エラー: \(error)")
                                 } else {
                                     print("ℹ️ ユーザーがGoogle連携をキャンセルしました")
                                 }
                             }
-                            continuation.resume(returning: false)
+                            if isCancelled {
+                                continuation.resume(returning: .cancelled)
+                            } else {
+                                continuation.resume(returning: .oauthFailed(error.localizedDescription))
+                            }
                             return
                         }
 
@@ -1586,17 +1705,42 @@ extension UserAccountManager {
                             print("✅ OAuth callback received: \(callbackURL)")
                             await self.handleOAuthCallback(url: callbackURL)
 
+                            // Guard: if auth user id changed, this is not an in-place upgrade.
+                            // It means user signed in to another existing Google account.
+                            let switchedToAnotherAccount = await MainActor.run { () -> Bool in
+                                guard let originalId = originalAnonymousUserId,
+                                      let currentId = self.currentUser?.id else {
+                                    return false
+                                }
+                                return originalId != currentId
+                            }
+
+                            if switchedToAnotherAccount {
+                                print("⚠️ アップグレード中に別アカウントへ切り替わりました。アップグレードを失敗扱いにします。")
+
+                                _ = await self.restoreAnonymousSessionAfterUpgradeFailure(originalAnonymousUser)
+
+                                await MainActor.run {
+                                    self.isLoading = false
+                                    self.authError = "既存のGoogleアカウントがあるためアップグレードに失敗しました。ログインから入り直してください。"
+                                }
+                                continuation.resume(returning: .switchedToExistingGoogleAccount)
+                                return
+                            }
+
                             // Check if upgrade was successful
-                            let success = self.isAuthenticated && !self.isAnonymousUser
+                            let success = await MainActor.run {
+                                self.isAuthenticated && !self.isAnonymousUser
+                            }
                             await MainActor.run {
                                 self.isLoading = false
                             }
-                            continuation.resume(returning: success)
+                            continuation.resume(returning: success ? .upgraded : .unknownFailure)
                         } else {
                             await MainActor.run {
                                 self.isLoading = false
                             }
-                            continuation.resume(returning: false)
+                            continuation.resume(returning: .unknownFailure)
                         }
                     }
                 }
@@ -1607,6 +1751,41 @@ extension UserAccountManager {
 
                 print("✅ ASWebAuthenticationSession started for upgrade")
             }
+        }
+    }
+
+    // Restore original anonymous session when upgrade flow switched to another account.
+    private func restoreAnonymousSessionAfterUpgradeFailure(_ originalUser: SupabaseUser?) async -> Bool {
+        guard let originalUser else {
+            print("⚠️ 元の匿名ユーザー情報がないためセッション復元をスキップ")
+            return false
+        }
+
+        guard let refreshToken = originalUser.refreshToken else {
+            print("⚠️ 元の匿名ユーザーのrefresh tokenがないためセッション復元に失敗")
+            return false
+        }
+
+        do {
+            _ = try await supabase.auth.setSession(
+                accessToken: originalUser.accessToken,
+                refreshToken: refreshToken
+            )
+
+            await MainActor.run {
+                self.currentUser = originalUser
+                self.isAuthenticated = true
+                self.authState = .authenticated(userId: originalUser.id)
+                self.saveUserToDefaults(originalUser)
+            }
+
+            await fetchUserProfile(userId: originalUser.id)
+            await initializeAuthenticatedUser(authUserId: originalUser.id)
+            print("✅ 匿名セッションの復元に成功")
+            return true
+        } catch {
+            print("❌ 匿名セッション復元失敗: \(error)")
+            return false
         }
     }
 }

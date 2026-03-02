@@ -26,7 +26,7 @@ struct AccountSettingsView: View {
     var body: some View {
         NavigationView {
             List {
-                // 匿名ユーザー向けアカウント登録促進（匿名認証済みユーザーのみ表示）
+                // 匿名ユーザー向けアップグレード導線（匿名認証済みユーザーのみ表示）
                 if userAccountManager.isAnonymousUser {
                     Section {
                         Button(action: {
@@ -38,7 +38,7 @@ struct AccountSettingsView: View {
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
                                         .foregroundColor(.primary)
-                                    Text("Googleアカウントでログインすると、データがクラウドに保存され安全に管理できます")
+                                    Text("Googleアカウントで、現在のゲストデータをそのまま引き継げます")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
                                 }
@@ -53,7 +53,7 @@ struct AccountSettingsView: View {
                     } header: {
                         Text("ゲストモード")
                     } footer: {
-                        Text("現在はゲストモードでご利用中です。アカウント登録すると、データが失われる心配がなくなります。")
+                        Text("ゲストユーザーはログアウトすると、データが失われる可能性があります。通常アカウントへアップグレードして保護してください。")
                     }
                 }
 
@@ -233,7 +233,7 @@ struct AccountSettingsView: View {
     private func performDeleteAccount() async {
         isDeletingAccount = true
 
-        guard let userId = userAccountManager.currentUser?.profile?.userId else {
+        guard let userId = userAccountManager.effectiveUserId else {
             print("❌ ユーザーIDが取得できません")
             deleteAccountError = "ユーザー情報が見つかりません"
             isDeletingAccount = false

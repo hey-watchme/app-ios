@@ -185,7 +185,9 @@ struct FullScreenRecordingView: View {
     }
 
     private func registerDevice() async {
-        guard let userId = userAccountManager.currentUser?.profile?.userId else {
+        guard let userId = userAccountManager.effectiveUserId else {
+            store.presentError("ユーザー情報が取得できないため、デバイス連携に失敗しました")
+            print("❌ デバイス連携失敗: userIdを解決できません")
             return
         }
 
@@ -199,6 +201,7 @@ struct FullScreenRecordingView: View {
             }
         } catch {
             print("❌ デバイス登録エラー: \(error)")
+            store.presentError("デバイス連携に失敗しました: \(error.localizedDescription)")
         }
     }
 

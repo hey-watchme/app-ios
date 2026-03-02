@@ -99,10 +99,9 @@ struct ContentView: View {
                             }
                         }
 
-                        // デバイス未登録時のガイドオーバーレイ
-                        // 条件: 実際のデバイス（デモ以外）がない かつ 何も選択されていない場合のみ表示
-                        // TODO: 一旦非表示（デバイス紐付け中に一瞬表示される問題を回避）
-                        if false && !deviceManager.hasRealDevices && deviceManager.selectedDeviceID == nil {
+                        // デバイス未選択時のガイドオーバーレイ
+                        // 条件: 選択中デバイスがない場合は常に表示（行き止まり防止）
+                        if deviceManager.selectedDeviceID == nil {
                             DeviceSetupGuideOverlay(
                                 onSelectThisDevice: {
                                     print("🔘 DeviceSetupGuideOverlay: このデバイスで測定するボタン押下")
@@ -110,8 +109,14 @@ struct ContentView: View {
                                     showRecordingSheet = true
                                 },
                                 onViewSample: {
-                                    // サンプルデバイスを選択
-                                    deviceManager.selectDevice(DeviceManager.sampleDeviceID)
+                                    // DB連携済みサンプルデバイスを選択（ローカル疑似注入なし）
+                                    let selected = deviceManager.selectSampleDevice()
+                                    if !selected {
+                                        toastManager.showInfo(
+                                            title: "サンプルデバイスが未連携です",
+                                            subtitle: "このデバイスを連携するか、QRコードで追加してください"
+                                        )
+                                    }
                                 },
                                 onScanQR: {
                                     // 権限チェック
@@ -154,7 +159,7 @@ struct ContentView: View {
                             // 再度初期化処理を呼び出す
                             Task {
                                 // ✅ CLAUDE.md: public.usersのuser_idを使用
-                                if let userId = userAccountManager.currentUser?.profile?.userId {
+                                if let userId = userAccountManager.effectiveUserId {
                                     await deviceManager.loadDevices(for: userId)
                                 }
                             }
@@ -264,8 +269,9 @@ struct ContentView: View {
 
     // MARK: - このデバイスを登録する処理
     private func handleRegisterCurrentDevice() {
-        guard let userId = userAccountManager.currentUser?.profile?.userId else {
+        guard let userId = userAccountManager.effectiveUserId else {
             print("❌ ユーザー情報の取得に失敗しました")
+            toastManager.showError(title: "連携に失敗しました", subtitle: "ユーザー情報を取得できません")
             return
         }
 
@@ -280,6 +286,10 @@ struct ContentView: View {
                 print("✅ デバイス登録成功")
             } catch {
                 print("❌ デバイス登録エラー: \(error)")
+                toastManager.showError(
+                    title: "デバイス連携に失敗しました",
+                    subtitle: error.localizedDescription
+                )
             }
         }
     }
@@ -296,7 +306,7 @@ struct ContentView: View {
         // デバイスを追加
         do {
             // ✅ CLAUDE.md: public.usersのuser_idを使用
-            if let userId = userAccountManager.currentUser?.profile?.userId {
+            if let userId = userAccountManager.effectiveUserId {
                 try await deviceManager.addDeviceByQRCode(code, for: userId)
                 print("✅ デバイスを追加しました: \(code)")
             } else {

@@ -307,7 +307,7 @@ struct DeviceSettingsView: View {
         }
 
         do {
-            if let userId = userAccountManager.currentUser?.profile?.userId {
+            if let userId = userAccountManager.effectiveUserId {
                 try await deviceManager.addDeviceByQRCode(code, for: userId)
                 addedDeviceId = code
                 showSuccessAlert = true
