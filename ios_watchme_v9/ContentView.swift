@@ -99,9 +99,9 @@ struct ContentView: View {
                             }
                         }
 
-                        // デバイス未選択時のガイドオーバーレイ
-                        // 条件: 選択中デバイスがない場合は常に表示（行き止まり防止）
-                        if deviceManager.selectedDeviceID == nil {
+                        // 実デバイス未連携時のガイドオーバーレイ
+                        // 条件: サンプルデバイスを除いた実デバイスが0件の場合に表示
+                        if !deviceManager.hasRealDevices {
                             DeviceSetupGuideOverlay(
                                 onSelectThisDevice: {
                                     print("🔘 DeviceSetupGuideOverlay: このデバイスで測定するボタン押下")

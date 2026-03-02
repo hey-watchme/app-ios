@@ -21,7 +21,7 @@ struct HeaderView: View {
     
     var body: some View {
         HStack {
-            // 観測対象または選択中デバイス表示（デバイス設定画面へのリンク）
+            // 分析対象または選択中デバイス表示（デバイス設定画面へのリンク）
             NavigationLink(destination: 
                 DeviceSettingsView()
                     .environmentObject(userAccountManager)
@@ -95,23 +95,23 @@ struct HeaderView: View {
         }
     }
     
-    // 現在の観測対象またはデバイス情報を表示するView
+    // 現在の分析対象またはデバイス情報を表示するView
     @ViewBuilder
     private var currentTargetView: some View {
         if let subject = deviceManager.selectedSubject {
-            // 観測対象が設定されている場合
+            // 分析対象が設定されている場合
             HStack(spacing: 8) {
                 // アバター表示（SSOT: Subject.avatarUrl を渡す）
                 AvatarView(type: .subject, id: subject.subjectId, size: 32, avatarUrl: subject.avatarUrl)
                     .environmentObject(dataManager)
 
-                // 観測対象名（「さん」付き）
+                // 分析対象名（「さん」付き）
                 if let name = subject.name, !name.isEmpty {
                     Text("\(name)さん")
                         .font(.subheadline)
                         .foregroundColor(.primary)
                 } else {
-                    Text("観測対象")
+                    Text("分析対象")
                         .font(.subheadline)
                         .foregroundColor(Color.safeColor("BorderLight"))
                 }
@@ -136,7 +136,7 @@ struct HeaderView: View {
                         .foregroundColor(.black)
                 }
             } else {
-                // 通常のデバイス選択中（観測対象未設定）
+                // 通常のデバイス選択中（分析対象未設定）
                 HStack(spacing: 8) {
                     ZStack {
                         Circle()

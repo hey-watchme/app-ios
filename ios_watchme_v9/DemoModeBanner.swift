@@ -80,7 +80,7 @@ struct DemoModeInfoSheet: View {
                             .font(.system(size: 30))
                             .fontWeight(.bold)
 
-                        Text("このデモでは、架空の観測対象の分析結果を見ることができます。「オブザーバー」と呼ばれる音声分析デバイスから定期的にデータが送られてくるので、リアルタイムで状態をチェックすることが可能です。WatchMeを通じて何が分かるのか、体験してみてください。")
+                        Text("このデモでは、架空の分析対象の分析結果を見ることができます。「オブザーバー」と呼ばれる音声分析デバイスから定期的にデータが送られてくるので、リアルタイムで状態をチェックすることが可能です。WatchMeを通じて何が分かるのか、体験してみてください。")
                             .font(.system(size: 16))
                             .foregroundColor(.primary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -130,8 +130,14 @@ struct DemoModeInfoSheet: View {
 
                     // デモ終了ボタン
                     Button(action: {
-                        // デモデバイスの選択を解除
-                        deviceManager.selectDevice(nil)
+                        // 実デバイスがあれば優先選択し、なければ未選択に戻す
+                        if let ownerRealDevice = deviceManager.realDevices.first(where: { $0.role == "owner" }) {
+                            deviceManager.selectDevice(ownerRealDevice.device_id)
+                        } else if let firstRealDevice = deviceManager.realDevices.first {
+                            deviceManager.selectDevice(firstRealDevice.device_id)
+                        } else {
+                            deviceManager.selectDevice(nil)
+                        }
                         // シートを閉じる
                         dismiss()
                     }) {

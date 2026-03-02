@@ -2,7 +2,7 @@
 //  SubjectComment.swift
 //  ios_watchme_v9
 //
-//  観測対象のコメントモデル
+//  分析対象のコメントモデル
 //
 
 import Foundation

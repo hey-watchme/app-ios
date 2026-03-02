@@ -97,7 +97,7 @@ struct MainAppView: View {
     enum FooterTab {
         case home  // ホーム
         case report  // レポート
-        case subject  // 観測対象
+        case subject  // 分析対象
     }
 
     var body: some View {
@@ -320,6 +320,11 @@ struct MainAppView: View {
 // カスタムフッターナビゲーション
 struct CustomFooterNavigation: View {
     @Binding var selectedTab: MainAppView.FooterTab
+    @EnvironmentObject var deviceManager: DeviceManager
+
+    private var isDeviceSelected: Bool {
+        deviceManager.selectedDeviceID != nil
+    }
 
     var body: some View {
         HStack(spacing: 0) {
@@ -334,8 +339,9 @@ struct CustomFooterNavigation: View {
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(selectedTab == .home ? Color.primary : Color.secondary)
+                .foregroundColor(isDeviceSelected ? (selectedTab == .home ? Color.primary : Color.secondary) : Color.gray)
             }
+            .disabled(!isDeviceSelected)
 
             // レポートタブ
             Button(action: {
@@ -348,25 +354,28 @@ struct CustomFooterNavigation: View {
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(selectedTab == .report ? Color.primary : Color.secondary)
+                .foregroundColor(isDeviceSelected ? (selectedTab == .report ? Color.primary : Color.secondary) : Color.gray)
             }
+            .disabled(!isDeviceSelected)
 
-            // 観測対象タブ
+            // 分析対象タブ
             Button(action: {
                 selectedTab = .subject
             }) {
                 VStack(spacing: 4) {
                     Image(systemName: selectedTab == .subject ? "person.fill" : "person")
                         .font(.system(size: 24))
-                    Text("観測対象")
+                    Text("分析対象")
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(selectedTab == .subject ? Color.primary : Color.secondary)
+                .foregroundColor(isDeviceSelected ? (selectedTab == .subject ? Color.primary : Color.secondary) : Color.gray)
             }
+            .disabled(!isDeviceSelected)
         }
         .padding(.top, 8)
         .padding(.bottom, 20) // セーフエリアの考慮
+        .opacity(isDeviceSelected ? 1.0 : 0.65)
         .background(
             Color(.systemBackground)
                 .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: -1)
@@ -468,4 +477,3 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         )
     }
 }
-

@@ -285,18 +285,20 @@ class DeviceManager: ObservableObject {
             return saved
         }
 
-        // 2. Prefer owner device
-        if let owner = devices.first(where: { $0.role == "owner" }) {
+        // 2. Prefer owner real device (exclude demo)
+        if let owner = devices.first(where: { $0.role == "owner" && !$0.isDemo }) {
             print("📱 Selected owner device: \(owner.device_id)")
             return owner.device_id
         }
 
-        // 3. Use first device
-        if let first = devices.first {
-            print("📱 Selected first device: \(first.device_id)")
+        // 3. Use first real device (exclude demo)
+        if let first = devices.first(where: { !$0.isDemo }) {
+            print("📱 Selected first real device: \(first.device_id)")
             return first.device_id
         }
 
+        // 4. No real devices available
+        print("📱 No real devices available. Selection remains nil.")
         return nil
     }
     
@@ -682,9 +684,9 @@ class DeviceManager: ObservableObject {
                     selectedDeviceID = nil
                     UserDefaults.standard.removeObject(forKey: selectedDeviceIDKey)
 
-                    // 別のデバイスがある場合は最初のデバイスを選択
-                    if let firstDevice = updatedDevices.first {
-                        selectDevice(firstDevice.device_id)
+                    // 別の実デバイスがある場合のみ自動選択
+                    if let fallbackDeviceId = determineDefaultDevice(from: updatedDevices) {
+                        selectDevice(fallbackDeviceId)
                     }
                 }
             }

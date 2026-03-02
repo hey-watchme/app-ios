@@ -8,14 +8,14 @@ WatchMe iOSアプリのアーキテクチャ、データベース設計、API仕
 
 ### 設計思想：ライフログツール
 
-本アプリケーションは**観測対象の時間軸を正確に記録する**ことを最重要視しています。
+本アプリケーションは**分析対象の時間軸を正確に記録する**ことを最重要視しています。
 
 #### 基本原則
 
-1. **デバイス = 観測対象の時間軸**
-   - デバイスは特定の人（観測対象）の生活を記録
+1. **デバイス = 分析対象の時間軸**
+   - デバイスは特定の人（分析対象）の生活を記録
    - デバイスが設置されている場所のタイムゾーンが基準
-   - 観測対象が東京にいれば、朝7時の活動は「朝7時」として記録
+   - 分析対象が東京にいれば、朝7時の活動は「朝7時」として記録
 
 2. **アカウント所有者の位置は無関係**
    - アカウント（ログインユーザー）は観測データを閲覧するだけ
@@ -218,7 +218,7 @@ CREATE POLICY "Users can insert their own device associations" ON user_devices
     FOR INSERT WITH CHECK (auth.uid() = user_id);
 ```
 
-#### subjects（観測対象情報）
+#### subjects（分析対象情報）
 
 ```sql
 CREATE TABLE subjects (
@@ -234,7 +234,7 @@ CREATE TABLE subjects (
 );
 ```
 
-#### subject_comments（観測対象へのコメント）
+#### subject_comments（分析対象へのコメント）
 
 ```sql
 CREATE TABLE subject_comments (

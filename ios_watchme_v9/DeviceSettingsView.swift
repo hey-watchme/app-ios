@@ -211,14 +211,9 @@ struct DeviceSettingsView: View {
                     isSelected: device.device_id == deviceManager.selectedDeviceID,
                     subject: device.subject,
                     onSelect: {
-                        if deviceManager.selectedDeviceID == device.device_id {
-                            // Already selected -> deselect (keep screen open)
-                            deviceManager.selectDevice(nil)
-                        } else {
-                            // Not selected -> select and close screen
-                            deviceManager.selectDevice(device.device_id)
-                            dismiss()
-                        }
+                        // ラジオボタン方式: 常に1つ選択状態を維持（解除はしない）
+                        deviceManager.selectDevice(device.device_id)
+                        dismiss()
                     },
                     onEditSubject: { subject in
                         // Always allow navigation (view/edit depends on device permissions)

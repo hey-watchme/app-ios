@@ -1,4 +1,4 @@
-# 観測対象の分析機能
+# 分析対象の分析機能
 
 最終更新: 2025-12-04
 
@@ -6,7 +6,7 @@
 
 ## 📋 概要
 
-観測対象ページでは、音声メタ情報から推定される認知スタイル・神経機能・知性の形式を視覚化するための分析機能を将来的に追加予定です。
+分析対象ページでは、音声メタ情報から推定される認知スタイル・神経機能・知性の形式を視覚化するための分析機能を将来的に追加予定です。
 
 **現在のステータス**: 一旦非表示（データベース構造のみ実装済み）
 
@@ -98,7 +98,7 @@
 
 ### 実装済み（コメントアウト中）
 - `ios_watchme_v9/ios_watchme_v9/Models/Subject.swift` - データモデル、Enum定義
-- `ios_watchme_v9/ios_watchme_v9/SubjectTabView.swift` - 観測対象ページUI
+- `ios_watchme_v9/ios_watchme_v9/SubjectTabView.swift` - 分析対象ページUI
 - `ios_watchme_v9/ios_watchme_v9/SubjectRegistrationView.swift` - プロフィール編集画面
 - `ios_watchme_v9/ios_watchme_v9/SupabaseDataManager.swift` - データ管理
 

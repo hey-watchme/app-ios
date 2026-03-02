@@ -38,7 +38,7 @@ class SlotTimeUtility {
     // MARK: - 日付文字列を取得（YYYY-MM-DD形式）
     static func getDateString(from date: Date, timezone: TimeZone? = nil) -> String {
         // デバイスのローカルタイムゾーンを使用します
-        // これにより、観測対象の生活時間に基づいたデータ管理が可能になります
+        // これにより、分析対象の生活時間に基づいたデータ管理が可能になります
         let dateFormatter = DateFormatter()
         dateFormatter.dateFormat = "yyyy-MM-dd"
         // タイムゾーンが指定されていればそれを使用、なければ現在のタイムゾーン

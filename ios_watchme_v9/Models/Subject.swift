@@ -52,7 +52,7 @@ struct Subject: Codable, Equatable {
         return parts.isEmpty ? nil : parts.joined(separator:"・")
     }
     
-    // 観測対象の情報が設定されているかどうか
+    // 分析対象の情報が設定されているかどうか
     var hasMetadata: Bool {
         return name != nil || age != nil || gender != nil
     }

@@ -430,7 +430,7 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Subject Management Methods
 
-    /// 新しい観測対象を登録
+    /// 新しい分析対象を登録
     func registerSubject(
         name: String,
         age: Int?,
@@ -825,7 +825,7 @@ class SupabaseDataManager: ObservableObject {
         }
     }
     
-    /// 観測対象を削除
+    /// 分析対象を削除
     func deleteSubject(subjectId: String, deviceId: String) async throws {
         print("🗑️ Deleting subject: \(subjectId) from device: \(deviceId)")
 
@@ -854,7 +854,7 @@ class SupabaseDataManager: ObservableObject {
         print("✅ Subject deleted successfully: \(subjectId)")
     }
 
-    /// 観測対象を更新
+    /// 分析対象を更新
     func updateSubject(
         subjectId: String,
         deviceId: String,

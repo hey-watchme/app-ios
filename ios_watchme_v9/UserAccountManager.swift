@@ -1722,7 +1722,8 @@ extension UserAccountManager {
 
                                 await MainActor.run {
                                     self.isLoading = false
-                                    self.authError = "既存のGoogleアカウントがあるためアップグレードに失敗しました。ログインから入り直してください。"
+                                    // この結果は upgradeAnonymousToGoogle() の戻り値で呼び出し元UIが通知する
+                                    // (グローバルauthErrorを使うと通知が二重表示される)
                                 }
                                 continuation.resume(returning: .switchedToExistingGoogleAccount)
                                 return

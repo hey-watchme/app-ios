@@ -16,7 +16,7 @@ struct SubjectRegistrationView: View {
     
     let deviceID: String
     @Binding var isPresented: Bool  // 互換性のため残す
-    let editingSubject: Subject? // 編集対象の観測対象（nilの場合は新規登録）
+    let editingSubject: Subject? // 編集対象の分析対象（nilの場合は新規登録）
     
     // フォーム入力項目
     @State private var name: String = ""
@@ -109,8 +109,8 @@ struct SubjectRegistrationView: View {
                 .padding(.top, 20)
             }
             .navigationTitle(
-                isViewOnly ? "観測対象の詳細" :
-                isEditing ? "観測対象を編集" : "観測対象を追加"
+                isViewOnly ? "分析対象の詳細" :
+                isEditing ? "分析対象を編集" : "分析対象を追加"
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -175,16 +175,16 @@ struct SubjectRegistrationView: View {
                     dismiss()  // iOS 15+の推奨パターン
                 }
             } message: {
-                Text(isEditing ? "観測対象の更新が完了しました。" : "観測対象の登録が完了しました。")
+                Text(isEditing ? "分析対象の更新が完了しました。" : "分析対象の登録が完了しました。")
             }
             .alert("削除完了", isPresented: $showingDeleteSuccessAlert) {
                 Button("OK") {
                     dismiss()
                 }
             } message: {
-                Text("観測対象を削除しました。")
+                Text("分析対象を削除しました。")
             }
-            .alert("観測対象を削除", isPresented: $showingDeleteConfirmation) {
+            .alert("分析対象を削除", isPresented: $showingDeleteConfirmation) {
                 Button("キャンセル", role: .cancel) { }
                 Button("削除", role: .destructive) {
                     Task {
@@ -192,7 +192,7 @@ struct SubjectRegistrationView: View {
                     }
                 }
             } message: {
-                Text("この観測対象を完全に削除します。この操作は取り消せません。")
+                Text("この分析対象を完全に削除します。この操作は取り消せません。")
             }
             .alert("変更内容を破棄しますか？", isPresented: $showingDiscardAlert) {
                 Button("キャンセル", role: .cancel) { }
@@ -517,7 +517,7 @@ struct SubjectRegistrationView: View {
             }) {
                 HStack {
                     Image(systemName: "trash")
-                    Text("観測対象を削除")
+                    Text("分析対象を削除")
                 }
                 .font(.subheadline)
                 .foregroundColor(.white)
@@ -527,7 +527,7 @@ struct SubjectRegistrationView: View {
                 .cornerRadius(8)
             }
 
-            Text("この観測対象に関連する全てのデータが削除されます。この操作は取り消せません。")
+            Text("この分析対象に関連する全てのデータが削除されます。この操作は取り消せません。")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -588,7 +588,7 @@ struct SubjectRegistrationView: View {
                 return
             }
             
-            // 観測対象を登録（アバターはAvatarPickerView経由で別途アップロード）
+            // 分析対象を登録（アバターはAvatarPickerView経由で別途アップロード）
             let subjectId = try await dataManager.registerSubject(
                 name: trimmedName,
                 age: ageInt,
@@ -652,7 +652,7 @@ struct SubjectRegistrationView: View {
                 }
             }
             
-            // 観測対象を更新（アバターはAvatarPickerView経由で別途アップロード）
+            // 分析対象を更新（アバターはAvatarPickerView経由で別途アップロード）
             try await dataManager.updateSubject(
                 subjectId: subject.subjectId,
                 deviceId: deviceID,
@@ -699,7 +699,7 @@ struct SubjectRegistrationView: View {
         }
 
         do {
-            // 観測対象を削除
+            // 分析対象を削除
             try await dataManager.deleteSubject(subjectId: subject.subjectId, deviceId: deviceID)
 
             // DeviceManagerのデータを強制的に再取得

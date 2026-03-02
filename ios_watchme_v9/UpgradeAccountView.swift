@@ -15,6 +15,13 @@ struct UpgradeAccountView: View {
 
     @State private var isProcessing = false
     @State private var showSignUp = false
+    @State private var errorAnnouncement: ErrorAnnouncement?
+
+    private struct ErrorAnnouncement: Identifiable {
+        let id = UUID()
+        let title: String
+        let message: String
+    }
 
     var body: some View {
         NavigationView {
@@ -144,6 +151,16 @@ struct UpgradeAccountView: View {
                     .environmentObject(userAccountManager)
             }
         }
+        .overlay {
+            ToastOverlay(toastManager: toastManager)
+        }
+        .alert(item: $errorAnnouncement) { item in
+            Alert(
+                title: Text(item.title),
+                message: Text(item.message),
+                dismissButton: .default(Text("OK"))
+            )
+        }
     }
 
     // MARK: - Actions
@@ -170,28 +187,27 @@ struct UpgradeAccountView: View {
                         subtitle: "Google認証をキャンセルしました"
                     )
                 case .notAnonymousUser:
-                    toastManager.showError(
-                        title: "アップグレードエラー",
-                        subtitle: "現在のユーザーは匿名ユーザーではありません"
-                    )
+                    showUpgradeError("現在のユーザーは匿名ユーザーではありません")
                 case .switchedToExistingGoogleAccount:
-                    toastManager.showError(
-                        title: "アップグレードエラー",
-                        subtitle: "既存のGoogleアカウントがあるためアップグレードに失敗しました。ログインから入り直してください。"
-                    )
+                    showUpgradeError("既存のGoogleアカウントがあるためアップグレードに失敗しました。ログインから入り直してください。")
                 case .oauthFailed(let message):
-                    toastManager.showError(
-                        title: "アップグレードエラー",
-                        subtitle: "Google連携に失敗しました: \(message)"
-                    )
+                    showUpgradeError("Google連携に失敗しました: \(message)")
                 case .unknownFailure:
-                    toastManager.showError(
-                        title: "アップグレードエラー",
-                        subtitle: "アップグレードに失敗しました。ログインから入り直してください。"
-                    )
+                    showUpgradeError("アップグレードに失敗しました。ログインから入り直してください。")
                 }
             }
         }
+    }
+
+    private func showUpgradeError(_ message: String) {
+        toastManager.showError(
+            title: "アップグレードエラー",
+            subtitle: message
+        )
+        errorAnnouncement = ErrorAnnouncement(
+            title: "アップグレードできませんでした",
+            message: message
+        )
     }
 }
 

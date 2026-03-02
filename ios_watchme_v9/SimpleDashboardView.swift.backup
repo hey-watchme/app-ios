@@ -37,7 +37,7 @@ struct SimpleDashboardView: View {
                     emotionGraphCard
                         .padding(.horizontal)
                     
-                    // 観測対象カード
+                    // 分析対象カード
                     Group {
                         if let subject = subject {
                             observationTargetCard(subject)
@@ -190,7 +190,7 @@ struct SimpleDashboardView: View {
     
     private func observationTargetCard(_ subject: Subject) -> some View {
         ObservationTargetCard(
-            title: "観測対象"
+            title: "分析対象"
         ) {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 16) {
@@ -255,14 +255,14 @@ struct SimpleDashboardView: View {
     
     private func noObservationTargetCard() -> some View {
         ObservationTargetCard(
-            title: "観測対象"
+            title: "分析対象"
         ) {
             VStack(spacing: 12) {
                 Image(systemName: "person.crop.circle.badge.questionmark")
                     .font(.system(size: 48))
                     .foregroundColor(.white.opacity(0.7))
                 
-                Text("観測対象が未設定です")
+                Text("分析対象が未設定です")
                     .font(.subheadline)
                     .foregroundColor(.white.opacity(0.9))
             }

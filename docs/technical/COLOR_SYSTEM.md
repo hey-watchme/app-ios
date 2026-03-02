@@ -57,7 +57,7 @@ WatchMeアプリのデザインは、**Apple風のミニマル・フレンドリ
 
 | カラー名 | 色 | 用途 | iOS定義 |
 |---------|---|------|--------|
-| **SuccessColor** | 緑 | 成功メッセージ、選択中の状態（チェックマーク） | `Color.safeColor("SuccessColor")` |
+| **SuccessColor** | 緑 | 成功メッセージ（選択UIはAppAccentColorを使用） | `Color.safeColor("SuccessColor")` |
 | **ErrorColor** | 赤 | エラー表示、録音ボタン、重要な通知 | `Color.safeColor("ErrorColor")` |
 | **WarningColor** | オレンジ | 警告メッセージ | `Color.safeColor("WarningColor")` |
 | **InfoColor** | 青 | 情報メッセージ | `Color.safeColor("InfoColor")` |
@@ -70,14 +70,14 @@ WatchMeアプリのデザインは、**Apple風のミニマル・フレンドリ
 
 #### **選択中のデバイスカード**
 - **背景**: 白 (`Color.white`)
-- **トグルボタン**: 緑のチェックマーク (`Color.safeColor("SuccessColor")`)
+- **ラジオボタン**: AppAccentColor (`Color.safeColor("AppAccentColor")`)
 - **テキスト**: 黒 (`.primary`)
 - **アイコン**: 黒
 - **枠線**: なし
 
 #### **非選択のデバイスカード**
 - **背景**: うっすらグレー (`Color.gray.opacity(0.1)`)
-- **トグルボタン**: グレーの丸 (`Color.gray.opacity(0.3)`)
+- **ラジオボタン**: グレー (`Color.secondary`)
 - **テキスト**: 黒 (`.primary`)
 - **アイコン**: 黒
 - **枠線**: 薄いグレー

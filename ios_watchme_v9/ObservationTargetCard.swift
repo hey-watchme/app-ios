@@ -2,7 +2,7 @@
 //  ObservationTargetCard.swift
 //  ios_watchme_v9
 //
-//  観測対象専用カードコンポーネント - 紫背景に白文字
+//  分析対象専用カードコンポーネント - 紫背景に白文字
 //
 
 import SwiftUI
@@ -66,7 +66,7 @@ struct ObservationTargetCard<Content: View>: View {
 struct ObservationTargetCard_Previews: PreviewProvider {
     static var previews: some View {
         ObservationTargetCard(
-            title: "観測対象"
+            title: "分析対象"
         ) {
             Text("コンテンツ")
                 .foregroundStyle(.white)

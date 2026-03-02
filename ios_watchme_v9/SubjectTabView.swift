@@ -2,7 +2,7 @@
 //  SubjectTabView.swift
 //  ios_watchme_v9
 //
-//  観測対象タブ - 観測対象の情報表示・編集画面
+//  分析対象タブ - 分析対象の情報表示・編集画面
 //
 
 import SwiftUI
@@ -21,7 +21,7 @@ struct SubjectTabView: View {
     var body: some View {
         ZStack(alignment: .top) {
             if let subject = deviceManager.selectedSubject {
-                // 観測対象が設定されている場合
+                // 分析対象が設定されている場合
                 ScrollView {
                     VStack(spacing: 0) {
                         // 地図ヘッダー（見切れる形で表示）
@@ -143,15 +143,15 @@ struct SubjectTabView: View {
                     }
                 }
             } else {
-                // 観測対象が未設定の場合
+                // 分析対象が未設定の場合
                 VStack(spacing: 20) {
                     Image(systemName: "person.crop.circle.badge.plus")
                         .font(.system(size: 80))
                         .foregroundColor(.gray)
-                    Text("観測対象が未設定です")
+                    Text("未登録")
                         .font(.title3)
                         .foregroundColor(.primary)
-                    Text("このデバイスで観測する人物を登録してください")
+                    Text("選択中のデバイス（\(currentDeviceTypeLabel)）で音声分析している対象者を登録しておくことで、分析の精度が向上します。年齢、性別、プロフィールの情報等が分析の前提として活用されます。")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -163,7 +163,7 @@ struct SubjectTabView: View {
                     }) {
                         HStack {
                             Image(systemName: "plus.circle.fill")
-                            Text("観測対象を登録")
+                            Text("分析対象を登録")
                         }
                         .font(.headline)
                         .foregroundColor(.white)
@@ -234,6 +234,28 @@ struct SubjectTabView: View {
         }
     }
 
+    private var currentDeviceTypeLabel: String {
+        guard let selectedDeviceID = deviceManager.selectedDeviceID,
+              let device = deviceManager.devices.first(where: { $0.device_id == selectedDeviceID }) else {
+            return "未選択"
+        }
+
+        switch device.device_type.lowercased() {
+        case "ios":
+            return "iPhone"
+        case "observer":
+            return "オブザーバー"
+        case "android":
+            return "Android"
+        case "web":
+            return "Webブラウザ"
+        case "demo":
+            return "デモデバイス"
+        default:
+            return device.device_type
+        }
+    }
+
     // MARK: - 認知タイプセクション
     private var cognitiveTypeSection: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -248,7 +270,7 @@ struct SubjectTabView: View {
             } else {
                 // タイプ未選択 - カルーセル + 選択ボタン
                 VStack(spacing: 16) {
-                    Text("観測対象のタイプを選択")
+                    Text("分析対象のタイプを選択")
                         .font(.headline)
                         .foregroundColor(.secondary)
 

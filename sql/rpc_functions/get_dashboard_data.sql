@@ -70,7 +70,7 @@ BEGIN
          LIMIT 1) AS dashboard_summary,
          
         -- subject_comments: コメントデータを取得
-        -- 観測対象に紐づくコメントを取得し、ユーザー情報も含める
+        -- 分析対象に紐づくコメントを取得し、ユーザー情報も含める
         -- 重要: 日付でフィルタリングして、選択された日付のコメントのみ取得
         (SELECT jsonb_agg(
             jsonb_build_object(

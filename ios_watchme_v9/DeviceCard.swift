@@ -32,31 +32,19 @@ struct DeviceCard: View {
                 )
 
             VStack(spacing: 16) {
-                // トグルスイッチと選択状態 - 行全体をクリック可能に
+                // ラジオボタンと選択状態 - 行全体をクリック可能に
                 Button(action: onSelect) {
                     HStack {
-                        Text(isSelected ? "選択中のデバイス" : "このデバイスを選択する")
+                        Text(isSelected ? "選択中のデバイス" : "このデバイスを選択")
                             .font(.body)
                             .fontWeight(isSelected ? .semibold : .regular)
                             .foregroundColor(.primary)
 
                         Spacer()
 
-                        // トグルスイッチUI
-                        ZStack {
-                            // トラック（溝の部分）
-                            Capsule()
-                                .fill(isSelected ? Color.green : Color.gray.opacity(0.3))
-                                .frame(width: 51, height: 31)
-
-                            // サム（つまみ部分）
-                            Circle()
-                                .fill(Color.white)
-                                .frame(width: 27, height: 27)
-                                .offset(x: isSelected ? 11 : -11)
-                                .shadow(color: .black.opacity(0.2), radius: 2, x: 0, y: 2)
-                        }
-                        .animation(.easeInOut(duration: 0.2), value: isSelected)
+                        Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
+                            .font(.system(size: 22, weight: .regular))
+                            .foregroundColor(isSelected ? Color.safeColor("AppAccentColor") : Color.secondary)
                     }
                     .contentShape(Rectangle())
                 }
@@ -132,7 +120,7 @@ struct DeviceCard: View {
                     Divider()
                         .background(Color.gray.opacity(0.3))
 
-                    // 観測対象情報（右端に>カーソル）- 行全体をクリック可能に
+                    // 分析対象情報（右端に>カーソル）- 行全体をクリック可能に
                     if let subject = subject, let onEditSubject = onEditSubject {
                         Button(action: { onEditSubject(subject) }) {
                             HStack(spacing: 12) {
@@ -146,7 +134,7 @@ struct DeviceCard: View {
                                 }
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("観測対象")
+                                    Text("分析対象")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
 
@@ -178,7 +166,7 @@ struct DeviceCard: View {
                                     )
 
                                 VStack(alignment: .leading, spacing: 2) {
-                                    Text("観測対象")
+                                    Text("分析対象")
                                         .font(.caption)
                                         .foregroundColor(.secondary)
 
@@ -209,7 +197,7 @@ struct DeviceCard: View {
                                 )
 
                             VStack(alignment: .leading, spacing: 2) {
-                                Text("観測対象")
+                                Text("分析対象")
                                     .font(.caption)
                                     .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
 

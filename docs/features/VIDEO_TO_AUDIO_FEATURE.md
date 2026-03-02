@@ -86,7 +86,7 @@ if let phAsset = PHAsset.fetchAssets(withLocalIdentifiers: [assetIdentifier], op
 
 **現状の2つのモード**:
 1. **録音デバイスモード**（コア機能）
-   - 観測対象デバイスのダッシュボード
+   - 分析対象デバイスのダッシュボード
    - リアルタイム更新、プッシュ通知
    - 継続的なモニタリング
 
