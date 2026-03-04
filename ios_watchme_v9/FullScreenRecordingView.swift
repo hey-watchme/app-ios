@@ -67,50 +67,52 @@ struct FullScreenRecordingView: View {
                 VStack(spacing: 20) {
                     // ビデオ選択ボタン（録音していない時のみ表示）
                     if !store.state.isRecording {
-                        Button(action: {
-                            showVideoPicker = true
-                        }) {
-                            HStack {
-                                Image(systemName: "photo.on.rectangle")
-                                    .font(.system(size: 20, weight: .medium))
-                                Text("カメラロールの動画の音声からも分析できます")
-                                    .font(.system(size: 16, weight: .medium))
-                            }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 14)
-                            .background(
-                                Capsule()
-                                    .fill(Color.white.opacity(0.2))
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                    )
-                            )
-                        }
-                        .transition(.scale.combined(with: .opacity))
+                        VStack(spacing: 12) {
+                            HStack(spacing: 12) {
+                                Button(action: {
+                                    showVideoPicker = true
+                                }) {
+                                    Text("カメラロール")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 14)
+                                        .background(
+                                            Capsule()
+                                                .fill(Color.white.opacity(0.2))
+                                                .overlay(
+                                                    Capsule()
+                                                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                                )
+                                        )
+                                }
 
-                        Button(action: {
-                            showAudioFilePicker = true
-                        }) {
-                            HStack {
-                                Image(systemName: "folder.fill")
-                                    .font(.system(size: 20, weight: .medium))
-                                Text("ファイルの音声からも分析できます")
-                                    .font(.system(size: 16, weight: .medium))
+                                Button(action: {
+                                    showAudioFilePicker = true
+                                }) {
+                                    Text("ファイル")
+                                        .font(.system(size: 16, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .padding(.vertical, 14)
+                                        .background(
+                                            Capsule()
+                                                .fill(Color.white.opacity(0.2))
+                                                .overlay(
+                                                    Capsule()
+                                                        .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                                )
+                                        )
+                                }
                             }
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 24)
-                            .padding(.vertical, 14)
-                            .background(
-                                Capsule()
-                                    .fill(Color.white.opacity(0.2))
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                                    )
-                            )
+
+                            Text("カメラロールの撮影動画から音声を抽出して分析できます。また、ファイルにある音声ファイルも分析できます。")
+                                .font(.footnote)
+                                .foregroundColor(.white.opacity(0.85))
+                                .multilineTextAlignment(.center)
+                                .padding(.horizontal, 8)
                         }
+                        .padding(.horizontal, 24)
                         .transition(.scale.combined(with: .opacity))
                     }
 
