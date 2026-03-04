@@ -1,7 +1,39 @@
 # 録音機能 仕様書
 
-**最終更新**: 2025-10-30
+**最終更新**: 2026-03-05
 **ステータス**: ✅ **UI刷新完了・安定稼働**
+
+---
+
+## 🆕 2026-03-05 追記（入力ソース拡張）
+
+録音モーダルからの分析入力経路を拡張し、現在は次の3パターンをサポートしています。
+
+1. **手動録音（マイク）**
+2. **カメラロール動画から音声抽出**
+3. **Filesの音声ファイル選択（WAV / M4A / MP3）**
+
+### 追加仕様（Files音声選択）
+
+- UI: `FullScreenRecordingView` で `カメラロール` / `ファイル` の2ボタンを表示
+- Picker: `AudioFilePickerView` で `fileImporter`（`UTType.audio`）を使用
+- 対応形式: `WAV / M4A / MP3`
+- 変換: MP3はアプリ内でM4Aへ変換してからアップロード
+- 共通処理: 既存のアップロードフロー（`UploaderService`）に統合
+
+### iOS制約（重要）
+
+- アプリは端末全体を自動走査できません
+- ユーザーがPickerで選択したファイルのみアクセス可能です
+- 「このiPhone内 > ダウンロード」配下はFiles UIから選択可能です
+
+### 関連ファイル
+
+- `ios_watchme_v9/FullScreenRecordingView.swift`
+- `ios_watchme_v9/AudioFilePickerView.swift`
+- `ios_watchme_v9/VideoPickerView.swift`
+- `ios_watchme_v9/VideoPicker.swift`
+- `ios_watchme_v9/Services/UploaderService.swift`
 
 ---
 
@@ -232,4 +264,3 @@ spikeRandomFactor = 0.6 + sin(spikeIndex * 2.718 + phase * 0.05) * 0.4 + 0.4
 | 録音開始遅延 | 3～8秒 | **即座（0秒）** |
 | アップロード | 100%失敗 | **正常に成功** |
 | エラーハンドリング | 不完全 | **堅牢** |
-

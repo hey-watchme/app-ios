@@ -20,6 +20,7 @@ WatchMeプラットフォームのiOSアプリケーション。
 > - [AUTHENTICATION.md](./docs/features/AUTHENTICATION.md) - 認証システム詳細（アカウント削除含む）
 > - [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/features/PUSH_NOTIFICATION_ARCHITECTURE.md) - プッシュ通知
 > - [RECORDING_SPECIFICATION.md](./docs/features/RECORDING_SPECIFICATION.md) - 録音仕様
+> - [VIDEO_TO_AUDIO_FEATURE.md](./docs/features/VIDEO_TO_AUDIO_FEATURE.md) - 動画音声抽出機能
 >
 > **技術仕様**:
 > - [TECHNICAL.md](./docs/technical/TECHNICAL.md) - アーキテクチャ・データベース設計
@@ -59,6 +60,7 @@ WatchMeプラットフォームのiOSアプリケーション。
 | 🔌 **API仕様を確認・変更** | [TECHNICAL.md](./docs/technical/TECHNICAL.md) |
 | 📡 **プッシュ通知の仕組みを理解** | [PUSH_NOTIFICATION_ARCHITECTURE.md](./docs/features/PUSH_NOTIFICATION_ARCHITECTURE.md) |
 | 🎙️ **録音機能の仕様を確認** | [RECORDING_SPECIFICATION.md](./docs/features/RECORDING_SPECIFICATION.md) |
+| 🎬 **動画/ファイル音声から分析したい** | [VIDEO_TO_AUDIO_FEATURE.md](./docs/features/VIDEO_TO_AUDIO_FEATURE.md) |
 | ⚡ **パフォーマンス問題を解決** | [PERFORMANCE.md](./docs/development/PERFORMANCE.md) |
 | 🔄 **リファクタリング計画を確認** | [REFACTORING_PLAN.md](./docs/development/REFACTORING_PLAN.md) |
 | 🎨 **カラーを変更したい** | [COLOR_GUIDE.md](./docs/development/COLOR_GUIDE.md) |
@@ -78,12 +80,29 @@ WatchMeプラットフォームのiOSアプリケーション。
 ### 主要機能
 
 - **手動録音**: アプリ内での音声録音（フォアグラウンドのみ）
+- **動画音声分析**: カメラロール動画から音声を抽出して分析
+- **ファイル音声分析**: Files（このiPhone内/iCloud Drive）で選択した音声ファイルを分析
 - **AI分析**: 音声認識、感情分析、行動パターン検出
 - **マルチデバイス対応**: 1ユーザーが複数の分析対象デバイス（録音デバイス）を管理可能
 - **リアルタイム更新**: プッシュ通知によるデータ自動更新
 - **コメント機能**: 分析対象に対する日別コメント投稿
 - **サンプルデバイス**: 初回体験の向上と事例カタログ
 - **✅ QRコード共有機能**: デバイスをQRコードで他ユーザーと共有（2025-12-06実装完了）
+
+### 録音・分析の入力ソース（2026-03-05更新）
+
+WatchMeの音声分析は、以下の3経路から入力できます。
+
+1. **アプリ内録音（マイク）**
+   - その場で録音して分析へ送信
+2. **カメラロール動画**
+   - 動画から音声を抽出して分析へ送信
+3. **Files内の音声ファイル**
+   - `WAV / M4A / MP3` を選択して分析へ送信（MP3はアプリ内でM4Aへ変換）
+
+**iOS制約**:
+- アプリが端末全体を自動走査することはできません
+- ユーザーがPickerで選択したファイルのみアクセス可能です（例: 「このiPhone内 > ダウンロード」）
 
 ### QRコード共有機能（2025-12-06実装完了）
 
@@ -271,6 +290,9 @@ xcodebuild -scheme ios_watchme_v9 -sdk iphonesimulator build
 | **初期画面** | ウェルカム画面 | `ios_watchme_v9App.swift`（MainAppView） | ロゴと「はじめる」「ログイン」ボタン |
 | **認証フロー** | 統合認証フロー | `AuthFlowView.swift` | オンボーディングとアカウント選択 |
 | **ログイン画面** | ログイン | `LoginView.swift` | メール/パスワードでログイン |
+| **録音モーダル** | 録音/分析ソース選択 | `FullScreenRecordingView.swift` | 手動録音、カメラロール、ファイル選択の起点 |
+| **動画選択画面** | カメラロール動画ピッカー | `VideoPickerView.swift` / `VideoPicker.swift` | 動画選択 → 音声抽出 → アップロード |
+| **ファイル選択画面** | Files音声ピッカー | `AudioFilePickerView.swift` | `WAV / M4A / MP3` を選択してアップロード |
 | **ホーム画面** | ホーム（リアルタイムステータス） | `SimpleDashboardView.swift` | 日別のダッシュボード。気分グラフ、最新のスポット分析（最大3件）、コメント機能を表示 |
 | **分析結果の一覧画面** | 分析結果の一覧 | `SimpleDashboardView.swift`（内部の`AnalysisListView`） | 1日分の全スポット分析を時系列順に表示 |
 | **気分詳細画面** | 気分詳細 | `HomeView.swift` | 気分グラフの詳細と時間ごとの詳細リスト |
@@ -292,6 +314,9 @@ ios_watchme_v9/
 ├── BehaviorGraphView.swift        # 行動グラフ詳細
 ├── EmotionGraphView.swift         # 感情グラフ詳細
 ├── FullScreenRecordingView.swift  # 録音画面（モーダル）
+├── AudioFilePickerView.swift      # Files音声ピッカー（WAV/M4A/MP3）
+├── VideoPickerView.swift          # カメラロール動画→音声抽出フロー
+├── VideoPicker.swift              # カメラロール動画ピッカー（PHPicker）
 ├── AudioBarVisualizerView.swift   # 音声ビジュアライザー
 ├── UserInfoView.swift             # マイページ
 ├── AuthFlowView.swift             # 統合認証フロー

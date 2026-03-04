@@ -1,6 +1,6 @@
 # 動画から音声抽出機能 - 実装状況と今後の方針
 
-最終更新: 2025-11-23
+最終更新: 2026-03-05
 
 ---
 
@@ -8,6 +8,10 @@
 
 カメラロールの動画から音声を抽出し、WatchMeの分析フローに送信する機能。
 **動画撮影日時をベースに過去の記録として分析**することで、ユーザーが好きなタイミングで分析データを追加できる。
+
+> 補足（2026-03-05）:
+> 録音モーダルから Files の音声ファイル（WAV/M4A/MP3）を直接選択して分析する機能も追加済みです。
+> このドキュメントは「カメラロール動画→音声抽出」の仕様を中心に記載しています。
 
 ---
 
@@ -29,6 +33,7 @@
 ### 実装ファイル
 - `/ios_watchme_v9/ios_watchme_v9/VideoPicker.swift` - カスタムピッカー実装
 - `/ios_watchme_v9/ios_watchme_v9/VideoPickerView.swift` - メイン処理
+- `/ios_watchme_v9/ios_watchme_v9/AudioFilePickerView.swift` - Files音声ピッカー（WAV/M4A/MP3）
 - `/ios_watchme_v9/ios_watchme_v9/ContentView.swift` - FABボタン
 - `/ios_watchme_v9/ios_watchme_v9/Components/FloatingActionButton.swift` - 共通FAB
 - `/projects/watchme/api/vault/app.py` - M4A→WAV変換機能

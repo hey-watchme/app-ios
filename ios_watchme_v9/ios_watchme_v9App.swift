@@ -462,6 +462,33 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return []
     }
 
+    // MARK: - 通知タップ時（バックグラウンド/終了状態）
+
+    func userNotificationCenter(_ center: UNUserNotificationCenter,
+                               didReceive response: UNNotificationResponse) async {
+        let userInfo = response.notification.request.content.userInfo
+
+        print("📲 [PUSH] Notification tapped")
+
+        // Permission check: Authenticated users only
+        guard UserDefaults.standard.string(forKey: "current_user_id") != nil else {
+            print("⚠️ [PUSH] Tap ignored (user not authenticated)")
+            return
+        }
+
+        // Device filter: selected device is known and different -> ignore
+        if let targetDeviceId = userInfo["device_id"] as? String,
+           let selectedDeviceId = UserDefaults.standard.string(forKey: "watchme_selected_device_id"),
+           targetDeviceId != selectedDeviceId {
+            print("⚠️ [PUSH] Tap ignored (different device: target=\(targetDeviceId), selected=\(selectedDeviceId))")
+            return
+        }
+
+        // Delegate to PushNotificationManager so dashboard can refresh on app open
+        let handled = PushNotificationManager.shared.handleAPNsPayload(userInfo)
+        print(handled ? "✅ [PUSH] Tap payload handled" : "⚠️ [PUSH] Tap payload not handled")
+    }
+
     // MARK: - デバイストークン保存
 
     private func saveDeviceToken(_ token: String) {

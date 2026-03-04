@@ -136,9 +136,12 @@ final class UploaderService {
 
         // Determine content type based on file extension
         let contentType: String
-        if request.fileURL.pathExtension.lowercased() == "m4a" {
+        switch request.fileURL.pathExtension.lowercased() {
+        case "m4a":
             contentType = "audio/mp4"
-        } else {
+        case "mp3":
+            contentType = "audio/mpeg"
+        default:
             contentType = "audio/wav"
         }
         body.append("Content-Type: \(contentType)\r\n\r\n".data(using: .utf8)!)

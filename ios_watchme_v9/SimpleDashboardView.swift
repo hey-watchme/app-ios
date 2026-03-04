@@ -74,6 +74,7 @@ struct SimpleDashboardView: View {
 
     // Pull-to-Refresh trigger (simple approach)
     @State private var refreshTrigger = 0
+    @State private var lastHandledPushTimestamp: Date?
 
     // コメント入力用
     @State private var newCommentText = ""
@@ -347,50 +348,13 @@ struct SimpleDashboardView: View {
             updateFilteredData()
         }
         .onChange(of: pushManager.latestUpdate) { oldValue, newValue in
-            // Handle push notification updates from centralized manager
             guard let update = newValue else { return }
-
-            // Only process dashboard refresh notifications
-            guard update.type == .refreshDashboard else { return }
-
-            // Filter: Only process if this view's device matches
-            guard update.deviceId == deviceManager.selectedDeviceID else {
-                print("⚠️ [PUSH] Update ignored (different device)")
-                return
-            }
-
-            // Filter: Only process today's data
-            let calendar = deviceManager.deviceCalendar
-            let today = calendar.startOfDay(for: Date())
-
-            guard calendar.isDate(date, inSameDayAs: today) else {
-                print("⚠️ [PUSH] Update ignored (not today's view)")
-                return
-            }
-
-            print("🔄 [PUSH] Dashboard update received: \(update.deviceId) - \(update.date)")
-
-            // Clear today's cache
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.timeZone = deviceManager.getTimezone(for: update.deviceId)
-            let todayString = formatter.string(from: today)
-            let todayCacheKey = "\(update.deviceId)_\(todayString)"
-
-            dataCache.removeValue(forKey: todayCacheKey)
-            cacheKeys.removeAll { $0 == todayCacheKey }
-
-            print("🗑️ [PUSH] Cache cleared: \(todayCacheKey)")
-
-            // Reload data
-            Task {
-                await loadAllData()
-
-                // Show toast after data is loaded
-                await MainActor.run {
-                    ToastManager.shared.showInfo(title: update.message)
-                    print("🍞 [PUSH] Toast displayed: \(update.message)")
-                }
+            processPushUpdateIfNeeded(update)
+        }
+        .onAppear {
+            // Handle pending update when app is opened from notification tap
+            if let update = pushManager.latestUpdate {
+                processPushUpdateIfNeeded(update)
             }
         }
         .sheet(isPresented: $showVibeSheet) {
@@ -456,6 +420,50 @@ struct SimpleDashboardView: View {
                 SpotDetailView(deviceId: deviceId, spotData: spot)
                     .environmentObject(dataManager)
             }
+        }
+    }
+
+    private func processPushUpdateIfNeeded(_ update: PushNotificationManager.PushNotificationUpdate) {
+        // Avoid duplicate handling when onChange and onAppear fire for the same payload
+        if lastHandledPushTimestamp == update.timestamp {
+            return
+        }
+
+        // Only process dashboard refresh notifications
+        guard update.type == .refreshDashboard else { return }
+
+        // Filter: Only process if this view's device matches
+        guard update.deviceId == deviceManager.selectedDeviceID else {
+            print("⚠️ [PUSH] Update ignored (different device)")
+            return
+        }
+
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.timeZone = deviceManager.getTimezone(for: update.deviceId)
+        let viewDateString = formatter.string(from: date)
+
+        // Filter: only this view's date
+        guard viewDateString == update.date else {
+            print("⚠️ [PUSH] Update ignored (different date: view=\(viewDateString), update=\(update.date))")
+            return
+        }
+
+        lastHandledPushTimestamp = update.timestamp
+        print("🔄 [PUSH] Dashboard update received: \(update.deviceId) - \(update.date)")
+
+        let cacheKey = "\(update.deviceId)_\(update.date)"
+        dataCache.removeValue(forKey: cacheKey)
+        cacheKeys.removeAll { $0 == cacheKey }
+        print("🗑️ [PUSH] Cache cleared: \(cacheKey)")
+
+        Task {
+            await loadAllData()
+            await MainActor.run {
+                ToastManager.shared.showInfo(title: update.message)
+                print("🍞 [PUSH] Toast displayed: \(update.message)")
+            }
+            PushNotificationManager.shared.clearUpdate()
         }
     }
     
