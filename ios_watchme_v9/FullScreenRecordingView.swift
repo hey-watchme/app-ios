@@ -22,7 +22,9 @@ struct FullScreenRecordingView: View {
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false
     @State private var showVideoPicker = false
+    @State private var showAudioFilePicker = false
     @State private var videoProcessingStarted = false  // 動画処理開始フラグ
+    @State private var audioFileProcessingStarted = false  // 音声ファイル処理開始フラグ
 
     // MARK: - Body
     var body: some View {
@@ -72,6 +74,29 @@ struct FullScreenRecordingView: View {
                                 Image(systemName: "photo.on.rectangle")
                                     .font(.system(size: 20, weight: .medium))
                                 Text("カメラロールの動画の音声からも分析できます")
+                                    .font(.system(size: 16, weight: .medium))
+                            }
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 24)
+                            .padding(.vertical, 14)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.2))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                                    )
+                            )
+                        }
+                        .transition(.scale.combined(with: .opacity))
+
+                        Button(action: {
+                            showAudioFilePicker = true
+                        }) {
+                            HStack {
+                                Image(systemName: "folder.fill")
+                                    .font(.system(size: 20, weight: .medium))
+                                Text("ファイルの音声からも分析できます")
                                     .font(.system(size: 16, weight: .medium))
                             }
                             .foregroundColor(.white)
@@ -147,8 +172,21 @@ struct FullScreenRecordingView: View {
                 .environmentObject(userAccountManager)
                 .environmentObject(store)
         }
+        .sheet(isPresented: $showAudioFilePicker) {
+            AudioFilePickerView(onAudioProcessingStarted: {
+                audioFileProcessingStarted = true
+            })
+            .environmentObject(deviceManager)
+            .environmentObject(userAccountManager)
+        }
         .onChange(of: videoProcessingStarted) { oldValue, newValue in
             // 動画処理が開始されたら録音モーダルを閉じる
+            if newValue {
+                dismiss()
+            }
+        }
+        .onChange(of: audioFileProcessingStarted) { oldValue, newValue in
+            // 音声ファイル処理が開始されたら録音モーダルを閉じる
             if newValue {
                 dismiss()
             }
