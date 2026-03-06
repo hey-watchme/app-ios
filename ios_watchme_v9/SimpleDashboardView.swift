@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 // データ取得のトリガーを管理する構造体
 struct LoadDataTrigger: Equatable {
@@ -68,6 +69,8 @@ struct SimpleDashboardView: View {
     @State private var dataCache: [String: CachedDashboardData] = [:]
     @State private var cacheKeys: [String] = []  // LRU管理用
     private let maxCacheSize = 30  // 最近30日分をキャッシュ（スワイプ体験向上＆メモリ効率改善）
+    private let currentDayCacheTTL: TimeInterval = 60
+    private let historicalCacheTTL: TimeInterval = 1800
 
     // 📊 パフォーマンス最適化: デバイス選択直後フラグ（Phase 5-A）
     @State private var isInitialLoad = false
@@ -232,8 +235,7 @@ struct SimpleDashboardView: View {
 
             // ✅ キャッシュヒット → 即座に表示（スワイプ超高速）
             if let cached = dataCache[cacheKey] {
-                // キャッシュが新鮮か確認（30分以内に延長してAPI呼び出しを削減）
-                if Date().timeIntervalSince(cached.timestamp) < 1800 {
+                if shouldUseCachedData(cached, for: date, timezone: formatter.timeZone) {
                     await MainActor.run {
                         self.dashboardSummary = cached.dashboardSummary
                         self.behaviorReport = cached.behaviorReport
@@ -249,7 +251,7 @@ struct SimpleDashboardView: View {
                     print("✅ [Cache HIT] Data loaded from cache for \(dateString)")
                     return
                 } else {
-                    print("⚠️ [Cache EXPIRED] Cache data is older than 30 minutes for \(dateString)")
+                    print("⚠️ [Cache BYPASS] Refreshing cached data for \(dateString)")
                 }
             }
 
@@ -310,6 +312,13 @@ struct SimpleDashboardView: View {
                     timestamp: Date()
                 )
 
+                guard shouldPersistCache(for: date, timezone: formatter.timeZone) else {
+                    dataCache.removeValue(forKey: cacheKey)
+                    cacheKeys.removeAll { $0 == cacheKey }
+                    print("⚠️ [Cache SKIP] Empty current-day data was not cached for \(dateString)")
+                    return
+                }
+
                 dataCache[cacheKey] = cached
 
                 // LRU管理: 既存のキーを削除してから追加
@@ -356,6 +365,12 @@ struct SimpleDashboardView: View {
             if let update = pushManager.latestUpdate {
                 processPushUpdateIfNeeded(update)
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            refreshCurrentDayIfNeeded(reason: "foreground")
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            refreshCurrentDayIfNeeded(reason: "significantTimeChange")
         }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
@@ -465,6 +480,41 @@ struct SimpleDashboardView: View {
             }
             PushNotificationManager.shared.clearUpdate()
         }
+    }
+
+    private func isToday(_ targetDate: Date, timezone: TimeZone) -> Bool {
+        var calendar = Calendar.current
+        calendar.timeZone = timezone
+        return calendar.isDateInToday(targetDate)
+    }
+
+    private func shouldUseCachedData(_ cached: CachedDashboardData, for targetDate: Date, timezone: TimeZone) -> Bool {
+        let isCurrentDay = isToday(targetDate, timezone: timezone)
+        let cacheTTL = isCurrentDay ? currentDayCacheTTL : historicalCacheTTL
+
+        if isCurrentDay && cached.dashboardSummary == nil && cached.timeBlocks.isEmpty {
+            return false
+        }
+
+        return Date().timeIntervalSince(cached.timestamp) < cacheTTL
+    }
+
+    private func shouldPersistCache(for targetDate: Date, timezone: TimeZone) -> Bool {
+        if !isToday(targetDate, timezone: timezone) {
+            return true
+        }
+
+        return dashboardSummary != nil || !timeBlocks.isEmpty || !subjectComments.isEmpty
+    }
+
+    private func refreshCurrentDayIfNeeded(reason: String) {
+        guard let deviceId = deviceManager.selectedDeviceID else { return }
+        let timezone = deviceManager.getTimezone(for: deviceId)
+
+        guard isToday(date, timezone: timezone) else { return }
+
+        refreshTrigger += 1
+        print("🔄 [Dashboard Refresh] Triggered for current day (\(reason))")
     }
     
     // MARK: - View Components

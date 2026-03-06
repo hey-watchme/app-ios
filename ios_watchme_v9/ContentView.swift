@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 struct ContentView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
@@ -258,6 +259,12 @@ struct ContentView: View {
             // 日付範囲の初期化
             initializeDateRange()
         }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
+            syncDateRangeWithToday()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
+            syncDateRangeWithToday()
+        }
         .onChange(of: recordingStore.state.errorMessage) { oldValue, newValue in
             // 録音エラーをToastで表示（エラーメッセージ統一）
             if let error = newValue, !error.isEmpty, recordingStore.state.showError {
@@ -343,6 +350,42 @@ struct ContentView: View {
         selectedDate = today
 
         print("📅 日付範囲初期化: \(dates.count)日分（\(formatDate(dates.first!)) 〜 \(formatDate(today))）")
+    }
+
+    /// フォアグラウンド復帰や日付変更時に、現在日の範囲を再同期する
+    private func syncDateRangeWithToday() {
+        let calendar = deviceManager.deviceCalendar
+        let today = calendar.startOfDay(for: Date())
+
+        guard let lastDate = dateRange.last else {
+            initializeDateRange()
+            return
+        }
+
+        if selectedDate > today {
+            selectedDate = today
+        }
+
+        guard lastDate < today else { return }
+
+        let wasViewingLatestDate = calendar.isDate(selectedDate, inSameDayAs: lastDate)
+        var newDates: [Date] = []
+        var currentDate = calendar.date(byAdding: .day, value: 1, to: lastDate)
+
+        while let nextDate = currentDate, nextDate <= today {
+            newDates.append(nextDate)
+            currentDate = calendar.date(byAdding: .day, value: 1, to: nextDate)
+        }
+
+        guard !newDates.isEmpty else { return }
+
+        dateRange.append(contentsOf: newDates)
+
+        if wasViewingLatestDate {
+            selectedDate = today
+        }
+
+        print("📅 日付範囲を再同期: \(formatDate(lastDate)) → \(formatDate(today))")
     }
 
     /// 端に到達したら追加データを読み込む
