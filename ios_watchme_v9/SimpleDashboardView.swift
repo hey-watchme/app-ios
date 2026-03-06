@@ -10,7 +10,7 @@ import UIKit
 
 // データ取得のトリガーを管理する構造体
 struct LoadDataTrigger: Equatable {
-    let date: Date
+    let localDate: String
     let deviceId: String?
     let refreshTrigger: Int  // Pull-to-Refresh用
 }
@@ -28,17 +28,37 @@ struct CachedDashboardData {
 }
 
 struct SimpleDashboardView: View {
-    private let originalDate: Date  // 初期化時の日付（TabViewのtag用）
-    @State private var date: Date  // このビューが表示する日付（動的に更新）
-    @Binding var selectedDate: Date  // TabViewの選択状態（ナビゲーション用）
+    let localDate: String
+    @Binding var selectedLocalDate: String
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var userAccountManager: UserAccountManager
 
-    init(date: Date, selectedDate: Binding<Date>) {
-        self.originalDate = date
-        self._date = State(initialValue: date)
-        self._selectedDate = selectedDate
+    init(localDate: String, selectedLocalDate: Binding<String>) {
+        self.localDate = localDate
+        self._selectedLocalDate = selectedLocalDate
+    }
+
+    private var currentTimezone: TimeZone {
+        if let deviceId = deviceManager.selectedDeviceID {
+            return deviceManager.getTimezone(for: deviceId)
+        }
+        return deviceManager.selectedDeviceTimezone
+    }
+
+    private var displayDate: Date {
+        LocalDate.date(from: localDate, timezone: currentTimezone) ?? Date()
+    }
+
+    private var selectedDateBinding: Binding<Date> {
+        Binding(
+            get: { displayDate },
+            set: { newValue in
+                let normalizedLocalDate = LocalDate.string(from: newValue, timezone: currentTimezone)
+                let today = LocalDate.today(timezone: currentTimezone)
+                selectedLocalDate = min(normalizedLocalDate, today)
+            }
+        )
     }
 
     // Push notification manager (centralized)
@@ -99,7 +119,7 @@ struct SimpleDashboardView: View {
             ScrollView {
                 VStack(spacing: 0) {
                     // 大きい日付セクション（スクロール可能）
-                    LargeDateSection(selectedDate: $selectedDate)
+                    LargeDateSection(selectedDate: selectedDateBinding)
                         .environmentObject(deviceManager)
                         .environmentObject(dataManager)
                         .background(
@@ -194,13 +214,13 @@ struct SimpleDashboardView: View {
             
             // 固定日付ヘッダー（条件付き表示）
             if showStickyHeader {
-                StickyDateHeader(selectedDate: $selectedDate)
+                StickyDateHeader(selectedDate: selectedDateBinding)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .task(id: LoadDataTrigger(date: date, deviceId: deviceManager.selectedDeviceID, refreshTrigger: refreshTrigger)) {
+        .task(id: LoadDataTrigger(localDate: localDate, deviceId: deviceManager.selectedDeviceID, refreshTrigger: refreshTrigger)) {
             // 📊 パフォーマンス最適化: データ取得を一元化（Phase 1-A: デバウンス + キャッシュ）
             guard deviceManager.isReady else {
                 #if DEBUG
@@ -220,10 +240,7 @@ struct SimpleDashboardView: View {
                 return
             }
 
-            let formatter = DateFormatter()
-            formatter.dateFormat = "yyyy-MM-dd"
-            formatter.timeZone = deviceManager.getTimezone(for: deviceId)
-            let dateString = formatter.string(from: date)
+            let dateString = localDate
             let cacheKey = "\(deviceId)_\(dateString)"
 
             // Pull-to-Refresh: Clear cache if triggered
@@ -235,7 +252,7 @@ struct SimpleDashboardView: View {
 
             // ✅ キャッシュヒット → 即座に表示（スワイプ超高速）
             if let cached = dataCache[cacheKey] {
-                if shouldUseCachedData(cached, for: date, timezone: formatter.timeZone) {
+                if shouldUseCachedData(cached, for: localDate, timezone: currentTimezone) {
                     await MainActor.run {
                         self.dashboardSummary = cached.dashboardSummary
                         self.behaviorReport = cached.behaviorReport
@@ -312,7 +329,7 @@ struct SimpleDashboardView: View {
                     timestamp: Date()
                 )
 
-                guard shouldPersistCache(for: date, timezone: formatter.timeZone) else {
+                guard shouldPersistCache(for: localDate, timezone: currentTimezone) else {
                     dataCache.removeValue(forKey: cacheKey)
                     cacheKeys.removeAll { $0 == cacheKey }
                     print("⚠️ [Cache SKIP] Empty current-day data was not cached for \(dateString)")
@@ -346,12 +363,6 @@ struct SimpleDashboardView: View {
                 isInitialLoad = true
             }
         }
-        .onChange(of: selectedDate) { oldValue, newValue in
-            // TabViewで選択された日付が変更された場合、常にdateを更新
-            // 応急処置: すべてのビューのdateを選択日付に同期させる
-            date = newValue
-            print("📅 [Date Update] All views now showing \(newValue)")
-        }
         .onChange(of: timeBlocks) { oldValue, newValue in
             // Phase 2: timeBlocksが更新されたら自動的にフィルタリング実行
             updateFilteredData()
@@ -374,7 +385,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showVibeSheet) {
             NavigationView {
-                AnalysisListView(timeBlocks: timeBlocks, selectedDate: date)
+                AnalysisListView(timeBlocks: timeBlocks, selectedDate: displayDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .environmentObject(userAccountManager)
@@ -391,7 +402,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showBehaviorSheet) {
             NavigationView {
-                BehaviorGraphView(selectedDate: date)
+                BehaviorGraphView(selectedDate: displayDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
@@ -407,7 +418,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showEmotionSheet) {
             NavigationView {
-                EmotionGraphView(selectedDate: date)
+                EmotionGraphView(selectedDate: displayDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
@@ -453,10 +464,7 @@ struct SimpleDashboardView: View {
             return
         }
 
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = deviceManager.getTimezone(for: update.deviceId)
-        let viewDateString = formatter.string(from: date)
+        let viewDateString = localDate
 
         // Filter: only this view's date
         guard viewDateString == update.date else {
@@ -482,14 +490,12 @@ struct SimpleDashboardView: View {
         }
     }
 
-    private func isToday(_ targetDate: Date, timezone: TimeZone) -> Bool {
-        var calendar = Calendar.current
-        calendar.timeZone = timezone
-        return calendar.isDateInToday(targetDate)
+    private func isToday(_ targetLocalDate: String, timezone: TimeZone) -> Bool {
+        targetLocalDate == LocalDate.today(timezone: timezone)
     }
 
-    private func shouldUseCachedData(_ cached: CachedDashboardData, for targetDate: Date, timezone: TimeZone) -> Bool {
-        let isCurrentDay = isToday(targetDate, timezone: timezone)
+    private func shouldUseCachedData(_ cached: CachedDashboardData, for targetLocalDate: String, timezone: TimeZone) -> Bool {
+        let isCurrentDay = isToday(targetLocalDate, timezone: timezone)
         let cacheTTL = isCurrentDay ? currentDayCacheTTL : historicalCacheTTL
 
         if isCurrentDay && cached.dashboardSummary == nil && cached.timeBlocks.isEmpty {
@@ -499,8 +505,8 @@ struct SimpleDashboardView: View {
         return Date().timeIntervalSince(cached.timestamp) < cacheTTL
     }
 
-    private func shouldPersistCache(for targetDate: Date, timezone: TimeZone) -> Bool {
-        if !isToday(targetDate, timezone: timezone) {
+    private func shouldPersistCache(for targetLocalDate: String, timezone: TimeZone) -> Bool {
+        if !isToday(targetLocalDate, timezone: timezone) {
             return true
         }
 
@@ -511,7 +517,7 @@ struct SimpleDashboardView: View {
         guard let deviceId = deviceManager.selectedDeviceID else { return }
         let timezone = deviceManager.getTimezone(for: deviceId)
 
-        guard isToday(date, timezone: timezone) else { return }
+        guard isToday(localDate, timezone: timezone) else { return }
 
         refreshTrigger += 1
         print("🔄 [Dashboard Refresh] Triggered for current day (\(reason))")
@@ -878,12 +884,12 @@ struct SimpleDashboardView: View {
 
         async let resultTask = dataManager.fetchAllReports(
             deviceId: deviceId,
-            date: date,
+            localDate: localDate,
             timezone: timezone
         )
         async let timeBlocksTask = dataManager.fetchDashboardTimeBlocks(
             deviceId: deviceId,
-            date: date,
+            localDate: localDate,
             timezone: timezone
         )
 
@@ -1094,14 +1100,14 @@ struct SimpleDashboardView: View {
                 subjectId: subjectId,
                 userId: userId,
                 commentText: newCommentText.trimmingCharacters(in: .whitespacesAndNewlines),
-                date: date  // このビューの日付を使用
+                localDate: localDate
             )
 
             // コメント追加成功後
             newCommentText = ""
 
             // コメントリストを再取得（同じ日付のコメントのみ）
-            let comments = await dataManager.fetchComments(subjectId: subjectId, date: date)
+            let comments = await dataManager.fetchComments(subjectId: subjectId, localDate: localDate)
             await MainActor.run {
                 self.subjectComments = comments
             }

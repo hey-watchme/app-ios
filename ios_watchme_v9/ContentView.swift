@@ -16,7 +16,7 @@ struct ContentView: View {
     @EnvironmentObject var toastManager: ToastManager
 
     // シンプルな状態管理
-    @State private var selectedDate: Date = Date()  // 初期値は現在時刻（後でonAppearで調整）
+    @State private var selectedLocalDate: String = ""
     @State private var showLogoutConfirmation = false
     @State private var showRecordingSheet = false
     @State private var showQRScanner = false
@@ -28,7 +28,7 @@ struct ContentView: View {
 
     // 動的な日付範囲管理（無限スクロール対応）
     // 初期値として今日の日付を設定（TabViewが空にならないように）
-    @State private var dateRange: [Date] = [Date()]
+    @State private var dateRange: [String] = []
     @State private var isLoadingMoreDates = false
 
     // 初期ロード日数（起動時のパフォーマンス最適化）
@@ -64,23 +64,24 @@ struct ContentView: View {
                 case .available:
                     // 常にダッシュボードを表示
                     ZStack(alignment: .top) {
-                        TabView(selection: $selectedDate) {
-                            ForEach(dateRange, id: \.self) { date in
+                        TabView(selection: $selectedLocalDate) {
+                            ForEach(dateRange, id: \.self) { localDate in
                                 SimpleDashboardView(
-                                    date: date,
-                                    selectedDate: $selectedDate
+                                    localDate: localDate,
+                                    selectedLocalDate: $selectedLocalDate
                                 )
-                                .tag(date)
+                                .tag(localDate)
                             }
                         }
                         .tabViewStyle(.page(indexDisplayMode: .never))
-                        .onChange(of: selectedDate) { oldValue, newValue in
+                        .onChange(of: selectedLocalDate) { oldValue, newValue in
+                            ensureDateRangeIncludes(newValue)
                             // 端に到達したら追加データをロード
-                            checkAndLoadMoreDates(currentDate: newValue)
+                            checkAndLoadMoreDates(currentLocalDate: newValue)
                         }
 
                         // ローディングインジケーター（左端で過去データ読み込み中）
-                        if isLoadingMoreDates, let firstDate = dateRange.first, selectedDate == firstDate {
+                        if isLoadingMoreDates, let firstDate = dateRange.first, selectedLocalDate == firstDate {
                             VStack {
                                 Spacer()
                                 HStack {
@@ -328,53 +329,39 @@ struct ContentView: View {
 
     /// 日付範囲の初期化（起動時・デバイス変更時）
     private func initializeDateRange() {
-        let calendar = deviceManager.deviceCalendar
-        let today = calendar.startOfDay(for: Date())
+        let timezone = deviceManager.selectedDeviceTimezone
+        let today = LocalDate.today(timezone: timezone)
+        let dates = LocalDate.trailingDays(endingAt: today, count: initialDaysToLoad, timezone: timezone)
 
-        // 初期ロード日数分の日付を生成
-        guard let startDate = calendar.date(byAdding: .day, value: -(initialDaysToLoad - 1), to: today) else {
-            dateRange = [today]
-            selectedDate = today
-            return
-        }
+        dateRange = dates.isEmpty ? [today] : dates
+        selectedLocalDate = today
 
-        var dates: [Date] = []
-        var currentDate = startDate
-
-        while currentDate <= today {
-            dates.append(currentDate)
-            currentDate = calendar.date(byAdding: .day, value: 1, to: currentDate)!
-        }
-
-        dateRange = dates
-        selectedDate = today
-
-        print("📅 日付範囲初期化: \(dates.count)日分（\(formatDate(dates.first!)) 〜 \(formatDate(today))）")
+        print("📅 日付範囲初期化: \(dateRange.count)日分（\(dateRange.first ?? today) 〜 \(today)）")
     }
 
     /// フォアグラウンド復帰や日付変更時に、現在日の範囲を再同期する
     private func syncDateRangeWithToday() {
-        let calendar = deviceManager.deviceCalendar
-        let today = calendar.startOfDay(for: Date())
+        let timezone = deviceManager.selectedDeviceTimezone
+        let today = LocalDate.today(timezone: timezone)
 
         guard let lastDate = dateRange.last else {
             initializeDateRange()
             return
         }
 
-        if selectedDate > today {
-            selectedDate = today
+        if selectedLocalDate > today {
+            selectedLocalDate = today
         }
 
         guard lastDate < today else { return }
 
-        let wasViewingLatestDate = calendar.isDate(selectedDate, inSameDayAs: lastDate)
-        var newDates: [Date] = []
-        var currentDate = calendar.date(byAdding: .day, value: 1, to: lastDate)
+        let wasViewingLatestDate = selectedLocalDate == lastDate
+        var newDates: [String] = []
+        var currentDate = LocalDate.addingDays(1, to: lastDate, timezone: timezone)
 
         while let nextDate = currentDate, nextDate <= today {
             newDates.append(nextDate)
-            currentDate = calendar.date(byAdding: .day, value: 1, to: nextDate)
+            currentDate = LocalDate.addingDays(1, to: nextDate, timezone: timezone)
         }
 
         guard !newDates.isEmpty else { return }
@@ -382,14 +369,14 @@ struct ContentView: View {
         dateRange.append(contentsOf: newDates)
 
         if wasViewingLatestDate {
-            selectedDate = today
+            selectedLocalDate = today
         }
 
-        print("📅 日付範囲を再同期: \(formatDate(lastDate)) → \(formatDate(today))")
+        print("📅 日付範囲を再同期: \(lastDate) → \(today)")
     }
 
     /// 端に到達したら追加データを読み込む
-    private func checkAndLoadMoreDates(currentDate: Date) {
+    private func checkAndLoadMoreDates(currentLocalDate: String) {
         guard !isLoadingMoreDates else {
             print("⏳ 既に読み込み中です")
             return
@@ -400,10 +387,8 @@ struct ContentView: View {
             return
         }
 
-        let calendar = deviceManager.deviceCalendar
-
         // 左端（過去方向）に到達したかチェック
-        if calendar.isDate(currentDate, inSameDayAs: firstDate) {
+        if currentLocalDate == firstDate {
             print("📍 左端に到達 - 過去のデータを読み込みます")
             loadMorePastDates()
         }
@@ -422,12 +407,11 @@ struct ContentView: View {
             // 非同期で少し待機（UIの反応性向上）
             try? await Task.sleep(nanoseconds: 300_000_000) // 0.3秒
 
-            let calendar = deviceManager.deviceCalendar
-
             // 追加日数分の日付を生成
-            var newDates: [Date] = []
+            let timezone = deviceManager.selectedDeviceTimezone
+            var newDates: [String] = []
             for i in 1...additionalDaysToLoad {
-                if let pastDate = calendar.date(byAdding: .day, value: -i, to: currentFirstDate) {
+                if let pastDate = LocalDate.addingDays(-i, to: currentFirstDate, timezone: timezone) {
                     newDates.insert(pastDate, at: 0)
                 }
             }
@@ -435,7 +419,7 @@ struct ContentView: View {
             if !newDates.isEmpty {
                 // 新しい日付を先頭に追加
                 dateRange.insert(contentsOf: newDates, at: 0)
-                print("✅ \(newDates.count)日分追加: \(formatDate(newDates.first!)) 〜 \(formatDate(newDates.last!))")
+                print("✅ \(newDates.count)日分追加: \(newDates.first!) 〜 \(newDates.last!)")
                 print("📊 現在の範囲: \(dateRange.count)日分")
             }
 
@@ -443,11 +427,42 @@ struct ContentView: View {
         }
     }
 
-    /// 日付をフォーマット（デバッグ用）
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = deviceManager.selectedDeviceTimezone
-        return formatter.string(from: date)
+    private func ensureDateRangeIncludes(_ localDate: String) {
+        guard !localDate.isEmpty else { return }
+
+        if dateRange.isEmpty {
+            dateRange = [localDate]
+            return
+        }
+
+        let timezone = deviceManager.selectedDeviceTimezone
+
+        if let firstDate = dateRange.first, localDate < firstDate {
+            var datesToInsert: [String] = []
+            var currentDate = localDate
+
+            while currentDate < firstDate {
+                datesToInsert.append(currentDate)
+                guard let nextDate = LocalDate.addingDays(1, to: currentDate, timezone: timezone) else {
+                    break
+                }
+                currentDate = nextDate
+            }
+
+            dateRange.insert(contentsOf: datesToInsert, at: 0)
+            return
+        }
+
+        if let lastDate = dateRange.last, localDate > lastDate {
+            var datesToAppend: [String] = []
+            var currentDate = LocalDate.addingDays(1, to: lastDate, timezone: timezone)
+
+            while let nextDate = currentDate, nextDate <= localDate {
+                datesToAppend.append(nextDate)
+                currentDate = LocalDate.addingDays(1, to: nextDate, timezone: timezone)
+            }
+
+            dateRange.append(contentsOf: datesToAppend)
+        }
     }
 }

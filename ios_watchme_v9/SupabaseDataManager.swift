@@ -378,11 +378,17 @@ class SupabaseDataManager: ObservableObject {
     ///   - timezone: デバイス固有のタイムゾーン
     /// - Returns: DashboardData（気分データのみ含む）
     func fetchAllReports(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
+        let targetTimezone = timezone ?? TimeZone.current
+        let localDate = LocalDate.string(from: date, timezone: targetTimezone)
+        return await fetchAllReports(deviceId: deviceId, localDate: localDate, timezone: targetTimezone)
+    }
+
+    func fetchAllReports(deviceId: String, localDate: String, timezone: TimeZone? = nil) async -> DashboardData {
         isLoading = true
         errorMessage = nil
 
         // 🎯 Phase 1: daily_resultsテーブルに直接アクセス
-        let dashboardSummary = await fetchDailyResults(deviceId: deviceId, date: date, timezone: timezone)
+        let dashboardSummary = await fetchDailyResults(deviceId: deviceId, localDate: localDate, timezone: timezone)
 
         // 🚀 最適化: DeviceManagerからSubject情報を取得（RPC呼び出し削減）
         var subject: Subject? = nil
@@ -407,7 +413,7 @@ class SupabaseDataManager: ObservableObject {
         }
 
         // コメントを取得
-        let comments = await fetchComments(subjectId: subject?.subjectId ?? "", date: date)
+        let comments = await fetchComments(subjectId: subject?.subjectId ?? "", localDate: localDate)
 
         // @Publishedプロパティも更新（互換性のため）
         await MainActor.run {
@@ -511,12 +517,14 @@ class SupabaseDataManager: ObservableObject {
     ///   - timezone: デバイス固有のタイムゾーン
     /// - Returns: 1日のサマリーデータ（DashboardSummary）
     func fetchDailyResults(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardSummary? {
-        // タイムゾーンを適用
         let targetTimezone = timezone ?? TimeZone.current
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = targetTimezone
-        let dateString = formatter.string(from: date)
+        let dateString = LocalDate.string(from: date, timezone: targetTimezone)
+        return await fetchDailyResults(deviceId: deviceId, localDate: dateString, timezone: targetTimezone)
+    }
+
+    func fetchDailyResults(deviceId: String, localDate: String, timezone: TimeZone? = nil) async -> DashboardSummary? {
+        let targetTimezone = timezone ?? TimeZone.current
+        let dateString = localDate
 
         #if DEBUG
         print("📊 [Direct Access] Fetching daily_results")
@@ -700,16 +708,18 @@ class SupabaseDataManager: ObservableObject {
     ///
     /// ⚠️ 重要: local_dateのみ使用。recorded_at（UTC）は一切参照しない
     func fetchDashboardTimeBlocks(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
+        let targetTimezone = timezone ?? TimeZone.current
+        let localDate = LocalDate.string(from: date, timezone: targetTimezone)
+        return await fetchDashboardTimeBlocks(deviceId: deviceId, localDate: localDate, timezone: targetTimezone)
+    }
+
+    func fetchDashboardTimeBlocks(deviceId: String, localDate: String, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
         #if DEBUG
         print("📊 Fetching spot results with features for device: \(deviceId)")
         #endif
 
-        // タイムゾーンを適用してlocal_dateを生成
         let targetTimezone = timezone ?? TimeZone.current
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = targetTimezone
-        let dateString = formatter.string(from: date)
+        let dateString = localDate
 
         #if DEBUG
         print("   Date: \(dateString)")
@@ -1222,10 +1232,12 @@ class SupabaseDataManager: ObservableObject {
     
     /// コメントを追加
     func addComment(subjectId: String, userId: String, commentText: String, date: Date) async throws {
-        // 日付をYYYY-MM-DD形式に変換
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        let dateString = dateFormatter.string(from: date)
+        let dateString = LocalDate.string(from: date, timezone: TimeZone.current)
+        try await addComment(subjectId: subjectId, userId: userId, commentText: commentText, localDate: dateString)
+    }
+
+    func addComment(subjectId: String, userId: String, commentText: String, localDate: String) async throws {
+        let dateString = localDate
 
         let comment = [
             "subject_id": subjectId,
@@ -1251,10 +1263,12 @@ class SupabaseDataManager: ObservableObject {
     
     /// コメントを再取得（リフレッシュ用）
     func fetchComments(subjectId: String, date: Date) async -> [SubjectComment] {
-        // 日付をYYYY-MM-DD形式に変換
-        let dateFormatter = DateFormatter()
-        dateFormatter.dateFormat = "yyyy-MM-dd"
-        let dateString = dateFormatter.string(from: date)
+        let dateString = LocalDate.string(from: date, timezone: TimeZone.current)
+        return await fetchComments(subjectId: subjectId, localDate: dateString)
+    }
+
+    func fetchComments(subjectId: String, localDate: String) async -> [SubjectComment] {
+        let dateString = localDate
 
         do {
             // まずコメントを取得
