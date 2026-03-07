@@ -742,45 +742,63 @@ class SupabaseDataManager: ObservableObject {
 
             struct SpotFeature: Codable {
                 let device_id: String
-                let local_time: String?  // ✅ local_timeで結合
-                let vibe_transcriber_result: String?  // 文字起こし結果
+                let local_time: String?
+                let vibe_transcriber_result: String?
                 let behavior_extractor_result: [SEDBehaviorTimePoint]?
                 let emotion_extractor_result: [EmotionChunk]?
             }
 
-            // 📊 Performance optimization: Parallel database queries
             let spotResultsQuery = supabase
                 .from("spot_results")
                 .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
-                .order("local_time", ascending: true)  // ✅ ローカルタイムでソート
+                .order("local_time", ascending: true)
 
             let spotFeaturesQuery = supabase
                 .from("spot_features")
-                .select("device_id, local_time, vibe_transcriber_result, behavior_extractor_result, emotion_extractor_result")
+                .select("device_id, local_time, vibe_transcriber_result, behavior_extractor_result, emotion_extractor_result, emotion_features_result_hume")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
 
             async let spotResultsTask: [SpotResult] = spotResultsQuery.execute().value
-            async let spotFeaturesTask: [SpotFeature] = spotFeaturesQuery.execute().value
+            async let spotFeaturesRawTask = spotFeaturesQuery.execute()
 
-            let (spotResults, spotFeatures) = try await (spotResultsTask, spotFeaturesTask)
+            let spotResults = try await spotResultsTask
+            let spotFeaturesResponse = try await spotFeaturesRawTask
 
-            print("✅ Fetched \(spotResults.count) spot results and \(spotFeatures.count) spot features")
+            // Decode SpotFeature (without hume) from raw data
+            let decoder = JSONDecoder()
+            let spotFeatures = (try? decoder.decode([SpotFeature].self, from: spotFeaturesResponse.data)) ?? []
 
-            // Step 3: Merge data by local_time (ユニークキー)
+            // Extract emotion_features_result_hume directly from raw JSON
+            var humeMap: [String: String] = [:]
+            if let jsonArray = try? JSONSerialization.jsonObject(with: spotFeaturesResponse.data) as? [[String: Any]] {
+                for item in jsonArray {
+                    guard let localTime = item["local_time"] as? String else { continue }
+                    if let humeData = item["emotion_features_result_hume"] {
+                        if !(humeData is NSNull) {
+                            let jsonData = try? JSONSerialization.data(withJSONObject: humeData, options: [.prettyPrinted, .sortedKeys])
+                            if let jsonData, let jsonStr = String(data: jsonData, encoding: .utf8) {
+                                humeMap[localTime] = jsonStr
+                            }
+                        }
+                    }
+                }
+            }
+
+            print("✅ Fetched \(spotResults.count) spot results and \(spotFeatures.count) spot features, \(humeMap.count) with SER data")
+
+            // Merge by local_time
             let featureMap = Dictionary(uniqueKeysWithValues: spotFeatures.compactMap { feature -> (String, SpotFeature)? in
                 guard let localTime = feature.local_time else { return nil }
                 return (localTime, feature)
             })
 
-            // Optimized: Direct object construction without JSON encoding/decoding
             let timeBlocks: [DashboardTimeBlock] = spotResults.compactMap { result in
                 guard let localTime = result.local_time else { return nil }
                 let feature = featureMap[localTime]
 
-                // Direct initialization (避免 JSON overhead)
                 return DashboardTimeBlock(
                     deviceId: result.device_id,
                     localDate: result.local_date,
@@ -794,7 +812,8 @@ class SupabaseDataManager: ObservableObject {
                     updatedAt: nil,
                     vibeTranscriberResult: feature?.vibe_transcriber_result,
                     behaviorTimePoints: feature?.behavior_extractor_result ?? [],
-                    emotionChunks: feature?.emotion_extractor_result ?? []
+                    emotionChunks: feature?.emotion_extractor_result ?? [],
+                    emotionFeaturesResultHumeRaw: humeMap[localTime]
                 )
             }
 

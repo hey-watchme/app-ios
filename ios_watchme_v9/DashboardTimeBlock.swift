@@ -63,6 +63,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let vibeTranscriberResult: String?  // 文字起こし結果（"発話なし" or 実際のテキスト）
     let behaviorTimePoints: [SEDBehaviorTimePoint]
     let emotionChunks: [EmotionChunk]
+    let emotionFeaturesResultHumeRaw: String?  // SER raw JSON (Hume API) for debug display
 
     // 表示用の時刻文字列（初期化時に1回だけ計算してキャッシュ）
     let displayTime: String
@@ -86,6 +87,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         case vibeTranscriberResult = "vibe_transcriber_result"
         case behaviorTimePoints = "behavior_extractor_result"
         case emotionChunks = "emotion_extractor_result"
+        case emotionFeaturesResultHumeRaw = "emotion_features_result_hume"
     }
 
     init(from decoder: Decoder) throws {
@@ -106,6 +108,12 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         vibeTranscriberResult = try? container.decodeIfPresent(String.self, forKey: .vibeTranscriberResult)
         behaviorTimePoints = (try? container.decodeIfPresent([SEDBehaviorTimePoint].self, forKey: .behaviorTimePoints)) ?? []
         emotionChunks = (try? container.decodeIfPresent([EmotionChunk].self, forKey: .emotionChunks)) ?? []
+        // emotion_features_result_hume is JSONB with arbitrary structure - decode via JSONValue and convert to string
+        if let jsonVal = try? container.decodeIfPresent(JSONValue.self, forKey: .emotionFeaturesResultHumeRaw) {
+            emotionFeaturesResultHumeRaw = jsonVal.prettyPrinted
+        } else {
+            emotionFeaturesResultHumeRaw = nil
+        }
 
         // displayTimeを初期化時に1回だけ計算（キャッシュ）
         displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
@@ -248,7 +256,8 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          updatedAt: String? = nil,
          vibeTranscriberResult: String? = nil,
          behaviorTimePoints: [SEDBehaviorTimePoint],
-         emotionChunks: [EmotionChunk]) {
+         emotionChunks: [EmotionChunk],
+         emotionFeaturesResultHumeRaw: String? = nil) {
 
         self.deviceId = deviceId
         self.date = localDate
@@ -263,6 +272,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.vibeTranscriberResult = vibeTranscriberResult
         self.behaviorTimePoints = behaviorTimePoints
         self.emotionChunks = emotionChunks
+        self.emotionFeaturesResultHumeRaw = emotionFeaturesResultHumeRaw
 
         // Calculate displayTime
         self.displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)

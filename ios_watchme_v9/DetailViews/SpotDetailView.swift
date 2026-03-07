@@ -38,6 +38,9 @@ struct SpotDetailView: View {
                         contentCard(title: "感情", content: emotion, icon: "face.smiling")
                     }
 
+                    // Raw analysis results (collapsible, for debug/advanced users)
+                    rawAnalysisSection
+
                     Spacer()
                         .frame(height: 40)
                 }
@@ -101,6 +104,83 @@ struct SpotDetailView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemGray6))
+        )
+    }
+
+    // MARK: - Raw Analysis Section (ASR, SED, SER)
+
+    private var rawAnalysisSection: some View {
+        Group {
+            if hasAnyRawData {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("DATA")
+                        .font(.headline)
+                        .foregroundColor(.secondary)
+
+                    // 1. STT
+                    if let transcription = spotData.vibeTranscriberResult {
+                        rawDataDisclosure(
+                            title: "STT",
+                            content: transcription
+                        )
+                    }
+
+                    // 2. SED
+                    if !spotData.behaviorTimePoints.isEmpty {
+                        rawDataDisclosure(
+                            title: "SED",
+                            content: behaviorExtractorJSONString
+                        )
+                    }
+
+                    // 3. SER
+                    if let humeRaw = spotData.emotionFeaturesResultHumeRaw, !humeRaw.isEmpty {
+                        rawDataDisclosure(
+                            title: "SER",
+                            content: humeRaw
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    private var hasAnyRawData: Bool {
+        spotData.vibeTranscriberResult != nil
+            || !spotData.behaviorTimePoints.isEmpty
+            || (spotData.emotionFeaturesResultHumeRaw.map { !$0.isEmpty } ?? false)
+    }
+
+    private var behaviorExtractorJSONString: String {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(spotData.behaviorTimePoints),
+              let str = String(data: data, encoding: .utf8) else {
+            return "[]"
+        }
+        return str
+    }
+
+    private func rawDataDisclosure(title: String, content: String) -> some View {
+        DisclosureGroup {
+            Text(content)
+                .font(.system(.caption, design: .monospaced))
+                .foregroundColor(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
+                .textSelection(.enabled)
+        } label: {
+            HStack {
+                Text(title)
+                    .font(.subheadline)
+                    .foregroundColor(.primary)
+                Spacer()
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 12)
                 .fill(Color(.systemGray6))
         )
     }
