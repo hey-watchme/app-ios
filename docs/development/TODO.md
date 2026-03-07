@@ -3,6 +3,47 @@
 このドキュメントは、アプリの改善とApp Store申請に向けた残りのタスクをまとめたものです。
 完了した項目はチェックボックスにチェックを入れてください。
 
+## 2026-03-07 引き継ぎメモ: ホーム画面の深夜バグ
+
+### 現状
+- `main` に深夜ロールオーバー対策を push 済み
+  - `027c3ca` Fix dashboard refresh after local date rollover
+- `main` にホーム画面の `local_date` 識別子化の第一段階を push 済み
+  - `b747793` Use local_date as dashboard page identity
+- GitHub issue:
+  - `#12` Refactor dashboard day identity to local_date
+
+### 今回やったこと
+- ホーム画面の `TabView` 選択状態を `Date` ではなく `local_date` 文字列で持つように変更
+- `ContentView` の `dateRange` も `[Date]` から `[String]` に変更
+- `SimpleDashboardView` を固定ページ単位の `localDate` 表示に変更
+- `SimpleDashboardView` 内の「全ページを selectedDate に同期する応急処置」を削除
+- `SupabaseDataManager` に `local_date` 直接指定の取得メソッドを追加
+- 現在日の空データを長時間キャッシュしないように調整
+- フォアグラウンド復帰 / significant time change 時の再同期を追加
+
+### 重要な見立て
+- 症状は UTC 参照ミス単体より、ホーム画面の「ページ識別子」「表示日付」「取得キー」がズレる構造の問題である可能性が高い
+- 特に `Date` を `TabView` のタグと取得キーに兼用していたことが脆弱だった
+- ただし `spot_features` の1件不正データで当日表示が全滅する経路はまだ残っている
+
+### 次セッションで優先すること
+- [ ] issue `#12` の続きとして、`spot_features` の部分失敗耐性を入れる
+  - 1件の decode 失敗で当日 `timeBlocks` 全体が `[]` にならないようにする
+  - `spot_results` は表示し、`spot_features` 詳細だけ欠落扱いに落とす方針
+- [ ] ホーム画面の midnight rollover を実機で再現確認
+  - 2026-03-07 時点ではビルド成功のみ確認済み
+  - 深夜 23:59 → 00:05 → 02:00 前後でホーム表示とスワイプを確認する
+- [ ] ホーム以外に残っている `Date` / `Calendar.current` 依存の棚卸し
+  - 優先対象: レポート画面、コメント日付、カレンダー選択まわり
+- [ ] 必要なら issue `#12` に検証結果を追記
+
+### 関連ファイル
+- `ios_watchme_v9/ContentView.swift`
+- `ios_watchme_v9/SimpleDashboardView.swift`
+- `ios_watchme_v9/SupabaseDataManager.swift`
+- `ios_watchme_v9/LocalDate.swift`
+
 ## 🚀 フェーズ1: コードベースのリファクタリングと安定性向上
 
 ### 認証・データフローの安定化
