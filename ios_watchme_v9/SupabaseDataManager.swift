@@ -740,14 +740,6 @@ class SupabaseDataManager: ObservableObject {
                 let created_at: String?
             }
 
-            struct SpotFeature: Codable {
-                let device_id: String
-                let local_time: String?
-                let vibe_transcriber_result: String?
-                let behavior_extractor_result: [SEDBehaviorTimePoint]?
-                let emotion_extractor_result: [EmotionChunk]?
-            }
-
             let spotResultsQuery = supabase
                 .from("spot_results")
                 .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at, profile_result")
@@ -767,21 +759,51 @@ class SupabaseDataManager: ObservableObject {
             let spotResults = try await spotResultsTask
             let spotFeaturesResponse = try await spotFeaturesRawTask
 
-            // Decode SpotFeature (without hume) from raw data
-            let decoder = JSONDecoder()
-            let spotFeatures = (try? decoder.decode([SpotFeature].self, from: spotFeaturesResponse.data)) ?? []
-
-            // Extract emotion_features_result_hume directly from raw JSON
+            // Extract all spot_features fields via JSONSerialization
+            // (vibe_transcriber_result is JSONB object, not a string)
+            var vibeTranscriberMap: [String: String] = [:]
+            var behaviorMap: [String: [SEDBehaviorTimePoint]] = [:]
+            var emotionChunksMap: [String: [EmotionChunk]] = [:]
             var humeMap: [String: String] = [:]
+
             if let jsonArray = try? JSONSerialization.jsonObject(with: spotFeaturesResponse.data) as? [[String: Any]] {
+                let featureDecoder = JSONDecoder()
                 for item in jsonArray {
                     guard let localTime = item["local_time"] as? String else { continue }
-                    if let humeData = item["emotion_features_result_hume"] {
-                        if !(humeData is NSNull) {
-                            let jsonData = try? JSONSerialization.data(withJSONObject: humeData, options: [.prettyPrinted, .sortedKeys])
-                            if let jsonData, let jsonStr = String(data: jsonData, encoding: .utf8) {
-                                humeMap[localTime] = jsonStr
+
+                    // STT: vibe_transcriber_result is JSONB object
+                    if let vtrObj = item["vibe_transcriber_result"], !(vtrObj is NSNull) {
+                        if let vtrDict = vtrObj as? [String: Any] {
+                            if let jsonData = try? JSONSerialization.data(withJSONObject: vtrDict, options: [.prettyPrinted, .sortedKeys]),
+                               let jsonStr = String(data: jsonData, encoding: .utf8) {
+                                vibeTranscriberMap[localTime] = jsonStr
                             }
+                        } else if let vtrStr = vtrObj as? String {
+                            vibeTranscriberMap[localTime] = vtrStr
+                        }
+                    }
+
+                    // SED: behavior_extractor_result is JSONB array
+                    if let berArray = item["behavior_extractor_result"], !(berArray is NSNull) {
+                        if let jsonData = try? JSONSerialization.data(withJSONObject: berArray),
+                           let points = try? featureDecoder.decode([SEDBehaviorTimePoint].self, from: jsonData) {
+                            behaviorMap[localTime] = points
+                        }
+                    }
+
+                    // Emotion chunks: emotion_extractor_result is JSONB array
+                    if let eerArray = item["emotion_extractor_result"], !(eerArray is NSNull) {
+                        if let jsonData = try? JSONSerialization.data(withJSONObject: eerArray),
+                           let chunks = try? featureDecoder.decode([EmotionChunk].self, from: jsonData) {
+                            emotionChunksMap[localTime] = chunks
+                        }
+                    }
+
+                    // SER (Hume): emotion_features_result_hume is JSONB object
+                    if let humeData = item["emotion_features_result_hume"], !(humeData is NSNull) {
+                        if let jsonData = try? JSONSerialization.data(withJSONObject: humeData, options: [.prettyPrinted, .sortedKeys]),
+                           let jsonStr = String(data: jsonData, encoding: .utf8) {
+                            humeMap[localTime] = jsonStr
                         }
                     }
                 }
@@ -818,17 +840,10 @@ class SupabaseDataManager: ObservableObject {
                 }
             }
 
-            print("✅ Fetched \(spotResults.count) spot results and \(spotFeatures.count) spot features, \(humeMap.count) with SER data")
-
-            // Merge by local_time
-            let featureMap = Dictionary(uniqueKeysWithValues: spotFeatures.compactMap { feature -> (String, SpotFeature)? in
-                guard let localTime = feature.local_time else { return nil }
-                return (localTime, feature)
-            })
+            print("✅ Fetched \(spotResults.count) spot results, STT:\(vibeTranscriberMap.count) SED:\(behaviorMap.count) SER:\(humeMap.count)")
 
             let timeBlocks: [DashboardTimeBlock] = spotResults.compactMap { result in
                 guard let localTime = result.local_time else { return nil }
-                let feature = featureMap[localTime]
 
                 return DashboardTimeBlock(
                     deviceId: result.device_id,
@@ -843,9 +858,9 @@ class SupabaseDataManager: ObservableObject {
                     updatedAt: nil,
                     sceneMapping: sceneMappingMap[localTime],
                     analysis: analysisMap[localTime],
-                    vibeTranscriberResult: feature?.vibe_transcriber_result,
-                    behaviorTimePoints: feature?.behavior_extractor_result ?? [],
-                    emotionChunks: feature?.emotion_extractor_result ?? [],
+                    vibeTranscriberResult: vibeTranscriberMap[localTime],
+                    behaviorTimePoints: behaviorMap[localTime] ?? [],
+                    emotionChunks: emotionChunksMap[localTime] ?? [],
                     emotionFeaturesResultHumeRaw: humeMap[localTime]
                 )
             }
