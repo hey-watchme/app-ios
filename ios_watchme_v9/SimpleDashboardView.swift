@@ -1208,6 +1208,20 @@ struct SpotAnalysisCard: View {
                     }
                 }
 
+                // Analysis (from profile_result.analysis)
+                if let analysis = timeBlock.analysis, !analysis.isEmpty {
+                    HStack(alignment: .top, spacing: 4) {
+                        Text("[分析]")
+                            .font(.system(size: 13))
+                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+
+                        Text(analysis)
+                            .font(.system(size: 13))
+                            .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                            .lineLimit(2)
+                    }
+                }
+
                 // Detail button
                 if let onTapDetail = onTapDetail {
                     Button(action: onTapDetail) {

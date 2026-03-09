@@ -45,6 +45,24 @@ struct EmotionChunk: Codable, Equatable {
     let primary_emotion: EmotionDetail
 }
 
+// MARK: - Scene Mapping Model (from profile_result)
+
+struct SceneMapping: Codable, Equatable {
+    let participants: String?
+    let core_activity: String?
+    let behavior_detail: String?
+    let atmosphere: String?
+    let uncertainty: String?
+
+    enum CodingKeys: String, CodingKey {
+        case participants
+        case core_activity
+        case behavior_detail
+        case atmosphere
+        case uncertainty
+    }
+}
+
 // MARK: - Dashboard Time Block
 
 struct DashboardTimeBlock: Codable, Equatable, Identifiable {
@@ -58,6 +76,10 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let rating: Int?        // Importance rating (0-5)
     let createdAt: String?
     let updatedAt: String?
+
+    // profile_result fields (scene_mapping, analysis)
+    let sceneMapping: SceneMapping?
+    let analysis: String?
 
     // spot_features からの追加データ（Supabaseが自動的にパースした配列）
     let vibeTranscriberResult: String?  // 文字起こし結果（"発話なし" or 実際のテキスト）
@@ -103,6 +125,10 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         rating = try container.decodeIfPresent(Int.self, forKey: .rating)
         createdAt = try container.decodeIfPresent(String.self, forKey: .createdAt)
         updatedAt = try container.decodeIfPresent(String.self, forKey: .updatedAt)
+
+        // scene_mapping and analysis are not used via Codable path (injected via direct init)
+        sceneMapping = nil
+        analysis = nil
 
         // Supabaseが自動パースした配列とテキストを取得（失敗時は空配列/nil）
         vibeTranscriberResult = try? container.decodeIfPresent(String.self, forKey: .vibeTranscriberResult)
@@ -254,6 +280,8 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          rating: Int? = nil,
          createdAt: String?,
          updatedAt: String? = nil,
+         sceneMapping: SceneMapping? = nil,
+         analysis: String? = nil,
          vibeTranscriberResult: String? = nil,
          behaviorTimePoints: [SEDBehaviorTimePoint],
          emotionChunks: [EmotionChunk],
@@ -269,6 +297,8 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.rating = rating
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.sceneMapping = sceneMapping
+        self.analysis = analysis
         self.vibeTranscriberResult = vibeTranscriberResult
         self.behaviorTimePoints = behaviorTimePoints
         self.emotionChunks = emotionChunks

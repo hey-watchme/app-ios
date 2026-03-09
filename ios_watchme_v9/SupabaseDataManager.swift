@@ -750,7 +750,7 @@ class SupabaseDataManager: ObservableObject {
 
             let spotResultsQuery = supabase
                 .from("spot_results")
-                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at")
+                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at, profile_result")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
                 .order("local_time", ascending: true)
@@ -787,6 +787,37 @@ class SupabaseDataManager: ObservableObject {
                 }
             }
 
+            // Extract scene_mapping and analysis from spot_results.profile_result
+            var sceneMappingMap: [String: SceneMapping] = [:]
+            var analysisMap: [String: String] = [:]
+            let spotResultsRaw = try await supabase
+                .from("spot_results")
+                .select("local_time, profile_result")
+                .eq("device_id", value: deviceId)
+                .eq("local_date", value: dateString)
+                .execute()
+
+            if let jsonArray = try? JSONSerialization.jsonObject(with: spotResultsRaw.data) as? [[String: Any]] {
+                for item in jsonArray {
+                    guard let localTime = item["local_time"] as? String else { continue }
+                    if let profileResult = item["profile_result"] as? [String: Any] {
+                        if let analysisStr = profileResult["analysis"] as? String {
+                            analysisMap[localTime] = analysisStr
+                        }
+                        if let smDict = profileResult["scene_mapping"] as? [String: Any] {
+                            let sm = SceneMapping(
+                                participants: smDict["participants"] as? String,
+                                core_activity: smDict["core_activity"] as? String,
+                                behavior_detail: smDict["behavior_detail"] as? String,
+                                atmosphere: smDict["atmosphere"] as? String,
+                                uncertainty: smDict["uncertainty"] as? String
+                            )
+                            sceneMappingMap[localTime] = sm
+                        }
+                    }
+                }
+            }
+
             print("✅ Fetched \(spotResults.count) spot results and \(spotFeatures.count) spot features, \(humeMap.count) with SER data")
 
             // Merge by local_time
@@ -810,6 +841,8 @@ class SupabaseDataManager: ObservableObject {
                     rating: result.rating,
                     createdAt: result.created_at,
                     updatedAt: nil,
+                    sceneMapping: sceneMappingMap[localTime],
+                    analysis: analysisMap[localTime],
                     vibeTranscriberResult: feature?.vibe_transcriber_result,
                     behaviorTimePoints: feature?.behavior_extractor_result ?? [],
                     emotionChunks: feature?.emotion_extractor_result ?? [],

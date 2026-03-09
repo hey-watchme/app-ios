@@ -23,9 +23,19 @@ struct SpotDetailView: View {
                         vibeScoreCard(vibeScore)
                     }
 
+                    // Scene Mapping
+                    if let sm = spotData.sceneMapping {
+                        sceneMappingCard(sm)
+                    }
+
                     // Summary
                     if let summary = spotData.summary {
                         contentCard(title: "概要", content: summary, icon: "text.alignleft")
+                    }
+
+                    // Analysis
+                    if let analysis = spotData.analysis, !analysis.isEmpty {
+                        contentCard(title: "分析", content: analysis, icon: "brain.head.profile")
                     }
 
                     // Behavior
@@ -106,6 +116,55 @@ struct SpotDetailView: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(Color(.systemGray6))
         )
+    }
+
+    private func sceneMappingCard(_ sm: SceneMapping) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "map")
+                    .foregroundColor(.accentPurple)
+                Text("シーン")
+                    .font(.headline)
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                if let participants = sm.participants, !participants.isEmpty {
+                    sceneMappingRow(label: "参加者", value: participants)
+                }
+                if let activity = sm.core_activity, !activity.isEmpty {
+                    sceneMappingRow(label: "活動", value: activity)
+                }
+                if let detail = sm.behavior_detail, !detail.isEmpty {
+                    sceneMappingRow(label: "やり取り", value: detail)
+                }
+                if let atmosphere = sm.atmosphere, !atmosphere.isEmpty {
+                    sceneMappingRow(label: "雰囲気", value: atmosphere)
+                }
+                if let uncertainty = sm.uncertainty, !uncertainty.isEmpty {
+                    sceneMappingRow(label: "不確実性", value: uncertainty)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.systemGray6))
+        )
+    }
+
+    private func sceneMappingRow(label: String, value: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Text(label)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.secondary)
+                .frame(width: 60, alignment: .leading)
+            Text(value)
+                .font(.system(size: 13))
+                .foregroundColor(.primary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     // MARK: - Raw Analysis Section (ASR, SED, SER)
