@@ -132,54 +132,75 @@ struct SimpleDashboardView: View {
                             }
                         )
                     
-                    // ダッシュボードコンテンツ
-                    // 📊 Performance optimization: LazyVStack for on-demand rendering
-                    LazyVStack(spacing: 20) {
+                    // Dashboard content
+                    LazyVStack(spacing: 16) {
                         if isLoading {
-                            // 📊 Skeleton loading for better perceived performance
                             SkeletonView()
                         } else {
-                            // 📊 Progressive rendering: Show content as it becomes available
-
-                            // Priority 1: Vibe card (always show - empty state is handled inside)
-                            vibeGraphCard
+                            // 1. Horizon Metrics (Top Scrollable Pills)
+                            MetricsHorizonView(
+                                vibeScore: dashboardSummary?.averageVibe.map { Double($0) },
+                                activityCount: timeBlocks.count
+                            )
+                            .transition(.opacity)
+                            
+                            // 2. Main Hero Gauge
+                            ModernHeroGaugeView(dashboardSummary: dashboardSummary)
                                 .padding(.horizontal, 20)
-                                .transition(.opacity.combined(with: .scale(scale: 0.95)))
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                                .onTapGesture {
+                                    isCommentFieldFocused = false
+                                    showVibeSheet = true
+                                }
+                                
+                            // 3. Vitals Range Cards 
+                            let stressValue = dashboardSummary?.averageVibe.map { max(10, min(90, 50 - Double($0) * 0.4)) } ?? 42.0
+                            VitalsRangeCard(
+                                title: "Stress Levels",
+                                value: stressValue,
+                                maxValue: 100,
+                                label: stressValue < 40 ? "LOW" : "ELEVATED",
+                                optimalRange: (0.0, 0.4), // 0-40 is optimal
+                                color: stressValue < 40 ? .accentEmerald : .accentAmber,
+                                icon: "heart.text.square"
+                            )
+                            .padding(.horizontal, 20)
+                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
-                            // Priority 2: Latest analysis (show when timeBlocks is available)
+                            // 4. Activity Comparison
+                            DailyActivityOverviewCard(
+                                analysisCount: timeBlocks.count,
+                                targetCount: 24
+                            )
+                            .padding(.horizontal, 20)
+                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+
+                            // Latest analysis
                             if !timeBlocks.isEmpty {
                                 latestAnalysisSection
                                     .padding(.horizontal, 20)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                             }
 
-                            // Priority 3: Highlight section (conversation-focused, only show if has conversation)
+                            // Highlights
                             if showHighlightSection {
                                 highlightSection
                                     .padding(.horizontal, 20)
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                             }
 
-                            // 行動グラフカード（一時的に非表示）
-                            // behaviorGraphCard
-                            //     .padding(.horizontal, 20)
-
-                            // 感情グラフカード（一時的に非表示）
-                            // emotionGraphCard
-                            //     .padding(.horizontal, 20)
-
-                            // Priority 4: Comments (show when subject and comments are available)
+                            // Comments
                             if let subject = subject, (!subjectComments.isEmpty || dashboardSummary != nil) {
                                 commentSection(subject: subject)
                                     .padding(.horizontal, 20)
-                                    .padding(.top, 20)
+                                    .padding(.top, 8)
                                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                             }
 
                             Spacer(minLength: 100)
                         }
                     }
-                    .padding(.top, 8)  // 日付セクションとの余白を8pxに変更
+                    .padding(.top, 8)
                     .animation(.easeInOut(duration: 0.3), value: isLoading)
                     .animation(.easeInOut(duration: 0.3), value: dashboardSummary?.date)
                     .animation(.easeInOut(duration: 0.3), value: timeBlocks.count)
@@ -202,8 +223,20 @@ struct SimpleDashboardView: View {
                 refreshTrigger += 1
             }
             .background(
-                Color.white
-                    .ignoresSafeArea()
+                ZStack {
+                    Color.darkBase
+                    // Subtle ambient gradient for depth (Oura-style)
+                    LinearGradient(
+                        colors: [
+                            Color(white: 0.07).opacity(0.6),
+                            Color.clear,
+                            Color(white: 0.04).opacity(0.3)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                }
+                .ignoresSafeArea()
             )
             .scrollDismissesKeyboard(.interactively)  // スクロール時にキーボードを閉じる
             .onTapGesture {
@@ -928,84 +961,82 @@ struct SimpleDashboardView: View {
     @ViewBuilder
     private func commentSection(subject: Subject) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            // セクションヘッダー
             HStack {
-                Text("コメント")
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                
+                Text("Comments")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+
                 Spacer()
-                
-                Text("\(subjectComments.count)件")
-                    .font(.caption)
-                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
+
+                Text("\(subjectComments.count)")
+                    .font(.system(size: 12, weight: .bold, design: .monospaced))
+                    .foregroundStyle(Color(white: 0.36))
             }
-            
-            // コメント入力欄
+
+            // Input field
             VStack(spacing: 12) {
                 HStack(alignment: .top) {
                     Image(systemName: "person.circle.fill")
-                        .font(.system(size: 32))
-                        .foregroundStyle(Color.safeColor("AppAccentColor"))
-                    
+                        .font(.system(size: 28))
+                        .foregroundStyle(Color.accentTeal)
+
                     VStack(alignment: .leading, spacing: 8) {
-                        TextField("コメントを追加...", text: $newCommentText, axis: .vertical)
+                        TextField("Add a comment...", text: $newCommentText, axis: .vertical)
                             .textFieldStyle(.plain)
-                            .font(.system(size: 15))
+                            .font(.system(size: 14))
+                            .foregroundColor(.white)
                             .lineLimit(3...6)
                             .padding(12)
-                            .background(Color.safeColor("CardBackground"))
+                            .background(Color.white.opacity(0.06))
                             .cornerRadius(12)
                             .focused($isCommentFieldFocused)
                             .submitLabel(.done)
                             .onSubmit {
-                                // リターンキー（完了）でキーボードを閉じる
                                 isCommentFieldFocused = false
                             }
-                        
+
                         if !newCommentText.isEmpty {
                             HStack {
                                 Spacer()
-                                
-                                Button("キャンセル") {
+
+                                Button("Cancel") {
                                     newCommentText = ""
                                 }
-                                .font(.caption)
-                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
-                                
-                                Button("投稿") {
+                                .font(.system(size: 12))
+                                .foregroundStyle(Color(white: 0.56))
+
+                                Button("Post") {
                                     Task {
                                         await addComment(subjectId: subject.subjectId)
                                     }
-                                    isCommentFieldFocused = false  // 投稿後キーボードを閉じる
+                                    isCommentFieldFocused = false
                                 }
-                                .font(.caption.bold())
+                                .font(.system(size: 12, weight: .bold))
                                 .foregroundStyle(.white)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 6)
-                                .background(Color.safeColor("AppAccentColor"))
-                                .cornerRadius(12)
+                                .background(Color.accentTeal)
+                                .cornerRadius(10)
                                 .disabled(isAddingComment)
                             }
                         }
                     }
                 }
-                .padding()
-                .background(Color.safeColor("BehaviorBackgroundPrimary").opacity(0.3))
+                .padding(14)
+                .background(Color.darkCard)
                 .cornerRadius(16)
             }
-            
-            // コメントリスト
-            VStack(spacing: 12) {
+
+            VStack(spacing: 8) {
                 ForEach(subjectComments) { comment in
                     commentRow(comment)
                 }
             }
-            
+
             if subjectComments.isEmpty {
-                Text("まだコメントがありません")
-                    .font(.caption)
-                    .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
+                Text("No comments yet")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(white: 0.36))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 20)
             }
@@ -1015,37 +1046,30 @@ struct SimpleDashboardView: View {
     @ViewBuilder
     private func commentRow(_ comment: SubjectComment) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            // アバター表示（SSOT: SubjectComment.userAvatarUrl を渡す）
-            AvatarView(userId: comment.userId, size: 32, avatarUrl: comment.userAvatarUrl)
+            AvatarView(userId: comment.userId, size: 28, avatarUrl: comment.userAvatarUrl)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack {
                     Text(comment.displayName)
-                        .font(.caption.bold())
-                        .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                    
-                    Text("・")
-                        .font(.caption)
-                        .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
-                    
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundStyle(.white)
+
                     Text(comment.formattedDate)
-                        .font(.caption)
-                        .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
-                    
+                        .font(.system(size: 11))
+                        .foregroundStyle(Color(white: 0.36))
+
                     Spacer()
                 }
-                
+
                 Text(comment.commentText)
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                    .font(.system(size: 14))
+                    .foregroundStyle(Color(white: 0.78))
                     .fixedSize(horizontal: false, vertical: true)
 
-                // アクションボタン（削除・通報）
                 if let currentUserId = userAccountManager.effectiveUserId {
                     HStack {
                         Spacer()
 
-                        // 自分のコメントの場合は削除ボタン
                         if comment.userId == currentUserId {
                             Button {
                                 Task {
@@ -1054,34 +1078,28 @@ struct SimpleDashboardView: View {
                             } label: {
                                 Image(systemName: "trash")
                                     .font(.system(size: 10))
-                                    .foregroundStyle(Color.safeColor("BehaviorTextTertiary").opacity(0.5))
+                                    .foregroundStyle(Color(white: 0.25))
                             }
                             .buttonStyle(PlainButtonStyle())
-                        }
-                        // 他人のコメントの場合は通報ボタン
-                        else {
+                        } else {
                             Button {
                                 reportTargetComment = comment
                                 showReportCommentSheet = true
                             } label: {
-                                HStack(spacing: 4) {
-                                    Image(systemName: "exclamationmark.bubble")
-                                        .font(.system(size: 10))
-                                    Text("通報")
-                                        .font(.system(size: 10))
-                                }
-                                .foregroundStyle(Color.safeColor("BehaviorTextTertiary").opacity(0.5))
+                                Image(systemName: "exclamationmark.bubble")
+                                    .font(.system(size: 10))
+                                    .foregroundStyle(Color(white: 0.25))
                             }
                             .buttonStyle(PlainButtonStyle())
                         }
                     }
-                    .padding(.top, 4)
+                    .padding(.top, 2)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(12)
-        .background(Color.safeColor("CardBackground"))
+        .background(Color.darkCard)
         .cornerRadius(12)
     }
     
@@ -1145,104 +1163,126 @@ struct SpotAnalysisCard: View {
     }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            // Header row (time and score) - outside the card
+        VStack(alignment: .leading, spacing: 0) {
+            // Header row: time + score + mini gauge
             HStack(spacing: 12) {
                 Text(timeBlock.displayTime)
-                    .font(.system(size: 14, weight: .semibold, design: .monospaced))
-                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
-
-                Spacer()
+                    .font(.system(size: 11, weight: .bold, design: .monospaced))
+                    .foregroundColor(Color(white: 0.6))
 
                 if let score = timeBlock.vibeScore {
-                    HStack(spacing: 4) {
-                        Circle()
-                            .fill(timeBlock.scoreColor)
-                            .frame(width: 6, height: 6)
-                        Text(String(format: "%@%.0fpt", score >= 0 ? "+" : "", score))
-                            .font(.system(size: 13, weight: .medium))
+                    HStack(spacing: 6) {
+                        Text(String(format: "%@%.0f", score >= 0 ? "+" : "", score))
+                            .font(.system(size: 13, weight: .bold, design: .rounded))
                             .foregroundColor(timeBlock.scoreColor)
                     }
-                } else {
-                    Text("-")
-                        .font(.system(size: 13))
-                        .foregroundColor(Color.safeColor("BehaviorTextTertiary"))
+                }
+
+                Spacer()
+                
+                // Mini Emotion Gauge (if available)
+                if !timeBlock.topEmotions.isEmpty {
+                    miniEmotionGauge(timeBlock.topEmotions)
+                        .frame(width: 40, height: 4)
+                }
+
+                if onTapDetail != nil {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(Color(white: 0.25))
                 }
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
 
-            // Card content (gray background)
-            VStack(alignment: .leading, spacing: 12) {
-                // Summary (transcription) - moved to top, no title
+            // Divider
+            Rectangle()
+                .fill(Color.white.opacity(0.08))
+                .frame(height: 1)
+
+            // Card content
+            VStack(alignment: .leading, spacing: 10) {
                 if let firstLine = summaryFirstLine {
                     Text(firstLine)
-                        .font(.system(size: 13))
-                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.white)
                         .fixedSize(horizontal: false, vertical: true)
+                        .lineLimit(2)
+                        .lineSpacing(2)
                 }
 
-                // Behavior (from spot_results.behavior)
-                if let behavior = timeBlock.behavior, !behavior.isEmpty {
-                    HStack(spacing: 4) {
-                        Text("[行動]")
-                            .font(.system(size: 13))
-                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
+                // Tags row 
+                HStack(spacing: 6) {
+                    if let behavior = timeBlock.behavior, !behavior.isEmpty {
+                        tagPill(text: behavior, color: .accentTeal, backgroundColor: Color.accentTeal.opacity(0.1))
+                    }
 
-                        Text(behavior)
-                            .font(.system(size: 13))
-                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                            .lineLimit(1)
+                    if let emotion = timeBlock.emotion, !emotion.isEmpty {
+                        tagPill(text: emotion, color: .accentAmber, backgroundColor: Color.accentAmber.opacity(0.1))
                     }
                 }
 
-                // Emotion (from spot_results.emotion)
-                if let emotion = timeBlock.emotion, !emotion.isEmpty {
-                    HStack(spacing: 4) {
-                        Text("[感情]")
-                            .font(.system(size: 13))
-                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
-
-                        Text(emotion)
-                            .font(.system(size: 13))
-                            .foregroundColor(Color.safeColor("PrimaryActionColor"))
-                            .lineLimit(1)
-                    }
-                }
-
-                // Analysis (from profile_result.analysis)
                 if let analysis = timeBlock.analysis, !analysis.isEmpty {
-                    HStack(alignment: .top, spacing: 4) {
-                        Text("[分析]")
-                            .font(.system(size: 13))
-                            .foregroundColor(Color.safeColor("BehaviorTextSecondary"))
-
-                        Text(analysis)
-                            .font(.system(size: 13))
-                            .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
-                            .lineLimit(2)
-                    }
-                }
-
-                // Detail button
-                if let onTapDetail = onTapDetail {
-                    Button(action: onTapDetail) {
-                        HStack {
-                            Text("詳細を見る")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color.safeColor("AppAccentColor"))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Color.safeColor("AppAccentColor"))
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                        .padding(.top, 8)
-                    }
-                    .buttonStyle(PlainButtonStyle())
+                    Text(analysis)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(white: 0.5))
+                        .lineLimit(2)
                 }
             }
-            .padding(16)
-            .background(Color.safeColor("CardBackground"))
-            .cornerRadius(12)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
         }
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1) // 1px border for high-density look
+                )
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onTapDetail?()
+        }
+    }
+
+    private func tagPill(text: String, color: Color, backgroundColor: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .medium))
+            .foregroundColor(color)
+            .lineLimit(1)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(backgroundColor)
+            .cornerRadius(6)
+    }
+    
+    @ViewBuilder
+    private func miniEmotionGauge(_ emotions: [(name: String, score: Double)]) -> some View {
+        GeometryReader { geo in
+            HStack(spacing: 0) {
+                // Determine colors based on emotions
+                let totalScore = emotions.reduce(0) { $0 + $1.score }
+                ForEach(0..<min(emotions.count, 3), id: \.self) { i in
+                    let em = emotions[i]
+                    let ratio = totalScore > 0 ? (em.score / totalScore) : 0
+                    let color = getEmotionColor(em.name)
+                    Rectangle()
+                        .fill(color)
+                        .frame(width: geo.size.width * CGFloat(ratio))
+                }
+            }
+            .cornerRadius(2)
+        }
+    }
+    
+    private func getEmotionColor(_ name: String) -> Color {
+        // basic mapping
+        let n = name.lowercased()
+        if n.contains("joy") || n.contains("happy") || n.contains("喜び") || n.contains("ポジティブ") { return Color.safeColor("SuccessColor") }
+        if n.contains("anger") || n.contains("sad") || n.contains("怒り") || n.contains("悲しみ") || n.contains("ネガティブ") { return Color.safeColor("ErrorColor") }
+        if n.contains("stress") || n.contains("fear") { return Color.safeColor("WarningColor") }
+        return Color.accentTeal
     }
 }
 
@@ -1300,127 +1340,12 @@ struct AnalysisListView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
-                // Filter and Sort controls
-                if !timeBlocks.isEmpty {
-                    VStack(spacing: 12) {
-                        HStack(spacing: 16) {
-                            // Filter
-                            Menu {
-                                ForEach(AnalysisFilterType.allCases, id: \.self) { type in
-                                    Button(action: {
-                                        filterType = type
-                                    }) {
-                                        HStack {
-                                            Text(type.rawValue)
-                                            if filterType == type {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Image(systemName: "line.3.horizontal.decrease.circle")
-                                        .font(.system(size: 14))
-                                    Text(filterType.rawValue)
-                                        .font(.system(size: 14))
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 11))
-                                }
-                                .foregroundStyle(Color.safeColor("AppAccentColor"))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.safeColor("CardBackground"))
-                                .cornerRadius(8)
-                            }
-
-                            // Sort
-                            Menu {
-                                ForEach(AnalysisSortOrder.allCases, id: \.self) { order in
-                                    Button(action: {
-                                        sortOrder = order
-                                    }) {
-                                        HStack {
-                                            Text(order.rawValue)
-                                            if sortOrder == order {
-                                                Image(systemName: "checkmark")
-                                            }
-                                        }
-                                    }
-                                }
-                            } label: {
-                                HStack {
-                                    Image(systemName: "arrow.up.arrow.down.circle")
-                                        .font(.system(size: 14))
-                                    Text(sortOrder.rawValue)
-                                        .font(.system(size: 14))
-                                    Image(systemName: "chevron.down")
-                                        .font(.system(size: 11))
-                                }
-                                .foregroundStyle(Color.safeColor("AppAccentColor"))
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                                .background(Color.safeColor("CardBackground"))
-                                .cornerRadius(8)
-                            }
-
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-
-                        // Result count
-                        HStack {
-                            Text("\(filteredAndSortedBlocks.count)件の分析結果")
-                                .font(.system(size: 13))
-                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
-                            Spacer()
-                        }
-                        .padding(.horizontal, 20)
-                    }
-                    .padding(.top, 20)
-                }
-
-                if timeBlocks.isEmpty {
-                    // Empty state
-                    Group {
-                        if deviceManager.selectedDeviceID == nil {
-                            DeviceNotSelectedView(graphType: .vibe)
-                        } else {
-                            GraphEmptyStateView(graphType: .vibe)
-                        }
-                    }
-                    .padding(.horizontal)
-                } else if filteredAndSortedBlocks.isEmpty {
-                    // Filtered but no results
-                    VStack(spacing: 12) {
-                        Image(systemName: "tray")
-                            .font(.system(size: 48))
-                            .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
-                        Text("条件に一致する分析結果がありません")
-                            .font(.caption)
-                            .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 60)
-                } else {
-                    // Display filtered and sorted results
-                    VStack(spacing: 20) {
-                        ForEach(filteredAndSortedBlocks, id: \.localTime) { block in
-                            SpotAnalysisCard(
-                                timeBlock: block,
-                                onTapDetail: {
-                                    selectedSpotForDetail = block
-                                }
-                            )
-                        }
-                    }
-                    .padding(.horizontal, 20)
-                }
-
+                filterControls
+                listContent
                 Spacer(minLength: 50)
             }
         }
-        .background(Color.white)
+        .background(Color.darkBase)
         .sheet(item: $selectedSpotForDetail) { spot in
             if let deviceId = deviceManager.selectedDeviceID {
                 SpotDetailView(deviceId: deviceId, spotData: spot)
@@ -1428,20 +1353,132 @@ struct AnalysisListView: View {
             }
         }
         .onAppear {
-            // Phase 2: 初回表示時にフィルタリング実行
             updateFilteredAndSortedData()
         }
         .onChange(of: timeBlocks) { oldValue, newValue in
-            // Phase 2: timeBlocksが更新されたら自動的にフィルタリング実行
             updateFilteredAndSortedData()
         }
         .onChange(of: filterType) { oldValue, newValue in
-            // Phase 2: フィルター変更時にフィルタリング実行
             updateFilteredAndSortedData()
         }
         .onChange(of: sortOrder) { oldValue, newValue in
-            // Phase 2: ソート順変更時にソート実行
             updateFilteredAndSortedData()
+        }
+    }
+
+    @ViewBuilder
+    private var filterControls: some View {
+        if !timeBlocks.isEmpty {
+            VStack(spacing: 12) {
+                HStack(spacing: 16) {
+                    Menu {
+                        ForEach(AnalysisFilterType.allCases, id: \.self) { type in
+                            Button(action: {
+                                filterType = type
+                            }) {
+                                HStack {
+                                    Text(type.rawValue)
+                                    if filterType == type {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "line.3.horizontal.decrease.circle")
+                                .font(.system(size: 13))
+                            Text(filterType.rawValue)
+                                .font(.system(size: 13))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10))
+                        }
+                        .foregroundStyle(Color.accentTeal)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.darkCard)
+                        .cornerRadius(10)
+                    }
+
+                    Menu {
+                        ForEach(AnalysisSortOrder.allCases, id: \.self) { order in
+                            Button(action: {
+                                sortOrder = order
+                            }) {
+                                HStack {
+                                    Text(order.rawValue)
+                                    if sortOrder == order {
+                                        Image(systemName: "checkmark")
+                                    }
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: "arrow.up.arrow.down.circle")
+                                .font(.system(size: 13))
+                            Text(sortOrder.rawValue)
+                                .font(.system(size: 13))
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 10))
+                        }
+                        .foregroundStyle(Color.accentTeal)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(Color.darkCard)
+                        .cornerRadius(10)
+                    }
+
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+
+                HStack {
+                    Text("\(filteredAndSortedBlocks.count) results")
+                        .font(.system(size: 13))
+                        .foregroundStyle(Color(white: 0.45))
+                    Spacer()
+                }
+                .padding(.horizontal, 20)
+            }
+            .padding(.top, 20)
+        }
+    }
+
+    @ViewBuilder
+    private var listContent: some View {
+        if timeBlocks.isEmpty {
+            Group {
+                if deviceManager.selectedDeviceID == nil {
+                    DeviceNotSelectedView(graphType: .vibe)
+                } else {
+                    GraphEmptyStateView(graphType: .vibe)
+                }
+            }
+            .padding(.horizontal)
+        } else if filteredAndSortedBlocks.isEmpty {
+            VStack(spacing: 12) {
+                Image(systemName: "tray")
+                    .font(.system(size: 40))
+                    .foregroundStyle(Color(white: 0.25))
+                Text("No matching results")
+                    .font(.system(size: 13))
+                    .foregroundStyle(Color(white: 0.36))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 60)
+        } else {
+            VStack(spacing: 20) {
+                ForEach(filteredAndSortedBlocks, id: \.localTime) { block in
+                    SpotAnalysisCard(
+                        timeBlock: block,
+                        onTapDetail: {
+                            selectedSpotForDetail = block
+                        }
+                    )
+                }
+            }
+            .padding(.horizontal, 20)
         }
     }
 }
@@ -1457,17 +1494,22 @@ struct SpotAnalysisListSection: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // Section title
             HStack {
                 Text(title)
-                    .font(.system(size: 24, weight: .bold))
-                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
                 Spacer()
+
+                if showMoreButton {
+                    Text("\(spotResults.count)")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundStyle(Color(white: 0.36))
+                }
             }
-            .padding(.bottom, 30)
+            .padding(.bottom, 16)
 
             if !spotResults.isEmpty {
-                VStack(spacing: 20) {
+                VStack(spacing: 10) {
                     ForEach(spotResults, id: \.localTime) { block in
                         SpotAnalysisCard(
                             timeBlock: block,
@@ -1477,34 +1519,32 @@ struct SpotAnalysisListSection: View {
                         )
                     }
                 }
-                .padding(.bottom, 16)
+                .padding(.bottom, 12)
 
-                // "Show more" button (optional)
                 if showMoreButton, let onTapShowMore = onTapShowMore {
                     Button(action: onTapShowMore) {
                         HStack {
-                            Text("もっと見る")
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(Color.safeColor("AppAccentColor"))
+                            Text("Show all")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.accentTeal)
                             Image(systemName: "chevron.right")
-                                .font(.system(size: 12, weight: .semibold))
-                                .foregroundStyle(Color.safeColor("AppAccentColor"))
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(Color.accentTeal)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.safeColor("CardBackground"))
+                        .background(Color.white.opacity(0.04))
                         .cornerRadius(12)
                     }
                     .buttonStyle(PlainButtonStyle())
                 }
             } else {
-                // Empty state
-                Text("分析データがありません")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
+                Text("No analysis data")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(white: 0.36))
                     .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(Color.safeColor("CardBackground"))
+                    .padding(.vertical, 24)
+                    .background(Color.darkCard)
                     .cornerRadius(12)
             }
         }

@@ -2,7 +2,7 @@
 //  UnifiedCard.swift
 //  ios_watchme_v9
 //
-//  統一されたカードコンポーネント - ミニマルでクリーンなデザイン
+//  Unified card component - Dark theme
 //
 
 import SwiftUI
@@ -12,76 +12,66 @@ struct UnifiedCard<Content: View>: View {
     var navigationLabel: String? = nil
     var onNavigate: (() -> Void)? = nil
     @ViewBuilder let content: () -> Content
-    
+
     var body: some View {
         ZStack {
-            // 背景 (白)
-            RoundedRectangle(cornerRadius: 24)
-                .fill(Color.white)
-            
-            // 軽い境界線
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.safeColor("BorderLight").opacity(0.1), lineWidth: 1)
-            
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.darkCard)
+
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(Color.white.opacity(0.06), lineWidth: 1)
+
             VStack(spacing: 24) {
-                // ヘッダー部分
                 HStack {
-                    // タイトル（アイコンなし）
                     Text(title)
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
-                    
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundStyle(.white)
+
                     Spacer()
                 }
-                
-                // コンテンツ部分
+
                 content()
-                
-                // ナビゲーションリンク（右下に配置）
+
                 if let navigationLabel = navigationLabel, let onNavigate = onNavigate {
                     HStack {
                         Spacer()
-                        
+
                         Button(action: onNavigate) {
                             HStack(spacing: 4) {
                                 Text(navigationLabel)
                                     .font(.caption)
-                                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
+                                    .foregroundStyle(Color(white: 0.56))
                                 Image(systemName: "chevron.right")
                                     .font(.caption2)
-                                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
+                                    .foregroundStyle(Color(white: 0.56))
                             }
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
                             .background(
                                 Capsule()
-                                    .fill(Color.safeColor("BorderLight").opacity(0.1))
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)
-                                    )
+                                    .fill(Color.white.opacity(0.06))
                             )
                         }
-                        .allowsHitTesting(false) // タップイベントを透過させる
+                        .allowsHitTesting(false)
                     }
                 }
             }
-            .padding(16)  // 内側の余白を16pxに変更
+            .padding(16)
         }
     }
 }
 
-// プレビュー用
 struct UnifiedCard_Previews: PreviewProvider {
     static var previews: some View {
         UnifiedCard(
-            title: "サンプル",
-            navigationLabel: "詳細へ",
+            title: "Sample",
+            navigationLabel: "Details",
             onNavigate: { }
         ) {
-            Text("コンテンツ")
+            Text("Content")
+                .foregroundColor(.white)
         }
         .padding()
-        .background(Color.safeColor("BehaviorBackgroundPrimary"))
+        .background(Color.darkBase)
     }
 }

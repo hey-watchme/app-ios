@@ -281,9 +281,9 @@ struct LargeDateSection: View {
             .multilineTextAlignment(.center)
         }
         .padding(.top, 32)
-        .padding(.bottom, 16)  // 下の余白を16pxに変更
+        .padding(.bottom, 16)
         .frame(maxWidth: .infinity)
-        .background(Color.white)
+        .background(Color.darkBase)
         .sheet(isPresented: $showDatePicker) {
             CustomCalendarView(selectedDate: $selectedDate, isPresented: $showDatePicker)
                 .environmentObject(deviceManager)
@@ -372,8 +372,8 @@ struct StickyDateHeader: View {
         .padding(.horizontal)
         .padding(.vertical, 8)
         .background(
-            Color(.systemBackground)
-                .shadow(color: .black.opacity(0.1), radius: 2, y: 2)
+            Color.darkBase
+                .shadow(color: .black.opacity(0.4), radius: 4, y: 2)
         )
         .sheet(isPresented: $showDatePicker) {
             CustomCalendarView(selectedDate: $selectedDate, isPresented: $showDatePicker)

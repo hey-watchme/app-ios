@@ -2,7 +2,7 @@
 //  SkeletonView.swift
 //  ios_watchme_v9
 //
-//  Skeleton loading placeholder for dashboard
+//  Skeleton loading placeholder - Dark theme
 //
 
 import SwiftUI
@@ -12,38 +12,47 @@ struct SkeletonView: View {
 
     var body: some View {
         VStack(spacing: 20) {
-            // Vibe card skeleton
-            VStack(alignment: .leading, spacing: 12) {
-                SkeletonRectangle(height: 24, width: 100)
-                SkeletonRectangle(height: 120, width: nil)
-                HStack(spacing: 8) {
-                    SkeletonRectangle(height: 12, width: 60)
-                    SkeletonRectangle(height: 12, width: 60)
-                    SkeletonRectangle(height: 12, width: 60)
+            // Metrics bar skeleton
+            HStack(spacing: 8) {
+                ForEach(0..<4, id: \.self) { _ in
+                    SkeletonRectangle(height: 56, width: 120)
+                        .cornerRadius(22)
                 }
             }
-            .padding()
-            .background(Color.safeColor("CardBackground"))
-            .cornerRadius(16)
+            .padding(.horizontal, 20)
+
+            // Vibe card skeleton
+            VStack(alignment: .leading, spacing: 12) {
+                SkeletonRectangle(height: 20, width: 80)
+                SkeletonRectangle(height: 140, width: nil)
+                HStack(spacing: 8) {
+                    SkeletonRectangle(height: 10, width: 50)
+                    SkeletonRectangle(height: 10, width: 50)
+                    SkeletonRectangle(height: 10, width: 50)
+                }
+            }
+            .padding(20)
+            .background(Color.darkCard)
+            .cornerRadius(20)
             .padding(.horizontal, 20)
 
             // Spot analysis skeleton
             VStack(alignment: .leading, spacing: 16) {
-                SkeletonRectangle(height: 24, width: 120)
+                SkeletonRectangle(height: 20, width: 100)
 
                 ForEach(0..<3, id: \.self) { _ in
                     VStack(alignment: .leading, spacing: 8) {
                         HStack {
-                            SkeletonRectangle(height: 14, width: 60)
+                            SkeletonRectangle(height: 12, width: 50)
                             Spacer()
-                            SkeletonRectangle(height: 14, width: 40)
+                            SkeletonRectangle(height: 12, width: 36)
                         }
-                        SkeletonRectangle(height: 12, width: nil)
-                        SkeletonRectangle(height: 12, width: 200)
+                        SkeletonRectangle(height: 10, width: nil)
+                        SkeletonRectangle(height: 10, width: 180)
                     }
-                    .padding()
-                    .background(Color.safeColor("CardBackground"))
-                    .cornerRadius(12)
+                    .padding(16)
+                    .background(Color.darkCard)
+                    .cornerRadius(16)
                 }
             }
             .padding(.horizontal, 20)
@@ -68,9 +77,9 @@ struct SkeletonRectangle: View {
             .fill(
                 LinearGradient(
                     gradient: Gradient(colors: [
-                        Color.safeColor("BorderLight").opacity(0.3),
-                        Color.safeColor("BorderLight").opacity(0.5),
-                        Color.safeColor("BorderLight").opacity(0.3)
+                        Color.white.opacity(0.04),
+                        Color.white.opacity(0.08),
+                        Color.white.opacity(0.04)
                     ]),
                     startPoint: isAnimating ? .leading : .trailing,
                     endPoint: isAnimating ? .trailing : .leading
@@ -87,5 +96,5 @@ struct SkeletonRectangle: View {
 
 #Preview {
     SkeletonView()
-        .background(Color.safeColor("BehaviorBackgroundPrimary"))
+        .background(Color.darkBase)
 }

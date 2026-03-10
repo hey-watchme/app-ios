@@ -2,7 +2,7 @@
 //  SpotDetailView.swift
 //  ios_watchme_v9
 //
-//  Spot analysis detail page
+//  Spot analysis detail page - Dark theme
 //
 
 import SwiftUI
@@ -17,7 +17,7 @@ struct SpotDetailView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(spacing: 24) {
+                VStack(spacing: 16) {
                     // Vibe Score
                     if let vibeScore = spotData.vibeScore {
                         vibeScoreCard(vibeScore)
@@ -30,25 +30,25 @@ struct SpotDetailView: View {
 
                     // Summary
                     if let summary = spotData.summary {
-                        contentCard(title: "概要", content: summary, icon: "text.alignleft")
+                        contentCard(title: "Summary", content: summary, icon: "text.alignleft")
                     }
 
                     // Analysis
                     if let analysis = spotData.analysis, !analysis.isEmpty {
-                        contentCard(title: "分析", content: analysis, icon: "brain.head.profile")
+                        contentCard(title: "Analysis", content: analysis, icon: "brain.head.profile")
                     }
 
                     // Behavior
                     if let behavior = spotData.behavior {
-                        contentCard(title: "行動", content: behavior, icon: "figure.walk")
+                        contentCard(title: "Behavior", content: behavior, icon: "figure.walk")
                     }
 
                     // Emotion
                     if let emotion = spotData.emotion, !emotion.isEmpty {
-                        contentCard(title: "感情", content: emotion, icon: "face.smiling")
+                        contentCard(title: "Emotion", content: emotion, icon: "face.smiling")
                     }
 
-                    // Raw analysis results (collapsible, for debug/advanced users)
+                    // Raw data
                     rawAnalysisSection
 
                     Spacer()
@@ -57,148 +57,189 @@ struct SpotDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
             }
-            .background(Color(.systemBackground))
+            .background(Color.darkBase)
             .navigationTitle(formatNavigationTitle())
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("閉じる") {
+                    Button("Close") {
                         dismiss()
                     }
+                    .foregroundColor(.accentTeal)
                 }
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     // MARK: - View Components
 
     private func vibeScoreCard(_ score: Double) -> some View {
-        VStack(spacing: 12) {
-            HStack {
-                Image(systemName: "chart.line.uptrend.xyaxis")
-                    .foregroundColor(.accentPurple)
-                Text("気分")
-                    .font(.headline)
-                Spacer()
+        HStack(spacing: 20) {
+            // Ring gauge
+            ZStack {
+                Circle()
+                    .stroke(Color.white.opacity(0.08), lineWidth: 4)
+                    .frame(width: 72, height: 72)
+
+                Circle()
+                    .trim(from: 0, to: min(max((score + 100) / 200, 0), 1))
+                    .stroke(vibeScoreColor(score), style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 72, height: 72)
+
+                Text(String(format: "%.0f", score))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
             }
 
-            Text(String(format: "%.1f", score))
-                .font(.system(size: 48, weight: .bold))
-                .foregroundColor(vibeScoreColor(score))
+            VStack(alignment: .leading, spacing: 6) {
+                Text("VIBE SCORE")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(Color(white: 0.45))
+                    .tracking(1.0)
+
+                Text(vibeStatusLabel(score))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(vibeScoreColor(score))
+
+                // Score bar
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(Color.white.opacity(0.08))
+                            .frame(height: 6)
+
+                        RoundedRectangle(cornerRadius: 3)
+                            .fill(vibeScoreColor(score))
+                            .frame(width: geo.size.width * min(max((score + 100) / 200, 0), 1), height: 6)
+                    }
+                }
+                .frame(height: 6)
+            }
+
+            Spacer()
         }
-        .frame(maxWidth: .infinity)
-        .padding()
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
         )
     }
 
     private func contentCard(title: String, content: String, icon: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: icon)
-                    .foregroundColor(.accentPurple)
-                Text(title)
-                    .font(.headline)
+                    .font(.system(size: 14))
+                    .foregroundColor(.accentTeal)
+                Text(title.uppercased())
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color(white: 0.45))
+                    .tracking(0.8)
                 Spacer()
             }
 
             Text(content)
-                .font(.body)
-                .foregroundColor(.primary)
+                .font(.system(size: 14))
+                .foregroundColor(Color(white: 0.78))
                 .fixedSize(horizontal: false, vertical: true)
+                .lineSpacing(4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
         )
     }
 
     private func sceneMappingCard(_ sm: SceneMapping) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Image(systemName: "map")
-                    .foregroundColor(.accentPurple)
-                Text("シーン")
-                    .font(.headline)
+                    .font(.system(size: 14))
+                    .foregroundColor(.accentTeal)
+                Text("SCENE")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color(white: 0.45))
+                    .tracking(0.8)
                 Spacer()
             }
 
             VStack(alignment: .leading, spacing: 8) {
                 if let participants = sm.participants, !participants.isEmpty {
-                    sceneMappingRow(label: "参加者", value: participants)
+                    sceneMappingRow(label: "Participants", value: participants)
                 }
                 if let activity = sm.core_activity, !activity.isEmpty {
-                    sceneMappingRow(label: "活動", value: activity)
+                    sceneMappingRow(label: "Activity", value: activity)
                 }
                 if let detail = sm.behavior_detail, !detail.isEmpty {
-                    sceneMappingRow(label: "やり取り", value: detail)
+                    sceneMappingRow(label: "Interaction", value: detail)
                 }
                 if let atmosphere = sm.atmosphere, !atmosphere.isEmpty {
-                    sceneMappingRow(label: "雰囲気", value: atmosphere)
+                    sceneMappingRow(label: "Atmosphere", value: atmosphere)
                 }
                 if let uncertainty = sm.uncertainty, !uncertainty.isEmpty {
-                    sceneMappingRow(label: "不確実性", value: uncertainty)
+                    sceneMappingRow(label: "Uncertainty", value: uncertainty)
                 }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding()
+        .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
         )
     }
 
     private func sceneMappingRow(label: String, value: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Text(label)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.secondary)
-                .frame(width: 60, alignment: .leading)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(Color(white: 0.45))
+                .frame(width: 80, alignment: .leading)
             Text(value)
                 .font(.system(size: 13))
-                .foregroundColor(.primary)
+                .foregroundColor(Color(white: 0.78))
                 .fixedSize(horizontal: false, vertical: true)
         }
     }
 
-    // MARK: - Raw Analysis Section (ASR, SED, SER)
+    // MARK: - Raw Analysis Section
 
     private var rawAnalysisSection: some View {
         Group {
             if hasAnyRawData {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("DATA")
-                        .font(.headline)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(Color(white: 0.36))
+                        .tracking(1.0)
 
-                    // 1. STT
                     if let transcription = spotData.vibeTranscriberResult {
-                        rawDataDisclosure(
-                            title: "STT",
-                            content: transcription
-                        )
+                        rawDataDisclosure(title: "STT", content: transcription)
                     }
 
-                    // 2. SED
                     if !spotData.behaviorTimePoints.isEmpty {
-                        rawDataDisclosure(
-                            title: "SED",
-                            content: behaviorExtractorJSONString
-                        )
+                        rawDataDisclosure(title: "SED", content: behaviorExtractorJSONString)
                     }
 
-                    // 3. SER
                     if let humeRaw = spotData.emotionFeaturesResultHumeRaw, !humeRaw.isEmpty {
-                        rawDataDisclosure(
-                            title: "SER",
-                            content: humeRaw
-                        )
+                        rawDataDisclosure(title: "SER", content: humeRaw)
                     }
                 }
             }
@@ -225,22 +266,27 @@ struct SpotDetailView: View {
         DisclosureGroup {
             Text(content)
                 .font(.system(.caption, design: .monospaced))
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(white: 0.45))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(.vertical, 8)
                 .textSelection(.enabled)
         } label: {
             HStack {
                 Text(title)
-                    .font(.subheadline)
-                    .foregroundColor(.primary)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
                 Spacer()
             }
         }
-        .padding()
+        .tint(Color(white: 0.36))
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemGray6))
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
         )
     }
 
@@ -248,7 +294,7 @@ struct SpotDetailView: View {
 
     private func formatNavigationTitle() -> String {
         guard let localDate = spotData.date, let localTime = spotData.localTime else {
-            return "スポット分析"
+            return "Spot Analysis"
         }
 
         let dateString = formatDateShort(localDate)
@@ -284,7 +330,6 @@ struct SpotDetailView: View {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
 
-        // ISO8601 format with milliseconds: "2025-11-27T07:31:01.352"
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSS"
 
         if let time = formatter.date(from: timeString) {
@@ -292,7 +337,6 @@ struct SpotDetailView: View {
             return formatter.string(from: time)
         }
 
-        // Fallback: try without milliseconds
         formatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
         if let time = formatter.date(from: timeString) {
             formatter.dateFormat = "HH:mm"
@@ -303,14 +347,13 @@ struct SpotDetailView: View {
     }
 
     private func vibeScoreColor(_ score: Double) -> Color {
-        if score >= 30 {
-            return .green
-        } else if score >= 0 {
-            return .blue
-        } else if score >= -30 {
-            return .orange
-        } else {
-            return .red
-        }
+        Color.vibeScoreColor(for: score)
+    }
+
+    private func vibeStatusLabel(_ score: Double) -> String {
+        if score >= 30 { return "Positive" }
+        else if score >= 0 { return "Good" }
+        else if score >= -30 { return "Neutral" }
+        else { return "Low" }
     }
 }

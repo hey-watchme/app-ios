@@ -2,290 +2,385 @@
 //  ModernVibeCard.swift
 //  ios_watchme_v9
 //
-//  モダンな気分グラフカード - Phase 1: ダークテーマとグラデーション
+//  Vibe graph card - Dark theme redesign
 //
 
 import SwiftUI
 import Charts
 
 struct ModernVibeCard: View {
-    let dashboardSummary: DashboardSummary?  // 平均スコアとサマリー用
-    let timeBlocks: [DashboardTimeBlock]  // グラフ用データ（spot_resultsから取得）
+    let dashboardSummary: DashboardSummary?
+    let timeBlocks: [DashboardTimeBlock]
     var onNavigateToDetail: (() -> Void)? = nil
-    var showTitle: Bool = true  // タイトル表示制御用
+    var showTitle: Bool = true
     @State private var isAnimating = false
     @State private var cardScale: CGFloat = 1.0
     @State private var showBurstBubbles = false
     @State private var burstScore: Double = 0
-    @State private var emojiRotation: Double = 0  // 絵文字の振動用
-    
-    // ライトテーマのカラーパレット
-    private let lightBackground = Color.white // #ffffff
-    
-    private let positiveGradient = LinearGradient(
-        colors: [
-            Color(red: 0, green: 1, blue: 0.53),
-            Color(red: 0, green: 0.85, blue: 1)
-        ],
-        startPoint: .top,
-        endPoint: .bottom
-    )
-    
-    private let negativeGradient = LinearGradient(
-        colors: [
-            Color(red: 1, green: 0.42, blue: 0.42),
-            Color(red: 0.79, green: 0.16, blue: 0.16)
-        ],
-        startPoint: .bottom,
-        endPoint: .top
-    )
-    
+    @State private var emojiRotation: Double = 0
+
     var body: some View {
         ZStack {
-            // 背景 (白)
-            RoundedRectangle(cornerRadius: 24)
-                .fill(lightBackground)
-            
-            // 軽い境界線
-            RoundedRectangle(cornerRadius: 24)
-                .stroke(Color.safeColor("BorderLight").opacity(0.1), lineWidth: 1)
-            
-            // バーストバブルは削除（パーティクルエフェクトを使わない）
-            
-            VStack(spacing: 16) {  // 他の要素との間隔は16に戻す
-                // ヘッダー部分（タイトルのみ）
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color.darkCard)
+
+            // Rich gradient overlay (Oura My Health-style: multi-tone mesh)
+            RoundedRectangle(cornerRadius: 20)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            scoreColor.opacity(0.12),
+                            scoreColor.opacity(0.04),
+                            Color.clear
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+
+            // Secondary gradient for depth (cross-direction)
+            RoundedRectangle(cornerRadius: 20)
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            Color.clear,
+                            Color(white: 0.08).opacity(0.5),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+
+            // Inner glow at top (premium feel)
+            RoundedRectangle(cornerRadius: 20)
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            scoreColor.opacity(0.08),
+                            Color.clear
+                        ],
+                        center: .topLeading,
+                        startRadius: 0,
+                        endRadius: 200
+                    )
+                )
+
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(
+                    LinearGradient(
+                        colors: [
+                            Color.white.opacity(0.12),
+                            Color.white.opacity(0.04)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+
+            VStack(spacing: 0) {
+                // Header: score + status
                 if showTitle {
-                    VStack(spacing: 8) {  // タイトルと絵文字の間だけ8pxに
-                        HStack {
-                            // シンプルな気分タイトル（大きく表示）
-                            Text("気分")
-                                .font(.system(size: 40, weight: .bold))
-                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary")) // #1a1a1a
-                            
-                            Spacer()
-                        }
-                        
-                        // メインスコア表示
-                        mainScoreView
-                    }
+                    headerSection
+                        .padding(.bottom, 20)
                 } else {
-                    // メインスコア表示
-                    mainScoreView
+                    compactScoreSection
+                        .padding(.bottom, 12)
                 }
-                
-                // インタラクティブタイムライン（Phase 2）
-                // spot_resultsから取得したtimeBlocksを使用
-                // ⚠️ エラーデータはグラフから除外（グラフのジャンプ問題を防ぐ）
+
+                // Motivational message (Oura-style)
+                if let msg = motivationalMessage {
+                    motivationalBanner(message: msg)
+                        .padding(.bottom, 16)
+                }
+
+                // Timeline graph
                 let validTimeBlocks = timeBlocks.filter { block in
-                    block.displayTime != "⚠️ ERROR" && block.displayTime != "⚠️ PARSE ERROR"
+                    block.displayTime != "⚠\u{FE0F} ERROR" && block.displayTime != "⚠\u{FE0F} PARSE ERROR"
                 }
 
                 if !validTimeBlocks.isEmpty {
                     InteractiveTimelineView(
                         timeBlocks: validTimeBlocks,
-                        burstEvents: dashboardSummary?.burstEvents,  // dashboard_summaryから取得
+                        burstEvents: dashboardSummary?.burstEvents,
                         onEventBurst: { score in
-                            // バーストエフェクトをトリガー
                             triggerBurst(score: score)
                         }
                     )
                 }
-                
-                // 1日のサマリー（insightsから取得）
+
+                // Daily insights
                 if let insights = dashboardSummary?.insights, !insights.isEmpty {
                     Text(insights)
-                        .font(.system(size: 18, weight: .bold))  // 太字に変更
-                        .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundStyle(Color(white: 0.78))
                         .fixedSize(horizontal: false, vertical: true)
                         .multilineTextAlignment(.leading)
-                        .lineSpacing(18 * 0.6)  // フォントサイズ18ptの60%で行間を設定（line-height: 160%相当）
-                        .padding(.top, 24)  // グラフとの間に24px余白
-                        .padding(.bottom, 16)  // 下部は少し余白を減らす
+                        .lineSpacing(15 * 0.5)
+                        .padding(.top, 20)
                 }
-                
-                // ナビゲーションリンク（右下に配置）
+
+                // Navigation link
                 HStack {
                     Spacer()
-                    
+
                     Button(action: {
-                        // 分析結果の一覧への遷移
                         onNavigateToDetail?()
                     }) {
                         HStack(spacing: 4) {
-                            Text("分析結果の一覧")
-                                .font(.caption)
-                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
+                            Text("All analyses")
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color(white: 0.45))
                             Image(systemName: "chevron.right")
-                                .font(.caption2)
-                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(Color(white: 0.45))
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(
                             Capsule()
-                                .fill(Color.safeColor("BorderLight").opacity(0.1))
-                                .overlay(
-                                    Capsule()
-                                        .stroke(Color.safeColor("BorderLight").opacity(0.2), lineWidth: 1)
-                                )
+                                .fill(Color.white.opacity(0.06))
                         )
                     }
-                    .allowsHitTesting(false) // タップイベントを透過させる
+                    .allowsHitTesting(false)
                 }
+                .padding(.top, 16)
             }
-            .padding(16)  // 内側の余白を16pxに変更（UnifiedCardと統一）
+            .padding(20)
         }
+        .shadow(color: .black.opacity(0.4), radius: 12, x: 0, y: 4)
+        .shadow(color: scoreColor.opacity(0.08), radius: 20, x: 0, y: 0)
         .scaleEffect(cardScale)
         .onAppear {
-            withAnimation(.easeOut(duration: 0.6)) {
+            withAnimation(.easeOut(duration: 0.5)) {
                 isAnimating = true
-                cardScale = 1.02
+                cardScale = 1.01
             }
-            
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
-                withAnimation(.easeInOut(duration: 0.3)) {
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                withAnimation(.easeInOut(duration: 0.2)) {
                     cardScale = 1.0
                 }
             }
         }
     }
-    
-    // MARK: - Main Score View
-    private var mainScoreView: some View {
-        VStack(spacing: 8) {
-            // 絵文字（1.5倍に拡大）- 振動アニメーション付き
-            Text(emotionEmoji)
-                .font(.system(size: 108))
-                .rotationEffect(.degrees(emojiRotation))
-            
-            // ステータステキスト（黒・太字・20px）
-            Text(emotionLabel)
-                .font(.system(size: 20, weight: .bold))
-                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))  // 黒
-                .textCase(.uppercase)
-                .tracking(1.0)
-            
-            // 気分スコア（1行で簡潔に）
-            HStack(spacing: 4) {
-                Text("気分")
-                    .font(.caption2)
-                    .foregroundStyle(Color.safeColor("BehaviorTextSecondary")) // #666666
-                
-                // dashboard_summaryのaverage_vibeのみを使用（フォールバックなし）
-                Group {
-                    if let avgVibe = dashboardSummary?.averageVibe {
-                        Text(String(format: "%.0f pt", Double(avgVibe)))  // 小数点なしに変更
-                    } else {
-                        Text("-- pt")
+
+    // MARK: - Header Section (with title)
+
+    private var headerSection: some View {
+        VStack(spacing: 12) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("Vibe")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color(white: 0.45))
+                        .tracking(1.0)
+                        .textCase(.uppercase)
+
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        if let avgVibe = dashboardSummary?.averageVibe {
+                            Text(String(format: "%.0f", avgVibe))
+                                .font(.system(size: 52, weight: .bold, design: .rounded))
+                                .foregroundStyle(.white)
+                        } else {
+                            Text("--")
+                                .font(.system(size: 52, weight: .bold, design: .rounded))
+                                .foregroundStyle(Color(white: 0.30))
+                        }
+
+                        Text("pt")
+                            .font(.system(size: 16, weight: .medium))
+                            .foregroundStyle(Color(white: 0.36))
                     }
                 }
-                .font(.caption)
-                .fontWeight(.semibold)
-                .foregroundStyle(scoreColor.opacity(0.8))
+
+                Spacer()
+
+                // Status badge
+                VStack(alignment: .trailing, spacing: 6) {
+                    Text(emotionLabel.uppercased())
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(scoreColor)
+                        .tracking(0.8)
+
+                    // Micro ring gauge
+                    ZStack {
+                        Circle()
+                            .stroke(Color.white.opacity(0.08), lineWidth: 3)
+                            .frame(width: 44, height: 44)
+
+                        Circle()
+                            .trim(from: 0, to: scoreProgress)
+                            .stroke(scoreColor, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                            .rotationEffect(.degrees(-90))
+                            .frame(width: 44, height: 44)
+
+                        Text(emotionEmoji)
+                            .font(.system(size: 20))
+                            .rotationEffect(.degrees(emojiRotation))
+                    }
+                }
             }
         }
-        .padding(.bottom, 24)  // 下に24pxの余白を追加
     }
-    
-    // MARK: - Time Distribution View（削除済み）
-    // 時間分布パネルは気分詳細ページで表示されるため、
-    // ダッシュボードのModernVibeCardからは削除しました
-    
+
+    // MARK: - Compact Score (no title)
+
+    private var compactScoreSection: some View {
+        HStack(alignment: .center) {
+            // Score
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                if let avgVibe = dashboardSummary?.averageVibe {
+                    Text(String(format: "%.0f", avgVibe))
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundStyle(.white)
+                } else {
+                    Text("--")
+                        .font(.system(size: 42, weight: .bold, design: .rounded))
+                        .foregroundStyle(Color(white: 0.30))
+                }
+
+                Text("pt")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color(white: 0.36))
+            }
+
+            Spacer()
+
+            // Status
+            HStack(spacing: 8) {
+                Text(emotionLabel.uppercased())
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundStyle(scoreColor)
+                    .tracking(0.8)
+
+                Circle()
+                    .fill(scoreColor)
+                    .frame(width: 8, height: 8)
+            }
+        }
+    }
+
     // MARK: - Burst Trigger
+
     private func triggerBurst(score: Double) {
         burstScore = score
-        
-        // 絵文字を振動させる
-        // 左右に小刻みに揺れるアニメーション
+
         withAnimation(Animation.linear(duration: 0.05)) {
-            emojiRotation = -2  // 左に2度
+            emojiRotation = -2
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
             withAnimation(Animation.linear(duration: 0.1)) {
-                emojiRotation = 2  // 右に2度
+                emojiRotation = 2
             }
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
             withAnimation(Animation.linear(duration: 0.1)) {
-                emojiRotation = -1.5  // 左に1.5度
+                emojiRotation = -1.5
             }
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
             withAnimation(Animation.linear(duration: 0.1)) {
-                emojiRotation = 1  // 右に1度
+                emojiRotation = 1
             }
         }
-        
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
             withAnimation(Animation.linear(duration: 0.1)) {
-                emojiRotation = -0.5  // 左に0.5度
+                emojiRotation = 0
             }
         }
-        
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-            withAnimation(Animation.linear(duration: 0.1)) {
-                emojiRotation = 0  // 元の位置に戻る
-            }
-        }
-        
-        // Hapticフィードバック（バイブレーション）も追加
+
         HapticManager.shared.playEventBurst()
     }
-    
+
     // MARK: - Computed Properties
-    // dashboard_summaryのaverage_vibeのみを使用（フォールバックなし）
+
     private var actualAverageScore: Double? {
         if let avgVibe = dashboardSummary?.averageVibe {
             return Double(avgVibe)
         }
         return nil
     }
-    
+
+    private var scoreProgress: Double {
+        guard let score = actualAverageScore else { return 0 }
+        return min(max((score + 100) / 200, 0), 1)
+    }
+
     private var scoreColor: Color {
-        guard let score = actualAverageScore else { return .gray }
-        if score > 30 {
-            return .green
-        } else if score < -30 {
-            return .red
-        } else {
-            return .gray
-        }
+        guard let score = actualAverageScore else { return Color(white: 0.30) }
+        return Color.vibeScoreColor(for: score)
     }
-    
+
     private var emotionEmoji: String {
-        guard let score = actualAverageScore else { return "❓" }
-        if score > 50 {
-            return "👏"
-        } else if score > 30 {
-            return "✌️"
-        } else if score > 0 {
-            return "👍"
-        } else if score > -30 {
-            return "👌"
-        } else if score > -50 {
-            return "💪"
-        } else {
-            return "💔"
-        }
+        guard let score = actualAverageScore else { return "?" }
+        if score > 50 { return "+" }
+        else if score > 30 { return "+" }
+        else if score > 0 { return "+" }
+        else if score > -30 { return "~" }
+        else if score > -50 { return "-" }
+        else { return "-" }
     }
-    
+
     private var emotionLabel: String {
         guard let score = actualAverageScore else { return "No data" }
+        if score > 50 { return "Excellent" }
+        else if score > 30 { return "Positive" }
+        else if score > 0 { return "Good" }
+        else if score > -30 { return "Neutral" }
+        else if score > -50 { return "Challenging" }
+        else { return "Difficult" }
+    }
+
+    private var motivationalMessage: (headline: String, subtext: String)? {
+        guard let score = actualAverageScore else { return nil }
         if score > 50 {
-            return "Excellent"
-        } else if score > 30 {
-            return "Positive"
-        } else if score > 0 {
-            return "Good"
-        } else if score > -30 {
-            return "Neutral"
-        } else if score > -50 {
-            return "Challenging"
+            return ("今日は調子が良さそう", "気分が上向きです。難しいタスクがあれば、今日こそ取り組む日にしてみては。")
+        } else if score > 20 {
+            return ("安定した一日", "今日の気分は落ち着いています。小さな積み重ねが大きな成果につながります。")
+        } else if score > -20 {
+            return ("無理せずに", "ペースを落としても大丈夫。休息と回復も大切な時間です。")
         } else {
-            return "Difficult"
+            return ("自分を労わって", "つらい日もあります。できることに集中し、必要なら周りに頼ってください。")
         }
+    }
+
+    private func motivationalBanner(message: (headline: String, subtext: String)) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(message.headline)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.white)
+
+            Text(message.subtext)
+                .font(.system(size: 13))
+                .foregroundColor(Color(white: 0.62))
+                .lineSpacing(4)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.white.opacity(0.06))
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                scoreColor.opacity(0.06),
+                                Color.clear
+                            ],
+                            startPoint: .leading,
+                            endPoint: .trailing
+                        )
+                    )
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            }
+        )
     }
 }
