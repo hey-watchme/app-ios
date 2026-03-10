@@ -39,7 +39,7 @@ struct HeaderView: View {
             }) {
                 Image(systemName: "person.circle")
                     .font(.title2)
-                    .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                    .foregroundColor(Color.white)
             }
             .padding(.trailing, 12)
 
@@ -50,7 +50,7 @@ struct HeaderView: View {
                 ZStack(alignment: .topTrailing) {
                     Image(systemName: "bell")
                         .font(.title2)
-                        .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
+                        .foregroundColor(Color.white)
 
                     // 未読通知がある場合の赤い丸（バッジ）と数
                     if unreadNotificationCount > 0 {
@@ -123,29 +123,29 @@ struct HeaderView: View {
                 HStack(spacing: 8) {
                     ZStack {
                         Circle()
-                            .fill(Color.black.opacity(0.1))
+                            .fill(Color.white.opacity(0.08))
                             .frame(width: 32, height: 32)
 
                         Image(systemName: "eye.circle")
                             .font(.system(size: 18))
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                     }
 
                     Text("サンプルデバイス")
                         .font(.subheadline)
-                        .foregroundColor(.black)
+                        .foregroundColor(Color(white: 0.56))
                 }
             } else {
                 // 通常のデバイス選択中（分析対象未設定）
                 HStack(spacing: 8) {
                     ZStack {
                         Circle()
-                            .fill(Color.black.opacity(0.1))
+                            .fill(Color.white.opacity(0.08))
                             .frame(width: 32, height: 32)
 
                         Image(systemName: "iphone")
                             .font(.system(size: 18))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color(white: 0.56))
                     }
 
                     // デバイスIDの最初の8文字を表示
@@ -160,12 +160,12 @@ struct HeaderView: View {
             HStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(Color.black.opacity(0.05))
+                        .fill(Color.white.opacity(0.08))
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "iphone.slash")
                         .font(.system(size: 18))
-                        .foregroundColor(.black)
+                        .foregroundColor(Color(white: 0.56))
                 }
 
                     Text("デバイス連携: なし")
@@ -177,12 +177,12 @@ struct HeaderView: View {
             HStack(spacing: 8) {
                 ZStack {
                     Circle()
-                        .fill(Color.black.opacity(0.05))
+                        .fill(Color.white.opacity(0.08))
                         .frame(width: 32, height: 32)
 
                     Image(systemName: "iphone")
                         .font(.system(size: 18))
-                        .foregroundColor(.black)
+                        .foregroundColor(Color(white: 0.56))
                 }
 
                     Text("デバイスを選択")

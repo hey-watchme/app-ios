@@ -3,7 +3,7 @@
 //  ios_watchme_v9
 //
 //  デバイス未登録時のガイドオーバーレイ
-//  すりガラス効果で背景のダッシュボードをぼかし、3つの選択肢を提示
+//  ダークテーマ対応（Oura Ring風）
 //
 
 import SwiftUI
@@ -12,7 +12,7 @@ import UIKit
 // UIKitのぼかし効果を使うカスタムビュー
 struct BackgroundBlurView: UIViewRepresentable {
     func makeUIView(context: Context) -> UIVisualEffectView {
-        let view = UIVisualEffectView(effect: UIBlurEffect(style: .prominent))
+        let view = UIVisualEffectView(effect: UIBlurEffect(style: .dark))
         return view
     }
 
@@ -28,23 +28,23 @@ struct DeviceSetupGuideOverlay: View {
 
     var body: some View {
         ZStack {
-            // シンプルな白の半透明オーバーレイ
-            Color.white.opacity(0.8)  // 白の80%透明度
+            // ダーク半透明オーバーレイ
+            Color.black.opacity(0.75)
                 .ignoresSafeArea()
 
             // 中央のモーダルウィンドウ（左右にも余白を持たせる）
             VStack(spacing: 20) {
-                // テキスト部分（アイコンは削除）
+                // テキスト部分
                 VStack(spacing: 8) {
                     Text("音声分析を\nはじめてみよう")
                         .font(.title2)
                         .fontWeight(.bold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                         .multilineTextAlignment(.center)
 
                     Text("あなたの声から、気分・行動・感情を分析します。")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                         .multilineTextAlignment(.center)
                 }
 
@@ -53,18 +53,18 @@ struct DeviceSetupGuideOverlay: View {
                     // 1. スマホのマイクで測定
                     Button(action: onSelectThisDevice) {
                         VStack(spacing: 8) {
-                            Image(systemName: "mic.fill")  // マイクアイコンに変更
-                                .font(.system(size: 48))  // 2倍のサイズ
+                            Image(systemName: "mic.fill")
+                                .font(.system(size: 48))
                             Text("スマホのマイク\nで測定")
                                 .font(.caption)
                                 .multilineTextAlignment(.center)
-                                .lineLimit(2)  // 2行まで表示
-                                .fixedSize(horizontal: false, vertical: true)  // 垂直方向に自然なサイズ
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)  // 上下20ピクセルの余白
-                        .padding(.horizontal, 10)  // 左右にも余白を追加
-                        .background(Color.safeColor("AppAccentColor"))
+                        .padding(.vertical, 20)
+                        .padding(.horizontal, 10)
+                        .background(Color.accentTeal)
                         .foregroundColor(.white)
                         .cornerRadius(12)
                     }
@@ -73,30 +73,36 @@ struct DeviceSetupGuideOverlay: View {
                     Button(action: onScanQR) {
                         VStack(spacing: 8) {
                             Image(systemName: "qrcode.viewfinder")
-                                .font(.system(size: 48))  // 2倍のサイズ
+                                .font(.system(size: 48))
                             Text("QRコードで\nデバイス追加")
                                 .font(.caption)
                                 .multilineTextAlignment(.center)
-                                .lineLimit(2)  // 2行まで表示
-                                .fixedSize(horizontal: false, vertical: true)  // 垂直方向に自然なサイズ
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)  // 上下20ピクセルの余白
-                        .padding(.horizontal, 10)  // 左右にも余白を追加
-                        .background(Color.white)
-                        .foregroundColor(.black)
+                        .padding(.vertical, 20)
+                        .padding(.horizontal, 10)
+                        .background(Color.darkElevated)
+                        .foregroundColor(.white)
+                        .cornerRadius(12)
                         .overlay(
                             RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.black, lineWidth: 2.0)  // 太めの黒い輪郭線
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1.5
+                                )
                         )
-                        .cornerRadius(12)
                     }
                 }
 
                 // 3. デモを体験するバナー
                 Button(action: onViewSample) {
                     VStack(spacing: 4) {
-                        // バナー部分（後で画像に置き換え予定）
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
                                 Text("デモを体験する")
@@ -118,8 +124,8 @@ struct DeviceSetupGuideOverlay: View {
                         .background(
                             LinearGradient(
                                 gradient: Gradient(colors: [
-                                    Color.blue.opacity(0.8),
-                                    Color.purple.opacity(0.8)
+                                    Color.accentTeal.opacity(0.6),
+                                    Color.accentTeal.opacity(0.3)
                                 ]),
                                 startPoint: .leading,
                                 endPoint: .trailing
@@ -130,11 +136,22 @@ struct DeviceSetupGuideOverlay: View {
                 }
             }
             .padding(30)
-            .frame(maxWidth: 350)  // モーダルの最大幅を制限
-            .background(Color(.systemBackground))
+            .frame(maxWidth: 350)
+            .background(Color.darkSurface)
             .cornerRadius(16)
-            .shadow(color: Color.black.opacity(0.1), radius: 20, x: 0, y: 10)
-            .padding(.horizontal, 30)  // 左右に余白を確保
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.08), Color.white.opacity(0.02)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.5), radius: 20, x: 0, y: 10)
+            .padding(.horizontal, 30)
             .opacity(isVisible ? 1.0 : 0)
             .scaleEffect(isVisible ? 1.0 : 0.95)
         }
@@ -149,21 +166,20 @@ struct DeviceSetupGuideOverlay: View {
 // MARK: - Preview
 #Preview {
     ZStack {
-        // 背景としてダミーのダッシュボード
-        Color.gray.opacity(0.1)
+        Color.darkBase
             .ignoresSafeArea()
 
         VStack {
             Text("ダッシュボード背景")
                 .font(.largeTitle)
+                .foregroundColor(.white)
             Rectangle()
-                .fill(Color.blue.opacity(0.3))
+                .fill(Color.darkCard)
                 .frame(height: 200)
                 .cornerRadius(12)
                 .padding()
         }
 
-        // オーバーレイ
         DeviceSetupGuideOverlay(
             onSelectThisDevice: { print("このデバイス") },
             onViewSample: { print("サンプル") },

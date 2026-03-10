@@ -38,6 +38,8 @@ struct ContentView: View {
     
     var body: some View {
         ZStack {
+            Color.darkBase.ignoresSafeArea()
+            
             VStack(spacing: 0) {
                 // ヘッダー（既存のHeaderViewを使用）
                 HeaderView(
@@ -53,11 +55,11 @@ struct ContentView: View {
                     Spacer()
                     VStack(spacing: 20) {
                         ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle())
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(1.5)
                         Text("デバイス情報を取得中...")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                     }
                     Spacer()
 
@@ -86,16 +88,17 @@ struct ContentView: View {
                                 Spacer()
                                 HStack {
                                     ProgressView()
-                                        .progressViewStyle(CircularProgressViewStyle())
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
                                         .scaleEffect(0.8)
                                     Text("過去のデータを読み込み中...")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color(white: 0.56))
                                 }
                                 .padding()
-                                .background(Color(.systemBackground).opacity(0.9))
+                                .background(Color.darkSurface.opacity(0.95))
                                 .cornerRadius(10)
-                                .shadow(radius: 5)
+                                .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                                .shadow(color: Color.black.opacity(0.5), radius: 10, x: 0, y: 5)
                                 Spacer()
                                     .frame(height: 100)
                             }
@@ -150,10 +153,10 @@ struct ContentView: View {
                             .foregroundColor(.orange)
                         Text("エラーが発生しました")
                             .font(.title3)
-                            .foregroundColor(.primary)
+                            .foregroundColor(.white)
                         Text(errorMessage)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                             .multilineTextAlignment(.center)
                             .padding(.horizontal)
 
@@ -169,7 +172,7 @@ struct ContentView: View {
                             Text("リトライ")
                                 .padding(.horizontal, 20)
                                 .padding(.vertical, 10)
-                                .background(Color.safeColor("AppAccentColor"))
+                                .background(Color.accentTeal)
                                 .foregroundColor(.white)
                                 .cornerRadius(8)
                         }

@@ -82,7 +82,7 @@ struct DemoModeInfoSheet: View {
 
                         Text("このデモでは、架空の分析対象の分析結果を見ることができます。「オブザーバー」と呼ばれる音声分析デバイスから定期的にデータが送られてくるので、リアルタイムで状態をチェックすることが可能です。WatchMeを通じて何が分かるのか、体験してみてください。")
                             .font(.system(size: 16))
-                            .foregroundColor(.primary)
+                            .foregroundColor(Color(white: 0.56))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(.bottom, 10)
@@ -93,7 +93,7 @@ struct DemoModeInfoSheet: View {
                             Image(systemName: "checkmark.circle.fill")
                                 .foregroundColor(.green)
                             Text("利用可能な機能")
-                                .foregroundColor(.primary)
+                                .foregroundColor(.white)
                         }
                         .font(.system(size: 20, weight: .semibold))
 
@@ -105,7 +105,7 @@ struct DemoModeInfoSheet: View {
                         .padding(.leading, 8)
                     }
 
-                    Divider()
+                    Divider().background(Color.white.opacity(0.08))
 
                     // 利用できない機能
                     VStack(alignment: .leading, spacing: 16) {
@@ -113,7 +113,7 @@ struct DemoModeInfoSheet: View {
                             Image(systemName: "xmark.circle.fill")
                                 .foregroundColor(.red)
                             Text("利用できない機能")
-                                .foregroundColor(.primary)
+                                .foregroundColor(.white)
                         }
                         .font(.system(size: 20, weight: .semibold))
 
@@ -126,7 +126,7 @@ struct DemoModeInfoSheet: View {
                         .padding(.leading, 8)
                     }
 
-                    Divider()
+                    Divider().background(Color.white.opacity(0.08))
 
                     // デモ終了ボタン
                     Button(action: {
@@ -145,14 +145,16 @@ struct DemoModeInfoSheet: View {
                             .fontWeight(.medium)
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(Color.primary)
-                            .foregroundColor(Color(UIColor.systemBackground))
+                            .background(Color.accentTeal)
+                            .foregroundColor(.white)
                             .cornerRadius(10)
                     }
                 }
-                .padding()
             }
+            .background(Color.darkBase.ignoresSafeArea())
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
@@ -174,11 +176,11 @@ struct DemoFeatureRow: View {
         HStack(spacing: 12) {
             Image(systemName: icon)
                 .frame(width: 20)
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
 
             Text(text)
                 .font(.footnote)
-                .foregroundColor(.primary)
+                .foregroundColor(Color(white: 0.56))
 
             Spacer()
         }

@@ -31,7 +31,10 @@ struct LoginView: View {
     private static let emailPredicate = NSPredicate(format: "SELF MATCHES %@", "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
 
     var body: some View {
-        VStack(spacing: 20) {
+        ZStack {
+            Color.darkBase.ignoresSafeArea()
+            
+            VStack(spacing: 20) {
             // アプリロゴ・タイトル
             VStack(spacing: 15) {
                 // PNGロゴを表示
@@ -42,7 +45,7 @@ struct LoginView: View {
 
                 Text("ログイン")
                     .font(.title2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
             }
             .padding(.top, 80)
 
@@ -54,7 +57,7 @@ struct LoginView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("メールアドレス")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
 
                     TextField("メールアドレスを入力", text: $email)
                         .textFieldStyle(RoundedBorderTextFieldStyle())
@@ -83,7 +86,7 @@ struct LoginView: View {
                     HStack {
                         Text("パスワード")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
 
                         Spacer()
 
@@ -92,7 +95,7 @@ struct LoginView: View {
                         }) {
                             Image(systemName: showPassword ? "eye.slash" : "eye")
                                 .font(.caption)
-                                .foregroundColor(.primary)
+                                .foregroundColor(.white)
                         }
                     }
 
@@ -180,8 +183,8 @@ struct LoginView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background(Color.primary)
-                    .foregroundColor(Color(.systemBackground))
+                    .background(Color.accentTeal)
+                    .foregroundColor(.white)
                     .cornerRadius(10)
                 }
                 .disabled(userAccountManager.isLoading)
@@ -193,7 +196,7 @@ struct LoginView: View {
                         .foregroundColor(.secondary.opacity(0.3))
                     Text("または")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                         .padding(.horizontal, 8)
                     Rectangle()
                         .frame(height: 1)
@@ -219,9 +222,20 @@ struct LoginView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 44)
-                    .background(Color.blue)
+                    .background(Color.darkElevated)
                     .foregroundColor(.white)
                     .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1.5
+                            )
+                    )
                 }
                 .disabled(userAccountManager.isLoading || isProcessing)
             }
@@ -233,11 +247,12 @@ struct LoginView: View {
             }) {
                 Text("新規ではじめる")
                     .font(.footnote)
-                    .foregroundColor(.primary)
+                    .foregroundColor(Color.accentTeal)
             }
             .padding(.top, 20)
 
             Spacer()
+        }
         }
         .fullScreenCover(isPresented: $showOnboarding) {
             AuthFlowView(isPresented: $showOnboarding)

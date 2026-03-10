@@ -18,15 +18,18 @@ struct NotificationView: View {
     
     var body: some View {
         NavigationView {
-            VStack(spacing: 0) {
-                if isLoading {
+            ZStack {
+                Color.darkBase.ignoresSafeArea()
+                
+                VStack(spacing: 0) {
+                    if isLoading {
                     // ローディング表示
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.2)
                         Text("通知を読み込み中...")
                             .font(.footnote)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else if let error = errorMessage {
@@ -37,9 +40,10 @@ struct NotificationView: View {
                             .foregroundColor(Color.safeColor("WarningColor"))
                         Text("通知の取得に失敗しました")
                             .font(.headline)
+                            .foregroundColor(.white)
                         Text(error)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                             .multilineTextAlignment(.center)
                         Button("再試行") {
                             Task {
@@ -62,10 +66,10 @@ struct NotificationView: View {
                             .foregroundColor(Color.safeColor("BorderLight"))
                         Text("通知はありません")
                             .font(.headline)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                         Text("新しい通知が届くとここに表示されます")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                     }
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
@@ -85,6 +89,7 @@ struct NotificationView: View {
                             }
                         }
                     }
+                }
                 }
             }
             .navigationTitle("通知")
@@ -199,7 +204,7 @@ struct NotificationRow: View {
                         Text(notification.title)
                             .font(.subheadline)
                             .fontWeight(notification.isRead ? .regular : .semibold)
-                            .foregroundColor(notification.isRead ? .secondary : .primary)
+                            .foregroundColor(notification.isRead ? Color(white: 0.56) : .white)
                         
                         // 通知タイプバッジ
                         if notification.type == NotificationType.global.rawValue {
@@ -216,12 +221,12 @@ struct NotificationRow: View {
                         
                         Text(notification.relativeTimeString)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                     }
                     
                     Text(notification.message)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
@@ -235,7 +240,7 @@ struct NotificationRow: View {
             }
             .padding(.horizontal)
             .padding(.vertical, 12)
-            .background(notification.isRead ? Color(.systemBackground) : Color.safeColor("PrimaryActionColor").opacity(0.03))
+            .background(notification.isRead ? Color.darkBase : Color.accentTeal.opacity(0.08))
             .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
@@ -246,11 +251,11 @@ struct NotificationRow: View {
         case NotificationType.global.rawValue:
             return Color.purple
         case NotificationType.event.rawValue:
-            return Color.safeColor("PrimaryActionColor")
+            return Color.accentTeal
         case NotificationType.personal.rawValue:
             return Color.blue
         default:
-            return Color.safeColor("PrimaryActionColor")
+            return Color.accentTeal
         }
     }
 }

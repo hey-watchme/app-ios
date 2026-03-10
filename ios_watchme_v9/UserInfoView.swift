@@ -25,8 +25,11 @@ struct UserInfoView: View {
     )
     
     var body: some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 0) {
+        ZStack {
+            Color.darkBase.ignoresSafeArea()
+            
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(spacing: 0) {
                 // ヘッダー部分（バナーとプロフィール情報）
                 ZStack(alignment: .topLeading) {
                     // 背景のコンテナ
@@ -48,13 +51,20 @@ struct UserInfoView: View {
                                     .fontWeight(.medium)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
-                                    .background(Color.white.opacity(0.95))
+                                    .background(Color.darkElevated)
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 20)
-                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                            .stroke(
+                                                LinearGradient(
+                                                    colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)],
+                                                    startPoint: .topLeading,
+                                                    endPoint: .bottomTrailing
+                                                ),
+                                                lineWidth: 1
+                                            )
                                     )
                                     .cornerRadius(20)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(.white)
                             }
                             .padding(.top, 50)  // ステータスバーを考慮
                             .padding(.trailing, 20)
@@ -74,24 +84,24 @@ struct UserInfoView: View {
                                         Text("ゲストユーザー")
                                             .font(.title2)
                                             .fontWeight(.bold)
-                                            .foregroundColor(.primary)
+                                            .foregroundColor(.white)
                                     } else if let profile = userAccountManager.currentUser?.profile,
                                               let name = profile.name, !name.isEmpty {
                                         Text(name)
                                             .font(.title2)
                                             .fontWeight(.bold)
-                                            .foregroundColor(.primary)
+                                            .foregroundColor(.white)
                                     } else {
                                         Text("ユーザー")
                                             .font(.title2)
                                             .fontWeight(.bold)
-                                            .foregroundColor(.primary)
+                                            .foregroundColor(.white)
                                     }
 
                                     // ユーザーステータス
                                     Text(userAccountManager.userStatusLabel)
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color(white: 0.56))
                                         .padding(.top, 4)
                                 }
                                 .padding(.leading, 20)
@@ -101,7 +111,7 @@ struct UserInfoView: View {
                             .padding(.bottom, 20)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(.systemBackground))
+                        .background(Color.darkBase)
                     }
                     
                     // アバターを最前面に配置（権限に応じて編集可否が変わる）
@@ -120,12 +130,12 @@ struct UserInfoView: View {
                                     )
                                     .overlay(
                                         Circle()
-                                            .stroke(Color(.systemBackground), lineWidth: 4)
+                                            .stroke(Color.darkBase, lineWidth: 4)
                                     )
 
                                     // カメラアイコンを追加
                                     Circle()
-                                        .fill(Color.black)
+                                        .fill(Color.darkElevated)
                                         .frame(width: 32, height: 32)
                                         .overlay(
                                             Image(systemName: "camera.fill")
@@ -133,9 +143,9 @@ struct UserInfoView: View {
                                                 .foregroundColor(.white)
                                         )
                                         .overlay(
-                                            Circle()
-                                                .stroke(Color(.systemBackground), lineWidth: 2)
-                                        )
+                                        Circle()
+                                            .stroke(Color.darkBase, lineWidth: 2)
+                                    )
                                 }
                             }
                             .padding(.leading, 20)
@@ -146,7 +156,7 @@ struct UserInfoView: View {
                                 AvatarView(userId: nil, size: 100, avatarUrl: nil)
                                     .overlay(
                                         Circle()
-                                            .stroke(Color(.systemBackground), lineWidth: 4)
+                                            .stroke(Color.darkBase, lineWidth: 4)
                                     )
                                 // カメラアイコンは表示しない
                             }
@@ -168,14 +178,14 @@ struct UserInfoView: View {
                                 if let name = user.profile?.name, !name.isEmpty { return name }
                                 return "未設定"
                             }()
-                            let displayNameColor: Color = (displayName == "未設定") ? .secondary : .primary
+                            let displayNameColor: Color = (displayName == "未設定") ? Color(white: 0.56) : .white
 
                             // 名前
                             InfoListRow(label: "名前", value: displayName, valueColor: displayNameColor)
 
                             // メールアドレス（匿名は常に未設定表示）
                             let displayEmail = (isAnonymous || user.email.isEmpty) ? "未設定" : user.email
-                            let emailColor: Color = (displayEmail == "未設定") ? .secondary : .primary
+                            let emailColor: Color = (displayEmail == "未設定") ? Color(white: 0.56) : .white
                             InfoListRow(label: "メールアドレス", value: displayEmail, valueColor: emailColor)
 
                             // ニュースレター配信設定
@@ -185,7 +195,7 @@ struct UserInfoView: View {
                                     HStack {
                                         Text("ニュースレター配信")
                                             .font(.subheadline)
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(Color(white: 0.56))
 
                                         Spacer()
 
@@ -214,7 +224,7 @@ struct UserInfoView: View {
                                     .padding(.vertical, 12)
 
                                     Divider()
-                                        .background(Color(.systemGray4))
+                                        .background(Color.white.opacity(0.08))
                                 }
 
                                 // 会員登録日
@@ -228,15 +238,15 @@ struct UserInfoView: View {
                             InfoListRow(label: "ユーザーID", value: user.id, showDivider: false)
                         } else {
                             // ゲストユーザー: ログインユーザーと同じ項目を表示（すべて「未設定」）
-                            InfoListRow(label: "名前", value: "未設定", valueColor: .secondary)
-                            InfoListRow(label: "メールアドレス", value: "未設定", valueColor: .secondary)
+                            InfoListRow(label: "名前", value: "未設定", valueColor: Color(white: 0.56))
+                            InfoListRow(label: "メールアドレス", value: "未設定", valueColor: Color(white: 0.56))
 
                             // ニュースレター配信（無効化されたトグル）
                             VStack(spacing: 0) {
                                 HStack {
                                     Text("ニュースレター配信")
                                         .font(.subheadline)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color(white: 0.56))
 
                                     Spacer()
 
@@ -248,11 +258,11 @@ struct UserInfoView: View {
                                 .padding(.vertical, 12)
 
                                 Divider()
-                                    .background(Color(.systemGray4))
+                                    .background(Color.white.opacity(0.08))
                             }
 
-                            InfoListRow(label: "会員登録日", value: "未設定", valueColor: .secondary)
-                            InfoListRow(label: "ユーザーID", value: "未設定", showDivider: false, valueColor: .secondary)
+                            InfoListRow(label: "会員登録日", value: "未設定", valueColor: Color(white: 0.56))
+                            InfoListRow(label: "ユーザーID", value: "未設定", showDivider: false, valueColor: Color(white: 0.56))
                         }
                     }
 
@@ -277,7 +287,7 @@ struct UserInfoView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(Color.black)
+                            .background(Color.accentTeal)
                             .cornerRadius(12)
                     }
                     .padding(.horizontal, 20)
@@ -288,6 +298,7 @@ struct UserInfoView: View {
                 Spacer()
 
             }
+        }
         }
         .edgesIgnoringSafeArea(.top)  // バナーを画面上部まで広げる
         .navigationBarHidden(true)  // ナビゲーションバーを完全に非表示

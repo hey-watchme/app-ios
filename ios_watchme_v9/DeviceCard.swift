@@ -19,15 +19,17 @@ struct DeviceCard: View {
     
     var body: some View {
         ZStack {
-            // 背景 - 選択時は白、非選択時はうっすらグレー
+            // 背景 - 選択時はelevated、非選択時はcard
             RoundedRectangle(cornerRadius: 24)
-                .fill(isSelected ? Color.white : Color.gray.opacity(0.1))
-                .shadow(color: .black.opacity(isSelected ? 0.15 : 0.1), radius: 10, x: 0, y: 5)
+                .fill(isSelected ? Color.darkElevated : Color.darkCard)
+                .shadow(color: Color.black.opacity(isSelected ? 0.6 : 0.4), radius: isSelected ? 12 : 8, x: 0, y: isSelected ? 6 : 4)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
                         .stroke(
-                            isSelected ? Color.clear : Color.safeColor("BorderLight").opacity(0.1),
-                            lineWidth: 1
+                            isSelected ? 
+                                LinearGradient(colors: [Color.accentTeal.opacity(0.8), Color.accentTeal.opacity(0.3)], startPoint: .topLeading, endPoint: .bottomTrailing)
+                                : LinearGradient(colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)], startPoint: .topLeading, endPoint: .bottomTrailing),
+                            lineWidth: isSelected ? 1.5 : 1
                         )
                 )
 
@@ -38,13 +40,13 @@ struct DeviceCard: View {
                         Text(isSelected ? "選択中のデバイス" : "このデバイスを選択")
                             .font(.body)
                             .fontWeight(isSelected ? .semibold : .regular)
-                            .foregroundColor(.primary)
+                            .foregroundColor(.white)
 
                         Spacer()
 
                         Image(systemName: isSelected ? "largecircle.fill.circle" : "circle")
                             .font(.system(size: 22, weight: .regular))
-                            .foregroundColor(isSelected ? Color.safeColor("AppAccentColor") : Color.secondary)
+                            .foregroundColor(isSelected ? Color.accentTeal : Color(white: 0.56))
                     }
                     .contentShape(Rectangle())
                 }
@@ -52,7 +54,7 @@ struct DeviceCard: View {
                     
                     // 区切り線（トグルボタンの下）
                     Divider()
-                        .background(Color.gray.opacity(0.3))
+                        .background(Color.white.opacity(0.08))
 
                     // デバイスID情報（右端に>カーソル）- 行全体をクリック可能に
                     if let onEditDevice = onEditDevice {
@@ -61,23 +63,23 @@ struct DeviceCard: View {
                                 // デバイスタイプに応じたアイコン
                                 ZStack {
                                     Circle()
-                                        .fill(Color.gray.opacity(0.1))
+                                        .fill(Color.white.opacity(0.05))
                                         .frame(width: 40, height: 40)
 
                                     Image(systemName: getDeviceIcon())
                                         .font(.system(size: 20))
-                                        .foregroundColor(.black)
+                                        .foregroundColor(Color(white: 0.56))
                                 }
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("デバイスID")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color(white: 0.56))
 
                                     Text(getShortDeviceId())
                                         .font(.system(.footnote, design: .monospaced))
                                         .fontWeight(.medium)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(.white)
                                 }
 
                                 Spacer()
@@ -93,23 +95,23 @@ struct DeviceCard: View {
                         HStack(spacing: 12) {
                             ZStack {
                                 Circle()
-                                    .fill(Color.gray.opacity(0.1))
+                                    .fill(Color.white.opacity(0.05))
                                     .frame(width: 40, height: 40)
 
                                 Image(systemName: getDeviceIcon())
                                     .font(.system(size: 20))
-                                    .foregroundColor(isSelected ? .white : .black)
+                                    .foregroundColor(isSelected ? .white : Color(white: 0.56))
                             }
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("デバイスID")
                                     .font(.caption)
-                                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                                    .foregroundColor(isSelected ? .white.opacity(0.8) : Color(white: 0.56))
 
                                 Text(getShortDeviceId())
                                     .font(.system(.footnote, design: .monospaced))
                                     .fontWeight(.medium)
-                                    .foregroundColor(isSelected ? .white : .primary)
+                                    .foregroundColor(.white)
                             }
 
                             Spacer()
@@ -118,7 +120,7 @@ struct DeviceCard: View {
 
                     // 区切り線
                     Divider()
-                        .background(Color.gray.opacity(0.3))
+                        .background(Color.white.opacity(0.08))
 
                     // 分析対象情報（右端に>カーソル）- 行全体をクリック可能に
                     if let subject = subject, let onEditSubject = onEditSubject {
@@ -136,12 +138,12 @@ struct DeviceCard: View {
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("分析対象")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color(white: 0.56))
 
                                     Text(subject.name ?? "未設定")
                                         .font(.footnote)
                                         .fontWeight(.medium)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(.white)
                                 }
 
                                 Spacer()
@@ -157,23 +159,23 @@ struct DeviceCard: View {
                         Button(action: onAddSubject) {
                             HStack(spacing: 12) {
                                 Circle()
-                                    .fill(Color.gray.opacity(0.1))
+                                    .fill(Color.white.opacity(0.05))
                                     .frame(width: 40, height: 40)
                                     .overlay(
                                         Image(systemName: "person.fill.questionmark")
                                             .font(.system(size: 18))
-                                            .foregroundColor(.black)
+                                            .foregroundColor(Color(white: 0.56))
                                     )
 
                                 VStack(alignment: .leading, spacing: 2) {
                                     Text("分析対象")
                                         .font(.caption)
-                                        .foregroundColor(.secondary)
+                                        .foregroundColor(Color(white: 0.56))
 
                                     Text("未設定")
                                         .font(.footnote)
                                         .fontWeight(.medium)
-                                        .foregroundColor(.primary)
+                                        .foregroundColor(.white)
                                 }
 
                                 Spacer()
@@ -188,23 +190,23 @@ struct DeviceCard: View {
                     } else {
                         HStack(spacing: 12) {
                             Circle()
-                                .fill(isSelected ? Color.white.opacity(0.2) : Color.gray.opacity(0.1))
+                                .fill(isSelected ? Color.white.opacity(0.2) : Color.white.opacity(0.05))
                                 .frame(width: 40, height: 40)
                                 .overlay(
                                     Image(systemName: "person.fill.questionmark")
                                         .font(.system(size: 18))
-                                        .foregroundColor(isSelected ? .white.opacity(0.6) : .black)
+                                        .foregroundColor(isSelected ? .white.opacity(0.6) : Color(white: 0.56))
                                 )
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("分析対象")
                                     .font(.caption)
-                                    .foregroundColor(isSelected ? .white.opacity(0.8) : .secondary)
+                                    .foregroundColor(isSelected ? .white.opacity(0.8) : Color(white: 0.56))
 
                                 Text("未設定")
                                     .font(.footnote)
                                     .fontWeight(.medium)
-                                    .foregroundColor(isSelected ? .white : .primary)
+                                    .foregroundColor(.white)
                             }
 
                             Spacer()

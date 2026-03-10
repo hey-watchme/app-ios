@@ -264,50 +264,63 @@ struct MainAppView: View {
     }
 
     private var initialView: some View {
-        VStack(spacing: 0) {
-            Spacer()
+        ZStack {
+            Color.darkBase.ignoresSafeArea()
+            
+            VStack(spacing: 0) {
+                Spacer()
 
-            // ロゴを中央に配置
-            Image("WatchMeLogo")
-                .resizable()
-                .aspectRatio(contentMode: .fit)
-                .frame(width: 200, height: 70)
+                // ロゴを中央に配置
+                Image("WatchMeLogo")
+                    .resizable()
+                    .aspectRatio(contentMode: .fit)
+                    .frame(width: 200, height: 70)
+                    // ※ロゴが黒文字の場合はダークモード用に白抜き画像にするなどの調整が必要ですが、ここではそのままにしています
 
-            Spacer()
+                Spacer()
 
-            // ボタンを最下部に配置
-            VStack(spacing: 16) {
-                // はじめるボタン → 認証フロー表示
-                Button(action: {
-                    showAuthFlow = true
-                }) {
-                    Text("はじめる")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(Color.safeColor("AppAccentColor"))
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                // ボタンを最下部に配置
+                VStack(spacing: 16) {
+                    // はじめるボタン → 認証フロー表示
+                    Button(action: {
+                        showAuthFlow = true
+                    }) {
+                        Text("はじめる")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.accentTeal)
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
+
+                    // ログインボタン
+                    Button(action: {
+                        showLogin = true
+                    }) {
+                        Text("ログイン")
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 50)
+                            .background(Color.darkElevated)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(
+                                        LinearGradient(
+                                            colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)],
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 1
+                                    )
+                            )
+                            .foregroundColor(.white)
+                            .cornerRadius(12)
+                    }
                 }
-
-                // ログインボタン
-                Button(action: {
-                    showLogin = true
-                }) {
-                    Text("ログイン")
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(Color.clear)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color.safeColor("AppAccentColor"), lineWidth: 1.5)
-                        )
-                        .foregroundColor(Color.safeColor("AppAccentColor"))
-                }
+                .padding(.horizontal, 40)
+                .padding(.bottom, 50)
             }
-            .padding(.horizontal, 40)
-            .padding(.bottom, 50)
         }
         .onAppear {
             print("⏱️ [VIEW] 初期画面表示（はじめる/ログイン）: \(Date().timeIntervalSince(viewStartTime))秒")
@@ -339,7 +352,7 @@ struct CustomFooterNavigation: View {
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(isDeviceSelected ? (selectedTab == .home ? Color.primary : Color.secondary) : Color.gray)
+                .foregroundColor(isDeviceSelected ? (selectedTab == .home ? Color.white : Color(white: 0.56)) : Color.gray.opacity(0.5))
             }
             .disabled(!isDeviceSelected)
 
@@ -354,7 +367,7 @@ struct CustomFooterNavigation: View {
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(isDeviceSelected ? (selectedTab == .report ? Color.primary : Color.secondary) : Color.gray)
+                .foregroundColor(isDeviceSelected ? (selectedTab == .report ? Color.white : Color(white: 0.56)) : Color.gray.opacity(0.5))
             }
             .disabled(!isDeviceSelected)
 
@@ -369,7 +382,7 @@ struct CustomFooterNavigation: View {
                         .font(.caption)
                 }
                 .frame(maxWidth: .infinity)
-                .foregroundColor(isDeviceSelected ? (selectedTab == .subject ? Color.primary : Color.secondary) : Color.gray)
+                .foregroundColor(isDeviceSelected ? (selectedTab == .subject ? Color.white : Color(white: 0.56)) : Color.gray.opacity(0.5))
             }
             .disabled(!isDeviceSelected)
         }
@@ -377,8 +390,8 @@ struct CustomFooterNavigation: View {
         .padding(.bottom, 20) // セーフエリアの考慮
         .opacity(isDeviceSelected ? 1.0 : 0.65)
         .background(
-            Color(.systemBackground)
-                .shadow(color: Color.black.opacity(0.1), radius: 1, x: 0, y: -1)
+            Color.darkBase
+                .shadow(color: Color.black.opacity(0.4), radius: 4, x: 0, y: -2)
         )
     }
 }

@@ -25,8 +25,20 @@ struct InfoSection<Content: View>: View {
                 content
             }
             .padding()
-            .background(Color(.systemGray6))
+            .background(Color.darkCard)
             .cornerRadius(12)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
         }
     }
 }
@@ -48,7 +60,7 @@ struct InfoRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.black)
+                .foregroundColor(Color(white: 0.56))
                 .frame(width: 20)
 
             Text(label)
@@ -84,7 +96,7 @@ struct InfoRowTwoLine: View {
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
-                .foregroundColor(.black)
+                .foregroundColor(Color(white: 0.56))
                 .frame(width: 20)
                 .padding(.top, 2)
 
@@ -125,12 +137,20 @@ struct InfoListSection<Content: View>: View {
             VStack(spacing: 0) {
                 content
             }
-            .background(Color.white)
+            .background(Color.darkCard)
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color(.systemGray4), lineWidth: 1)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
             )
+            .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
         }
     }
 }
@@ -169,7 +189,7 @@ struct InfoListRow: View {
 
             if showDivider {
                 Divider()
-                    .background(Color(.systemGray4))
+                    .background(Color.white.opacity(0.08))
             }
         }
     }

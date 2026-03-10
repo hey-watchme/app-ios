@@ -129,6 +129,9 @@ struct AuthFlowView: View {
     // MARK: - Account Selection View
 
     private var accountSelectionView: some View {
+        ZStack {
+        Color.darkBase.ignoresSafeArea()
+
         VStack(spacing: 24) {
             Spacer()
 
@@ -137,10 +140,11 @@ struct AuthFlowView: View {
                 Text("WatchMe へようこそ")
                     .font(.title2)
                     .fontWeight(.bold)
+                    .foregroundColor(.white)
 
                 Text("アカウントを作成して\nデータを安全に保存しましょう")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
                     .multilineTextAlignment(.center)
             }
 
@@ -159,9 +163,20 @@ struct AuthFlowView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(Color.blue)
+                    .background(Color.darkElevated)
                     .foregroundColor(.white)
                     .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
                 }
 
                 // Email Sign Up
@@ -191,12 +206,20 @@ struct AuthFlowView: View {
                     }
                     .frame(maxWidth: .infinity)
                     .frame(height: 50)
-                    .background(Color.clear)
+                    .background(Color.darkCard)
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.secondary, lineWidth: 1.5)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [Color.white.opacity(0.10), Color.white.opacity(0.03)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
                     )
-                    .foregroundColor(.primary)
+                    .cornerRadius(12)
+                    .foregroundColor(.white)
                 }
 
                 // Warning
@@ -220,9 +243,10 @@ struct AuthFlowView: View {
             }) {
                 Text("アカウントをお持ちの方はこちら")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
             }
             .padding(.bottom, 40)
+        }
         }
         .sheet(isPresented: $showLogin) {
             LoginView()

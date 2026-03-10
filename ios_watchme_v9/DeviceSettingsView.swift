@@ -51,11 +51,15 @@ struct DeviceSettingsView: View {
     // MARK: - Body
     var body: some View {
         ScrollView {
+            ZStack {
+            Color.darkBase.ignoresSafeArea()
+
             VStack(spacing: 0) {
                 // DeviceManager.stateに基づいた表示切り替え
                 switch deviceManager.state {
                 case .idle, .loading:
                     ProgressView("デバイス一覧を読み込み中...")
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 200)
 
                 case .available(let allDevices):
@@ -98,20 +102,22 @@ struct DeviceSettingsView: View {
                             .foregroundColor(.orange)
                         Text("エラーが発生しました")
                             .font(.title3)
+                            .foregroundColor(.white)
                         Text(message)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                             .multilineTextAlignment(.center)
                     }
                     .frame(maxWidth: .infinity, minHeight: 200)
                 }
+                }
+                .padding(.top, 20)
             }
-            .padding(.top, 20)
         }
-        .background(Color.safeColor("BehaviorBackgroundPrimary").ignoresSafeArea())
+        .background(Color.darkBase.ignoresSafeArea())
         .navigationTitle("デバイス設定")
         .navigationBarTitleDisplayMode(.inline)
-        .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+        .toolbarBackground(Color.darkBase, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
         .task {
             // DeviceManager.stateが既に.availableの場合は何もしない
@@ -179,15 +185,15 @@ struct DeviceSettingsView: View {
             VStack(spacing: 20) {
                 Image(systemName: "iphone.slash")
                     .font(.system(size: 50))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
 
                 Text("連携されたデバイスがありません")
                     .font(.title3)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
 
                 Text("他のデバイスから測定データを\n共有することができます")
                     .font(.footnote)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
                     .multilineTextAlignment(.center)
             }
             .padding(.vertical, 20)
@@ -201,7 +207,7 @@ struct DeviceSettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text(title)
                 .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
                 .padding(.horizontal)
 
             // Display devices (reversed order)
@@ -249,7 +255,7 @@ struct DeviceSettingsView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("新しいデバイス")
                 .font(.system(size: 24, weight: .bold))
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
                 .padding(.horizontal)
 
             UnifiedCard(title: "デバイスを追加") {
@@ -257,12 +263,12 @@ struct DeviceSettingsView: View {
                     VStack(alignment: .leading, spacing: 8) {
                         Text("録音デバイスに表示されたQRコードをスキャンすると、デバイス一覧に追加されます。")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                             .fixedSize(horizontal: false, vertical: true)
 
                         Text("デモデータ登録する時も、こちらからご登録いただけます。")
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -279,7 +285,7 @@ struct DeviceSettingsView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.safeColor("AppAccentColor"))
+                        .background(Color.accentTeal)
                         .cornerRadius(12)
                     }
                 }
@@ -291,7 +297,6 @@ struct DeviceSettingsView: View {
     // MARK: - Data Loading
     // loadAllData()とloadSampleDevice()は削除
     // → DeviceManagerで一元管理されるため不要
-
 
     /// QRコードをスキャンしてデバイスを追加
     private func handleQRCodeScanned(_ code: String) async {
