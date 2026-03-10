@@ -70,7 +70,7 @@ struct HeaderView: View {
         }
         .padding(.horizontal)
         .padding(.vertical, 8)
-        .background(Color(.systemBackground).shadow(radius: 1))
+        .background(Color.darkBase)
         .sheet(isPresented: $showNotificationSheet) {
             // 通知画面
             NotificationView()
@@ -108,11 +108,11 @@ struct HeaderView: View {
                 // 分析対象名（「さん」付き）
                 if let name = subject.name, !name.isEmpty {
                     Text("\(name)さん")
-                        .font(.subheadline)
-                        .foregroundColor(.primary)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(.white)
                 } else {
                     Text("分析対象")
-                        .font(.subheadline)
+                        .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(Color.safeColor("BorderLight"))
                 }
             }
@@ -145,15 +145,14 @@ struct HeaderView: View {
 
                         Image(systemName: "iphone")
                             .font(.system(size: 18))
-                            .foregroundColor(.black)
+                            .foregroundColor(.white)
                     }
 
                     // デバイスIDの最初の8文字を表示
                     let shortDeviceId = String(deviceId.prefix(8))
                     Text(shortDeviceId)
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .monospaced()
+                        .font(.system(size: 15, weight: .medium, design: .monospaced))
+                        .foregroundColor(.white)
                 }
             }
         } else if !deviceManager.hasRealDevices {
@@ -169,9 +168,9 @@ struct HeaderView: View {
                         .foregroundColor(.black)
                 }
 
-                Text("デバイス連携: なし")
-                    .font(.subheadline)
-                    .foregroundColor(.black)
+                    Text("デバイス連携: なし")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white)
             }
         } else {
             // フォールバック（デバイスはあるが選択されていない）
@@ -186,9 +185,9 @@ struct HeaderView: View {
                         .foregroundColor(.black)
                 }
 
-                Text("デバイスを選択")
-                    .font(.subheadline)
-                    .foregroundColor(.black)
+                    Text("デバイスを選択")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(.white)
             }
         }
     }
