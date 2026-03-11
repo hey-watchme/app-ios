@@ -153,12 +153,12 @@ struct ToastOverlay: View {
                     Text(toast.title)
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
 
                     if let subtitle = toast.subtitle {
                         Text(subtitle)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.72))
                             .lineLimit(2)
                     }
                 }
@@ -169,16 +169,29 @@ struct ToastOverlay: View {
             // プログレスバー（送信中またはフェーズ付きプログレス）
             if case .uploading(let progress) = toast.type {
                 ProgressView(value: progress, total: 1.0)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                    .progressViewStyle(LinearProgressViewStyle(tint: progressTint(for: toast.type)))
             } else if case .progress(_, let progress) = toast.type {
                 ProgressView(value: progress, total: 1.0)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                    .progressViewStyle(LinearProgressViewStyle(tint: progressTint(for: toast.type)))
             }
         }
         .padding()
-        .background(Color(.systemBackground))
-        .cornerRadius(12)
-        .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 4)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color.darkElevated.opacity(0.94))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(
+                            LinearGradient(
+                                colors: [Color.white.opacity(0.16), Color.white.opacity(0.04)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1
+                        )
+                )
+        )
+        .shadow(color: Color.black.opacity(0.32), radius: 14, x: 0, y: 6)
         .padding(.horizontal, 16)
         .padding(.top, 8)
     }
@@ -203,15 +216,26 @@ struct ToastOverlay: View {
     private func iconColor(for type: ToastMessage.ToastType) -> Color {
         switch type {
         case .success:
-            return .green
+            return .accentEmerald
         case .error:
-            return .red
+            return .accentCoral
         case .info:
-            return Color.safeColor("AppAccentColor")
+            return .accentTeal
         case .uploading:
-            return .blue
+            return .accentTeal
         case .progress:
-            return .blue
+            return .accentTeal
+        }
+    }
+
+    private func progressTint(for type: ToastMessage.ToastType) -> Color {
+        switch type {
+        case .success:
+            return .accentEmerald
+        case .error:
+            return .accentCoral
+        case .info, .uploading, .progress:
+            return .accentTeal
         }
     }
 }

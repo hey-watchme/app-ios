@@ -20,6 +20,8 @@ struct SubjectTabView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
+            Color.darkBase.ignoresSafeArea()
+
             if let subject = deviceManager.selectedSubject {
                 // 分析対象が設定されている場合
                 ScrollView {
@@ -34,7 +36,7 @@ struct SubjectTabView: View {
                         .frame(height: 150) // 表示される高さ
                         .clipped()
 
-                        // プロフィールセクション（白背景）
+                        // プロフィールセクション（ダークカード）
                         VStack(alignment: .leading, spacing: 16) {
                             // アバターと基本情報
                             HStack(alignment: .top, spacing: 12) {
@@ -49,11 +51,12 @@ struct SubjectTabView: View {
                                         Text(name)
                                             .font(.title3)
                                             .fontWeight(.bold)
+                                            .foregroundColor(.white)
                                     } else {
                                         Text("名前未設定")
                                             .font(.title3)
                                             .fontWeight(.bold)
-                                            .foregroundColor(.secondary)
+                                            .foregroundColor(Color(white: 0.56))
                                     }
 
                                     // 年齢・性別・地域を1行で表示
@@ -61,18 +64,18 @@ struct SubjectTabView: View {
                                         if let age = subject.age {
                                             Text("\(age)歳")
                                                 .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(Color(white: 0.56))
                                         }
 
                                         if let gender = subject.gender, !gender.isEmpty {
                                             if subject.age != nil {
                                                 Text("•")
                                                     .font(.subheadline)
-                                                    .foregroundColor(.secondary)
+                                                    .foregroundColor(Color(white: 0.56))
                                             }
                                             Text(gender)
                                                 .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(Color(white: 0.56))
                                         }
 
                                         // Location (prefecture and city)
@@ -80,11 +83,11 @@ struct SubjectTabView: View {
                                             if subject.age != nil || subject.gender != nil {
                                                 Text("•")
                                                     .font(.subheadline)
-                                                    .foregroundColor(.secondary)
+                                                    .foregroundColor(Color(white: 0.56))
                                             }
                                             Text(locationName)
                                                 .font(.subheadline)
-                                                .foregroundColor(.secondary)
+                                                .foregroundColor(Color(white: 0.56))
                                         }
                                     }
 
@@ -96,11 +99,11 @@ struct SubjectTabView: View {
                             if let notes = subject.notes, !notes.isEmpty {
                                 Text(notes)
                                     .font(.body)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(.white)
                                     .lineSpacing(4)
                             }
 
-                            // プロフィール編集ボタン（白いボタン）
+                            // プロフィール編集ボタン
                             Button(action: {
                                 showSubjectEdit = true
                             }) {
@@ -109,18 +112,30 @@ struct SubjectTabView: View {
                                     Text("プロフィールを編集")
                                 }
                                 .font(.subheadline)
-                                .foregroundColor(.primary)
+                                .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
-                                .background(Color.white)
+                                .background(Color.darkElevated)
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
                                 )
                             }
                         }
                         .padding(20)
-                        .background(Color.white) // 白背景
+                        .background(Color.darkCard)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 0)
+                                .stroke(
+                                    LinearGradient(
+                                        colors: [Color.white.opacity(0.08), Color.white.opacity(0.03)],
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    ),
+                                    lineWidth: 1
+                                )
+                        )
+                        .shadow(color: Color.black.opacity(0.35), radius: 14, x: 0, y: 8)
                         .padding(.horizontal, 0)
                         .padding(.top, 0)
 
@@ -147,13 +162,13 @@ struct SubjectTabView: View {
                 VStack(spacing: 20) {
                     Image(systemName: "person.crop.circle.badge.plus")
                         .font(.system(size: 80))
-                        .foregroundColor(.gray)
+                        .foregroundColor(Color(white: 0.50))
                     Text("未登録")
                         .font(.title3)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                     Text("選択中のデバイス（\(currentDeviceTypeLabel)）で音声分析している対象者を登録しておくことで、分析の精度が向上します。年齢、性別、プロフィールの情報等が分析の前提として活用されます。")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 40)
 
@@ -263,6 +278,7 @@ struct SubjectTabView: View {
             Text("タイプ")
                 .font(.title2)
                 .fontWeight(.semibold)
+                .foregroundColor(.white)
 
             if let subject = deviceManager.selectedSubject, let cognitiveTypeData = subject.cognitiveTypeData {
                 // タイプ選択済み - カードのみ表示
@@ -272,7 +288,7 @@ struct SubjectTabView: View {
                 VStack(spacing: 16) {
                     Text("分析対象のタイプを選択")
                         .font(.headline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
 
                     // カルーセル
                     TabView(selection: $selectedCognitiveType) {
@@ -320,14 +336,15 @@ struct SubjectTabView: View {
             Text(type.categoryName)
                 .font(.title)
                 .fontWeight(.bold)
+                .foregroundColor(.white)
 
             Text(type.typeName)
                 .font(.title3)
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(white: 0.56))
 
             Text(type.description)
                 .font(.callout)
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(white: 0.56))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 20)
         }
@@ -335,7 +352,11 @@ struct SubjectTabView: View {
         .padding(24)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         )
     }
 
@@ -387,13 +408,14 @@ struct SubjectTabView: View {
                 Text("神経機能モデル")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .foregroundColor(.white)
 
                 Spacer()
 
                 Button(action: { showNeuralInfo = true }) {
                     Image(systemName: "info.circle")
                         .font(.title3)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                 }
             }
 
@@ -416,31 +438,31 @@ struct SubjectTabView: View {
                         Circle().fill(Color.blue).frame(width: 12, height: 12)
                         Text("注意制御").font(.caption)
                         Spacer()
-                        Text("60%").font(.caption).foregroundColor(.secondary)
+                        Text("60%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                     HStack {
                         Circle().fill(Color.green).frame(width: 12, height: 12)
                         Text("実行機能").font(.caption)
                         Spacer()
-                        Text("70%").font(.caption).foregroundColor(.secondary)
+                        Text("70%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                     HStack {
                         Circle().fill(Color.orange).frame(width: 12, height: 12)
                         Text("ワーキングメモリ").font(.caption)
                         Spacer()
-                        Text("50%").font(.caption).foregroundColor(.secondary)
+                        Text("50%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                     HStack {
                         Circle().fill(Color.red).frame(width: 12, height: 12)
                         Text("感情制御").font(.caption)
                         Spacer()
-                        Text("40%").font(.caption).foregroundColor(.secondary)
+                        Text("40%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                     HStack {
                         Circle().fill(Color.purple).frame(width: 12, height: 12)
                         Text("発想流動性").font(.caption)
                         Spacer()
-                        Text("80%").font(.caption).foregroundColor(.secondary)
+                        Text("80%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                 }
                 .padding(.horizontal, 20)
@@ -448,7 +470,11 @@ struct SubjectTabView: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(Color.darkCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
             )
         }
     }
@@ -461,13 +487,14 @@ struct SubjectTabView: View {
                 Text("知性の形式モデル")
                     .font(.title2)
                     .fontWeight(.semibold)
+                    .foregroundColor(.white)
 
                 Spacer()
 
                 Button(action: { showIntelligenceInfo = true }) {
                     Image(systemName: "info.circle")
                         .font(.title3)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                 }
             }
 
@@ -486,7 +513,11 @@ struct SubjectTabView: View {
             .padding(20)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(Color.darkCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
             )
         }
     }
@@ -512,7 +543,7 @@ struct RadarChartView: View {
                 // 背景グリッド（5段階）
                 ForEach(1...5, id: \.self) { level in
                     RadarPolygonShape(sides: dataPoints.count, scale: Double(level) / 5.0)
-                        .stroke(Color.gray.opacity(0.2), lineWidth: 1)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
                         .frame(width: radius * 2, height: radius * 2)
                 }
 
@@ -522,7 +553,7 @@ struct RadarChartView: View {
                     scale: 1.0,
                     values: dataPoints.map { $0.value }
                 )
-                .fill(Color.blue.opacity(0.3))
+                .fill(Color.accentTeal.opacity(0.22))
                 .frame(width: radius * 2, height: radius * 2)
 
                 RadarPolygonShape(
@@ -530,7 +561,7 @@ struct RadarChartView: View {
                     scale: 1.0,
                     values: dataPoints.map { $0.value }
                 )
-                .stroke(Color.blue, lineWidth: 2)
+                .stroke(Color.accentTeal, lineWidth: 2)
                 .frame(width: radius * 2, height: radius * 2)
 
                 // ラベル
@@ -542,7 +573,7 @@ struct RadarChartView: View {
 
                     Text(dataPoints[index].label)
                         .font(.caption)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                         .position(x: x, y: y)
                 }
             }
@@ -594,14 +625,15 @@ struct IntelligenceBar: View {
                     Text(title)
                         .font(.subheadline)
                         .fontWeight(.medium)
+                        .foregroundColor(.white)
                     Text(subtitle)
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                 }
                 Spacer()
                 Text("\(Int(value * 100))%")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
                     .monospacedDigit()
             }
 
@@ -609,10 +641,10 @@ struct IntelligenceBar: View {
             GeometryReader { geometry in
                 ZStack(alignment: .leading) {
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color(.tertiarySystemFill))
+                        .fill(Color.white.opacity(0.10))
 
                     RoundedRectangle(cornerRadius: 4)
-                        .fill(Color.primary.opacity(0.8))
+                        .fill(Color.accentTeal.opacity(0.85))
                         .frame(width: geometry.size.width * CGFloat(value))
                 }
             }
@@ -633,13 +665,17 @@ struct InfoSheet: View {
                 VStack(alignment: .leading, spacing: 16) {
                     Text(content)
                         .font(.body)
-                        .foregroundColor(.primary)
+                        .foregroundColor(.white)
                         .lineSpacing(4)
                 }
                 .padding(20)
             }
+            .background(Color.darkBase)
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {

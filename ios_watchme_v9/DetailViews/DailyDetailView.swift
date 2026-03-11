@@ -54,9 +54,12 @@ struct DailyDetailView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
             }
-            .background(Color(.systemBackground))
+            .background(Color.darkBase)
             .navigationTitle(formatDateHeader(localDate))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
@@ -109,11 +112,11 @@ struct DailyDetailView: View {
     // Score color logic (same as ModernVibeCard)
     private func scoreColor(for score: Double) -> Color {
         if score > 30 {
-            return .green
+            return .accentEmerald
         } else if score < -30 {
-            return .red
+            return .accentCoral
         } else {
-            return .gray
+            return .accentTeal
         }
     }
 
@@ -121,14 +124,18 @@ struct DailyDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(summary)
                 .font(.body)
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         )
     }
 
@@ -136,9 +143,10 @@ struct DailyDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "waveform.path.ecg")
-                    .foregroundColor(.accentPurple)
+                    .foregroundColor(.accentTeal)
                 Text("Vibe Score Timeline")
                     .font(.headline)
+                    .foregroundColor(.white)
                 Spacer()
             }
 
@@ -148,7 +156,7 @@ struct DailyDetailView: View {
                         x: .value("Time", scores[index].time),
                         y: .value("Score", scores[index].score)
                     )
-                    .foregroundStyle(.purple)
+                    .foregroundStyle(Color.accentTeal)
                     .interpolationMethod(.catmullRom)
                 }
             }
@@ -157,15 +165,28 @@ struct DailyDetailView: View {
             .chartXAxis {
                 AxisMarks(values: .stride(by: .hour, count: 3)) { _ in
                     AxisValueLabel(format: .dateTime.hour())
+                        .foregroundStyle(Color(white: 0.56))
                     AxisGridLine()
+                        .foregroundStyle(Color.white.opacity(0.10))
+                }
+            }
+            .chartYAxis {
+                AxisMarks { _ in
+                    AxisValueLabel()
+                        .foregroundStyle(Color(white: 0.56))
+                    AxisGridLine()
+                        .foregroundStyle(Color.white.opacity(0.10))
                 }
             }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white)
-                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         )
     }
 
@@ -173,9 +194,10 @@ struct DailyDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "bolt.fill")
-                    .foregroundColor(.accentPurple)
+                    .foregroundColor(.accentAmber)
                 Text("ハイライト")
                     .font(.headline)
+                    .foregroundColor(.white)
                 Spacer()
             }
 
@@ -186,7 +208,11 @@ struct DailyDetailView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         )
     }
 
@@ -195,17 +221,17 @@ struct DailyDetailView: View {
             Text(event.time)
                 .font(.caption)
                 .fontWeight(.medium)
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(white: 0.56))
                 .frame(width: 50, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(event.event)
                     .font(.subheadline)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
 
                 Text(String(format: "Change: %+.1f", event.scoreChange))
                     .font(.caption)
-                    .foregroundColor(event.scoreChange >= 0 ? .green : .red)
+                    .foregroundColor(event.scoreChange >= 0 ? .accentEmerald : .accentCoral)
             }
 
             Spacer()

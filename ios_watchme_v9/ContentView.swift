@@ -18,7 +18,7 @@ struct ContentView: View {
     // シンプルな状態管理
     @State private var selectedLocalDate: String = ""
     @State private var showLogoutConfirmation = false
-    @State private var showRecordingSheet = false
+    @Binding var showRecordingSheet: Bool
     @State private var showQRScanner = false
     @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
@@ -41,13 +41,6 @@ struct ContentView: View {
             Color.darkBase.ignoresSafeArea()
             
             VStack(spacing: 0) {
-                // ヘッダー（既存のHeaderViewを使用）
-                HeaderView(
-                    showLogoutConfirmation: $showLogoutConfirmation,
-                    showRecordingSheet: $showRecordingSheet,
-                    showMyPage: $showMyPage
-                )
-                
                 // ✅ 権限ベース設計: 状態チェックロジック更新
                 switch deviceManager.state {
                 case .idle, .loading:
@@ -180,49 +173,21 @@ struct ContentView: View {
                     Spacer()
                 }
             }
-            
-            // Floating Action Buttons (FAB)
-            // deviceManagerのshouldShowFABプロパティで表示制御
-            if deviceManager.shouldShowFAB {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-
-                        // FAB: Recording only (mic icon)
-                        FloatingActionButton(icon: "mic.fill", action: {
-                            print("🔘 FAB: 録音ボタン押下")
-                            print("✅ 録音シート表示（権限チェックは録音開始時に実行）")
-                            showRecordingSheet = true
-                        })
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 20)
-                    }
-                }
+            .overlay(alignment: .top) {
+                HeaderView(
+                    showLogoutConfirmation: $showLogoutConfirmation,
+                    showRecordingSheet: $showRecordingSheet,
+                    showMyPage: $showMyPage
+                )
+                .zIndex(10)
             }
-
+            
             // デモモードバナー（device_type == "demo"のデバイス選択時に表示）
             if deviceManager.isDemoDeviceSelected || deviceManager.isSampleDeviceSelected {
                 DemoModeBanner()
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                     .animation(.easeInOut(duration: 0.3), value: deviceManager.isDemoDeviceSelected)
             }
-        }
-        .sheet(isPresented: $showRecordingSheet) {
-            ZStack {
-                FullScreenRecordingView()
-                    .environmentObject(deviceManager)
-                    .environmentObject(userAccountManager)
-                    .environmentObject(recordingStore)
-
-                // モーダル内でもトーストを表示
-                VStack {
-                    ToastOverlay(toastManager: ToastManager.shared)
-                    Spacer()
-                }
-            }
-            .presentationDetents([.large])
-            .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showQRScanner) {
             QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in

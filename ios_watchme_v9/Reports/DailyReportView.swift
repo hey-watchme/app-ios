@@ -51,11 +51,12 @@ struct DailyReportView: View {
 
                 if isLoading {
                     ProgressView()
+                        .tint(Color.accentTeal)
                         .padding()
                 } else if dailySummaries.isEmpty {
                     Text("この期間のデータがありません")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                         .padding()
                 } else {
                     // Graph section
@@ -71,7 +72,7 @@ struct DailyReportView: View {
                     .frame(height: 40)
             }
         }
-        .background(Color(.systemBackground))
+        .background(Color.darkBase)
         .sheet(isPresented: $showDailyDetailSheet) {
             if let deviceId = deviceManager.selectedDeviceID,
                let dailySummary = selectedDailySummary {
@@ -273,20 +274,24 @@ struct DailyReportView: View {
             HStack {
                 Text("期間：")
                     .font(.subheadline)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
                 Text(selectedPeriod.rawValue)
                     .font(.subheadline)
                     .fontWeight(.medium)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.white)
                 Image(systemName: "chevron.down")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(.systemGray6))
+                    .fill(Color.darkCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -297,7 +302,7 @@ struct DailyReportView: View {
     private var periodDisplayText: some View {
         Text(getPeriodDisplayText())
             .font(.subheadline)
-            .foregroundColor(.secondary)
+            .foregroundColor(Color(white: 0.56))
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
@@ -324,6 +329,7 @@ struct DailyReportView: View {
             Text("気分の推移")
                 .font(.title3)
                 .fontWeight(.semibold)
+                .foregroundColor(.white)
 
             vibeGraph
         }
@@ -374,7 +380,7 @@ struct DailyReportView: View {
                                 let vibeScore = Double(dailySummaries[index].averageVibe ?? 0)
                                 let barHeight = abs(vibeScore) / maxValue * halfHeight
                                 let isPositive = vibeScore >= 0
-                                let barColor = isPositive ? Color.green : Color.red
+                                let barColor = isPositive ? Color.accentEmerald : Color.accentCoral
 
                                 ZStack {
                                     if !hasData {
@@ -383,7 +389,7 @@ struct DailyReportView: View {
                                             Spacer()
                                                 .frame(height: halfHeight - 2)
                                             Rectangle()
-                                                .fill(Color(.systemGray4))
+                                                .fill(Color.white.opacity(0.16))
                                                 .frame(width: barInnerWidth, height: 4)
                                             Spacer()
                                                 .frame(height: halfHeight - 2)
@@ -423,7 +429,7 @@ struct DailyReportView: View {
                         ForEach(dailySummaries.indices, id: \.self) { index in
                             Text(shouldShowLabel(index: index, total: dailySummaries.count) ? formatDateLabel(dailySummaries[index].date) : "")
                                 .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Color(white: 0.56))
                                 .frame(width: barWidth)
                                 .lineLimit(1)
                                 .minimumScaleFactor(0.5)
@@ -436,27 +442,27 @@ struct DailyReportView: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text("50")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                     Spacer().frame(height: chartHeight / 4)
 
                     Text("25")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                     Spacer().frame(height: chartHeight / 4)
 
                     Text("0")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                     Spacer().frame(height: chartHeight / 4)
 
                     Text("-25")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                     Spacer().frame(height: chartHeight / 4)
 
                     Text("-50")
                         .font(.caption2)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                 }
                 .frame(width: 30, height: chartHeight)
             }
@@ -465,14 +471,18 @@ struct DailyReportView: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemGray6))
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         )
     }
 
     private func gridLine(value: Int, isZero: Bool) -> some View {
         HStack {
             Rectangle()
-                .fill(isZero ? Color(.systemGray4) : Color(.systemGray5))
+                .fill(isZero ? Color.white.opacity(0.20) : Color.white.opacity(0.10))
                 .frame(height: isZero ? 1.0 : 0.5)
             Spacer()
         }
@@ -485,6 +495,7 @@ struct DailyReportView: View {
             Text("日次サマリー")
                 .font(.title3)
                 .fontWeight(.semibold)
+                .foregroundColor(.white)
 
             ForEach(dailySummaries, id: \.date) { summary in
                 dailySummaryRow(summary: summary)
@@ -499,7 +510,7 @@ struct DailyReportView: View {
             HStack {
                 Text(formatDate(summary.date))
                     .font(.headline)
-                    .foregroundColor(hasData ? .primary : .secondary)
+                    .foregroundColor(hasData ? .white : Color(white: 0.56))
 
                 Spacer()
 
@@ -511,7 +522,7 @@ struct DailyReportView: View {
                 } else {
                     Text("データなし")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                 }
             }
 
@@ -519,7 +530,7 @@ struct DailyReportView: View {
                 if let insights = summary.insights, !insights.isEmpty {
                     Text(insights)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(Color(white: 0.56))
                         .lineLimit(2)
                 }
 
@@ -530,24 +541,28 @@ struct DailyReportView: View {
                 }) {
                     HStack {
                         Text("詳細を見る")
-                            .font(.caption)
+                        .font(.caption)
                             .fontWeight(.medium)
                         Image(systemName: "chevron.right")
                             .font(.caption)
                     }
-                    .foregroundColor(.accentPurple)
+                    .foregroundColor(.accentTeal)
                 }
             } else {
                 Text("この日のデータは記録されていません")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.50))
                     .italic()
             }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(hasData ? Color(.systemGray6) : Color(.systemGray6).opacity(0.5))
+                .fill(hasData ? Color.darkCard : Color.darkCard.opacity(0.7))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         )
         .opacity(hasData ? 1.0 : 0.6)
     }
@@ -594,14 +609,6 @@ struct DailyReportView: View {
     }
 
     private func vibeScoreColor(_ score: Double) -> Color {
-        if score >= 30 {
-            return .green
-        } else if score >= 0 {
-            return .blue
-        } else if score >= -30 {
-            return .orange
-        } else {
-            return .red
-        }
+        Color.vibeScoreColor(for: score)
     }
 }

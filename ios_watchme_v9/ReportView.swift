@@ -17,34 +17,38 @@ struct ReportView: View {
     // @State private var selectedTab = 0 // 0: Daily, 1: Weekly, 2: Monthly
 
     var body: some View {
-        VStack(spacing: 0) {
-            // Header
-            VStack(alignment: .leading, spacing: 16) {
-                Text("レポート")
-                    .font(.largeTitle)
-                    .fontWeight(.bold)
+        ZStack {
+            Color.darkBase.ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                // Header
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("レポート")
+                        .font(.largeTitle)
+                        .fontWeight(.bold)
+                        .foregroundColor(.white)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 16)
+
+                // TODO: Tab Picker (hidden until Weekly/Monthly are ready)
+                // Picker("", selection: $selectedTab) {
+                //     Text("日次").tag(0)
+                //     Text("週次").tag(1)
+                //     Text("月次").tag(2)
+                // }
+                // .pickerStyle(SegmentedPickerStyle())
+                // .padding(.horizontal, 20)
+                // .padding(.bottom, 16)
+
+                // Daily Tab Only (for now)
+                DailyReportView()
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, 20)
-            .padding(.top, 20)
-            .padding(.bottom, 16)
-
-            // TODO: Tab Picker (hidden until Weekly/Monthly are ready)
-            // Picker("", selection: $selectedTab) {
-            //     Text("日次").tag(0)
-            //     Text("週次").tag(1)
-            //     Text("月次").tag(2)
-            // }
-            // .pickerStyle(SegmentedPickerStyle())
-            // .padding(.horizontal, 20)
-            // .padding(.bottom, 16)
-
-            // Daily Tab Only (for now)
-            DailyReportView()
-                .environmentObject(deviceManager)
-                .environmentObject(dataManager)
         }
-        .background(Color(.systemBackground))
     }
 }
 

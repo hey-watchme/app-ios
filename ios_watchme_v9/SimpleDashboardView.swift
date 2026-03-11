@@ -113,6 +113,7 @@ struct SimpleDashboardView: View {
     @State private var showBehaviorSheet = false
     @State private var showEmotionSheet = false
     @State private var selectedSpotForDetail: DashboardTimeBlock?
+    private let floatingHeaderContentInset: CGFloat = 40
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -122,6 +123,7 @@ struct SimpleDashboardView: View {
                     LargeDateSection(selectedDate: selectedDateBinding)
                         .environmentObject(deviceManager)
                         .environmentObject(dataManager)
+                        .padding(.top, floatingHeaderContentInset)
                         .background(
                             GeometryReader { geometry in
                                 Color.clear

@@ -305,6 +305,7 @@ struct UserInfoView: View {
         .sheet(isPresented: $showAccountSettings) {
             AccountSettingsView()
                 .environmentObject(userAccountManager)
+                .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $showingAvatarPicker) {
             NavigationStack {
@@ -326,11 +327,13 @@ struct UserInfoView: View {
                     }
                 }
             }
+            .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $showUpgradeAccount) {
             UpgradeAccountView()
                 .environmentObject(userAccountManager)
                 .environmentObject(ToastManager.shared)
+                .preferredColorScheme(.dark)
         }
         .onAppear {
             // ViewModelの初期化

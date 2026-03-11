@@ -85,6 +85,7 @@ struct MainAppView: View {
     @State private var showLogin = false
     @State private var showAuthFlow = false  // 統合認証フロー（オンボーディング + アカウント選択）
     @State private var authFlowCompleted = false  // 認証フロー完了フラグ
+    @State private var showRecordingSheet = false
 
 
     // フッターナビゲーション用の選択状態
@@ -112,39 +113,78 @@ struct MainAppView: View {
 
     // MARK: - Extracted Views
 
+    private var homeContent: some View {
+        ContentView(showRecordingSheet: $showRecordingSheet)
+            .environmentObject(userAccountManager)
+            .environmentObject(deviceManager)
+            .environmentObject(dataManager)
+            .environmentObject(recordingStore)
+    }
+
+    private var reportContent: some View {
+        ReportView()
+            .environmentObject(userAccountManager)
+            .environmentObject(deviceManager)
+            .environmentObject(dataManager)
+    }
+
+    private var subjectContent: some View {
+        SubjectTabView()
+            .environmentObject(userAccountManager)
+            .environmentObject(deviceManager)
+            .environmentObject(dataManager)
+    }
+
     /// 共通化されたタブビュー構造
     private var mainTabView: some View {
         NavigationStack {
-            VStack(spacing: 0) {
+            ZStack {
                 // コンテンツエリア（ビューを保持したまま表示/非表示を切り替え）
                 ZStack {
-                    ContentView()
-                        .environmentObject(userAccountManager)
-                        .environmentObject(deviceManager)
-                        .environmentObject(dataManager)
-                        .environmentObject(recordingStore)
+                    homeContent
                         .opacity(selectedTab == .home ? 1 : 0)
                         .zIndex(selectedTab == .home ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .home)
 
-                    ReportView()
-                        .environmentObject(userAccountManager)
-                        .environmentObject(deviceManager)
-                        .environmentObject(dataManager)
+                    reportContent
                         .opacity(selectedTab == .report ? 1 : 0)
                         .zIndex(selectedTab == .report ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .report)
 
-                    SubjectTabView()
-                        .environmentObject(userAccountManager)
-                        .environmentObject(deviceManager)
-                        .environmentObject(dataManager)
+                    subjectContent
                         .opacity(selectedTab == .subject ? 1 : 0)
                         .zIndex(selectedTab == .subject ? 1 : 0)
+                        .allowsHitTesting(selectedTab == .subject)
                 }
-
-                // カスタムフッターナビゲーション
-                CustomFooterNavigation(selectedTab: $selectedTab)
             }
-            .edgesIgnoringSafeArea(.bottom)
+            .overlay(alignment: .bottom) {
+                // スワイプ体験を維持するため、コンテンツ構造は変えずにフッターのみ浮島化
+                CustomFooterNavigation(
+                    selectedTab: $selectedTab,
+                    showRecordButton: deviceManager.shouldShowFAB,
+                    onRecordTap: {
+                        showRecordingSheet = true
+                    }
+                )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 8)
+            }
+            .ignoresSafeArea(.keyboard, edges: .bottom)
+            .sheet(isPresented: $showRecordingSheet) {
+                ZStack {
+                    FullScreenRecordingView()
+                        .environmentObject(deviceManager)
+                        .environmentObject(userAccountManager)
+                        .environmentObject(recordingStore)
+
+                    VStack {
+                        ToastOverlay(toastManager: ToastManager.shared)
+                        Spacer()
+                    }
+                }
+                .presentationDetents([.large])
+                .presentationDragIndicator(.visible)
+            }
         }
     }
 
@@ -216,28 +256,28 @@ struct MainAppView: View {
     }
 
     private var loadingView: some View {
-        VStack {
-            Spacer()
+        ZStack {
+            Color.white.ignoresSafeArea()
 
-            // ロゴを表示
+            // ロゴは常に中央固定（Launch Screenとの視覚差分を減らす）
             Image("WatchMeLogo")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 200, height: 70)
 
-            // ローディングインジケーター
-            ProgressView()
-                .progressViewStyle(CircularProgressViewStyle())
-                .scaleEffect(1.5)
-                .padding(.top, 40)
+            VStack(spacing: 10) {
+                ProgressView()
+                    .progressViewStyle(CircularProgressViewStyle())
+                    .scaleEffect(1.2)
+                    .tint(Color.black.opacity(0.55))
 
-            Text("認証状態を確認中...")
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .padding(.top, 10)
-
-            Spacer()
+                Text("認証チェック中...")
+                    .font(.caption)
+                    .foregroundColor(Color.black.opacity(0.56))
+            }
+            .padding(.top, 120)
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onAppear {
             print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
         }
@@ -265,7 +305,11 @@ struct MainAppView: View {
 
     private var initialView: some View {
         ZStack {
-            Color.darkBase.ignoresSafeArea()
+            LoopingVideoBackgroundView(
+                resourceName: "Zooming_out_rotating_camera_59a4c0497a",
+                fallbackColor: Color.darkBase
+            )
+            .ignoresSafeArea()
             
             VStack(spacing: 0) {
                 Spacer()
@@ -333,66 +377,104 @@ struct MainAppView: View {
 // カスタムフッターナビゲーション
 struct CustomFooterNavigation: View {
     @Binding var selectedTab: MainAppView.FooterTab
+    let showRecordButton: Bool
+    let onRecordTap: () -> Void
     @EnvironmentObject var deviceManager: DeviceManager
+    private let glassBaseOpacity: Double = 0.56
+    private let glassMaterialOpacity: Double = 0.35
 
     private var isDeviceSelected: Bool {
         deviceManager.selectedDeviceID != nil
     }
 
     var body: some View {
-        HStack(spacing: 0) {
-            // ホームタブ
-            Button(action: {
-                selectedTab = .home
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: "house.fill")
-                        .font(.system(size: 24))
-                    Text("ホーム")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-                .foregroundColor(isDeviceSelected ? (selectedTab == .home ? Color.white : Color(white: 0.56)) : Color.gray.opacity(0.5))
+        HStack(spacing: 10) {
+            HStack(spacing: 8) {
+                footerTabButton(.home, activeIcon: "house.fill", inactiveIcon: "house", title: "ホーム")
+                footerTabButton(.report, activeIcon: "heart.text.square.fill", inactiveIcon: "heart.text.square", title: "レポート")
+                footerTabButton(.subject, activeIcon: "person.fill", inactiveIcon: "person", title: "分析対象")
             }
-            .disabled(!isDeviceSelected)
+            .frame(maxWidth: .infinity)
 
-            // レポートタブ
-            Button(action: {
-                selectedTab = .report
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: "heart.text.square.fill")
-                        .font(.system(size: 24))
-                    Text("レポート")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-                .foregroundColor(isDeviceSelected ? (selectedTab == .report ? Color.white : Color(white: 0.56)) : Color.gray.opacity(0.5))
+            if showRecordButton {
+                recordButton
             }
-            .disabled(!isDeviceSelected)
-
-            // 分析対象タブ
-            Button(action: {
-                selectedTab = .subject
-            }) {
-                VStack(spacing: 4) {
-                    Image(systemName: selectedTab == .subject ? "person.fill" : "person")
-                        .font(.system(size: 24))
-                    Text("分析対象")
-                        .font(.caption)
-                }
-                .frame(maxWidth: .infinity)
-                .foregroundColor(isDeviceSelected ? (selectedTab == .subject ? Color.white : Color(white: 0.56)) : Color.gray.opacity(0.5))
-            }
-            .disabled(!isDeviceSelected)
         }
-        .padding(.top, 8)
-        .padding(.bottom, 20) // セーフエリアの考慮
+        .padding(.horizontal, 10)
+        .padding(.vertical, 10)
         .opacity(isDeviceSelected ? 1.0 : 0.65)
+        .frame(maxWidth: 460)
         .background(
-            Color.darkBase
-                .shadow(color: Color.black.opacity(0.4), radius: 4, x: 0, y: -2)
+            Capsule()
+                .fill(Color.black.opacity(glassBaseOpacity))
+                .overlay(
+                    Capsule()
+                        .fill(.ultraThinMaterial)
+                        .opacity(glassMaterialOpacity)
+                )
         )
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.1), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.22), radius: 18, x: 0, y: 8)
+    }
+
+    private func footerTabButton(
+        _ tab: MainAppView.FooterTab,
+        activeIcon: String,
+        inactiveIcon: String,
+        title: String
+    ) -> some View {
+        let isSelected = selectedTab == tab
+
+        return Button(action: {
+            selectedTab = tab
+        }) {
+            VStack(spacing: 3) {
+                Image(systemName: isSelected ? activeIcon : inactiveIcon)
+                    .font(.system(size: 20, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 52)
+            .foregroundColor(tabForegroundColor(isSelected: isSelected))
+            .background(
+                Capsule()
+                    .fill(Color.white.opacity(isSelected ? 0.08 : 0.001))
+            )
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!isDeviceSelected)
+    }
+
+    private func tabForegroundColor(isSelected: Bool) -> Color {
+        guard isDeviceSelected else { return Color.gray.opacity(0.55) }
+        return isSelected ? Color.accentTeal.opacity(0.9) : Color.white.opacity(0.76)
+    }
+
+    private var recordButton: some View {
+        Button(action: onRecordTap) {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(Color.accentTeal.opacity(0.95))
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                )
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 3)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isDeviceSelected)
     }
 }
 

@@ -34,7 +34,7 @@ struct MonthlyReportView: View {
                     .frame(height: 40)
             }
         }
-        .background(Color(.systemBackground))
+        .background(Color.darkBase)
         .sheet(isPresented: $showMonthlyDetailSheet) {
             if let deviceId = deviceManager.selectedDeviceID {
                 MonthlyDetailView(deviceId: deviceId, monthStartDate: selectedMonth)
@@ -49,6 +49,7 @@ struct MonthlyReportView: View {
             Text("月次分析")
                 .font(.title3)
                 .fontWeight(.semibold)
+                .foregroundColor(.white)
 
             ForEach(mockMonthlySummaries, id: \.month) { monthly in
                 monthlySummaryRow(
@@ -64,17 +65,17 @@ struct MonthlyReportView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text(formatMonth(month))
                 .font(.headline)
-                .foregroundColor(.primary)
+                .foregroundColor(.white)
 
             Text(summary)
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(Color(white: 0.56))
                 .lineLimit(2)
 
             HStack {
                 Text("印象的イベント: \(eventCount)件")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(Color(white: 0.56))
 
                 Spacer()
 
@@ -89,14 +90,18 @@ struct MonthlyReportView: View {
                         Image(systemName: "chevron.right")
                             .font(.caption)
                     }
-                    .foregroundColor(.accentPurple)
+                    .foregroundColor(.accentTeal)
                 }
             }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(.systemGray6))
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
         )
     }
 

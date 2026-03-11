@@ -21,15 +21,16 @@ struct WeeklyDetailView: View {
                     VStack(spacing: 16) {
                         Image(systemName: "calendar.badge.clock")
                             .font(.system(size: 64))
-                            .foregroundColor(.accentPurple)
+                            .foregroundColor(.accentTeal)
 
                         Text("Weekly分析の詳細")
                             .font(.title2)
                             .fontWeight(.bold)
+                            .foregroundColor(.white)
 
                         Text("ここにWeekly分析の詳細が入ります")
                             .font(.body)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                             .multilineTextAlignment(.center)
 
                         Divider()
@@ -43,7 +44,7 @@ struct WeeklyDetailView: View {
                                 Spacer()
                                 Text(deviceId)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Color(white: 0.56))
                             }
 
                             HStack {
@@ -52,13 +53,17 @@ struct WeeklyDetailView: View {
                                 Spacer()
                                 Text(weekStartDate)
                                     .font(.caption)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(Color(white: 0.56))
                             }
                         }
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.systemGray6))
+                                .fill(Color.darkCard)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                )
                         )
 
                         // Future implementation preview
@@ -75,24 +80,32 @@ struct WeeklyDetailView: View {
                                 Label("各日のサマリー一覧", systemImage: "list.bullet")
                             }
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(Color(white: 0.56))
                         }
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(Color(.systemGray6))
+                                .fill(Color.darkCard)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                )
                         )
 
                         Text("📝 次フェーズでデータ取得を実装")
                             .font(.caption)
-                            .foregroundColor(.orange)
+                            .foregroundColor(.accentAmber)
                             .padding(.top)
                     }
                     .padding()
                 }
             }
+            .background(Color.darkBase)
             .navigationTitle("Weekly分析")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {

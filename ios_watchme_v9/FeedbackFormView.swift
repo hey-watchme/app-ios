@@ -48,101 +48,124 @@ struct FeedbackFormView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 20) {
-                    // コンテキスト情報の表示（コメント通報時）
-                    if case .reportComment(_, let commentText) = context {
+            ZStack {
+                Color.darkBase.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        // コンテキスト情報の表示（コメント通報時）
+                        if case .reportComment(_, let commentText) = context {
+                            VStack(alignment: .leading, spacing: 8) {
+                                Text("通報対象のコメント")
+                                    .font(.subheadline)
+                                    .fontWeight(.semibold)
+                                    .foregroundColor(Color(white: 0.56))
+
+                                Text(commentText)
+                                    .font(.body)
+                                    .foregroundColor(.white)
+                                    .padding()
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .background(Color.darkCard)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                    )
+                                    .cornerRadius(8)
+                            }
+                            .padding(.horizontal)
+                        }
+
+                        // カテゴリ選択
                         VStack(alignment: .leading, spacing: 8) {
-                            Text("通報対象のコメント")
+                            Text("カテゴリ")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(Color(white: 0.56))
 
-                            Text(commentText)
-                                .font(.body)
-                                .padding()
-                                .frame(maxWidth: .infinity, alignment: .leading)
-                                .background(Color.gray.opacity(0.1))
-                                .cornerRadius(8)
+                            Picker("カテゴリ", selection: $selectedCategory) {
+                                ForEach(MessageCategory.allCases, id: \.self) { category in
+                                    Text(category.displayName).tag(category)
+                                }
+                            }
+                            .pickerStyle(.menu)
+                            .tint(.white)
+                            .padding(12)
+                            .background(Color.darkCard)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                            .cornerRadius(8)
                         }
                         .padding(.horizontal)
-                    }
 
-                    // カテゴリ選択
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("カテゴリ")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-
-                        Picker("カテゴリ", selection: $selectedCategory) {
-                            ForEach(MessageCategory.allCases, id: \.self) { category in
-                                Text(category.displayName).tag(category)
-                            }
-                        }
-                        .pickerStyle(.menu)
-                        .padding(12)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    .padding(.horizontal)
-
-                    // メッセージ入力
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("メッセージ")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
-
-                        ZStack(alignment: .topLeading) {
-                            if messageBody.isEmpty {
-                                Text("詳細をご記入ください...")
-                                    .foregroundColor(.gray.opacity(0.6))
-                                    .padding(.horizontal, 4)
-                                    .padding(.vertical, 8)
-                            }
-
-                            TextEditor(text: $messageBody)
-                                .frame(minHeight: 150)
-                                .scrollContentBackground(.hidden)
-                                .background(Color.clear)
-                        }
-                        .padding(8)
-                        .background(Color.gray.opacity(0.1))
-                        .cornerRadius(8)
-                    }
-                    .padding(.horizontal)
-
-                    // 送信ボタン
-                    Button(action: submitFeedback) {
-                        HStack {
-                            if isSubmitting {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            }
-                            Text(isSubmitting ? "送信中..." : "送信する")
+                        // メッセージ入力
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("メッセージ")
+                                .font(.subheadline)
                                 .fontWeight(.semibold)
+                                .foregroundColor(Color(white: 0.56))
+
+                            ZStack(alignment: .topLeading) {
+                                if messageBody.isEmpty {
+                                    Text("詳細をご記入ください...")
+                                        .foregroundColor(Color(white: 0.40))
+                                        .padding(.horizontal, 4)
+                                        .padding(.vertical, 8)
+                                }
+
+                                TextEditor(text: $messageBody)
+                                    .frame(minHeight: 150)
+                                    .foregroundColor(.white)
+                                    .scrollContentBackground(.hidden)
+                                    .background(Color.clear)
+                            }
+                            .padding(8)
+                            .background(Color.darkCard)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                            .cornerRadius(8)
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(messageBody.isEmpty ? Color.gray : Color.blue)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
+                        .padding(.horizontal)
+
+                        // 送信ボタン
+                        Button(action: submitFeedback) {
+                            HStack {
+                                if isSubmitting {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .scaleEffect(0.8)
+                                }
+                                Text(isSubmitting ? "送信中..." : "送信する")
+                                    .fontWeight(.semibold)
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding()
+                            .background(messageBody.isEmpty ? Color.darkElevated : Color.accentTeal)
+                            .foregroundColor(.white)
+                            .cornerRadius(10)
+                        }
+                        .disabled(messageBody.isEmpty || isSubmitting)
+                        .padding(.horizontal)
+                        .padding(.top, 10)
                     }
-                    .disabled(messageBody.isEmpty || isSubmitting)
-                    .padding(.horizontal)
-                    .padding(.top, 10)
+                    .padding(.vertical)
                 }
-                .padding(.vertical)
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
+            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("キャンセル") {
                         dismiss()
                     }
+                    .foregroundColor(.white)
                 }
             }
             .alert("送信完了", isPresented: $showSuccessAlert) {
@@ -158,6 +181,7 @@ struct FeedbackFormView: View {
                 Text(errorMessage)
             }
         }
+        .preferredColorScheme(.dark)
     }
 
     // ナビゲーションタイトル

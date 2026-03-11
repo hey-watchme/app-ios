@@ -18,9 +18,11 @@ struct HeaderView: View {
     // 通知関連
     @State private var showNotificationSheet = false
     @State private var unreadNotificationCount = 0
+    private let glassBaseOpacity: Double = 0.56
+    private let glassMaterialOpacity: Double = 0.35
     
     var body: some View {
-        HStack {
+        HStack(spacing: 10) {
             // 分析対象または選択中デバイス表示（デバイス設定画面へのリンク）
             NavigationLink(destination: 
                 DeviceSettingsView()
@@ -29,48 +31,51 @@ struct HeaderView: View {
                     .environmentObject(dataManager)
             ) {
                 currentTargetView
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill(Color.black.opacity(glassBaseOpacity))
+                            .overlay(
+                                Capsule()
+                                    .fill(.ultraThinMaterial)
+                                    .opacity(glassMaterialOpacity)
+                            )
+                    )
+                    .overlay(
+                        Capsule()
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 5)
             }
+            .buttonStyle(.plain)
             
             Spacer()
 
-            // マイページアイコン
-            Button(action: {
-                showMyPage = true
-            }) {
-                Image(systemName: "person.circle")
-                    .font(.title2)
-                    .foregroundColor(Color.white)
+            HStack(spacing: 8) {
+                myPageButton
+                notificationButton
             }
-            .padding(.trailing, 12)
-
-            // 通知アイコン
-            Button(action: {
-                showNotificationSheet = true
-            }) {
-                ZStack(alignment: .topTrailing) {
-                    Image(systemName: "bell")
-                        .font(.title2)
-                        .foregroundColor(Color.white)
-
-                    // 未読通知がある場合の赤い丸（バッジ）と数
-                    if unreadNotificationCount > 0 {
-                        ZStack {
-                            Circle()
-                                .fill(Color.red)
-                                .frame(width: 18, height: 18)
-
-                            Text("\(min(unreadNotificationCount, 99))")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                        .offset(x: 8, y: -4)
-                    }
-                }
-            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color.black.opacity(glassBaseOpacity))
+                    .overlay(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .opacity(glassMaterialOpacity)
+                    )
+            )
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 5)
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
-        .background(Color.darkBase)
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 6)
         .sheet(isPresented: $showNotificationSheet) {
             // 通知画面
             NotificationView()
@@ -109,11 +114,11 @@ struct HeaderView: View {
                 if let name = subject.name, !name.isEmpty {
                     Text("\(name)さん")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(.white.opacity(0.95))
                 } else {
                     Text("分析対象")
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(Color.safeColor("BorderLight"))
+                        .foregroundColor(.white.opacity(0.9))
                 }
             }
         } else if let deviceId = deviceManager.selectedDeviceID {
@@ -133,7 +138,7 @@ struct HeaderView: View {
 
                     Text("サンプルデバイス")
                         .font(.subheadline)
-                        .foregroundColor(Color(white: 0.56))
+                        .foregroundColor(.white.opacity(0.86))
                 }
             } else {
                 // 通常のデバイス選択中（分析対象未設定）
@@ -145,14 +150,14 @@ struct HeaderView: View {
 
                         Image(systemName: "iphone")
                             .font(.system(size: 18))
-                            .foregroundColor(Color(white: 0.56))
+                            .foregroundColor(.white.opacity(0.86))
                     }
 
                     // デバイスIDの最初の8文字を表示
                     let shortDeviceId = String(deviceId.prefix(8))
                     Text(shortDeviceId)
                         .font(.system(size: 15, weight: .medium, design: .monospaced))
-                        .foregroundColor(.white)
+                        .foregroundColor(.white.opacity(0.92))
                 }
             }
         } else if !deviceManager.hasRealDevices {
@@ -165,12 +170,12 @@ struct HeaderView: View {
 
                     Image(systemName: "iphone.slash")
                         .font(.system(size: 18))
-                        .foregroundColor(Color(white: 0.56))
+                        .foregroundColor(.white.opacity(0.86))
                 }
 
-                    Text("デバイス連携: なし")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white)
+                Text("デバイス連携: なし")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
             }
         } else {
             // フォールバック（デバイスはあるが選択されていない）
@@ -182,14 +187,60 @@ struct HeaderView: View {
 
                     Image(systemName: "iphone")
                         .font(.system(size: 18))
-                        .foregroundColor(Color(white: 0.56))
+                        .foregroundColor(.white.opacity(0.86))
                 }
 
-                    Text("デバイスを選択")
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white)
+                Text("デバイスを選択")
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
             }
         }
+    }
+
+    private var myPageButton: some View {
+        Button(action: {
+            showMyPage = true
+        }) {
+            Image(systemName: "person.crop.circle")
+                .font(.system(size: 19, weight: .semibold))
+                .foregroundColor(.white.opacity(0.95))
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var notificationButton: some View {
+        Button(action: {
+            showNotificationSheet = true
+        }) {
+            ZStack(alignment: .topTrailing) {
+                Image(systemName: "bell")
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.95))
+                    .frame(width: 36, height: 36)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.08))
+                    )
+
+                if unreadNotificationCount > 0 {
+                    ZStack {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 18, height: 18)
+                        Text("\(min(unreadNotificationCount, 99))")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                    }
+                    .offset(x: 7, y: -3)
+                }
+            }
+        }
+        .buttonStyle(.plain)
     }
     
     // 未読通知数を更新
