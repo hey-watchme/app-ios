@@ -86,6 +86,10 @@ struct MainAppView: View {
     @State private var showAuthFlow = false  // 統合認証フロー（オンボーディング + アカウント選択）
     @State private var authFlowCompleted = false  // 認証フロー完了フラグ
     @State private var showRecordingSheet = false
+    @State private var showFirstLaunchGuide = false
+    @AppStorage("has_seen_first_launch_guide") private var hasSeenFirstLaunchGuide = false
+    @State private var showMicTip = false
+    @AppStorage("has_seen_mic_tip") private var hasSeenMicTip = false
 
 
     // フッターナビゲーション用の選択状態
@@ -108,6 +112,22 @@ struct MainAppView: View {
 
             // グローバルトーストオーバーレイ（最前面）
             ToastOverlay(toastManager: toastManager)
+
+            if showFirstLaunchGuide && userAccountManager.authState.isAuthenticated {
+                FirstLaunchGuideSheet(onDismiss: {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        showFirstLaunchGuide = false
+                    }
+                    hasSeenFirstLaunchGuide = true
+                    if !hasSeenMicTip {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            showMicTip = true
+                        }
+                    }
+                })
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(2)
+            }
         }
     }
 
@@ -162,6 +182,13 @@ struct MainAppView: View {
                 CustomFooterNavigation(
                     selectedTab: $selectedTab,
                     showRecordButton: deviceManager.shouldShowFAB,
+                    showMicTip: showMicTip,
+                    onDismissMicTip: {
+                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                            showMicTip = false
+                        }
+                        hasSeenMicTip = true
+                    },
                     onRecordTap: {
                         showRecordingSheet = true
                     }
@@ -227,6 +254,11 @@ struct MainAppView: View {
                 authFlowCompleted = true
                 selectedTab = .home
                 print("✅ 全権限モード - すべてのモーダルを閉じてホーム画面に遷移")
+                if !hasSeenFirstLaunchGuide {
+                    withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                        showFirstLaunchGuide = true
+                    }
+                }
             } else {
                 selectedTab = .home
                 authFlowCompleted = false
@@ -379,6 +411,8 @@ struct MainAppView: View {
 struct CustomFooterNavigation: View {
     @Binding var selectedTab: MainAppView.FooterTab
     let showRecordButton: Bool
+    let showMicTip: Bool
+    let onDismissMicTip: () -> Void
     let onRecordTap: () -> Void
     @EnvironmentObject var deviceManager: DeviceManager
     private let glassBaseOpacity: Double = 0.62
@@ -459,23 +493,34 @@ struct CustomFooterNavigation: View {
     }
 
     private var recordButton: some View {
-        Button(action: onRecordTap) {
-            Image(systemName: "mic.fill")
-                .font(.system(size: 20, weight: .bold))
-                .foregroundColor(Color.accentTeal.opacity(0.95))
-                .frame(width: 52, height: 52)
-                .background(
-                    Circle()
-                        .fill(Color.white.opacity(0.08))
+        ZStack(alignment: .top) {
+            Button(action: onRecordTap) {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(Color.accentTeal.opacity(0.95))
+                    .frame(width: 52, height: 52)
+                    .background(
+                        Circle()
+                            .fill(Color.white.opacity(0.08))
+                    )
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                    )
+                    .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 3)
+            }
+            .buttonStyle(.plain)
+            .disabled(!isDeviceSelected)
+
+            if showMicTip && isDeviceSelected {
+                MicTipBubble(
+                    text: "まずは音声の\\n分析を始めてみましょう。",
+                    onClose: onDismissMicTip
                 )
-                .overlay(
-                    Circle()
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
-                .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 3)
+                .frame(width: 220)
+                .offset(y: -78)
+            }
         }
-        .buttonStyle(.plain)
-        .disabled(!isDeviceSelected)
     }
 }
 

@@ -381,14 +381,17 @@ private func getNewsletterStatusColor(_ newsletter: Bool?) -> Color {
 }
 
 private func formatDate(_ dateString: String) -> String {
-    let isoFormatter = ISO8601DateFormatter()
-    isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-    
-    // ISO8601形式でパースを試行
-    if let date = isoFormatter.date(from: dateString) {
+    let isoWithFraction = ISO8601DateFormatter()
+    isoWithFraction.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+
+    let iso = ISO8601DateFormatter()
+    iso.formatOptions = [.withInternetDateTime]
+
+    // ISO8601形式でパースを試行（小数秒あり/なし）
+    if let date = isoWithFraction.date(from: dateString) ?? iso.date(from: dateString) {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
-        formatter.timeStyle = .none
+        formatter.timeStyle = .short
         formatter.locale = Locale(identifier: "ja_JP")
         return formatter.string(from: date)
     }
@@ -396,10 +399,24 @@ private func formatDate(_ dateString: String) -> String {
     // フォールバック: 別の形式を試行
     let fallbackFormatter = DateFormatter()
     fallbackFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss.SSSSSS'Z'"
+    fallbackFormatter.locale = Locale(identifier: "en_US_POSIX")
     if let date = fallbackFormatter.date(from: dateString) {
         let formatter = DateFormatter()
         formatter.dateStyle = .long
-        formatter.timeStyle = .none
+        formatter.timeStyle = .short
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: date)
+    }
+
+    // タイムゾーンなしのISO（例: 2026-03-14T09:17:55）
+    let noTzFormatter = DateFormatter()
+    noTzFormatter.locale = Locale(identifier: "en_US_POSIX")
+    noTzFormatter.timeZone = TimeZone.current
+    noTzFormatter.dateFormat = "yyyy-MM-dd'T'HH:mm:ss"
+    if let date = noTzFormatter.date(from: dateString) {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .long
+        formatter.timeStyle = .short
         formatter.locale = Locale(identifier: "ja_JP")
         return formatter.string(from: date)
     }

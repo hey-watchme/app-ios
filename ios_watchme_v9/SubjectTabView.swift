@@ -26,15 +26,21 @@ struct SubjectTabView: View {
                 // 分析対象が設定されている場合
                 ScrollView {
                     VStack(spacing: 0) {
-                        // 地図ヘッダー（見切れる形で表示）
+                        // 地図ヘッダー（4:3 比率で表示、上を少し見切らせる）
                         // Location display: city/prefecture if available, otherwise show Japan map
-                        MapSnapshotView(
-                            locationName: subject.locationDisplay ?? "日本",
-                            height: 200
-                        )
-                        .offset(y: -50) // 上部を見切らせる
-                        .frame(height: 150) // 表示される高さ
-                        .clipped()
+                        GeometryReader { proxy in
+                            let mapHeight = proxy.size.width * 0.75
+                            let visibleHeight = mapHeight * 0.82
+                            let clipOffset = mapHeight * 0.08
+                            MapSnapshotView(
+                                locationName: subject.locationDisplay ?? "日本",
+                                height: mapHeight
+                            )
+                            .frame(height: mapHeight)
+                            .offset(y: -clipOffset)
+                            .clipped()
+                        }
+                        .frame(height: UIScreen.main.bounds.width * 0.75 * 0.82)
 
                         // プロフィールセクション（ダークカード）
                         VStack(alignment: .leading, spacing: 16) {

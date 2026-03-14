@@ -97,37 +97,7 @@ struct ContentView: View {
                             }
                         }
 
-                        // 実デバイス未連携時のガイドオーバーレイ
-                        // 条件: サンプルデバイスを除いた実デバイスが0件の場合に表示
-                        if !deviceManager.hasRealDevices {
-                            DeviceSetupGuideOverlay(
-                                onSelectThisDevice: {
-                                    print("🔘 DeviceSetupGuideOverlay: このデバイスで測定するボタン押下")
-                                    print("✅ 録音シート表示（権限チェックは録音開始時に実行）")
-                                    showRecordingSheet = true
-                                },
-                                onViewSample: {
-                                    // DB連携済みサンプルデバイスを選択（ローカル疑似注入なし）
-                                    let selected = deviceManager.selectSampleDevice()
-                                    if !selected {
-                                        toastManager.showInfo(
-                                            title: "サンプルデバイスが未連携です",
-                                            subtitle: "このデバイスを連携するか、QRコードで追加してください"
-                                        )
-                                    }
-                                },
-                                onScanQR: {
-                                    // 権限チェック
-                                    if userAccountManager.requireWritePermission() {
-                                        showSignUpPrompt = true
-                                        return
-                                    }
-                                    showQRScanner = true
-                                }
-                            )
-                            .transition(.opacity)
-                            .zIndex(1)
-                        }
+                        // 実デバイス未連携時のガイドオーバーレイは廃止
                     }
                     .id(deviceManager.selectedDeviceID) // デバイスIDで再構築を制御
                     .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in

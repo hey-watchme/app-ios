@@ -119,6 +119,8 @@ struct DeviceSettingsView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.darkBase, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .tint(.white)
         .task {
             // DeviceManager.stateが既に.availableの場合は何もしない
             if case .idle = deviceManager.state {
@@ -206,7 +208,7 @@ struct DeviceSettingsView: View {
     private func DeviceList(title: String, devices: [Device], isSampleSection: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text(title)
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal)
 
@@ -254,7 +256,7 @@ struct DeviceSettingsView: View {
     private func DeviceAddCard() -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("新しいデバイス")
-                .font(.system(size: 24, weight: .bold))
+                .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal)
 

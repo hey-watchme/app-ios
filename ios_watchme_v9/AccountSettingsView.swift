@@ -26,6 +26,26 @@ struct AccountSettingsView: View {
     var body: some View {
         NavigationView {
             List {
+                #if DEBUG
+                Section {
+                    Button(action: {
+                        UserDefaults.standard.removeObject(forKey: "has_seen_first_launch_guide")
+                        UserDefaults.standard.removeObject(forKey: "has_seen_mic_tip")
+                    }) {
+                        HStack {
+                            Label("チュートリアル表示をリセット", systemImage: "arrow.counterclockwise")
+                                .foregroundColor(.primary)
+                            Spacer()
+                        }
+                    }
+                } header: {
+                    Text("デバッグ")
+                } footer: {
+                    Text("オンボーディング関連の表示を初回状態に戻します（端末単位）。")
+                }
+                .listRowBackground(Color(.systemBackground))
+                #endif
+
                 // 匿名ユーザー向けアップグレード導線（匿名認証済みユーザーのみ表示）
                 if userAccountManager.isAnonymousUser {
                     Section {

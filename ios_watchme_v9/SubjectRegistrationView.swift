@@ -515,16 +515,13 @@ struct SubjectRegistrationView: View {
             Button(action: {
                 showingDeleteConfirmation = true
             }) {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "trash")
                     Text("分析対象を削除")
                 }
                 .font(.subheadline)
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 12)
-                .background(Color.accentCoral)
-                .cornerRadius(8)
+                .foregroundColor(Color.accentCoral)
+                .padding(.vertical, 6)
             }
 
             Text("この分析対象に関連する全てのデータが削除されます。この操作は取り消せません。")
