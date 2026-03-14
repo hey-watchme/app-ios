@@ -11,7 +11,7 @@
 -- 
 -- 戻り値:
 --   behavior_report: behavior_summaryテーブルのデータ
---   emotion_report: emotion_opensmile_summaryテーブルのデータ
+--   emotion_report: emotion_paralinguistic_summaryテーブルのデータ
 --   subject_info: subjectsテーブルのデータ（devicesテーブル経由）
 --   dashboard_summary: dashboard_summaryテーブルのデータ（気分データはここから取得）
 --   subject_comments: subject_commentsテーブルのデータ（対象日付のコメントのみ）
@@ -42,9 +42,9 @@ BEGIN
          AND t.date = p_date::date 
          LIMIT 1) AS behavior_report,
          
-        -- emotion_report: emotion_opensmile_summaryテーブルから取得
+        -- emotion_report: emotion_paralinguistic_summaryテーブルから取得
         (SELECT to_jsonb(t.*) 
-         FROM emotion_opensmile_summary t 
+         FROM emotion_paralinguistic_summary t 
          WHERE t.device_id = p_device_id 
          AND t.date = p_date::date 
          LIMIT 1) AS emotion_report,

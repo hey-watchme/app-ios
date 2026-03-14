@@ -94,7 +94,7 @@ struct WeeklyDetailView: View {
 
                         Text("📝 次フェーズでデータ取得を実装")
                             .font(.caption)
-                            .foregroundColor(.accentAmber)
+                            .foregroundColor(.accentTealMuted)
                             .padding(.top)
                     }
                     .padding()

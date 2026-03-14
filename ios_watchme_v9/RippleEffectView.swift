@@ -360,11 +360,11 @@ struct BurstAnimationModifier: ViewModifier {
 
 // MARK: - Extension for Easy Use
 extension View {
-    func rippleEffect(color: Color = .cyan) -> some View {
+    func rippleEffect(color: Color = .accentTeal) -> some View {
         modifier(RippleEffect(color: color))
     }
     
-    func pulseEffect(color: Color = .cyan, intensity: Double = 0.3) -> some View {
+    func pulseEffect(color: Color = .accentTeal, intensity: Double = 0.3) -> some View {
         modifier(PulseEffect(color: color, intensity: intensity))
     }
 }

@@ -85,7 +85,7 @@ struct CustomCalendarView: View {
                     Button(action: previousMonth) {
                         Image(systemName: "chevron.left")
                             .font(.title2)
-                            .foregroundColor(.blue)
+                            .foregroundColor(.accentTeal)
                     }
                     
                     Spacer()
@@ -99,7 +99,7 @@ struct CustomCalendarView: View {
                     Button(action: nextMonth) {
                         Image(systemName: "chevron.right")
                             .font(.title2)
-                            .foregroundColor(.blue)
+                            .foregroundColor(.accentTeal)
                     }
                 }
                 .padding()
@@ -281,7 +281,7 @@ struct CalendarDayCell: View {
         if isSelected {
             return .white
         } else if isToday {
-            return .blue
+            return .accentTeal
         } else {
             return .primary
         }
@@ -297,7 +297,7 @@ struct CalendarDayCell: View {
     
     private var borderColor: Color {
         if isToday && !isSelected {
-            return .blue
+            return .accentTeal
         } else if isSelected {
             return Color.clear
         } else {

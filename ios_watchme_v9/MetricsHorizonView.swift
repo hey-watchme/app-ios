@@ -55,7 +55,7 @@ struct MetricsHorizonView: View {
             value: String(format: "%.0f", stressVal),
             caption: stressVal < 40 ? "LOW" : "ELEVATED",
             progress: stressVal / 100.0,
-            color: stressVal < 40 ? .accentEmerald : .accentAmber,
+            color: stressVal < 40 ? .accentTeal : .accentTealMuted,
             icon: "heart.text.square"
         ))
         

@@ -143,7 +143,7 @@ struct ContentView: View {
                     VStack(spacing: 20) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 60))
-                            .foregroundColor(.orange)
+                            .foregroundColor(.accentTealMuted)
                         Text("エラーが発生しました")
                             .font(.title3)
                             .foregroundColor(.white)
@@ -222,6 +222,7 @@ struct ContentView: View {
             UserInfoView(userAccountManager: userAccountManager)
                 .environmentObject(deviceManager)
                 .environmentObject(dataManager)
+                .preferredColorScheme(.light)
         }
         .onAppear {
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み

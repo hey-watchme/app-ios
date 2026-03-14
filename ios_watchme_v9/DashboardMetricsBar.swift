@@ -47,7 +47,7 @@ struct DashboardMetricsBar: View {
             label: "Stress",
             value: String(format: "%.0f", stressValue),
             progress: stressValue / 100,
-            color: stressValue < 40 ? .accentEmerald : (stressValue < 65 ? .accentAmber : .accentCoral),
+            color: stressValue < 40 ? .accentTeal : (stressValue < 65 ? .accentTealMuted : .accentCoral),
             icon: "heart.text.square",
             optimalRange: (0, 0.4)
         ))
@@ -162,17 +162,17 @@ struct DashboardMetricsBar: View {
     private func statusInfo(for pill: MetricPill) -> (String, Color) {
         switch pill.label {
         case "Vibe":
-            if pill.progress > 0.65 { return ("Good", .accentEmerald) }
+            if pill.progress > 0.65 { return ("Good", .accentTeal) }
             if pill.progress > 0.45 { return ("Neutral", Color(white: 0.50)) }
-            return ("Low", .accentAmber)
+            return ("Low", .accentTealMuted)
         case "Stress":
-            if pill.progress < 0.35 { return ("Low", .accentEmerald) }
-            if pill.progress < 0.60 { return ("Moderate", .accentAmber) }
+            if pill.progress < 0.35 { return ("Low", .accentTeal) }
+            if pill.progress < 0.60 { return ("Moderate", .accentTealMuted) }
             return ("High", .accentCoral)
         case "Focus":
             if pill.progress > 0.70 { return ("Sharp", .accentTeal) }
             if pill.progress > 0.45 { return ("Normal", Color(white: 0.50)) }
-            return ("Low", .accentAmber)
+            return ("Low", .accentTealMuted)
         case "Activity":
             if pill.progress > 0.50 { return ("Active", Color(red: 0.35, green: 0.68, blue: 1.0)) }
             return ("Light", Color(white: 0.50))
@@ -188,8 +188,8 @@ struct StressGaugeCard: View {
     let stressLevel: Double
 
     private var stressColor: Color {
-        if stressLevel < 35 { return .accentEmerald }
-        if stressLevel < 60 { return .accentAmber }
+        if stressLevel < 35 { return .accentTeal }
+        if stressLevel < 60 { return .accentTealMuted }
         return .accentCoral
     }
 
@@ -241,7 +241,7 @@ struct StressGaugeCard: View {
 
                         // Optimal zone (0-40)
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.accentEmerald.opacity(0.15))
+                            .fill(Color.accentTeal.opacity(0.15))
                             .frame(width: w * optimalEnd / 100, height: 6)
 
                         // Fill (current value)
@@ -271,7 +271,7 @@ struct StressGaugeCard: View {
                     Spacer()
                     Text("Optimal")
                         .font(.system(size: 9, weight: .medium))
-                        .foregroundColor(Color.accentEmerald.opacity(0.8))
+                        .foregroundColor(Color.accentTeal.opacity(0.8))
                     Spacer()
                     Text("100")
                         .font(.system(size: 9, weight: .medium, design: .monospaced))
@@ -281,13 +281,13 @@ struct StressGaugeCard: View {
 
             // Sub-metrics (refined layout)
             HStack(spacing: 0) {
-                subMetric(label: "Recovery", value: stressLevel < 50 ? "Good" : "Needs rest", color: stressLevel < 50 ? .accentEmerald : .accentAmber)
+                subMetric(label: "Recovery", value: stressLevel < 50 ? "Good" : "Needs rest", color: stressLevel < 50 ? .accentTeal : .accentTealMuted)
                 Spacer()
                 Rectangle()
                     .fill(Color.white.opacity(0.06))
                     .frame(width: 1, height: 28)
                 Spacer()
-                subMetric(label: "Balance", value: stressLevel < 40 ? "Balanced" : "Unbalanced", color: stressLevel < 40 ? .accentTeal : .accentAmber)
+                subMetric(label: "Balance", value: stressLevel < 40 ? "Balanced" : "Unbalanced", color: stressLevel < 40 ? .accentTeal : .accentTealMuted)
                 Spacer()
                 Rectangle()
                     .fill(Color.white.opacity(0.06))
@@ -354,8 +354,8 @@ struct DailyActivityOverviewCard: View {
 
                 HStack(spacing: 6) {
                     areaPill("Behavior", color: .accentTeal)
-                    areaPill("Emotion", color: .accentAmber)
-                    areaPill("Vibe", color: .accentEmerald)
+                    areaPill("Emotion", color: .accentTealMuted)
+                    areaPill("Vibe", color: .accentTeal)
                 }
             }
         }

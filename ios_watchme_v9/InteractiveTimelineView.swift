@@ -11,6 +11,7 @@ struct InteractiveTimelineView: View {
     let timeBlocks: [DashboardTimeBlock]  // spot_results data
     let burstEvents: [BurstEvent]?  // Burst events from daily_results
     var onEventBurst: ((Double) -> Void)? = nil  // Burst effect callback
+    var showsContainerBackground: Bool = true
     
     @State private var currentTimeIndex: Int = 0
     @State private var isDragging: Bool = false
@@ -29,7 +30,7 @@ struct InteractiveTimelineView: View {
     private let restartDelay: Double = 3.0 // ドラッグ後の再開待機時間
     
     var body: some View {
-        VStack(spacing: 16) {
+        VStack(spacing: 10) {
             // メイングラフエリア（ジェスチャー対応）
             GeometryReader { geometry in
                 ZStack(alignment: .topTrailing) {
@@ -66,7 +67,12 @@ struct InteractiveTimelineView: View {
                     handleTap(location: location, width: geometry.size.width)
                 }
             }
-            .frame(height: 200) // グラフの高さを固定
+            .frame(height: 184) // グラフの高さを固定
+
+            // 時間軸ラベル（カード内余白を確保）
+            timeAxisLabels
+                .padding(.horizontal, 4)
+                .padding(.bottom, 4)
         }
         .onAppear {
             // 自動ループ再生を開始
@@ -110,8 +116,12 @@ struct InteractiveTimelineView: View {
         .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(Color.white.opacity(0.9))
-                .shadow(color: Color.black.opacity(0.05), radius: 2, x: 0, y: 1)
+                .fill(Color.darkElevated.opacity(0.92))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.28), radius: 5, x: 0, y: 2)
         )
         .animation(.spring(response: 0.3), value: currentTimeIndex)
     }
@@ -119,9 +129,34 @@ struct InteractiveTimelineView: View {
     // MARK: - Graph View
     private func graphView(in geometry: GeometryProxy) -> some View {
         ZStack {
-            // 背景（システムグレー6）
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.systemGray6))
+            if showsContainerBackground {
+                // 背景（ダークサーフェス）
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(
+                        LinearGradient(
+                            colors: [
+                                Color.darkSurface.opacity(0.98),
+                                Color.darkCard.opacity(0.96)
+                            ],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(
+                                LinearGradient(
+                                    colors: [
+                                        Color.white.opacity(0.12),
+                                        Color.white.opacity(0.04)
+                                    ],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ),
+                                lineWidth: 1
+                            )
+                    )
+            }
             
             // ゼロライン
             Path { path in
@@ -131,7 +166,7 @@ struct InteractiveTimelineView: View {
             }
             .stroke(
                 LinearGradient(
-                    colors: [Color.gray.opacity(0.2), Color.gray.opacity(0.4), Color.gray.opacity(0.2)],
+                    colors: [Color.white.opacity(0.06), Color.white.opacity(0.18), Color.white.opacity(0.06)],
                     startPoint: .leading,
                     endPoint: .trailing
                 ),
@@ -161,7 +196,14 @@ struct InteractiveTimelineView: View {
                 }
             }
             .stroke(
-                Color.safeColor("BehaviorTextPrimary"),  // #1a1a1aの黒
+                LinearGradient(
+                    colors: [
+                        Color.accentTeal.opacity(0.95),
+                        currentScoreColor.opacity(0.88)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                ),
                 style: StrokeStyle(
                     lineWidth: 2,        // 3pt → 2ptに細く
                     lineCap: .round,    // 線の端を丸く
@@ -198,7 +240,7 @@ struct InteractiveTimelineView: View {
                 }
             }
             .stroke(
-                Color.gray.opacity(0.3),
+                Color.white.opacity(0.18),
                 lineWidth: 1
             )
             
@@ -233,13 +275,11 @@ struct InteractiveTimelineView: View {
                 }
             }
             
-            // 時間軸ラベル
-            timeAxisLabels(in: geometry)
         }
     }
     
     // MARK: - Time Axis Labels
-    private func timeAxisLabels(in geometry: GeometryProxy) -> some View {
+    private var timeAxisLabels: some View {
         HStack(spacing: 0) {
             ForEach([0, 6, 12, 18, 23], id: \.self) { hour in
                 Text("\(hour):00")
@@ -248,8 +288,6 @@ struct InteractiveTimelineView: View {
                     .frame(maxWidth: .infinity, alignment: hour == 0 ? .leading : (hour == 23 ? .trailing : .center))
             }
         }
-        .frame(width: geometry.size.width)
-        .position(x: geometry.size.width / 2, y: geometry.size.height + 15)
     }
     
     // MARK: - Time Indicator
@@ -268,7 +306,7 @@ struct InteractiveTimelineView: View {
                 path.addLine(to: CGPoint(x: x, y: geometry.size.height))
             }
             .stroke(
-                Color.gray.opacity(0.5),  // グレーに変更
+                Color.safeColor("TimelineIndicator").opacity(0.45),
                 lineWidth: 1  // 1ptの細さ
             )
             .animation(.spring(response: 0.3), value: currentTimeIndex)
@@ -283,15 +321,18 @@ struct InteractiveTimelineView: View {
                 
                 // 見える部分（青い丸）
                 Circle()
-                    .fill(
-                        RadialGradient(
-                            colors: [Color.safeColor("TimelineIndicator").opacity(0.8), Color.safeColor("TimelineIndicator")],
-                            center: .center,
-                            startRadius: 0,
-                            endRadius: 8
-                        )
+                    .fill(Color.darkBase.opacity(0.95))
+                    .overlay(
+                        Circle()
+                            .stroke(Color.safeColor("TimelineIndicator"), lineWidth: 2)
+                    )
+                    .overlay(
+                        Circle()
+                            .fill(Color.safeColor("TimelineIndicator"))
+                            .frame(width: 7, height: 7)
                     )
                     .frame(width: 16, height: 16)
+                    .shadow(color: Color.safeColor("TimelineIndicator").opacity(0.50), radius: 8, x: 0, y: 0)
             }
             .scaleEffect(indicatorScale)
             .position(x: x, y: getCurrentYPosition(in: geometry))
@@ -333,9 +374,13 @@ struct InteractiveTimelineView: View {
         .padding(12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.95))
+                .fill(Color.darkElevated.opacity(0.96))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                )
         )
-        .shadow(color: .black.opacity(0.2), radius: 5)
+        .shadow(color: .black.opacity(0.35), radius: 8, x: 0, y: 3)
         .position(
             x: geometry.size.width / 2,
             y: geometry.size.height / 2
@@ -671,7 +716,7 @@ struct InteractiveTimelineView: View {
 
     private var currentScoreColor: Color {
         guard currentTimeIndex < timeBlocks.count else {
-            return .gray
+            return Color.safeColor("BehaviorTextSecondary")
         }
 
         let score = timeBlocks[currentTimeIndex].vibeScore ?? 0
@@ -681,7 +726,7 @@ struct InteractiveTimelineView: View {
         } else if score < -30 {
             return Color.safeColor("ErrorColor")
         } else {
-            return .gray
+            return Color.safeColor("BehaviorTextSecondary")
         }
     }
 

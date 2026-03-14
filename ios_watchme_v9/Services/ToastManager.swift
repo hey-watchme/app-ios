@@ -216,7 +216,7 @@ struct ToastOverlay: View {
     private func iconColor(for type: ToastMessage.ToastType) -> Color {
         switch type {
         case .success:
-            return .accentEmerald
+            return .accentTeal
         case .error:
             return .accentCoral
         case .info:
@@ -231,7 +231,7 @@ struct ToastOverlay: View {
     private func progressTint(for type: ToastMessage.ToastType) -> Color {
         switch type {
         case .success:
-            return .accentEmerald
+            return .accentTeal
         case .error:
             return .accentCoral
         case .info, .uploading, .progress:

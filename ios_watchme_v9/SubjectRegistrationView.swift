@@ -523,7 +523,7 @@ struct SubjectRegistrationView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 12)
-                .background(Color.red)
+                .background(Color.accentCoral)
                 .cornerRadius(8)
             }
 

@@ -380,7 +380,7 @@ struct DailyReportView: View {
                                 let vibeScore = Double(dailySummaries[index].averageVibe ?? 0)
                                 let barHeight = abs(vibeScore) / maxValue * halfHeight
                                 let isPositive = vibeScore >= 0
-                                let barColor = isPositive ? Color.accentEmerald : Color.accentCoral
+                                let barColor = isPositive ? Color.accentTeal : Color.accentCoral
 
                                 ZStack {
                                     if !hasData {

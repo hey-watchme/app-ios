@@ -73,11 +73,11 @@ struct SignUpView: View {
                         if showValidationErrors && displayName.isEmpty {
                             Text("表示名を入力してください")
                                 .font(.caption2)
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                         } else if showValidationErrors && displayName.count < 2 {
                             Text("表示名は2文字以上で入力してください")
                                 .font(.caption2)
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                         }
                     }
 
@@ -101,11 +101,11 @@ struct SignUpView: View {
                         if showValidationErrors && email.isEmpty {
                             Text("メールアドレスを入力してください")
                                 .font(.caption2)
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                         } else if showValidationErrors && !isValidEmail(email) {
                             Text("正しいメールアドレスの形式で入力してください")
                                 .font(.caption2)
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                         }
                     }
 
@@ -149,11 +149,11 @@ struct SignUpView: View {
                         if showValidationErrors && password.isEmpty {
                             Text("パスワードを入力してください")
                                 .font(.caption2)
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                         } else if showValidationErrors && password.count < 8 {
                             Text("パスワードは8文字以上で入力してください")
                                 .font(.caption2)
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                         } else {
                             Text("8文字以上、英数字を含む")
                                 .font(.caption2)
@@ -201,7 +201,7 @@ struct SignUpView: View {
                         if showValidationErrors && password != passwordConfirm {
                             Text("パスワードが一致しません")
                                 .font(.caption2)
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                         }
                     }
 
@@ -257,7 +257,7 @@ struct SignUpView: View {
                     if showValidationErrors && !agreeToTerms {
                         Text("利用規約とプライバシーポリシーに同意してください")
                             .font(.caption2)
-                            .foregroundColor(.red)
+                            .foregroundColor(.accentCoral)
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
 
@@ -283,7 +283,7 @@ struct SignUpView: View {
                     if let errorMessage = userAccountManager.authError {
                         Text(errorMessage)
                             .font(.caption)
-                            .foregroundColor(Color.red)
+                            .foregroundColor(Color.accentCoral)
                             .multilineTextAlignment(.center)
                             .padding(.top, 8)
                     }

@@ -230,7 +230,7 @@ struct HeaderView: View {
                 if unreadNotificationCount > 0 {
                     ZStack {
                         Circle()
-                            .fill(Color.red)
+                            .fill(Color.accentTeal)
                             .frame(width: 18, height: 18)
                         Text("\(min(unreadNotificationCount, 99))")
                             .font(.system(size: 10, weight: .bold))

@@ -144,7 +144,7 @@ struct LargeDateSection: View {
                                     .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                             }
                         }
-                        .padding(.bottom, 32)  // 「今日」との間の余白を32pxに
+                        .padding(.bottom, 8)  // 「今日」との間の余白を8pxに
                         
                         // 「今日」と前日・翌日ボタンを配置
                         HStack {
@@ -165,7 +165,7 @@ struct LargeDateSection: View {
                             // 中央に「今日」
                             Text("今日")
                                 .font(.system(size: 28, weight: .bold))
-                                .foregroundColor(Color.white)
+                                .foregroundColor(Color.safeColor("PrimaryText"))
                             
                             Spacer()
                             
@@ -193,7 +193,7 @@ struct LargeDateSection: View {
                                     .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                             }
                         }
-                        .padding(.bottom, 32)  // 西暦と月日の間に32px余白
+                        .padding(.bottom, 8)  // 西暦と月日の間に8px余白
                         
                         // 月日と曜日、前日・翌日ボタンを配置
                         HStack {
@@ -214,7 +214,7 @@ struct LargeDateSection: View {
                             // 中央に月日と曜日
                             Text(getMonthDayWithWeekdayString(from: selectedDate))
                                 .font(.system(size: 24, weight: .bold))
-                                .foregroundColor(Color.white)
+                                .foregroundColor(Color.safeColor("PrimaryText"))
                             
                             Spacer()
                             
@@ -238,7 +238,7 @@ struct LargeDateSection: View {
             }
             .multilineTextAlignment(.center)
         }
-        .padding(.top, 32)
+        .padding(.top, 45)
         .padding(.bottom, 16)
         .frame(maxWidth: .infinity)
         .background(Color.darkBase)

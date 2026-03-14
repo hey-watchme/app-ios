@@ -423,11 +423,11 @@ struct SubjectTabView: View {
             VStack(spacing: 20) {
                 RadarChartView(
                     dataPoints: [
-                        RadarDataPoint(label: "🎯 注意制御", value: 0.6, color: .blue),
-                        RadarDataPoint(label: "🧭 実行機能", value: 0.7, color: .green),
-                        RadarDataPoint(label: "⚙️ WM", value: 0.5, color: .orange),
-                        RadarDataPoint(label: "❤️ 感情制御", value: 0.4, color: .red),
-                        RadarDataPoint(label: "🌈 発想", value: 0.8, color: .purple)
+                        RadarDataPoint(label: "🎯 注意制御", value: 0.6, color: .accentTeal),
+                        RadarDataPoint(label: "🧭 実行機能", value: 0.7, color: .accentTealMuted),
+                        RadarDataPoint(label: "⚙️ WM", value: 0.5, color: .accentTeal),
+                        RadarDataPoint(label: "❤️ 感情制御", value: 0.4, color: .accentCoral),
+                        RadarDataPoint(label: "🌈 発想", value: 0.8, color: .accentTealMuted)
                     ]
                 )
                 .frame(height: 300)
@@ -435,31 +435,31 @@ struct SubjectTabView: View {
                 // 凡例
                 VStack(alignment: .leading, spacing: 8) {
                     HStack {
-                        Circle().fill(Color.blue).frame(width: 12, height: 12)
+                        Circle().fill(Color.accentTeal).frame(width: 12, height: 12)
                         Text("注意制御").font(.caption)
                         Spacer()
                         Text("60%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                     HStack {
-                        Circle().fill(Color.green).frame(width: 12, height: 12)
+                        Circle().fill(Color.accentTeal).frame(width: 12, height: 12)
                         Text("実行機能").font(.caption)
                         Spacer()
                         Text("70%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                     HStack {
-                        Circle().fill(Color.orange).frame(width: 12, height: 12)
+                        Circle().fill(Color.accentTeal).frame(width: 12, height: 12)
                         Text("ワーキングメモリ").font(.caption)
                         Spacer()
                         Text("50%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                     HStack {
-                        Circle().fill(Color.red).frame(width: 12, height: 12)
+                        Circle().fill(Color.accentCoral).frame(width: 12, height: 12)
                         Text("感情制御").font(.caption)
                         Spacer()
                         Text("40%").font(.caption).foregroundColor(Color(white: 0.56))
                     }
                     HStack {
-                        Circle().fill(Color.purple).frame(width: 12, height: 12)
+                        Circle().fill(Color.accentTealMuted).frame(width: 12, height: 12)
                         Text("発想流動性").font(.caption)
                         Spacer()
                         Text("80%").font(.caption).foregroundColor(Color(white: 0.56))

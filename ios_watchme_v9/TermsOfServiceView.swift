@@ -13,13 +13,13 @@ struct TermsOfServiceView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.darkBase.ignoresSafeArea()
+                Color(.systemBackground).ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         Text("最終更新日: 2025年8月19日")
                             .font(.caption)
-                            .foregroundColor(Color(white: 0.56))
+                            .foregroundColor(.secondary)
 
                         Group {
                             TermsSection(
@@ -128,7 +128,7 @@ struct TermsOfServiceView: View {
                         }
 
                         Text("以上")
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.vertical, 20)
                     }
@@ -137,19 +137,19 @@ struct TermsOfServiceView: View {
             }
             .navigationTitle("利用規約")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
     }
 }
 
@@ -161,11 +161,11 @@ struct TermsSection: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             Text(content)
                 .font(.body)
-                .foregroundColor(Color(white: 0.84))
+                .foregroundColor(.primary)
                 .lineSpacing(4)
         }
         .padding(.bottom, 8)

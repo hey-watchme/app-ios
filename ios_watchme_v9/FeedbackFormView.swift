@@ -49,7 +49,7 @@ struct FeedbackFormView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.darkBase.ignoresSafeArea()
+                Color(.systemGroupedBackground).ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
@@ -59,17 +59,17 @@ struct FeedbackFormView: View {
                                 Text("通報対象のコメント")
                                     .font(.subheadline)
                                     .fontWeight(.semibold)
-                                    .foregroundColor(Color(white: 0.56))
+                                    .foregroundColor(.secondary)
 
                                 Text(commentText)
                                     .font(.body)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                                     .padding()
                                     .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color.darkCard)
+                                    .background(Color(.systemBackground))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 8)
-                                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                            .stroke(Color(.separator), lineWidth: 1)
                                     )
                                     .cornerRadius(8)
                             }
@@ -81,7 +81,7 @@ struct FeedbackFormView: View {
                             Text("カテゴリ")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .foregroundColor(Color(white: 0.56))
+                                .foregroundColor(.secondary)
 
                             Picker("カテゴリ", selection: $selectedCategory) {
                                 ForEach(MessageCategory.allCases, id: \.self) { category in
@@ -89,12 +89,12 @@ struct FeedbackFormView: View {
                                 }
                             }
                             .pickerStyle(.menu)
-                            .tint(.white)
+                            .tint(.accentTeal)
                             .padding(12)
-                            .background(Color.darkCard)
+                            .background(Color(.systemBackground))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                    .stroke(Color(.separator), lineWidth: 1)
                             )
                             .cornerRadius(8)
                         }
@@ -105,27 +105,27 @@ struct FeedbackFormView: View {
                             Text("メッセージ")
                                 .font(.subheadline)
                                 .fontWeight(.semibold)
-                                .foregroundColor(Color(white: 0.56))
+                                .foregroundColor(.secondary)
 
                             ZStack(alignment: .topLeading) {
                                 if messageBody.isEmpty {
                                     Text("詳細をご記入ください...")
-                                        .foregroundColor(Color(white: 0.40))
+                                        .foregroundColor(.secondary)
                                         .padding(.horizontal, 4)
                                         .padding(.vertical, 8)
                                 }
 
                                 TextEditor(text: $messageBody)
                                     .frame(minHeight: 150)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                                     .scrollContentBackground(.hidden)
                                     .background(Color.clear)
                             }
                             .padding(8)
-                            .background(Color.darkCard)
+                            .background(Color(.systemBackground))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                    .stroke(Color(.separator), lineWidth: 1)
                             )
                             .cornerRadius(8)
                         }
@@ -144,7 +144,7 @@ struct FeedbackFormView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .padding()
-                            .background(messageBody.isEmpty ? Color.darkElevated : Color.accentTeal)
+                            .background(messageBody.isEmpty ? Color.gray.opacity(0.30) : Color.accentTeal)
                             .foregroundColor(.white)
                             .cornerRadius(10)
                         }
@@ -157,15 +157,15 @@ struct FeedbackFormView: View {
             }
             .navigationTitle(navigationTitle)
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("キャンセル") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 }
             }
             .alert("送信完了", isPresented: $showSuccessAlert) {
@@ -181,7 +181,7 @@ struct FeedbackFormView: View {
                 Text(errorMessage)
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
     }
 
     // ナビゲーションタイトル

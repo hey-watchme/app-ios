@@ -232,19 +232,19 @@ struct TimeBlockCell: View {
         let colors: [Color]
         switch hour {
         case 0..<6:
-            colors = [.purple, .indigo] // 深夜
+            colors = [Color.darkElevated, Color.accentTealMuted.opacity(0.50)] // 深夜
         case 6..<9:
-            colors = [.orange, .yellow] // 朝
+            colors = [Color.accentTealMuted, Color.accentTeal] // 朝
         case 9..<12:
-            colors = [.blue, .cyan] // 午前
+            colors = [Color.accentTeal.opacity(0.90), Color.accentTeal.opacity(0.65)] // 午前
         case 12..<15:
-            colors = [.green, .mint] // 午後早め
+            colors = [Color.accentTeal.opacity(0.80), Color.accentTealMuted.opacity(0.80)] // 午後早め
         case 15..<18:
-            colors = [.teal, .blue] // 午後
+            colors = [Color.accentTeal, Color.accentTealMuted] // 午後
         case 18..<21:
-            colors = [.orange, .red] // 夕方
+            colors = [Color.accentTealMuted.opacity(0.80), Color.accentTeal.opacity(0.55)] // 夕方
         default:
-            colors = [.indigo, .purple] // 夜
+            colors = [Color.darkSurface, Color.accentTealMuted.opacity(0.45)] // 夜
         }
         
         return LinearGradient(

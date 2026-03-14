@@ -257,23 +257,24 @@ struct MainAppView: View {
 
     private var loadingView: some View {
         ZStack {
-            Color.white.ignoresSafeArea()
+            Color.darkBase.ignoresSafeArea()
 
             // ロゴは常に中央固定（Launch Screenとの視覚差分を減らす）
-            Image("WatchMeLogo")
+            Image("WatchMeLogoWhite")
                 .resizable()
                 .aspectRatio(contentMode: .fit)
                 .frame(width: 200, height: 70)
+                .shadow(color: Color.white.opacity(0.16), radius: 10, x: 0, y: 4)
 
             VStack(spacing: 10) {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle())
                     .scaleEffect(1.2)
-                    .tint(Color.black.opacity(0.55))
+                    .tint(Color.white.opacity(0.85))
 
                 Text("認証チェック中...")
                     .font(.caption)
-                    .foregroundColor(Color.black.opacity(0.56))
+                    .foregroundColor(Color.white.opacity(0.70))
             }
             .padding(.top, 120)
         }
@@ -306,7 +307,7 @@ struct MainAppView: View {
     private var initialView: some View {
         ZStack {
             LoopingVideoBackgroundView(
-                resourceName: "Zooming_out_rotating_camera_59a4c0497a",
+                resourceName: "app-opening-video_001",
                 fallbackColor: Color.darkBase
             )
             .ignoresSafeArea()
@@ -380,8 +381,8 @@ struct CustomFooterNavigation: View {
     let showRecordButton: Bool
     let onRecordTap: () -> Void
     @EnvironmentObject var deviceManager: DeviceManager
-    private let glassBaseOpacity: Double = 0.56
-    private let glassMaterialOpacity: Double = 0.35
+    private let glassBaseOpacity: Double = 0.62
+    private let glassMaterialOpacity: Double = 0.40
 
     private var isDeviceSelected: Bool {
         deviceManager.selectedDeviceID != nil

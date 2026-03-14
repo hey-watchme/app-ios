@@ -26,7 +26,7 @@ struct UpgradeAccountView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.darkBase.ignoresSafeArea()
+                Color(.systemGroupedBackground).ignoresSafeArea()
 
                 VStack(spacing: 24) {
                     Spacer()
@@ -40,11 +40,11 @@ struct UpgradeAccountView: View {
                         Text("通常アカウントへのアップグレード")
                             .font(.title2)
                             .fontWeight(.bold)
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
 
                         Text("現在のゲストデータを引き継いだまま、通常アカウントへ移行します。")
                             .font(.subheadline)
-                            .foregroundColor(Color(white: 0.56))
+                            .foregroundColor(.secondary)
                             .multilineTextAlignment(.center)
                             .padding(.horizontal, 20)
                     }
@@ -60,15 +60,15 @@ struct UpgradeAccountView: View {
 
                         Text("アカウントの移行はGoogle認証でのみ行うことができます。Googleアカウントを使った認証ができない場合は、新規アカウント登録をご利用ください。その際データの引き継ぎはできませんのでご注意ください。")
                             .font(.footnote)
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                             .fixedSize(horizontal: false, vertical: true)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
-                    .background(Color.safeColor("WarningColor").opacity(0.12))
+                    .background(Color.safeColor("WarningColor").opacity(0.08))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.safeColor("WarningColor").opacity(0.45), lineWidth: 1)
+                            .stroke(Color.safeColor("WarningColor").opacity(0.30), lineWidth: 1)
                     )
                     .cornerRadius(12)
                     .padding(.horizontal, 24)
@@ -88,12 +88,12 @@ struct UpgradeAccountView: View {
                             }
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
-                            .background(Color.darkElevated)
+                            .background(Color(.systemBackground))
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                                    .stroke(Color(.separator), lineWidth: 1)
                             )
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                             .cornerRadius(12)
                         }
 
@@ -118,7 +118,7 @@ struct UpgradeAccountView: View {
                         }) {
                             Text("後で")
                                 .fontWeight(.semibold)
-                                .foregroundColor(Color(white: 0.56))
+                                .foregroundColor(.secondary)
                         }
                         .padding(.top, 8)
                     }
@@ -130,31 +130,34 @@ struct UpgradeAccountView: View {
             }
             .navigationTitle("アップグレード")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 }
             }
             .overlay(
                 Group {
                     if isProcessing {
                         ZStack {
-                            Color.black.opacity(0.3)
+                            Color.black.opacity(0.12)
                                 .ignoresSafeArea()
                             VStack(spacing: 16) {
                                 ProgressView()
                                     .scaleEffect(1.5)
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .accentTeal))
                                 Text("アップグレード中...")
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                                     .font(.caption)
                             }
+                            .padding(24)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(12)
                         }
                     }
                 }
@@ -164,7 +167,7 @@ struct UpgradeAccountView: View {
                     .environmentObject(userAccountManager)
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
         .overlay {
             ToastOverlay(toastManager: toastManager)
         }

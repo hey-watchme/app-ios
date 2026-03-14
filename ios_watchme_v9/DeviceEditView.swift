@@ -152,7 +152,7 @@ struct DeviceEditView: View {
                                             .foregroundColor(.white)
                                             .frame(maxWidth: .infinity)
                                             .padding(.vertical, 12)
-                                            .background(Color.blue)
+                                            .background(Color.accentTeal)
                                             .cornerRadius(12)
                                     }
                                 }
@@ -180,7 +180,7 @@ struct DeviceEditView: View {
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(Color.blue.opacity(isGeneratingQR ? 0.6 : 1.0))
+                                .background(Color.accentTeal.opacity(isGeneratingQR ? 0.6 : 1.0))
                                 .cornerRadius(12)
                             }
                             .disabled(isGeneratingQR)
@@ -210,7 +210,7 @@ struct DeviceEditView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(Color.red.opacity(isUnlinking ? 0.6 : 1.0))
+                            .background(Color.accentCoral.opacity(isUnlinking ? 0.6 : 1.0))
                             .cornerRadius(12)
                         }
                         .disabled(isUnlinking)
@@ -237,7 +237,7 @@ struct DeviceEditView: View {
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
-                            .background(Color.red.opacity(0.8).opacity(isDeleting ? 0.6 : 1.0))
+                            .background(Color.accentCoral.opacity(0.8).opacity(isDeleting ? 0.6 : 1.0))
                             .cornerRadius(12)
                         }
                         .disabled(isDeleting || isUnlinking)

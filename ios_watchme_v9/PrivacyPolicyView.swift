@@ -13,17 +13,17 @@ struct PrivacyPolicyView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.darkBase.ignoresSafeArea()
+                Color(.systemBackground).ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         Text("最終更新日: 2025年8月19日")
                             .font(.caption)
-                            .foregroundColor(Color(white: 0.56))
+                            .foregroundColor(.secondary)
 
                         Text("WatchMe Team（以下「当社」といいます）は、本アプリケーションにおけるユーザーの個人情報の取扱いについて、以下のとおりプライバシーポリシー（以下「本ポリシー」といいます）を定めます。")
                             .font(.body)
-                            .foregroundColor(Color(white: 0.84))
+                            .foregroundColor(.primary)
                             .padding(.bottom, 10)
 
                         Group {
@@ -178,7 +178,7 @@ struct PrivacyPolicyView: View {
                         }
 
                         Text("以上")
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                             .frame(maxWidth: .infinity, alignment: .center)
                             .padding(.vertical, 20)
                     }
@@ -187,19 +187,19 @@ struct PrivacyPolicyView: View {
             }
             .navigationTitle("プライバシーポリシー")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
     }
 }
 
@@ -211,11 +211,11 @@ struct PolicySection: View {
         VStack(alignment: .leading, spacing: 12) {
             Text(title)
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
             
             Text(content)
                 .font(.body)
-                .foregroundColor(Color(white: 0.84))
+                .foregroundColor(.primary)
                 .lineSpacing(4)
         }
         .padding(.bottom, 8)

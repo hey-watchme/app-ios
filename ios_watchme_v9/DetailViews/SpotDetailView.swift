@@ -13,6 +13,10 @@ struct SpotDetailView: View {
 
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var dataManager: SupabaseDataManager
+    @State private var rawSectionsLoadedFull: Set<String> = []
+
+    private let rawPreviewCharacterLimit = 4_000
+    private let rawLargeContentThreshold = 12_000
 
     var body: some View {
         NavigationView {
@@ -231,15 +235,15 @@ struct SpotDetailView: View {
                         .tracking(1.0)
 
                     if let transcription = spotData.vibeTranscriberResult {
-                        rawDataDisclosure(title: "STT", content: transcription)
+                        rawDataDisclosure(id: "stt", title: "STT", content: transcription)
                     }
 
                     if !spotData.behaviorTimePoints.isEmpty {
-                        rawDataDisclosure(title: "SED", content: behaviorExtractorJSONString)
+                        rawDataDisclosure(id: "sed", title: "SED", content: behaviorExtractorJSONString)
                     }
 
                     if let humeRaw = spotData.emotionFeaturesResultHumeRaw, !humeRaw.isEmpty {
-                        rawDataDisclosure(title: "SER", content: humeRaw)
+                        rawDataDisclosure(id: "ser", title: "SER", content: humeRaw)
                     }
                 }
             }
@@ -262,20 +266,88 @@ struct SpotDetailView: View {
         return str
     }
 
-    private func rawDataDisclosure(title: String, content: String) -> some View {
-        DisclosureGroup {
-            Text(content)
-                .font(.system(.caption, design: .monospaced))
-                .foregroundColor(Color(white: 0.45))
-                .frame(maxWidth: .infinity, alignment: .leading)
+    private func rawDataDisclosure(id: String, title: String, content: String) -> some View {
+        let byteCount = content.lengthOfBytes(using: .utf8)
+        let isLargeContent = byteCount >= rawLargeContentThreshold
+        let isFullLoaded = rawSectionsLoadedFull.contains(id)
+        let shouldShowFullContent = !isLargeContent || isFullLoaded
+        let previewText: String = {
+            let preview = String(content.prefix(rawPreviewCharacterLimit))
+            if content.count > rawPreviewCharacterLimit {
+                return preview + "\n\n… truncated (preview only)"
+            }
+            return preview
+        }()
+
+        return DisclosureGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                if isLargeContent, !isFullLoaded {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Label("Large raw data", systemImage: "exclamationmark.triangle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.accentTealMuted)
+
+                        Text("Size: \(formattedByteCount(byteCount)). \(expectedLoadHint(for: byteCount))")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(white: 0.62))
+
+                        Button("全文を読み込む（重くなる可能性あり）") {
+                            rawSectionsLoadedFull.insert(id)
+                        }
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule()
+                                .fill(Color.accentTealMuted.opacity(0.35))
+                        )
+                    }
+                    .padding(10)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(Color.white.opacity(0.04))
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    )
+                }
+
+                ScrollView(.horizontal, showsIndicators: true) {
+                    if shouldShowFullContent {
+                        Text(content)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(Color(white: 0.45))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.enabled)
+                    } else {
+                        Text(previewText)
+                            .font(.system(.caption, design: .monospaced))
+                            .foregroundColor(Color(white: 0.45))
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .textSelection(.disabled)
+                    }
+                }
                 .padding(.vertical, 8)
-                .textSelection(.enabled)
+
+                if isLargeContent, isFullLoaded {
+                    Button("プレビュー表示に戻す") {
+                        rawSectionsLoadedFull.remove(id)
+                    }
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(white: 0.62))
+                }
+            }
         } label: {
             HStack {
                 Text(title)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
                 Spacer()
+                Text(formattedByteCount(byteCount))
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color(white: 0.45))
             }
         }
         .tint(Color(white: 0.36))
@@ -288,6 +360,23 @@ struct SpotDetailView: View {
                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
         )
+    }
+
+    private func formattedByteCount(_ bytes: Int) -> String {
+        let formatter = ByteCountFormatter()
+        formatter.allowedUnits = [.useKB, .useMB]
+        formatter.countStyle = .file
+        return formatter.string(fromByteCount: Int64(bytes))
+    }
+
+    private func expectedLoadHint(for bytes: Int) -> String {
+        if bytes >= 180_000 {
+            return "端末によっては展開に数十秒〜2分かかる場合があります。"
+        }
+        if bytes >= 80_000 {
+            return "端末によっては展開に数秒〜30秒かかる場合があります。"
+        }
+        return "重い場合はプレビュー表示で確認してください。"
     }
 
     // MARK: - Helpers

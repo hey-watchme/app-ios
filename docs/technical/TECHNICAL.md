@@ -380,7 +380,7 @@ BEGIN
          WHERE t.device_id = p_device_id::uuid AND t.date = p_date::date
          LIMIT 1) AS behavior_report,
 
-        (SELECT to_jsonb(t) FROM emotion_opensmile_summary t
+        (SELECT to_jsonb(t) FROM emotion_paralinguistic_summary t
          WHERE t.device_id = p_device_id::uuid AND t.date = p_date::date
          LIMIT 1) AS emotion_report,
 

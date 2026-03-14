@@ -212,8 +212,8 @@ struct NotificationRow: View {
                                 .font(.caption2)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(Color.purple.opacity(0.2))
-                                .foregroundColor(.purple)
+                                .background(Color.accentTealMuted.opacity(0.2))
+                                .foregroundColor(.accentTealMuted)
                                 .cornerRadius(4)
                         }
                         
@@ -234,7 +234,7 @@ struct NotificationRow: View {
                 // 未読インジケーター
                 if !notification.isRead {
                     Circle()
-                        .fill(Color.red)
+                        .fill(Color.accentTeal)
                         .frame(width: 8, height: 8)
                 }
             }
@@ -249,11 +249,11 @@ struct NotificationRow: View {
     private var notificationColor: Color {
         switch notification.type {
         case NotificationType.global.rawValue:
-            return Color.purple
+            return Color.accentTealMuted
         case NotificationType.event.rawValue:
             return Color.accentTeal
         case NotificationType.personal.rawValue:
-            return Color.blue
+            return Color.accentTeal
         default:
             return Color.accentTeal
         }

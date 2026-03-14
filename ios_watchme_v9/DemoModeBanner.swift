@@ -47,7 +47,7 @@ struct DemoModeBanner: View {
             }
             .background(
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.purple.opacity(0.9)]),
+                    gradient: Gradient(colors: [Color.accentTeal.opacity(0.9), Color.accentTealMuted.opacity(0.9)]),
                     startPoint: .leading,
                     endPoint: .trailing
                 )
@@ -91,7 +91,7 @@ struct DemoModeInfoSheet: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(spacing: 8) {
                             Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(.green)
+                                .foregroundColor(.accentTeal)
                             Text("利用可能な機能")
                                 .foregroundColor(.white)
                         }
@@ -111,7 +111,7 @@ struct DemoModeInfoSheet: View {
                     VStack(alignment: .leading, spacing: 16) {
                         HStack(spacing: 8) {
                             Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                             Text("利用できない機能")
                                 .foregroundColor(.white)
                         }

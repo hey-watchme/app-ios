@@ -112,7 +112,7 @@ struct DailyDetailView: View {
     // Score color logic (same as ModernVibeCard)
     private func scoreColor(for score: Double) -> Color {
         if score > 30 {
-            return .accentEmerald
+            return .accentTeal
         } else if score < -30 {
             return .accentCoral
         } else {
@@ -194,7 +194,7 @@ struct DailyDetailView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "bolt.fill")
-                    .foregroundColor(.accentAmber)
+                    .foregroundColor(.accentTealMuted)
                 Text("ハイライト")
                     .font(.headline)
                     .foregroundColor(.white)
@@ -231,7 +231,7 @@ struct DailyDetailView: View {
 
                 Text(String(format: "Change: %+.1f", event.scoreChange))
                     .font(.caption)
-                    .foregroundColor(event.scoreChange >= 0 ? .accentEmerald : .accentCoral)
+                    .foregroundColor(event.scoreChange >= 0 ? .accentTeal : .accentCoral)
             }
 
             Spacer()

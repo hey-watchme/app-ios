@@ -109,7 +109,7 @@ struct UnifiedBanner: View {
             // プログレスバー（送信中のみ）
             if let progress = progress {
                 ProgressView(value: progress, total: 1.0)
-                    .progressViewStyle(LinearProgressViewStyle(tint: .blue))
+                    .progressViewStyle(LinearProgressViewStyle(tint: .accentTeal))
             }
         }
         .padding()
@@ -140,7 +140,7 @@ struct UnifiedBanner: View {
                 title: "送信中...",
                 subtitle: "2024-01-01/14-30.wav",
                 icon: "arrow.up.circle.fill",
-                iconColor: .blue,
+                iconColor: .accentTeal,
                 progress: 0.6
             ),
             isShowing: .constant(true),
@@ -158,7 +158,7 @@ struct UnifiedBanner: View {
                 title: "送信完了",
                 subtitle: "分析結果をお待ちください",
                 icon: "checkmark.circle.fill",
-                iconColor: .green,
+                iconColor: .accentTeal,
                 progress: nil
             ),
             isShowing: .constant(true)

@@ -127,7 +127,7 @@ struct PlaceholderNotificationRow: View {
             // 未読インジケーター
             if !notification.isRead {
                 Circle()
-                    .fill(Color.red)
+                    .fill(Color.accentTeal)
                     .frame(width: 8, height: 8)
             }
         }

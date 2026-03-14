@@ -21,7 +21,7 @@
 
 - `vibe_whisper_summary` - 従来の心理データ（段階的に廃止予定）
 - `behavior_summary` - 行動データ
-- `emotion_opensmile_summary` - 感情データ
+- `emotion_paralinguistic_summary` - 感情データ
 - `subjects` - 分析対象情報
 - `dashboard_summary` - 新しい統合ダッシュボードデータ
   - `average_vibe` - 平均スコア
@@ -33,7 +33,7 @@
 - **device_id**の型が異なる：
   - `vibe_whisper_summary`: TEXT型
   - `behavior_summary`: TEXT型
-  - `emotion_opensmile_summary`: TEXT型
+  - `emotion_paralinguistic_summary`: TEXT型
   - `devices`: UUID型
   - `dashboard_summary`: UUID型
 

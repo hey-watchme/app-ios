@@ -379,7 +379,7 @@ struct PurpleBackgroundToggleStyle: ToggleStyle {
                 Capsule()
                     .fill(isOnPurpleBackground ? 
                           Color(red: 0.3, green: 0.1, blue: 0.5).opacity(0.8) :  // 紫色の暗い色
-                          (configuration.isOn ? Color.green : Color.gray.opacity(0.3)))
+                          (configuration.isOn ? Color.accentTeal : Color.gray.opacity(0.3)))
                     .frame(width: 51, height: 31)
                 
                 // サム（つまみ部分）

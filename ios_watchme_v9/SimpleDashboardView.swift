@@ -155,7 +155,12 @@ struct SimpleDashboardView: View {
                                     showVibeSheet = true
                                 }
                                 
-                            // 3. Vitals Range Cards 
+                            // 3. Vibe Timeline (under hero)
+                            vibeGraphCard
+                                .padding(.horizontal, 20)
+                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+
+                            // 4. Vitals Range Cards
                             let stressValue = dashboardSummary?.averageVibe.map { max(10, min(90, 50 - Double($0) * 0.4)) } ?? 42.0
                             VitalsRangeCard(
                                 title: "Stress Levels",
@@ -163,26 +168,19 @@ struct SimpleDashboardView: View {
                                 maxValue: 100,
                                 label: stressValue < 40 ? "LOW" : "ELEVATED",
                                 optimalRange: (0.0, 0.4), // 0-40 is optimal
-                                color: stressValue < 40 ? .accentEmerald : .accentAmber,
+                                color: stressValue < 40 ? .accentTeal : .accentTealMuted,
                                 icon: "heart.text.square"
                             )
                             .padding(.horizontal, 20)
                             .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
-                            // 4. Activity Comparison
+                            // 5. Activity Comparison
                             DailyActivityOverviewCard(
                                 analysisCount: timeBlocks.count,
                                 targetCount: 24
                             )
                             .padding(.horizontal, 20)
                             .transition(.opacity.combined(with: .scale(scale: 0.98)))
-
-                            // Latest analysis
-                            if !timeBlocks.isEmpty {
-                                latestAnalysisSection
-                                    .padding(.horizontal, 20)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
-                            }
 
                             // Highlights
                             if showHighlightSection {
@@ -426,6 +424,10 @@ struct SimpleDashboardView: View {
                     .environmentObject(userAccountManager)
                     .navigationBarTitleDisplayMode(.inline)
                     .navigationTitle("分析結果の一覧")
+                    .toolbarBackground(Color.darkBase, for: .navigationBar)
+                    .toolbarBackground(.visible, for: .navigationBar)
+                    .toolbarColorScheme(.dark, for: .navigationBar)
+                    .tint(.white)
                     .toolbar {
                         ToolbarItem(placement: .navigationBarLeading) {
                             Button("閉じる") {
@@ -562,17 +564,17 @@ struct SimpleDashboardView: View {
     
     private var vibeGraphCard: some View {
         Group {
-            if let summary = dashboardSummary {
+            if dashboardSummary != nil || !timeBlocks.isEmpty {
                 ModernVibeCard(
-                    dashboardSummary: summary,
+                    dashboardSummary: dashboardSummary,
                     timeBlocks: timeBlocks,  // spot_resultsから取得したグラフデータ
                     onNavigateToDetail: { },
-                    showTitle: false  // タイトルを非表示
+                    showTitle: false,
+                    showHeaderSection: false,
+                    showInsightSection: false,
+                    showFooterLink: false,
+                    timelineTitle: "Daily vibe timeline"
                 )
-                .onTapGesture {
-                    isCommentFieldFocused = false  // キーボードを閉じる
-                    showVibeSheet = true
-                }
             } else {
                 // エンプティーステート：ナビゲーションボタンを非表示
                 if deviceManager.selectedDeviceID == nil {
@@ -1220,7 +1222,7 @@ struct SpotAnalysisCard: View {
                     }
 
                     if let emotion = timeBlock.emotion, !emotion.isEmpty {
-                        tagPill(text: emotion, color: .accentAmber, backgroundColor: Color.accentAmber.opacity(0.1))
+                        tagPill(text: emotion, color: .accentTealMuted, backgroundColor: Color.accentTealMuted.opacity(0.1))
                     }
                 }
 
@@ -1395,7 +1397,7 @@ struct AnalysisListView: View {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 10))
                         }
-                        .foregroundStyle(Color.accentTeal)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.darkCard)
@@ -1424,7 +1426,7 @@ struct AnalysisListView: View {
                             Image(systemName: "chevron.down")
                                 .font(.system(size: 10))
                         }
-                        .foregroundStyle(Color.accentTeal)
+                        .foregroundStyle(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 8)
                         .background(Color.darkCard)

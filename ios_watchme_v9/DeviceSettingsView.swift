@@ -99,7 +99,7 @@ struct DeviceSettingsView: View {
                     VStack(spacing: 20) {
                         Image(systemName: "exclamationmark.triangle")
                             .font(.system(size: 50))
-                            .foregroundColor(.orange)
+                            .foregroundColor(.accentTealMuted)
                         Text("エラーが発生しました")
                             .font(.title3)
                             .foregroundColor(.white)

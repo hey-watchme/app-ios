@@ -131,7 +131,7 @@ struct AuthFlowView: View {
     private var accountSelectionView: some View {
         ZStack {
             LoopingVideoBackgroundView(
-                resourceName: "Zooming_out_rotating_camera_59a4c0497a",
+                resourceName: "app-opening-video_001",
                 fallbackColor: Color.darkBase
             )
             .ignoresSafeArea()
@@ -229,7 +229,7 @@ struct AuthFlowView: View {
                     // Warning
                     HStack(spacing: 8) {
                         Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(.accentTealMuted)
                             .font(.caption)
                         Text("ゲストモードではデータが保護されません")
                             .font(.caption)

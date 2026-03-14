@@ -9,6 +9,7 @@ import SwiftUI
 
 struct AccountSettingsView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @State private var showLogoutConfirmation = false
@@ -17,7 +18,6 @@ struct AccountSettingsView: View {
     @State private var showTermsOfService = false
     @State private var showPrivacyPolicy = false
     @State private var showDeleteAccountConfirmation = false
-    @State private var showFeedbackForm = false
     @State private var isDeletingAccount = false
     @State private var deleteAccountError: String?
     @State private var showDeleteAccountError = false
@@ -37,10 +37,10 @@ struct AccountSettingsView: View {
                                     Text("アカウント登録")
                                         .font(.subheadline)
                                         .fontWeight(.semibold)
-                                        .foregroundColor(.white)
+                                        .foregroundColor(.primary)
                                     Text("Googleアカウントで、現在のゲストデータをそのまま引き継げます")
                                         .font(.caption)
-                                        .foregroundColor(Color(white: 0.56))
+                                        .foregroundColor(.secondary)
                                 }
                                 Spacer()
                                 Image(systemName: "arrow.right.circle.fill")
@@ -55,17 +55,17 @@ struct AccountSettingsView: View {
                     } footer: {
                         Text("ゲストユーザーはログアウトすると、データが失われる可能性があります。通常アカウントへアップグレードして保護してください。")
                     }
-                    .listRowBackground(Color.darkCard)
+                    .listRowBackground(Color(.systemBackground))
                 }
 
                 // このアプリについて
                 Section {
                     HStack {
                         Label("このアプリについて", systemImage: "info.circle")
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .foregroundColor(Color(white: 0.56))
+                            .foregroundColor(.secondary)
                             .font(.system(size: 14))
                     }
                     .contentShape(Rectangle())
@@ -73,16 +73,16 @@ struct AccountSettingsView: View {
                         showAboutApp = true
                     }
                 }
-                .listRowBackground(Color.darkCard)
+                .listRowBackground(Color(.systemBackground))
                 
                 // 利用規約・プライバシーポリシー
                 Section {
                     HStack {
                         Label("利用規約", systemImage: "doc.text")
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .foregroundColor(Color(white: 0.56))
+                            .foregroundColor(.secondary)
                             .font(.system(size: 14))
                     }
                     .contentShape(Rectangle())
@@ -92,10 +92,10 @@ struct AccountSettingsView: View {
 
                     HStack {
                         Label("プライバシーポリシー", systemImage: "lock.shield")
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .foregroundColor(Color(white: 0.56))
+                            .foregroundColor(.secondary)
                             .font(.system(size: 14))
                     }
                     .contentShape(Rectangle())
@@ -103,24 +103,26 @@ struct AccountSettingsView: View {
                         showPrivacyPolicy = true
                     }
                 }
-                .listRowBackground(Color.darkCard)
+                .listRowBackground(Color(.systemBackground))
 
                 // サポート
                 Section {
                     HStack {
                         Label("お問い合わせ", systemImage: "envelope")
-                            .foregroundColor(.white)
+                            .foregroundColor(.primary)
                         Spacer()
                         Image(systemName: "chevron.right")
-                            .foregroundColor(Color(white: 0.56))
+                            .foregroundColor(.secondary)
                             .font(.system(size: 14))
                     }
                     .contentShape(Rectangle())
                     .onTapGesture {
-                        showFeedbackForm = true
+                        if let url = supportMailURL {
+                            openURL(url)
+                        }
                     }
                 }
-                .listRowBackground(Color.darkCard)
+                .listRowBackground(Color(.systemBackground))
                 
                 // アカウント管理
                 Section {
@@ -129,7 +131,7 @@ struct AccountSettingsView: View {
                     }) {
                         HStack {
                             Label("ログアウト", systemImage: "rectangle.portrait.and.arrow.right")
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                             Spacer()
                         }
                     }
@@ -140,28 +142,27 @@ struct AccountSettingsView: View {
                     }) {
                         HStack {
                             Label("アカウントを削除", systemImage: "trash")
-                                .foregroundColor(.red)
+                                .foregroundColor(.accentCoral)
                             Spacer()
                         }
                     }
                 }
-                .listRowBackground(Color.darkCard)
+                .listRowBackground(Color(.systemBackground))
             }
-            .scrollContentBackground(.hidden)
-            .background(Color.darkBase)
+            .scrollContentBackground(.automatic)
             .listStyle(.insetGrouped)
-            .listRowSeparatorTint(Color.white.opacity(0.08))
+            .listRowSeparatorTint(Color(.separator))
             .navigationTitle("アカウント設定")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 }
             }
             .alert("ログアウトしますか？", isPresented: $showLogoutConfirmation) {
@@ -210,29 +211,29 @@ struct AccountSettingsView: View {
             }
             .sheet(isPresented: $showAboutApp) {
                 AboutAppView()
-                    .preferredColorScheme(.dark)
+                    .preferredColorScheme(.light)
             }
             .sheet(isPresented: $showTermsOfService) {
                 TermsOfServiceView()
-                    .preferredColorScheme(.dark)
+                    .preferredColorScheme(.light)
             }
             .sheet(isPresented: $showPrivacyPolicy) {
                 PrivacyPolicyView()
-                    .preferredColorScheme(.dark)
-            }
-            .sheet(isPresented: $showFeedbackForm) {
-                FeedbackFormView(context: .general)
-                    .environmentObject(userAccountManager)
-                    .preferredColorScheme(.dark)
+                    .preferredColorScheme(.light)
             }
             .sheet(isPresented: $showUpgradeAccount) {
                 UpgradeAccountView()
                     .environmentObject(userAccountManager)
                     .environmentObject(ToastManager.shared)
-                    .preferredColorScheme(.dark)
+                    .preferredColorScheme(.light)
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
+    }
+
+    private var supportMailURL: URL? {
+        let subject = "WatchMe お問い合わせ".addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? ""
+        return URL(string: "mailto:support@hey-watch.me?subject=\(subject)")
     }
     
     private func performLogout() async {

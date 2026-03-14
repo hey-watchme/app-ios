@@ -13,7 +13,7 @@ struct AboutAppView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.darkBase.ignoresSafeArea()
+                Color(.systemBackground).ignoresSafeArea()
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 24) {
@@ -28,11 +28,11 @@ struct AboutAppView: View {
                             Text("WatchMe")
                                 .font(.title)
                                 .fontWeight(.bold)
-                                .foregroundColor(.white)
+                                .foregroundColor(.primary)
 
                             Text("バージョン 9.21.0")
                                 .font(.subheadline)
-                                .foregroundColor(Color(white: 0.56))
+                                .foregroundColor(.secondary)
                         }
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 20)
@@ -42,28 +42,29 @@ struct AboutAppView: View {
                             Section {
                                 Text("WatchMeについて")
                                     .font(.headline)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
 
                                 Text("""
-                                WatchMeは、日々の感情や行動を記録し、AIによる分析を通じて心理状態や生活パターンを可視化するライフログアプリケーションです。
+                                WatchMeは、音声の言語的情報に加えて、韻律的情報（声の抑揚・テンポ・間など）を分析し、心理状態や発達特性を可視化して課題解決に役立てるサポートツールです。
 
-                                30分ごとの自動音声記録により、あなたの一日を詳細に記録し、感情の変化や行動パターンを分析します。
+                                WatchMeはデバイスを使った自動音声記録を活用したサポートツールですが、アプリ単体でもデバイスのマイク、カメラロールの動画、またはデバイスに保存された他の音声ファイルを使用して録音・分析できます。ぜひ機能をお試しください。
                                 """)
                                     .font(.body)
-                                    .foregroundColor(Color(white: 0.84))
+                                    .foregroundColor(.primary)
                             }
 
                             Divider()
-                                .background(Color.white.opacity(0.08))
+                                .background(Color(.separator))
 
                             // 主な機能
                             Section {
                                 Text("主な機能")
                                     .font(.headline)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
 
                                 VStack(alignment: .leading, spacing: 12) {
-                                    FeatureRow(icon: "mic.fill", title: "自動音声記録", description: "30分ごとに自動で音声を記録")
+                                    FeatureRow(icon: "mic.fill", title: "デバイスを使った自動音声記録（オプション）", description: "対応デバイス利用時に自動音声記録を有効化できます")
+                                    FeatureRow(icon: "waveform", title: "アプリ単体での録音・分析", description: "端末マイク・カメラロール動画・端末内音声ファイルに対応")
                                     FeatureRow(icon: "brain", title: "AI感情分析", description: "最新のAI技術で感情を分析")
                                     FeatureRow(icon: "chart.line.uptrend.xyaxis", title: "データ可視化", description: "感情や行動をグラフで表示")
                                     FeatureRow(icon: "shield.fill", title: "プライバシー保護", description: "データは安全に暗号化して保存")
@@ -71,47 +72,43 @@ struct AboutAppView: View {
                             }
 
                             Divider()
-                                .background(Color.white.opacity(0.08))
+                                .background(Color(.separator))
 
                             // 開発情報
                             Section {
                                 Text("開発情報")
                                     .font(.headline)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
 
                                 VStack(alignment: .leading, spacing: 8) {
                                     InfoPair(label: "開発元", value: "WatchMe Team")
-                                    InfoPair(label: "サポート", value: "support@watchme.app")
-                                    InfoPair(label: "ウェブサイト", value: "https://watchme.app")
+                                    InfoPair(label: "サポート", value: "support@hey-watch.me")
+                                    InfoPair(label: "ウェブサイト", value: "https://hey-watch.me")
                                 }
                             }
 
                             Divider()
-                                .background(Color.white.opacity(0.08))
+                                .background(Color(.separator))
 
-                            // 謝辞
+                            // 利用上の案内
                             Section {
-                                Text("謝辞")
+                                Text("利用上の案内")
                                     .font(.headline)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
 
                                 Text("""
-                                WatchMeの開発にあたり、多くのオープンソースプロジェクトを利用させていただいています。
-
-                                • Supabase - 認証とデータベース
-                                • OpenAI - 感情分析エンジン
-                                • Swift Package Manager - 依存関係管理
-
-                                すべての貢献者の皆様に感謝いたします。
+                                • 本アプリは日常の状態把握と支援を目的としたツールであり、医療診断を行うものではありません。
+                                • 分析結果は録音環境や入力データの品質により変動する場合があります。
+                                • データの取り扱いについては、プライバシーポリシーおよび利用規約をご確認ください。
                                 """)
                                     .font(.body)
-                                    .foregroundColor(Color(white: 0.84))
+                                    .foregroundColor(.primary)
                             }
 
                             // コピーライト
-                            Text("© 2025 WatchMe Team. All rights reserved.")
+                            Text("© WatchMe Team. All rights reserved.")
                                 .font(.caption)
-                                .foregroundColor(Color(white: 0.56))
+                                .foregroundColor(.secondary)
                                 .frame(maxWidth: .infinity, alignment: .center)
                                 .padding(.top, 20)
                         }
@@ -121,19 +118,19 @@ struct AboutAppView: View {
             }
             .navigationTitle("このアプリについて")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 }
             }
         }
-        .preferredColorScheme(.dark)
+        .preferredColorScheme(.light)
     }
 }
 
@@ -153,10 +150,10 @@ struct FeatureRow: View {
                 Text(title)
                     .font(.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundColor(.white)
+                    .foregroundColor(.primary)
                 Text(description)
                     .font(.caption)
-                    .foregroundColor(Color(white: 0.56))
+                    .foregroundColor(.secondary)
             }
         }
     }
@@ -169,10 +166,10 @@ struct InfoPair: View {
     var body: some View {
         HStack {
             Text(label)
-                .foregroundColor(Color(white: 0.56))
+                .foregroundColor(.secondary)
             Spacer()
             Text(value)
-                .foregroundColor(.white)
+                .foregroundColor(.primary)
         }
         .font(.subheadline)
     }

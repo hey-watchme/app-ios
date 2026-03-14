@@ -262,7 +262,7 @@ struct ErrorMessageView: View {
     var body: some View {
         HStack {
             Image(systemName: "exclamationmark.triangle.fill")
-                .foregroundColor(.orange)
+                .foregroundColor(.accentTealMuted)
             Text(message)
                 .font(.subheadline)
                 .foregroundColor(.white)
@@ -275,7 +275,7 @@ struct ErrorMessageView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color.red.opacity(0.3))
+                .fill(Color.accentCoral.opacity(0.3))
         )
         .padding(.horizontal, 24)
     }

@@ -26,7 +26,7 @@ struct UserInfoView: View {
     
     var body: some View {
         ZStack {
-            Color.darkBase.ignoresSafeArea()
+            Color(.systemGroupedBackground).ignoresSafeArea()
             
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -51,12 +51,12 @@ struct UserInfoView: View {
                                     .fontWeight(.medium)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
-                                    .background(Color.darkElevated)
+                                    .background(Color(.systemBackground))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 20)
                                             .stroke(
                                                 LinearGradient(
-                                                    colors: [Color.white.opacity(0.12), Color.white.opacity(0.04)],
+                                                    colors: [Color.black.opacity(0.10), Color.black.opacity(0.03)],
                                                     startPoint: .topLeading,
                                                     endPoint: .bottomTrailing
                                                 ),
@@ -64,7 +64,7 @@ struct UserInfoView: View {
                                             )
                                     )
                                     .cornerRadius(20)
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.primary)
                             }
                             .padding(.top, 50)  // ステータスバーを考慮
                             .padding(.trailing, 20)
@@ -84,18 +84,18 @@ struct UserInfoView: View {
                                         Text("ゲストユーザー")
                                             .font(.title2)
                                             .fontWeight(.bold)
-                                            .foregroundColor(.white)
+                                            .foregroundColor(.primary)
                                     } else if let profile = userAccountManager.currentUser?.profile,
                                               let name = profile.name, !name.isEmpty {
                                         Text(name)
                                             .font(.title2)
                                             .fontWeight(.bold)
-                                            .foregroundColor(.white)
+                                            .foregroundColor(.primary)
                                     } else {
                                         Text("ユーザー")
                                             .font(.title2)
                                             .fontWeight(.bold)
-                                            .foregroundColor(.white)
+                                            .foregroundColor(.primary)
                                     }
 
                                     // ユーザーステータス
@@ -111,7 +111,7 @@ struct UserInfoView: View {
                             .padding(.bottom, 20)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color.darkBase)
+                        .background(Color(.systemBackground))
                     }
                     
                     // アバターを最前面に配置（権限に応じて編集可否が変わる）
@@ -130,21 +130,21 @@ struct UserInfoView: View {
                                     )
                                     .overlay(
                                         Circle()
-                                            .stroke(Color.darkBase, lineWidth: 4)
+                                            .stroke(Color(.systemBackground), lineWidth: 4)
                                     )
 
                                     // カメラアイコンを追加
                                     Circle()
-                                        .fill(Color.darkElevated)
+                                        .fill(Color(.systemBackground))
                                         .frame(width: 32, height: 32)
                                         .overlay(
                                             Image(systemName: "camera.fill")
                                                 .font(.system(size: 16))
-                                                .foregroundColor(.white)
+                                                .foregroundColor(.accentTeal)
                                         )
                                         .overlay(
                                         Circle()
-                                            .stroke(Color.darkBase, lineWidth: 2)
+                                            .stroke(Color(.separator), lineWidth: 1)
                                     )
                                 }
                             }
@@ -156,7 +156,7 @@ struct UserInfoView: View {
                                 AvatarView(userId: nil, size: 100, avatarUrl: nil)
                                     .overlay(
                                         Circle()
-                                            .stroke(Color.darkBase, lineWidth: 4)
+                                            .stroke(Color(.systemBackground), lineWidth: 4)
                                     )
                                 // カメラアイコンは表示しない
                             }
@@ -178,14 +178,14 @@ struct UserInfoView: View {
                                 if let name = user.profile?.name, !name.isEmpty { return name }
                                 return "未設定"
                             }()
-                            let displayNameColor: Color = (displayName == "未設定") ? Color(white: 0.56) : .white
+                            let displayNameColor: Color = (displayName == "未設定") ? Color(white: 0.56) : .primary
 
                             // 名前
                             InfoListRow(label: "名前", value: displayName, valueColor: displayNameColor)
 
                             // メールアドレス（匿名は常に未設定表示）
                             let displayEmail = (isAnonymous || user.email.isEmpty) ? "未設定" : user.email
-                            let emailColor: Color = (displayEmail == "未設定") ? Color(white: 0.56) : .white
+                            let emailColor: Color = (displayEmail == "未設定") ? Color(white: 0.56) : .primary
                             InfoListRow(label: "メールアドレス", value: displayEmail, valueColor: emailColor)
 
                             // ニュースレター配信設定
@@ -224,7 +224,7 @@ struct UserInfoView: View {
                                     .padding(.vertical, 12)
 
                                     Divider()
-                                        .background(Color.white.opacity(0.08))
+                                        .background(Color(.separator))
                                 }
 
                                 // 会員登録日
@@ -258,7 +258,7 @@ struct UserInfoView: View {
                                 .padding(.vertical, 12)
 
                                 Divider()
-                                    .background(Color.white.opacity(0.08))
+                                    .background(Color(.separator))
                             }
 
                             InfoListRow(label: "会員登録日", value: "未設定", valueColor: Color(white: 0.56))
@@ -305,7 +305,7 @@ struct UserInfoView: View {
         .sheet(isPresented: $showAccountSettings) {
             AccountSettingsView()
                 .environmentObject(userAccountManager)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(.light)
         }
         .sheet(isPresented: $showingAvatarPicker) {
             NavigationStack {
@@ -327,13 +327,13 @@ struct UserInfoView: View {
                     }
                 }
             }
-            .preferredColorScheme(.dark)
+            .preferredColorScheme(.light)
         }
         .sheet(isPresented: $showUpgradeAccount) {
             UpgradeAccountView()
                 .environmentObject(userAccountManager)
                 .environmentObject(ToastManager.shared)
-                .preferredColorScheme(.dark)
+                .preferredColorScheme(.light)
         }
         .onAppear {
             // ViewModelの初期化
@@ -355,6 +355,7 @@ struct UserInfoView: View {
                 print("❌ ユーザープロファイルが読み込まれていません")
             }
         }
+        .preferredColorScheme(.light)
     }
     
 }

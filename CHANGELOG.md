@@ -481,7 +481,7 @@
   - **SupabaseDataManagerの完全SDK化**
     - fetchDailyReportメソッドを`supabase.from("vibe_whisper_summary").select()`に変更
     - fetchBehaviorReportメソッドを`supabase.from("behavior_summary").select()`に変更
-    - fetchEmotionReportメソッドを`supabase.from("emotion_opensmile_summary").select()`に変更
+    - fetchEmotionReportメソッドを`supabase.from("emotion_paralinguistic_summary").select()`に変更
     - fetchDeviceMetadataメソッドを`supabase.from("device_metadata").select()`に変更（v9.14.0で`fetchSubjectForDevice`に変更）
     - fetchWeeklyReportsメソッドを`supabase.from("vibe_whisper_summary").select()`に変更
     
@@ -572,7 +572,7 @@
     - タップで各時間帯の詳細表示
   
   - **感情グラフ (Emotion Graph) の実装**
-    - emotion_opensmile_summaryテーブルからのデータ取得機能
+    - emotion_paralinguistic_summaryテーブルからのデータ取得機能
     - 8つの感情の1日の合計値をランキング表示
     - 48時間帯の感情推移を折れ線グラフで表示
     - Charts frameworkを使用した美しいグラフ描画

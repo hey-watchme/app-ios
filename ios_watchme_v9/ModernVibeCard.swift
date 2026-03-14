@@ -13,6 +13,10 @@ struct ModernVibeCard: View {
     let timeBlocks: [DashboardTimeBlock]
     var onNavigateToDetail: (() -> Void)? = nil
     var showTitle: Bool = true
+    var showHeaderSection: Bool = true
+    var showInsightSection: Bool = true
+    var showFooterLink: Bool = true
+    var timelineTitle: String? = nil
     @State private var isAnimating = false
     @State private var cardScale: CGFloat = 1.0
     @State private var showBurstBubbles = false
@@ -81,18 +85,32 @@ struct ModernVibeCard: View {
 
             VStack(spacing: 0) {
                 // Header: score + status
-                if showTitle {
-                    headerSection
-                        .padding(.bottom, 20)
-                } else {
-                    compactScoreSection
-                        .padding(.bottom, 12)
+                if showHeaderSection {
+                    if showTitle {
+                        headerSection
+                            .padding(.bottom, 20)
+                    } else {
+                        compactScoreSection
+                            .padding(.bottom, 12)
+                    }
                 }
 
                 // Motivational message (Oura-style)
-                if let msg = motivationalMessage {
+                if showInsightSection, let msg = motivationalMessage {
                     motivationalBanner(message: msg)
                         .padding(.bottom, 16)
+                }
+
+                if let timelineTitle {
+                    HStack {
+                        Text(timelineTitle)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Color(white: 0.56))
+                            .tracking(0.8)
+                            .textCase(.uppercase)
+                        Spacer()
+                    }
+                    .padding(.bottom, 10)
                 }
 
                 // Timeline graph
@@ -106,12 +124,13 @@ struct ModernVibeCard: View {
                         burstEvents: dashboardSummary?.burstEvents,
                         onEventBurst: { score in
                             triggerBurst(score: score)
-                        }
+                        },
+                        showsContainerBackground: false
                     )
                 }
 
                 // Daily insights
-                if let insights = dashboardSummary?.insights, !insights.isEmpty {
+                if showInsightSection, let insights = dashboardSummary?.insights, !insights.isEmpty {
                     Text(insights)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundStyle(Color(white: 0.78))
@@ -122,30 +141,32 @@ struct ModernVibeCard: View {
                 }
 
                 // Navigation link
-                HStack {
-                    Spacer()
+                if showFooterLink {
+                    HStack {
+                        Spacer()
 
-                    Button(action: {
-                        onNavigateToDetail?()
-                    }) {
-                        HStack(spacing: 4) {
-                            Text("All analyses")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundStyle(Color(white: 0.45))
-                            Image(systemName: "chevron.right")
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundStyle(Color(white: 0.45))
+                        Button(action: {
+                            onNavigateToDetail?()
+                        }) {
+                            HStack(spacing: 4) {
+                                Text("All analyses")
+                                    .font(.system(size: 12, weight: .medium))
+                                    .foregroundStyle(Color(white: 0.45))
+                                Image(systemName: "chevron.right")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundStyle(Color(white: 0.45))
+                            }
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.06))
+                            )
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            Capsule()
-                                .fill(Color.white.opacity(0.06))
-                        )
+                        .allowsHitTesting(false)
                     }
-                    .allowsHitTesting(false)
+                    .padding(.top, 16)
                 }
-                .padding(.top, 16)
             }
             .padding(20)
         }

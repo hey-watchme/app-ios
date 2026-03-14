@@ -25,20 +25,20 @@ struct InfoSection<Content: View>: View {
                 content
             }
             .padding()
-            .background(Color.darkCard)
+            .background(Color(.systemBackground))
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)],
+                            colors: [Color.black.opacity(0.10), Color.black.opacity(0.03)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
                         lineWidth: 1
                     )
             )
-            .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
     }
 }
@@ -137,20 +137,20 @@ struct InfoListSection<Content: View>: View {
             VStack(spacing: 0) {
                 content
             }
-            .background(Color.darkCard)
+            .background(Color(.systemBackground))
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(
                         LinearGradient(
-                            colors: [Color.white.opacity(0.06), Color.white.opacity(0.02)],
+                            colors: [Color.black.opacity(0.10), Color.black.opacity(0.03)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
                         lineWidth: 1
                     )
             )
-            .shadow(color: Color.black.opacity(0.4), radius: 8, x: 0, y: 4)
+            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
     }
 }
@@ -189,7 +189,7 @@ struct InfoListRow: View {
 
             if showDivider {
                 Divider()
-                    .background(Color.white.opacity(0.08))
+                    .background(Color(.separator))
             }
         }
     }

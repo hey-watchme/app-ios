@@ -10,19 +10,21 @@ import SwiftUI
 extension Color {
     // MARK: - Dark Theme Base Palette
 
-    static let darkBase = Color(red: 0.05, green: 0.05, blue: 0.07)       // #0D0D12
+    static let darkBase = Color(red: 0.024, green: 0.078, blue: 0.106)    // #06141B
     static let darkSurface = Color(red: 0.10, green: 0.10, blue: 0.13)    // #1A1A21
     static let darkElevated = Color(red: 0.14, green: 0.14, blue: 0.18)   // #24242E
     static let darkCard = Color(red: 0.11, green: 0.11, blue: 0.14)       // #1C1C24
+    static let brightText = Color(red: 0.8, green: 0.816, blue: 0.812)    // #CCD0CF
 
-    static let accentTeal = Color(red: 0.0, green: 0.83, blue: 0.67)      // #00D4AB
-    static let accentAmber = Color(red: 0.91, green: 0.66, blue: 0.22)    // #E8A838
-    static let accentCoral = Color(red: 1.0, green: 0.42, blue: 0.42)     // #FF6B6B
-    static let accentEmerald = Color(red: 0.20, green: 0.78, blue: 0.35)  // #34C759
+    static let accentTeal = Color(red: 0.153, green: 0.914, blue: 0.710)      // #27E9B5
+    static let accentTealMuted = Color(red: 0.122, green: 0.749, blue: 0.600) // #1FBF99
+    static let accentAmber = accentTealMuted
+    static let accentCoral = Color(red: 1.0, green: 0.42, blue: 0.42)         // #FF6B6B
+    static let accentEmerald = accentTeal
 
     // MARK: - Ambient Glow & Redesign Specific Colors
     static let auraTealGlow = Color.accentTeal.opacity(0.15)
-    static let stressAmberGlow = Color.accentAmber.opacity(0.15)
+    static let stressAmberGlow = Color.accentTealMuted.opacity(0.15)
     static let neutralGlow = Color(white: 0.5).opacity(0.1)
 
     // MARK: - Chart Colors
@@ -63,13 +65,13 @@ extension Color {
         case "VibeChangeIndicatorColor":
             return accentTeal
         case "ScorePositiveColor":
-            return accentEmerald
+            return accentTeal
         case "ScoreNormalColor":
             return accentTeal
         case "ScoreNeutralColor":
             return Color(white: 0.45)
         case "ScoreNegativeColor":
-            return accentAmber
+            return accentTealMuted
         case "ScoreVeryNegativeColor":
             return accentCoral
         case "ChartBackgroundColor":
@@ -79,7 +81,7 @@ extension Color {
 
         // Text Colors (Dark Theme)
         case "BehaviorTextPrimary":
-            return Color.white
+            return brightText
         case "BehaviorTextSecondary":
             return Color(white: 0.56)
         case "BehaviorTextTertiary":
@@ -103,7 +105,7 @@ extension Color {
         case "EmotionJoy":
             return Color(red: 1.0, green: 0.84, blue: 0.04)
         case "EmotionTrust":
-            return accentEmerald
+            return accentTeal
         case "EmotionFear":
             return Color(red: 0.70, green: 0.40, blue: 1.0)
         case "EmotionSurprise":
@@ -115,7 +117,7 @@ extension Color {
         case "EmotionAnger":
             return accentCoral
         case "EmotionAnticipation":
-            return accentAmber
+            return accentTealMuted
         case "EmotionNeutral":
             return Color(white: 0.50)
 
@@ -125,13 +127,13 @@ extension Color {
         case "SecondaryActionColor":
             return Color(white: 0.30)
         case "WarningColor":
-            return accentAmber
+            return accentTealMuted
         case "SuccessColor":
-            return accentEmerald
+            return accentTeal
         case "ErrorColor":
             return accentCoral
         case "InfoColor":
-            return Color(red: 0.35, green: 0.68, blue: 1.0)
+            return accentTeal
         case "AppAccentColor":
             return accentTeal
 
@@ -147,7 +149,7 @@ extension Color {
 
         // Text Colors
         case "PrimaryText":
-            return Color.white
+            return brightText
         case "SecondaryText":
             return Color(white: 0.56)
         case "TertiaryText":
@@ -163,7 +165,7 @@ extension Color {
         case "UploadActive":
             return accentTeal
         case "StatusNormal":
-            return accentEmerald
+            return accentTeal
 
         // Border & Separator Colors
         case "BorderLight":
@@ -177,7 +179,7 @@ extension Color {
         case "TimelineIndicator":
             return accentTeal
         case "TimelineActive":
-            return Color(red: 0.30, green: 0.85, blue: 1.0)
+            return accentTealMuted
 
         default:
             return Color(white: 0.36)
@@ -198,13 +200,13 @@ extension Color {
     static func vibeScoreColor(for score: Double) -> Color {
         switch score {
         case 60...:
-            return accentEmerald
+            return accentTeal
         case 20..<60:
             return accentTeal
         case -20..<20:
             return Color(white: 0.50)
         case -60..<(-20):
-            return accentAmber
+            return accentTealMuted
         default:
             return accentCoral
         }
