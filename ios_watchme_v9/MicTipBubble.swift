@@ -29,10 +29,12 @@ struct MicTipBubble: View {
                 TrianglePointer()
                     .fill(Color.accentTeal)
                     .frame(width: 16, height: 8)
-                    .offset(y: 8),
-                alignment: .bottom
+                    .offset(x: -18, y: 8),
+                alignment: .bottomTrailing
             )
         }
+        .contentShape(Rectangle())
+        .onTapGesture(perform: onClose)
     }
 }
 

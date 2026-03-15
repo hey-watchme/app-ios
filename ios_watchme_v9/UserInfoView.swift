@@ -140,7 +140,7 @@ struct UserInfoView: View {
                                         .overlay(
                                             Image(systemName: "camera.fill")
                                                 .font(.system(size: 16))
-                                                .foregroundColor(.accentTeal)
+                                                .foregroundColor(.black)
                                         )
                                         .overlay(
                                         Circle()

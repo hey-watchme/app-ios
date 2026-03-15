@@ -464,6 +464,9 @@ struct CustomFooterNavigation: View {
         let isSelected = selectedTab == tab
 
         return Button(action: {
+            if showMicTip {
+                onDismissMicTip()
+            }
             selectedTab = tab
         }) {
             VStack(spacing: 3) {
@@ -493,7 +496,12 @@ struct CustomFooterNavigation: View {
     }
 
     private var recordButton: some View {
-        Button(action: onRecordTap) {
+        Button(action: {
+            if showMicTip {
+                onDismissMicTip()
+            }
+            onRecordTap()
+        }) {
             Image(systemName: "mic.fill")
                 .font(.system(size: 20, weight: .bold))
                 .foregroundColor(Color.accentTeal.opacity(0.95))
@@ -511,7 +519,7 @@ struct CustomFooterNavigation: View {
         .buttonStyle(.plain)
         .disabled(!isDeviceSelected)
         .frame(width: 52, height: 52)
-        .overlay(alignment: .top) {
+        .overlay(alignment: .topTrailing) {
             if showMicTip && isDeviceSelected {
                 MicTipBubble(
                     text: "まずは音声の\n分析を始めてみましょう。",

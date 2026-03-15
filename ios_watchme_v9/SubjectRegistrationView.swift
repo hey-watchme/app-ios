@@ -305,16 +305,16 @@ struct SubjectRegistrationView: View {
 
                         // カメラアイコンを追加（UserInfoViewと同じ）
                         Circle()
-                            .fill(Color.black)
+                            .fill(Color(.systemBackground))
                             .frame(width: 32, height: 32)
                             .overlay(
                                 Image(systemName: "camera.fill")
                                     .font(.system(size: 16))
-                                    .foregroundColor(.white)
+                                    .foregroundColor(.black)
                             )
                             .overlay(
                                 Circle()
-                                    .stroke(Color(.systemBackground), lineWidth: 2)
+                                    .stroke(Color(.separator), lineWidth: 1)
                             )
                     }
                 }

@@ -22,6 +22,7 @@ struct AccountSettingsView: View {
     @State private var deleteAccountError: String?
     @State private var showDeleteAccountError = false
     @State private var showUpgradeAccount = false  // 匿名アップグレードシート
+    @State private var showTutorialResetFeedback = false
     
     var body: some View {
         NavigationView {
@@ -31,6 +32,7 @@ struct AccountSettingsView: View {
                     Button(action: {
                         UserDefaults.standard.removeObject(forKey: "has_seen_first_launch_guide")
                         UserDefaults.standard.removeObject(forKey: "has_seen_mic_tip")
+                        showTutorialResetFeedback = true
                     }) {
                         HStack {
                             Label("チュートリアル表示をリセット", systemImage: "arrow.counterclockwise")
@@ -155,17 +157,22 @@ struct AccountSettingsView: View {
                             Spacer()
                         }
                     }
+                }
+                .listRowBackground(Color(.systemBackground))
 
-                    // アカウント削除（プレースホルダー）
+                Section {
                     Button(action: {
                         showDeleteAccountConfirmation = true
                     }) {
-                        HStack {
-                            Label("アカウントを削除", systemImage: "trash")
-                                .foregroundColor(.accentCoral)
-                            Spacer()
-                        }
+                        Text("このアカウントを削除")
+                            .font(.footnote)
+                            .foregroundColor(.accentCoral)
+                            .underline()
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    .buttonStyle(.plain)
+                } footer: {
+                    Text("アカウント削除は取り消せません。")
                 }
                 .listRowBackground(Color(.systemBackground))
             }
@@ -209,6 +216,11 @@ struct AccountSettingsView: View {
                 Button("OK", role: .cancel) { }
             } message: {
                 Text(deleteAccountError ?? "アカウント削除に失敗しました")
+            }
+            .alert("チュートリアルをリセットしました", isPresented: $showTutorialResetFeedback) {
+                Button("OK", role: .cancel) { }
+            } message: {
+                Text("オンボーディング表示を初回状態に戻しました。")
             }
             .overlay {
                 if isLoggingOut || isDeletingAccount {
