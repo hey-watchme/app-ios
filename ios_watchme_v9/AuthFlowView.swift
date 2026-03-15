@@ -32,7 +32,8 @@ struct AuthFlowView: View {
         "onboarding-001",
         "onboarding-002",
         "onboarding-003",
-        "onboarding-004"
+        "onboarding-004",
+        "onboarding-005"
     ]
 
     var body: some View {

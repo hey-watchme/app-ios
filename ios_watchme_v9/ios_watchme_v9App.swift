@@ -493,28 +493,28 @@ struct CustomFooterNavigation: View {
     }
 
     private var recordButton: some View {
-        ZStack(alignment: .top) {
-            Button(action: onRecordTap) {
-                Image(systemName: "mic.fill")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundColor(Color.accentTeal.opacity(0.95))
-                    .frame(width: 52, height: 52)
-                    .background(
-                        Circle()
-                            .fill(Color.white.opacity(0.08))
-                    )
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 3)
-            }
-            .buttonStyle(.plain)
-            .disabled(!isDeviceSelected)
-
+        Button(action: onRecordTap) {
+            Image(systemName: "mic.fill")
+                .font(.system(size: 20, weight: .bold))
+                .foregroundColor(Color.accentTeal.opacity(0.95))
+                .frame(width: 52, height: 52)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.08))
+                )
+                .overlay(
+                    Circle()
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 3)
+        }
+        .buttonStyle(.plain)
+        .disabled(!isDeviceSelected)
+        .frame(width: 52, height: 52)
+        .overlay(alignment: .top) {
             if showMicTip && isDeviceSelected {
                 MicTipBubble(
-                    text: "まずは音声の\\n分析を始めてみましょう。",
+                    text: "まずは音声の\n分析を始めてみましょう。",
                     onClose: onDismissMicTip
                 )
                 .frame(width: 220)

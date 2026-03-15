@@ -9,6 +9,15 @@ import SwiftUI
 import PhotosUI
 
 struct SubjectRegistrationView: View {
+    struct InitialValues {
+        let name: String?
+        let age: String?
+        let gender: String?
+        let prefecture: String?
+        let city: String?
+        let notes: String?
+    }
+
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var userAccountManager: UserAccountManager
@@ -17,6 +26,7 @@ struct SubjectRegistrationView: View {
     let deviceID: String
     @Binding var isPresented: Bool  // 互換性のため残す
     let editingSubject: Subject? // 編集対象の分析対象（nilの場合は新規登録）
+    let initialValues: InitialValues?
     
     // フォーム入力項目
     @State private var name: String = ""
@@ -37,6 +47,7 @@ struct SubjectRegistrationView: View {
     @State private var showingDeleteSuccessAlert = false
     @State private var hasUnsavedChanges = false // 未保存の変更があるか
     @State private var showingDiscardAlert = false // 破棄確認ダイアログ
+    @State private var didApplyInitialValues = false
     
     // Avatar ViewModel
     @StateObject private var avatarViewModel = AvatarUploadViewModel(
@@ -84,6 +95,18 @@ struct SubjectRegistrationView: View {
 
     // View-only mode (based on device permissions) - Cached to avoid repeated array search
     @State private var isViewOnly: Bool = false
+
+    init(
+        deviceID: String,
+        isPresented: Binding<Bool>,
+        editingSubject: Subject?,
+        initialValues: InitialValues? = nil
+    ) {
+        self.deviceID = deviceID
+        self._isPresented = isPresented
+        self.editingSubject = editingSubject
+        self.initialValues = initialValues
+    }
     
     var body: some View {
         NavigationView {
@@ -142,6 +165,7 @@ struct SubjectRegistrationView: View {
             }
             .onAppear {
                 loadEditingData()
+                applyInitialValuesIfNeeded()
                 // ViewModelの初期化
                 avatarViewModel.entityId = editingSubject?.subjectId ?? ""
                 avatarViewModel.authToken = userAccountManager.getAccessToken()
@@ -547,6 +571,44 @@ struct SubjectRegistrationView: View {
 
             print("📖 Form initialized: name=\(name), age=\(age), gender=\(gender), cognitiveType=\(cognitiveType), prefecture=\(prefecture), city=\(city), notes=\(notes)")
         }
+    }
+
+    private func applyInitialValuesIfNeeded() {
+        guard !didApplyInitialValues, !isEditing, let initialValues else { return }
+
+        if name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let initialName = initialValues.name?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !initialName.isEmpty {
+            name = initialName
+        }
+
+        if age.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let initialAge = initialValues.age?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !initialAge.isEmpty {
+            age = initialAge
+        }
+
+        if gender.isEmpty, let initialGender = initialValues.gender, !initialGender.isEmpty {
+            gender = initialGender
+        }
+
+        if prefecture.isEmpty, let initialPrefecture = initialValues.prefecture, !initialPrefecture.isEmpty {
+            prefecture = initialPrefecture
+        }
+
+        if city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let initialCity = initialValues.city?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !initialCity.isEmpty {
+            city = initialCity
+        }
+
+        if notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+           let initialNotes = initialValues.notes?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !initialNotes.isEmpty {
+            notes = initialNotes
+        }
+
+        didApplyInitialValues = true
     }
     
     // MARK: - Subject Registration

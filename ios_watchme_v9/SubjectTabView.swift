@@ -17,6 +17,7 @@ struct SubjectTabView: View {
     @State private var showIntelligenceInfo = false
     @State private var selectedCognitiveType: CognitiveTypeOption = .behavioralImpulsive
     @State private var isUpdatingType = false
+    @State private var subjectInitialValues: SubjectRegistrationView.InitialValues? = nil
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -111,6 +112,7 @@ struct SubjectTabView: View {
 
                             // プロフィール編集ボタン
                             Button(action: {
+                                subjectInitialValues = nil
                                 showSubjectEdit = true
                             }) {
                                 HStack {
@@ -179,20 +181,26 @@ struct SubjectTabView: View {
                         .padding(.horizontal, 40)
 
                     // 新規登録ボタン
-                    Button(action: {
-                        showSubjectEdit = true
-                    }) {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                            Text("分析対象を登録")
+                    VStack(spacing: 12) {
+                        SubjectActionButton(
+                            title: "分析対象を新規登録",
+                            systemImage: "plus.circle.fill",
+                            style: .primary
+                        ) {
+                            subjectInitialValues = nil
+                            showSubjectEdit = true
                         }
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 30)
-                        .padding(.vertical, 12)
-                        .background(Color.safeColor("AppAccentColor"))
-                        .cornerRadius(12)
+
+                        SubjectActionButton(
+                            title: "このアカウントを分析対象として登録",
+                            systemImage: "person.crop.circle",
+                            style: .secondary
+                        ) {
+                            subjectInitialValues = buildInitialValuesFromAccount()
+                            showSubjectEdit = true
+                        }
                     }
+                    .padding(.horizontal, 24)
                     .padding(.top, 10)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -204,11 +212,17 @@ struct SubjectTabView: View {
                 SubjectRegistrationView(
                     deviceID: deviceId,
                     isPresented: $showSubjectEdit,
-                    editingSubject: deviceManager.selectedSubject
+                    editingSubject: deviceManager.selectedSubject,
+                    initialValues: subjectInitialValues
                 )
                 .environmentObject(dataManager)
                 .environmentObject(deviceManager)
                 .environmentObject(userAccountManager)
+            }
+        }
+        .onChange(of: showSubjectEdit) { _, isPresented in
+            if !isPresented {
+                subjectInitialValues = nil
             }
         }
         .sheet(isPresented: $showNeuralInfo) {
@@ -275,6 +289,37 @@ struct SubjectTabView: View {
         default:
             return device.device_type
         }
+    }
+
+    private func buildInitialValuesFromAccount() -> SubjectRegistrationView.InitialValues {
+        let isAnonymous = userAccountManager.isAnonymousUser
+        let profileName = userAccountManager.currentUser?.profile?.name?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let email = userAccountManager.currentUser?.email.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        let displayName: String = {
+            if isAnonymous {
+                return "ゲストユーザー"
+            }
+            if let profileName, !profileName.isEmpty {
+                return profileName
+            }
+            if let email, !email.isEmpty {
+                let localPart = email.split(separator: "@").first.map(String.init)
+                if let localPart, !localPart.isEmpty {
+                    return localPart
+                }
+            }
+            return "ユーザー"
+        }()
+
+        return SubjectRegistrationView.InitialValues(
+            name: displayName,
+            age: nil,
+            gender: nil,
+            prefecture: nil,
+            city: nil,
+            notes: nil
+        )
     }
 
     // MARK: - 認知タイプセクション
@@ -583,6 +628,58 @@ struct RadarChartView: View {
                         .position(x: x, y: y)
                 }
             }
+        }
+    }
+}
+
+private struct SubjectActionButton: View {
+    enum Style {
+        case primary
+        case secondary
+    }
+
+    let title: String
+    let systemImage: String
+    let style: Style
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 8) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                Text(title)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .font(.headline)
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity, minHeight: 48)
+            .padding(.horizontal, 20)
+            .background(backgroundColor)
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(borderColor, lineWidth: borderColor == .clear ? 0 : 1)
+            )
+            .cornerRadius(12)
+        }
+    }
+
+    private var backgroundColor: Color {
+        switch style {
+        case .primary:
+            return Color.safeColor("AppAccentColor")
+        case .secondary:
+            return Color.darkElevated
+        }
+    }
+
+    private var borderColor: Color {
+        switch style {
+        case .primary:
+            return .clear
+        case .secondary:
+            return Color.white.opacity(0.10)
         }
     }
 }
