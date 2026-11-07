@@ -52,6 +52,11 @@ struct SpotDetailView: View {
                         contentCard(title: "Emotion", content: emotion, icon: "face.smiling")
                     }
 
+                    // Sounds detected by the fixed classifier
+                    if !soundSummaries.isEmpty {
+                        soundsCard
+                    }
+
                     // Raw data
                     rawAnalysisSection
 
@@ -221,6 +226,107 @@ struct SpotDetailView: View {
                 .foregroundColor(Color(white: 0.78))
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    // MARK: - Sounds (sound event detection)
+
+    private struct SoundSummary: Identifiable {
+        let id: String
+        let label: String
+        let peak: Double
+        let ranges: String
+    }
+
+    /// Same threshold the analysis prompt uses for this classifier.
+    private let soundScoreThreshold = 0.10
+
+    /// Each detected sound (except generic speech) with its peak score and the seconds it was present.
+    private var soundSummaries: [SoundSummary] {
+        var peaks: [String: Double] = [:]
+        var spans: [String: [(Double, Double)]] = [:]
+        var japanese: [String: String] = [:]
+        for point in spotData.behaviorTimePoints {
+            for event in point.events where event.score >= soundScoreThreshold {
+                let english = event.label.split(separator: "/").first.map { $0.trimmingCharacters(in: .whitespaces) } ?? event.label
+                if english == "Speech" { continue }
+                peaks[event.label] = max(peaks[event.label] ?? 0, event.score)
+                japanese[event.label] = event.japaneseLabel
+                var ranges = spans[event.label] ?? []
+                if let last = ranges.last, point.time - last.1 <= 1.0 {
+                    ranges[ranges.count - 1].1 = point.time
+                } else {
+                    ranges.append((point.time, point.time))
+                }
+                spans[event.label] = ranges
+            }
+        }
+        return peaks.sorted { $0.value > $1.value }.prefix(10).map { label, peak in
+            let ranges = (spans[label] ?? []).map { start, end in
+                Int(start.rounded()) == Int(end.rounded())
+                    ? "\(Int(start.rounded()))秒"
+                    : "\(Int(start.rounded()))–\(Int(end.rounded()))秒"
+            }.joined(separator: ", ")
+            return SoundSummary(id: label, label: japanese[label] ?? label, peak: peak, ranges: ranges)
+        }
+    }
+
+    private var soundsCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 14))
+                    .foregroundColor(.accentTeal)
+                Text("SOUNDS")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color(white: 0.45))
+                    .tracking(0.8)
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(soundSummaries) { sound in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text(sound.label)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundColor(Color(white: 0.85))
+                            Spacer()
+                            Text(String(format: "%.2f", sound.peak))
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundColor(Color(white: 0.6))
+                        }
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.white.opacity(0.08))
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(Color.accentTeal.opacity(0.8))
+                                    .frame(width: geo.size.width * min(sound.peak, 1))
+                            }
+                        }
+                        .frame(height: 4)
+                        Text(sound.ranges)
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(white: 0.45))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+            }
+
+            Text("音の分類器による検出（最大スコア・時間帯）。似た音を取り違えることがあります")
+                .font(.system(size: 11))
+                .foregroundColor(Color(white: 0.4))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
     }
 
     // MARK: - Raw Analysis Section
