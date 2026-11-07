@@ -10,7 +10,7 @@ import Foundation
 import Combine
 
 class NetworkManager: ObservableObject {
-    @Published var serverURL: String = "https://46jlcfnlge.execute-api.ap-northeast-1.amazonaws.com"
+    @Published var serverURL: String = "https://api.hey-watch.me"
     @Published var connectionStatus: ConnectionStatus = .unknown
     @Published var currentUserID: String
     @Published var uploadProgress: Double = 0.0
