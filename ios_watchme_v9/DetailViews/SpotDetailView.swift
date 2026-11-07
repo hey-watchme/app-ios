@@ -234,6 +234,10 @@ struct SpotDetailView: View {
                         .foregroundColor(Color(white: 0.36))
                         .tracking(1.0)
 
+                    if !conversationTurns.isEmpty {
+                        conversationDisclosure
+                    }
+
                     if let transcription = spotData.vibeTranscriberResult {
                         rawDataDisclosure(id: "stt", title: "STT", content: transcription)
                     }
@@ -248,6 +252,96 @@ struct SpotDetailView: View {
                 }
             }
         }
+    }
+
+    // MARK: - Conversation (speaker-labelled transcript)
+
+    private struct ConversationTurn: Identifiable {
+        let id: Int
+        let speaker: String?
+        let text: String
+    }
+
+    private var transcriptObject: [String: Any]? {
+        guard let raw = spotData.vibeTranscriberResult, let data = raw.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    /// Splits the stored transcription ("SPEAKER S1: ...\nSPEAKER S2: ...") into turns.
+    private var conversationTurns: [ConversationTurn] {
+        guard let text = transcriptObject?["transcription"] as? String else { return [] }
+        let prefix = "SPEAKER "
+        return text.split(separator: "\n").enumerated().compactMap { index, rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { return nil }
+            if line.hasPrefix(prefix), let colon = line.firstIndex(of: ":") {
+                let speaker = String(line[line.index(line.startIndex, offsetBy: prefix.count)..<colon])
+                let body = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                return ConversationTurn(id: index, speaker: speaker, text: body)
+            }
+            return ConversationTurn(id: index, speaker: nil, text: line)
+        }
+    }
+
+    private var conversationDisclosure: some View {
+        let engine = transcriptObject?["asr_model"] as? String
+        let speakerOrder = conversationTurns.compactMap(\.speaker).reduce(into: [String]()) { order, speaker in
+            if !order.contains(speaker) { order.append(speaker) }
+        }
+
+        return DisclosureGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(conversationTurns) { turn in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text(turn.speaker ?? "–")
+                            .font(.system(size: 11, weight: .bold, design: .monospaced))
+                            .foregroundColor(speakerColor(turn.speaker, order: speakerOrder))
+                            .frame(width: 28, alignment: .leading)
+                            .padding(.top, 2)
+                        Text(turn.text)
+                            .font(.system(size: 14))
+                            .foregroundColor(Color(white: 0.78))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .lineSpacing(3)
+                            .textSelection(.enabled)
+                    }
+                }
+
+                if let engine {
+                    Text(engine)
+                        .font(.system(size: 11, design: .monospaced))
+                        .foregroundColor(Color(white: 0.45))
+                        .padding(.top, 4)
+                }
+            }
+            .padding(.vertical, 8)
+        } label: {
+            HStack {
+                Text("Conversation")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white)
+                Spacer()
+                Text(speakerOrder.isEmpty ? "" : "\(speakerOrder.count) speakers")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundColor(Color(white: 0.45))
+            }
+        }
+        .tint(Color(white: 0.36))
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+
+    private func speakerColor(_ speaker: String?, order: [String]) -> Color {
+        let palette: [Color] = [.accentTeal, .accentCoral, .brightText, .accentTealMuted]
+        guard let speaker, let index = order.firstIndex(of: speaker) else { return Color(white: 0.45) }
+        return palette[index % palette.count]
     }
 
     private var hasAnyRawData: Bool {
