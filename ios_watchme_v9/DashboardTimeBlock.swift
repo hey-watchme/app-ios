@@ -87,6 +87,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let emotionChunks: [EmotionChunk]
     let emotionFeaturesResultHumeRaw: String?  // SER raw JSON (Hume API) for debug display
     let sceneDescriptionRaw: String?  // Acoustic scene description (Gemini) for debug display
+    let audioKey: String?  // S3 key of the recording (development playback)
 
     // 表示用の時刻文字列（初期化時に1回だけ計算してキャッシュ）
     let displayTime: String
@@ -142,6 +143,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
             emotionFeaturesResultHumeRaw = nil
         }
         sceneDescriptionRaw = nil
+        audioKey = nil
 
         // displayTimeを初期化時に1回だけ計算（キャッシュ）
         displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
@@ -288,7 +290,8 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          behaviorTimePoints: [SEDBehaviorTimePoint],
          emotionChunks: [EmotionChunk],
          emotionFeaturesResultHumeRaw: String? = nil,
-         sceneDescriptionRaw: String? = nil) {
+         sceneDescriptionRaw: String? = nil,
+         audioKey: String? = nil) {
 
         self.deviceId = deviceId
         self.date = localDate
@@ -307,6 +310,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.emotionChunks = emotionChunks
         self.emotionFeaturesResultHumeRaw = emotionFeaturesResultHumeRaw
         self.sceneDescriptionRaw = sceneDescriptionRaw
+        self.audioKey = audioKey
 
         // Calculate displayTime
         self.displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)

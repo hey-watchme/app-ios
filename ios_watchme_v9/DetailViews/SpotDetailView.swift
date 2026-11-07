@@ -6,6 +6,9 @@
 //
 
 import SwiftUI
+#if DEBUG
+import AVFoundation
+#endif
 
 struct SpotDetailView: View {
     let deviceId: String
@@ -14,6 +17,9 @@ struct SpotDetailView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var rawSectionsLoadedFull: Set<String> = []
+    #if DEBUG
+    @StateObject private var previewPlayer = RecordingPreviewPlayer()
+    #endif
 
     private let rawPreviewCharacterLimit = 4_000
     private let rawLargeContentThreshold = 12_000
@@ -340,6 +346,12 @@ struct SpotDetailView: View {
                         .foregroundColor(Color(white: 0.36))
                         .tracking(1.0)
 
+                    #if DEBUG
+                    if let audioKey = spotData.audioKey {
+                        audioPreviewRow(audioKey: audioKey)
+                    }
+                    #endif
+
                     if !conversationTurns.isEmpty {
                         conversationDisclosure
                     }
@@ -363,6 +375,51 @@ struct SpotDetailView: View {
             }
         }
     }
+
+    #if DEBUG
+    // MARK: - Audio preview (development builds only)
+
+    private func audioPreviewRow(audioKey: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Button {
+                    Task { await previewPlayer.toggle(audioKey: audioKey) }
+                } label: {
+                    HStack(spacing: 8) {
+                        if previewPlayer.isLoading {
+                            ProgressView().tint(.accentTeal)
+                        } else {
+                            Image(systemName: previewPlayer.isPlaying ? "stop.fill" : "play.fill")
+                        }
+                        Text(previewPlayer.isPlaying ? "停止" : "録音を再生")
+                            .font(.system(size: 13, weight: .medium))
+                    }
+                    .foregroundColor(.accentTeal)
+                }
+                .disabled(previewPlayer.isLoading)
+                Spacer()
+                Text("開発用")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(white: 0.45))
+            }
+            if let message = previewPlayer.errorMessage {
+                Text(message)
+                    .font(.system(size: 11))
+                    .foregroundColor(.accentCoral)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
+        .onDisappear { previewPlayer.stop() }
+    }
+    #endif
 
     // MARK: - Conversation (speaker-labelled transcript)
 
@@ -690,3 +747,70 @@ struct SpotDetailView: View {
         else { return "Low" }
     }
 }
+
+#if DEBUG
+/// Plays a recording through a short-lived URL from GET /audio (development builds only).
+/// The API checks the signed-in user's token and their access to the device.
+@MainActor
+private final class RecordingPreviewPlayer: ObservableObject {
+    @Published var isPlaying = false
+    @Published var isLoading = false
+    @Published var errorMessage: String?
+
+    private let serverURL = "https://api.hey-watch.me"
+    private var player: AVPlayer?
+    private var endObserver: NSObjectProtocol?
+
+    func toggle(audioKey: String) async {
+        if isPlaying {
+            stop()
+            return
+        }
+        isLoading = true
+        errorMessage = nil
+        defer { isLoading = false }
+
+        do {
+            let token = try await SupabaseClientManager.shared.client.auth.session.accessToken
+            var components = URLComponents(string: "\(serverURL)/audio")!
+            components.queryItems = [URLQueryItem(name: "audio_key", value: audioKey)]
+            var request = URLRequest(url: components.url!)
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+
+            let (data, response) = try await URLSession.shared.data(for: request)
+            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+            guard status == 200,
+                  let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let urlString = object["url"] as? String,
+                  let url = URL(string: urlString) else {
+                errorMessage = "再生用のURLを取得できませんでした（HTTP \(status)）"
+                return
+            }
+
+            try AVAudioSession.sharedInstance().setCategory(.playback)
+            try AVAudioSession.sharedInstance().setActive(true)
+            let item = AVPlayerItem(url: url)
+            endObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.stop() }
+            }
+            player = AVPlayer(playerItem: item)
+            player?.play()
+            isPlaying = true
+        } catch {
+            errorMessage = "再生できませんでした: \(error.localizedDescription)"
+        }
+    }
+
+    func stop() {
+        player?.pause()
+        player = nil
+        if let endObserver {
+            NotificationCenter.default.removeObserver(endObserver)
+        }
+        endObserver = nil
+        isPlaying = false
+    }
+}
+#endif

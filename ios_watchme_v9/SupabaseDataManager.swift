@@ -813,6 +813,7 @@ class SupabaseDataManager: ObservableObject {
             var sceneMappingMap: [String: SceneMapping] = [:]
             var analysisMap: [String: String] = [:]
             var sceneDescriptionMap: [String: String] = [:]
+            var audioKeyMap: [String: String] = [:]
             let spotResultsRaw = try await supabase
                 .from("spot_results")
                 .select("local_time, profile_result")
@@ -836,6 +837,9 @@ class SupabaseDataManager: ObservableObject {
                                 uncertainty: smDict["uncertainty"] as? String
                             )
                             sceneMappingMap[localTime] = sm
+                        }
+                        if let audioKey = profileResult["audio_key"] as? String {
+                            audioKeyMap[localTime] = audioKey
                         }
                         // Scene description, or the stage status (with the error) when it did not complete
                         let stages = profileResult["stages"] as? [String: Any]
@@ -871,7 +875,8 @@ class SupabaseDataManager: ObservableObject {
                     behaviorTimePoints: behaviorMap[localTime] ?? [],
                     emotionChunks: emotionChunksMap[localTime] ?? [],
                     emotionFeaturesResultHumeRaw: humeMap[localTime],
-                    sceneDescriptionRaw: sceneDescriptionMap[localTime]
+                    sceneDescriptionRaw: sceneDescriptionMap[localTime],
+                    audioKey: audioKeyMap[localTime]
                 )
             }
 
