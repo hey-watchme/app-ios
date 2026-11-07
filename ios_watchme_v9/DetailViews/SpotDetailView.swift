@@ -287,14 +287,53 @@ struct SpotDetailView: View {
         }
     }
 
+    /// Who each speaker label sounds like, estimated from the voice by the scene stage (e.g. "S1" -> "子ども").
+    private var speakerRoles: [String: String] {
+        guard let raw = spotData.sceneDescriptionRaw,
+              let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let scene = object["scene"] as? [String: Any],
+              let roles = scene["speaker_roles"] as? [[String: Any]] else { return [:] }
+        var result: [String: String] = [:]
+        for entry in roles {
+            if let label = entry["label"] as? String, let role = entry["role"] as? String {
+                result[label] = role
+            }
+        }
+        return result
+    }
+
     private var conversationDisclosure: some View {
         let engine = transcriptObject?["asr_model"] as? String
         let speakerOrder = conversationTurns.compactMap(\.speaker).reduce(into: [String]()) { order, speaker in
             if !order.contains(speaker) { order.append(speaker) }
         }
+        let roles = speakerRoles
 
         return DisclosureGroup {
             VStack(alignment: .leading, spacing: 10) {
+                if !roles.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(speakerOrder, id: \.self) { speaker in
+                            if let role = roles[speaker] {
+                                HStack(spacing: 10) {
+                                    Text(speaker)
+                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                        .foregroundColor(speakerColor(speaker, order: speakerOrder))
+                                        .frame(width: 28, alignment: .leading)
+                                    Text(role)
+                                        .font(.system(size: 13, weight: .medium))
+                                        .foregroundColor(Color(white: 0.78))
+                                }
+                            }
+                        }
+                        Text("声からの推定")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(white: 0.45))
+                    }
+                    .padding(.bottom, 6)
+                }
+
                 ForEach(conversationTurns) { turn in
                     HStack(alignment: .top, spacing: 10) {
                         Text(turn.speaker ?? "–")
