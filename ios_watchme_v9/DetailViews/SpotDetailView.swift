@@ -242,6 +242,10 @@ struct SpotDetailView: View {
                         rawDataDisclosure(id: "stt", title: "STT", content: transcription)
                     }
 
+                    if let scene = spotData.sceneDescriptionRaw {
+                        rawDataDisclosure(id: "scene", title: "Scene (Gemini)", content: scene)
+                    }
+
                     if !spotData.behaviorTimePoints.isEmpty {
                         rawDataDisclosure(id: "sed", title: "SED", content: behaviorExtractorJSONString)
                     }
@@ -346,6 +350,7 @@ struct SpotDetailView: View {
 
     private var hasAnyRawData: Bool {
         spotData.vibeTranscriberResult != nil
+            || spotData.sceneDescriptionRaw != nil
             || !spotData.behaviorTimePoints.isEmpty
             || (spotData.emotionFeaturesResultHumeRaw.map { !$0.isEmpty } ?? false)
     }

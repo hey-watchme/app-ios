@@ -812,6 +812,7 @@ class SupabaseDataManager: ObservableObject {
             // Extract scene_mapping and analysis from spot_results.profile_result
             var sceneMappingMap: [String: SceneMapping] = [:]
             var analysisMap: [String: String] = [:]
+            var sceneDescriptionMap: [String: String] = [:]
             let spotResultsRaw = try await supabase
                 .from("spot_results")
                 .select("local_time, profile_result")
@@ -835,6 +836,11 @@ class SupabaseDataManager: ObservableObject {
                                 uncertainty: smDict["uncertainty"] as? String
                             )
                             sceneMappingMap[localTime] = sm
+                        }
+                        if let sceneDict = profileResult["scene"] as? [String: Any],
+                           let sceneData = try? JSONSerialization.data(withJSONObject: sceneDict, options: [.prettyPrinted, .sortedKeys]),
+                           let sceneStr = String(data: sceneData, encoding: .utf8) {
+                            sceneDescriptionMap[localTime] = sceneStr
                         }
                     }
                 }
@@ -861,7 +867,8 @@ class SupabaseDataManager: ObservableObject {
                     vibeTranscriberResult: vibeTranscriberMap[localTime],
                     behaviorTimePoints: behaviorMap[localTime] ?? [],
                     emotionChunks: emotionChunksMap[localTime] ?? [],
-                    emotionFeaturesResultHumeRaw: humeMap[localTime]
+                    emotionFeaturesResultHumeRaw: humeMap[localTime],
+                    sceneDescriptionRaw: sceneDescriptionMap[localTime]
                 )
             }
 
