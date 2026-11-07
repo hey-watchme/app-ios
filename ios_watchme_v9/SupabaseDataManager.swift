@@ -837,8 +837,11 @@ class SupabaseDataManager: ObservableObject {
                             )
                             sceneMappingMap[localTime] = sm
                         }
-                        if let sceneDict = profileResult["scene"] as? [String: Any],
-                           let sceneData = try? JSONSerialization.data(withJSONObject: sceneDict, options: [.prettyPrinted, .sortedKeys]),
+                        // Scene description, or the stage status (with the error) when it did not complete
+                        let stages = profileResult["stages"] as? [String: Any]
+                        let sceneObject = (profileResult["scene"] as? [String: Any]) ?? (stages?["scene"] as? [String: Any])
+                        if let sceneObject,
+                           let sceneData = try? JSONSerialization.data(withJSONObject: sceneObject, options: [.prettyPrinted, .sortedKeys]),
                            let sceneStr = String(data: sceneData, encoding: .utf8) {
                             sceneDescriptionMap[localTime] = sceneStr
                         }
