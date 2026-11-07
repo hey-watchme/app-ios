@@ -37,6 +37,15 @@ struct Subject: Codable, Equatable {
         case updatedAt = "updated_at"
     }
     
+    /// Same subject with a new avatar URL (used to update every screen right after upload).
+    func withAvatarUrl(_ url: String) -> Subject {
+        Subject(
+            subjectId: subjectId, name: name, age: age, gender: gender, avatarUrl: url,
+            notes: notes, prefecture: prefecture, city: city, cognitiveType: cognitiveType,
+            createdByUserId: createdByUserId, createdAt: createdAt, updatedAt: updatedAt
+        )
+    }
+
     // 年齢と性別を組み合わせた表示文字列
     var ageGenderDisplay: String? {
         var parts: [String] = []

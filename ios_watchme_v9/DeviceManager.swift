@@ -143,6 +143,21 @@ class DeviceManager: ObservableObject {
         }
     }
 
+    /// Put a just-uploaded subject avatar into the in-memory device list, so the
+    /// device list, header and subject tab update before the network reload.
+    @MainActor
+    func applySubjectAvatar(subjectId: String, avatarUrl: String) {
+        guard case .available(let current) = state else { return }
+        let updated = current.map { device -> Device in
+            guard let subject = device.subject,
+                  subject.subjectId.lowercased() == subjectId.lowercased() else { return device }
+            var copy = device
+            copy.subject = subject.withAvatarUrl(avatarUrl)
+            return copy
+        }
+        state = .available(updated)
+    }
+
     /// Register a new device and return its ID
     @discardableResult
     func registerDevice(userId: String) async throws -> String {

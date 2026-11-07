@@ -106,12 +106,22 @@ struct EditableAvatarView: View {
                 uploadedUrl = url.absoluteString
                 showingPicker = false
                 onUploaded?(url)
+                applyLocally(url)
                 await refreshSource()
             }
         }
     }
 
-    /// Reload whatever the other screens read the avatar from.
+    /// Update the in-memory copies at once, so every screen showing this
+    /// avatar changes immediately, without waiting for the reload.
+    @MainActor
+    private func applyLocally(_ url: URL) {
+        guard type == .subject, let subjectId = entityId else { return }
+        deviceManager.applySubjectAvatar(subjectId: subjectId, avatarUrl: url.absoluteString)
+    }
+
+    /// Reload whatever the other screens read the avatar from (confirms the
+    /// saved value from the server).
     private func refreshSource() async {
         guard let userId = userAccountManager.effectiveUserId else { return }
         switch type {

@@ -438,7 +438,6 @@ struct SubjectTabView: View {
                     cognitiveType: selectedCognitiveType.rawValue,
                     prefecture: subject.prefecture,
                     city: subject.city,
-                    avatarUrl: nil,
                     notes: subject.notes
                 )
 

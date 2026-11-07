@@ -640,7 +640,6 @@ struct SubjectRegistrationView: View {
                 cognitiveType: cognitiveType.isEmpty ? nil : cognitiveType,
                 prefecture: prefecture.isEmpty ? nil : prefecture,
                 city: city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : city.trimmingCharacters(in: .whitespacesAndNewlines),
-                avatarUrl: subject.avatarUrl,
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             )
 

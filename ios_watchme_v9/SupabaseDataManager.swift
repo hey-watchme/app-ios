@@ -941,13 +941,14 @@ class SupabaseDataManager: ObservableObject {
         cognitiveType: String?,
         prefecture: String?,
         city: String?,
-        avatarUrl: String?,
         notes: String?
     ) async throws {
         print("👤 Updating subject: \(subjectId) for device: \(deviceId)")
-        print("📝 Update data: name=\(name), age=\(age?.description ?? "nil"), gender=\(gender ?? "nil"), cognitiveType=\(cognitiveType ?? "nil"), prefecture=\(prefecture ?? "nil"), city=\(city ?? "nil"), avatarUrl=\(avatarUrl ?? "nil"), notes=\(notes ?? "nil")")
+        print("📝 Update data: name=\(name), age=\(age?.description ?? "nil"), gender=\(gender ?? "nil"), cognitiveType=\(cognitiveType ?? "nil"), prefecture=\(prefecture ?? "nil"), city=\(city ?? "nil"), notes=\(notes ?? "nil")")
 
-        // Custom Encodable struct that includes nil values in JSON
+        // Custom Encodable struct that includes nil values in JSON.
+        // avatar_url is deliberately absent: avatars are saved only by
+        // AvatarService, so a profile save can never overwrite or clear a photo.
         struct SubjectUpdate: Encodable {
             let name: String
             let age: Int?
@@ -955,7 +956,6 @@ class SupabaseDataManager: ObservableObject {
             let cognitive_type: String?
             let prefecture: String?
             let city: String?
-            let avatar_url: String?
             let notes: String?
             let updated_at: String
 
@@ -967,7 +967,6 @@ class SupabaseDataManager: ObservableObject {
                 try container.encode(cognitive_type, forKey: .cognitive_type)
                 try container.encode(prefecture, forKey: .prefecture)
                 try container.encode(city, forKey: .city)
-                try container.encode(avatar_url, forKey: .avatar_url)
                 try container.encode(notes, forKey: .notes)
                 try container.encode(updated_at, forKey: .updated_at)
             }
@@ -979,7 +978,6 @@ class SupabaseDataManager: ObservableObject {
                 case cognitive_type
                 case prefecture
                 case city
-                case avatar_url
                 case notes
                 case updated_at
             }
@@ -993,7 +991,6 @@ class SupabaseDataManager: ObservableObject {
             cognitive_type: cognitiveType,
             prefecture: prefecture,
             city: city,
-            avatar_url: avatarUrl,
             notes: notes,
             updated_at: now
         )
