@@ -22,7 +22,7 @@ struct UploadRequest {
 // MARK: - UploaderService（アップロード専門サービス）
 final class UploaderService {
     // MARK: - Properties
-    private let serverURL = "https://api.hey-watch.me"
+    private let serverURL = "https://46jlcfnlge.execute-api.ap-northeast-1.amazonaws.com"
     private var uploadTask: URLSessionUploadTask?
 
     // MARK: - Initialization
