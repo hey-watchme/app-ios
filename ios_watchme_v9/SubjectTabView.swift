@@ -47,9 +47,17 @@ struct SubjectTabView: View {
                         VStack(alignment: .leading, spacing: 16) {
                             // アバターと基本情報
                             HStack(alignment: .top, spacing: 12) {
-                                // 左：小さめのアバター（SSOT: Subject.avatarUrl を渡す）
-                                AvatarView(type: .subject, id: subject.subjectId, size: 60, avatarUrl: subject.avatarUrl)
-                                    .environmentObject(dataManager)
+                                // 左：小さめのアバター。タップで写真を変更（共通の編集部品、SSOT: Subject.avatarUrl）
+                                EditableAvatarView(
+                                    type: .subject,
+                                    entityId: subject.subjectId,
+                                    avatarUrl: subject.avatarUrl,
+                                    size: 60,
+                                    isEditable: deviceManager.devices
+                                        .first(where: { $0.device_id == deviceManager.selectedDeviceID })?
+                                        .canEditSubject ?? false,
+                                    ringColor: .clear
+                                )
 
                                 // 右：名前、年齢・性別・地域
                                 VStack(alignment: .leading, spacing: 4) {

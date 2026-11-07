@@ -224,16 +224,6 @@ class DeviceManager: ObservableObject {
             print("⚠️ Step 3: Sample device already exists (skipped)")
         }
 
-        // Step 4: Generate QR code (non-blocking)
-        Task {
-            do {
-                let qrCodeUrl = try await QRCodeService.shared.generateQRCode(for: deviceId)
-                print("✅ QR code generated: \(qrCodeUrl)")
-            } catch {
-                print("⚠️ QR code generation failed: \(error)")
-            }
-        }
-
         return deviceId
     }
 

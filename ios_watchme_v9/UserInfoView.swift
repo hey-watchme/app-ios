@@ -13,16 +13,8 @@ struct UserInfoView: View {
     let userAccountManager: UserAccountManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showAccountSettings = false  // アカウント設定画面
-    @State private var showingAvatarPicker = false  // アバター選択画面
     @State private var showUpgradeAccount = false  // 匿名アップグレード画面
     @Environment(\.dismiss) private var dismiss
-
-    // Avatar ViewModel
-    @StateObject private var avatarViewModel = AvatarUploadViewModel(
-        avatarType: .user,
-        entityId: "",  // 実際のIDはonAppearで設定
-        authToken: nil
-    )
     
     var body: some View {
         ZStack {
@@ -117,37 +109,14 @@ struct UserInfoView: View {
                     // アバターを最前面に配置（権限に応じて編集可否が変わる）
                     Group {
                         if userAccountManager.authState.canEditAvatar {
-                            // 全権限モード: タップでアバター編集可能
-                            Button(action: {
-                                showingAvatarPicker = true
-                            }) {
-                                ZStack(alignment: .bottomTrailing) {
-                                    // ✅ SSOT: UserProfile.avatarUrl を渡す
-                                    AvatarView(
-                                        userId: userAccountManager.effectiveUserId,
-                                        size: 100,
-                                        avatarUrl: userAccountManager.currentUser?.profile?.avatarUrl
-                                    )
-                                    .overlay(
-                                        Circle()
-                                            .stroke(Color(.systemBackground), lineWidth: 4)
-                                    )
-
-                                    // カメラアイコンを追加
-                                    Circle()
-                                        .fill(Color(.systemBackground))
-                                        .frame(width: 32, height: 32)
-                                        .overlay(
-                                            Image(systemName: "camera.fill")
-                                                .font(.system(size: 16))
-                                                .foregroundColor(.black)
-                                        )
-                                        .overlay(
-                                        Circle()
-                                            .stroke(Color(.separator), lineWidth: 1)
-                                    )
-                                }
-                            }
+                            // 全権限モード: タップでアバター編集可能（共通の編集部品）
+                            EditableAvatarView(
+                                type: .user,
+                                entityId: userAccountManager.effectiveUserId,
+                                avatarUrl: userAccountManager.currentUser?.profile?.avatarUrl,
+                                size: 100
+                            )
+                            .environmentObject(userAccountManager)
                             .padding(.leading, 20)
                             .padding(.top, 130)  // バナーの下端付近に配置（180 - 50 = 130）
                         } else {
@@ -307,53 +276,11 @@ struct UserInfoView: View {
                 .environmentObject(userAccountManager)
                 .preferredColorScheme(.light)
         }
-        .sheet(isPresented: $showingAvatarPicker) {
-            NavigationStack {
-                AvatarPickerView(
-                    viewModel: avatarViewModel,
-                    currentAvatarURL: {
-                        guard let userId = userAccountManager.effectiveUserId else { return nil }
-                        return AWSManager.shared.getAvatarURL(type: "users", id: userId)
-                    }()
-                )
-                .navigationTitle("アバターを選択")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("キャンセル") {
-                            showingAvatarPicker = false
-                            avatarViewModel.reset()
-                        }
-                    }
-                }
-            }
-            .preferredColorScheme(.light)
-        }
         .sheet(isPresented: $showUpgradeAccount) {
             UpgradeAccountView()
                 .environmentObject(userAccountManager)
                 .environmentObject(ToastManager.shared)
                 .preferredColorScheme(.light)
-        }
-        .onAppear {
-            // ViewModelの初期化
-            if let userId = userAccountManager.effectiveUserId {
-                avatarViewModel.entityId = userId
-                avatarViewModel.authToken = userAccountManager.getAccessToken()
-                avatarViewModel.dataManager = dataManager
-
-                // アップロード成功時のコールバック（UserAccountManager再読み込み）
-                avatarViewModel.onSuccess = { [weak userAccountManager] _ in
-                    Task { @MainActor in
-                        // Refresh user profile to get updated avatar URL
-                        if let userId = userAccountManager?.currentUser?.id {
-                            await userAccountManager?.fetchUserProfile(userId: userId)
-                        }
-                    }
-                }
-            } else {
-                print("❌ ユーザープロファイルが読み込まれていません")
-            }
         }
         .preferredColorScheme(.light)
     }

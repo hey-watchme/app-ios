@@ -36,7 +36,6 @@ struct SubjectRegistrationView: View {
     @State private var prefecture: String = ""
     @State private var city: String = ""
     @State private var notes: String = ""
-    @State private var showingAvatarPicker = false
     @State private var currentAvatarUrl: String? = nil // アバターURL（アップロード後の即時更新用）
 
     // UI状態
@@ -49,12 +48,6 @@ struct SubjectRegistrationView: View {
     @State private var showingDiscardAlert = false // 破棄確認ダイアログ
     @State private var didApplyInitialValues = false
     
-    // Avatar ViewModel
-    @StateObject private var avatarViewModel = AvatarUploadViewModel(
-        avatarType: .subject,
-        entityId: "",  // 実際のIDはonAppearで設定
-        authToken: nil
-    )
     
     // Gender options
     private let genderOptions = ["男性", "女性", "その他", "回答しない"]
@@ -166,27 +159,6 @@ struct SubjectRegistrationView: View {
             .onAppear {
                 loadEditingData()
                 applyInitialValuesIfNeeded()
-                // ViewModelの初期化
-                avatarViewModel.entityId = editingSubject?.subjectId ?? ""
-                avatarViewModel.authToken = userAccountManager.getAccessToken()
-                avatarViewModel.dataManager = dataManager
-
-                // Hybrid update: immediate UI feedback + data consistency
-                avatarViewModel.onSuccess = { url in
-                    Task { @MainActor in
-                        // Clear old cache first (important: same URL, different image)
-                        if let oldUrl = currentAvatarUrl ?? editingSubject?.avatarUrl,
-                           let urlToClean = URL(string: oldUrl) {
-                            ImageCacheManager.shared.removeImage(for: urlToClean)
-                            URLCache.shared.removeCachedResponse(for: URLRequest(url: urlToClean))
-                        }
-
-                        // Force UI update with cache-busting timestamp
-                        let timestamp = Date().timeIntervalSince1970
-                        currentAvatarUrl = "\(url.absoluteString)?t=\(timestamp)"
-                    }
-                }
-
                 // Calculate isViewOnly once on appear to avoid repeated array searches
                 if let device = deviceManager.devices.first(where: { $0.device_id == deviceID }) {
                     isViewOnly = !device.canEditSubject
@@ -267,18 +239,6 @@ struct SubjectRegistrationView: View {
         }
     }
     
-    // MARK: - Avatar Image View
-    @ViewBuilder
-    private var avatarImageView: some View {
-        // Use AvatarView to ensure consistent caching behavior
-        // Display currentAvatarUrl if available (after upload), otherwise use editingSubject.avatarUrl
-        AvatarView(
-            type: .subject,
-            id: editingSubject?.subjectId,
-            size: 120,
-            avatarUrl: currentAvatarUrl ?? editingSubject?.avatarUrl
-        )
-    }
     // MARK: - Profile Image Section
     private var profileImageSection: some View {
         VStack(spacing: 16) {
@@ -287,38 +247,15 @@ struct SubjectRegistrationView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(spacing: 12) {
-                // UserInfoViewと同じUIデザイン：アバター + 右下にカメラアイコン
-                Button(action: {
-                    if !isViewOnly {
-                        showingAvatarPicker = true
-                    }
-                }) {
-                    ZStack(alignment: .bottomTrailing) {
-                        // アバター画像表示
-                        avatarImageView
-                            .frame(width: 100, height: 100)
-                            .clipShape(Circle())
-                            .overlay(
-                                Circle()
-                                    .stroke(Color(.systemBackground), lineWidth: 4)
-                            )
-
-                        // カメラアイコンを追加（UserInfoViewと同じ）
-                        Circle()
-                            .fill(Color(.systemBackground))
-                            .frame(width: 32, height: 32)
-                            .overlay(
-                                Image(systemName: "camera.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.black)
-                            )
-                            .overlay(
-                                Circle()
-                                    .stroke(Color(.separator), lineWidth: 1)
-                            )
-                    }
-                }
-                .disabled(!isEditing)
+                // 共通の編集部品（マイページ・分析対象タブと同じ）
+                EditableAvatarView(
+                    type: .subject,
+                    entityId: editingSubject?.subjectId,
+                    avatarUrl: currentAvatarUrl ?? editingSubject?.avatarUrl,
+                    size: 100,
+                    isEditable: isEditing && !isViewOnly,
+                    onUploaded: { url in currentAvatarUrl = url.absoluteString }
+                )
                 .opacity(isEditing ? 1.0 : 0.5)
 
                 // 新規登録時の説明テキスト
@@ -326,24 +263,6 @@ struct SubjectRegistrationView: View {
                     Text("写真は登録完了後に設定できます")
                         .font(.caption)
                         .foregroundColor(.secondary)
-                }
-            }
-        }
-        .sheet(isPresented: $showingAvatarPicker) {
-            NavigationStack {
-                AvatarPickerView(
-                    viewModel: avatarViewModel,
-                    currentAvatarURL: editingSubject?.avatarUrl != nil && !editingSubject!.avatarUrl!.isEmpty ? URL(string: editingSubject!.avatarUrl!) : nil
-                )
-                .navigationTitle("アバターを選択")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("キャンセル") {
-                            showingAvatarPicker = false
-                            avatarViewModel.reset()
-                        }
-                    }
                 }
             }
         }

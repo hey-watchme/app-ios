@@ -790,8 +790,12 @@ class UserAccountManager: ObservableObject {
 
                     print("✅ 匿名ユーザーをGoogleアカウントにアップグレード: \(email), avatar_url: \(avatarUrl ?? "none")")
                 } else {
-                    // Update avatar_url for existing Google users
-                    if let avatarUrl = avatarUrl {
+                    // Keep a photo the user chose in the app. Only fill in or
+                    // refresh the Google photo when there is none, or when the
+                    // current one is itself a Google photo.
+                    let currentAvatar = existingProfile.avatarUrl ?? ""
+                    let mayUseGooglePhoto = currentAvatar.isEmpty || currentAvatar.contains("googleusercontent.com")
+                    if let avatarUrl = avatarUrl, mayUseGooglePhoto, avatarUrl != currentAvatar {
                         struct UpdateAvatar: Encodable {
                             let avatar_url: String
                         }
