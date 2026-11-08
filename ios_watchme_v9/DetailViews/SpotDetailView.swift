@@ -250,6 +250,9 @@ struct SpotDetailView: View {
         let pauseRatio: Double?
         let responseLatency: Double?
         let fillers: Int
+        let pitchHz: Double?
+        let pitchRange: Double?
+        let hnr: Double?
     }
 
     private var metricsRaw: String? { spotData.metricsRaw }
@@ -264,8 +267,10 @@ struct SpotDetailView: View {
               conversation["available"] as? Bool == true,
               let speakers = conversation["speakers"] as? [String: [String: Any]] else { return [] }
         let roles = speakerRoles
+        let acoustic = (metricsObject?["acoustic"] as? [String: Any])?["speakers"] as? [String: [String: Any]] ?? [:]
         return speakers.keys.sorted().map { label in
             let m = speakers[label] ?? [:]
+            let voice = acoustic[label]?["summary"] as? [String: Any] ?? [:]
             return SpeakerMetrics(
                 id: label,
                 role: roles[label],
@@ -274,7 +279,10 @@ struct SpotDetailView: View {
                 speechRate: m["speech_rate_cps"] as? Double,
                 pauseRatio: m["pause_ratio"] as? Double,
                 responseLatency: m["median_response_latency_seconds"] as? Double,
-                fillers: m["fillers"] as? Int ?? 0
+                fillers: m["fillers"] as? Int ?? 0,
+                pitchHz: voice["pitch_mean_hz"] as? Double,
+                pitchRange: voice["pitch_range_semitones"] as? Double,
+                hnr: voice["hnr_db"] as? Double
             )
         }
     }
@@ -323,11 +331,18 @@ struct SpotDetailView: View {
                             metricValue("応答", m.responseLatency.map { String(format: "%.2f 秒", $0) })
                             metricValue("フィラー", "\(m.fillers)")
                         }
+                        if m.pitchHz != nil {
+                            HStack(spacing: 14) {
+                                metricValue("声の高さ", m.pitchHz.map { String(format: "%.0f Hz", $0) })
+                                metricValue("高さの幅", m.pitchRange.map { String(format: "%.1f 半音", $0) })
+                                metricValue("HNR", m.hnr.map { String(format: "%.1f dB", $0) })
+                            }
+                        }
                     }
                 }
             }
 
-            Text("文字起こしの時刻から計算。応答がマイナスなら、相手の話の途中で話し始めた")
+            Text("文字起こしの時刻から計算。応答がマイナスなら、相手の話の途中で話し始めた。声の値は、その人だけが話している区間で測り、マイクや距離で変わる")
                 .font(.system(size: 11))
                 .foregroundColor(Color(white: 0.4))
         }
