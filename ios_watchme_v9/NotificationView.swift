@@ -27,6 +27,7 @@ struct NotificationView: View {
                     VStack(spacing: 16) {
                         ProgressView()
                             .scaleEffect(1.2)
+                            .tint(.accentTeal)
                         Text("通知を読み込み中...")
                             .font(.footnote)
                             .foregroundColor(Color(white: 0.56))
@@ -85,7 +86,9 @@ struct NotificationView: View {
                                         }
                                     }
                                 )
-                                Divider()
+                                Rectangle()
+                                    .fill(Color.white.opacity(0.08))
+                                    .frame(height: 1)
                             }
                         }
                     }
@@ -94,6 +97,10 @@ struct NotificationView: View {
             }
             .navigationTitle("通知")
             .navigationBarTitleDisplayMode(.large)
+            .toolbarBackground(Color.darkBase, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .tint(.white)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("閉じる") {
@@ -109,6 +116,7 @@ struct NotificationView: View {
                             }
                         }
                         .font(.footnote)
+                        .foregroundColor(.accentTeal)
                     }
                 }
             }
