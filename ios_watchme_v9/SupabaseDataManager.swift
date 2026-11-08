@@ -814,6 +814,7 @@ class SupabaseDataManager: ObservableObject {
             var analysisMap: [String: String] = [:]
             var sceneDescriptionMap: [String: String] = [:]
             var audioKeyMap: [String: String] = [:]
+            var metricsMap: [String: String] = [:]
             let spotResultsRaw = try await supabase
                 .from("spot_results")
                 .select("local_time, profile_result")
@@ -840,6 +841,11 @@ class SupabaseDataManager: ObservableObject {
                         }
                         if let audioKey = profileResult["audio_key"] as? String {
                             audioKeyMap[localTime] = audioKey
+                        }
+                        if let metrics = profileResult["metrics"] as? [String: Any],
+                           let metricsData = try? JSONSerialization.data(withJSONObject: metrics, options: [.prettyPrinted, .sortedKeys]),
+                           let metricsStr = String(data: metricsData, encoding: .utf8) {
+                            metricsMap[localTime] = metricsStr
                         }
                         // Scene description, or the stage status (with the error) when it did not complete
                         let stages = profileResult["stages"] as? [String: Any]
@@ -876,7 +882,8 @@ class SupabaseDataManager: ObservableObject {
                     emotionChunks: emotionChunksMap[localTime] ?? [],
                     emotionFeaturesResultHumeRaw: humeMap[localTime],
                     sceneDescriptionRaw: sceneDescriptionMap[localTime],
-                    audioKey: audioKeyMap[localTime]
+                    audioKey: audioKeyMap[localTime],
+                    metricsRaw: metricsMap[localTime]
                 )
             }
 

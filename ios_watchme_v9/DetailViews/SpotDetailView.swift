@@ -58,6 +58,11 @@ struct SpotDetailView: View {
                         contentCard(title: "Emotion", content: emotion, icon: "face.smiling")
                     }
 
+                    // Fixed conversation measurements
+                    if !speakerMetrics.isEmpty {
+                        metricsCard
+                    }
+
                     // Sounds detected by the fixed classifier
                     if !soundSummaries.isEmpty {
                         soundsCard
@@ -234,6 +239,121 @@ struct SpotDetailView: View {
         }
     }
 
+    // MARK: - Conversation metrics (fixed measurements)
+
+    private struct SpeakerMetrics: Identifiable {
+        let id: String
+        let role: String?
+        let speechShare: Double
+        let speakingSeconds: Double
+        let speechRate: Double?
+        let pauseRatio: Double?
+        let responseLatency: Double?
+        let fillers: Int
+    }
+
+    private var metricsRaw: String? { spotData.metricsRaw }
+
+    private var metricsObject: [String: Any]? {
+        guard let raw = spotData.metricsRaw, let data = raw.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    private var speakerMetrics: [SpeakerMetrics] {
+        guard let conversation = metricsObject?["conversation"] as? [String: Any],
+              conversation["available"] as? Bool == true,
+              let speakers = conversation["speakers"] as? [String: [String: Any]] else { return [] }
+        let roles = speakerRoles
+        return speakers.keys.sorted().map { label in
+            let m = speakers[label] ?? [:]
+            return SpeakerMetrics(
+                id: label,
+                role: roles[label],
+                speechShare: m["speech_share"] as? Double ?? 0,
+                speakingSeconds: m["speaking_seconds"] as? Double ?? 0,
+                speechRate: m["speech_rate_cps"] as? Double,
+                pauseRatio: m["pause_ratio"] as? Double,
+                responseLatency: m["median_response_latency_seconds"] as? Double,
+                fillers: m["fillers"] as? Int ?? 0
+            )
+        }
+    }
+
+    private var metricsCard: some View {
+        let order = speakerMetrics.map(\.id)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.system(size: 14))
+                    .foregroundColor(.accentTeal)
+                Text("CONVERSATION")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color(white: 0.45))
+                    .tracking(0.8)
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(speakerMetrics) { m in
+                    VStack(alignment: .leading, spacing: 6) {
+                        HStack(spacing: 8) {
+                            Text(m.id)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(speakerColor(m.id, order: order))
+                            Text(m.role ?? "")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Color(white: 0.85))
+                            Spacer()
+                            Text(String(format: "%.0f%%・%.0f秒", m.speechShare * 100, m.speakingSeconds))
+                                .font(.system(size: 12, design: .monospaced))
+                                .foregroundColor(Color(white: 0.6))
+                        }
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                RoundedRectangle(cornerRadius: 2).fill(Color.white.opacity(0.08))
+                                RoundedRectangle(cornerRadius: 2)
+                                    .fill(speakerColor(m.id, order: order).opacity(0.8))
+                                    .frame(width: geo.size.width * min(m.speechShare, 1))
+                            }
+                        }
+                        .frame(height: 4)
+                        HStack(spacing: 14) {
+                            metricValue("速さ", m.speechRate.map { String(format: "%.1f 字/秒", $0) })
+                            metricValue("間", m.pauseRatio.map { String(format: "%.0f%%", $0 * 100) })
+                            metricValue("応答", m.responseLatency.map { String(format: "%.2f 秒", $0) })
+                            metricValue("フィラー", "\(m.fillers)")
+                        }
+                    }
+                }
+            }
+
+            Text("文字起こしの時刻から計算。応答がマイナスなら、相手の話の途中で話し始めた")
+                .font(.system(size: 11))
+                .foregroundColor(Color(white: 0.4))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
+                )
+        )
+    }
+
+    private func metricValue(_ label: String, _ value: String?) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(label)
+                .font(.system(size: 10))
+                .foregroundColor(Color(white: 0.45))
+            Text(value ?? "–")
+                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                .foregroundColor(Color(white: 0.78))
+        }
+    }
+
     // MARK: - Sounds (sound event detection)
 
     private struct SoundSummary: Identifiable {
@@ -358,6 +478,10 @@ struct SpotDetailView: View {
 
                     if let transcription = spotData.vibeTranscriberResult {
                         rawDataDisclosure(id: "stt", title: "STT", content: transcription)
+                    }
+
+                    if let metricsRaw {
+                        rawDataDisclosure(id: "metrics", title: "Metrics", content: metricsRaw)
                     }
 
                     if let scene = spotData.sceneDescriptionRaw {
@@ -552,6 +676,7 @@ struct SpotDetailView: View {
 
     private var hasAnyRawData: Bool {
         spotData.vibeTranscriberResult != nil
+            || spotData.metricsRaw != nil
             || spotData.sceneDescriptionRaw != nil
             || !spotData.behaviorTimePoints.isEmpty
             || (spotData.emotionFeaturesResultHumeRaw.map { !$0.isEmpty } ?? false)
