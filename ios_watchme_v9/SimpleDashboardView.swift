@@ -97,6 +97,7 @@ struct SimpleDashboardView: View {
 
     // Pull-to-Refresh trigger (simple approach)
     @State private var refreshTrigger = 0
+    @State private var timelineReplayToken = 0  // pull to refresh replays the vibe timeline animation
     @StateObject private var realtime = RealtimeWatcher()  // reload the day as analysis stages finish
     @State private var lastHandledPushTimestamp: Date?
 
@@ -248,6 +249,7 @@ struct SimpleDashboardView: View {
             .refreshable {
                 // Pull-to-Refresh: Simple trigger approach to avoid Task cancellation
                 refreshTrigger += 1
+                timelineReplayToken += 1
             }
             .background(
                 ZStack {
@@ -643,7 +645,8 @@ struct SimpleDashboardView: View {
                     showHeaderSection: false,
                     showInsightSection: false,
                     showFooterLink: false,
-                    timelineTitle: "Daily vibe timeline"
+                    timelineTitle: "Daily vibe timeline",
+                    replayToken: timelineReplayToken
                 )
             } else {
                 // エンプティーステート：ナビゲーションボタンを非表示

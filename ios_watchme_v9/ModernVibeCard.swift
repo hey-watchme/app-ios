@@ -17,6 +17,7 @@ struct ModernVibeCard: View {
     var showInsightSection: Bool = true
     var showFooterLink: Bool = true
     var timelineTitle: String? = nil
+    var replayToken: Int = 0  // bump to replay the timeline animation
     @State private var isAnimating = false
     @State private var cardScale: CGFloat = 1.0
     @State private var showBurstBubbles = false
@@ -125,7 +126,8 @@ struct ModernVibeCard: View {
                         onEventBurst: { score in
                             triggerBurst(score: score)
                         },
-                        showsContainerBackground: false
+                        showsContainerBackground: false,
+                        replayToken: replayToken
                     )
                 }
 

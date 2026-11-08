@@ -12,6 +12,16 @@ struct InteractiveTimelineView: View {
     let burstEvents: [BurstEvent]?  // Burst events from daily_results
     var onEventBurst: ((Double) -> Void)? = nil  // Burst effect callback
     var showsContainerBackground: Bool = true
+    var replayToken: Int = 0  // bump to replay the animation for unchanged data (e.g. pull to refresh)
+
+    /// Data the playback has already run for. The dashboard rebuilds this view whenever it
+    /// scrolls back into sight, so without this the animation (and its haptics) replays every time.
+    private static var playedKeys = Set<String>()
+
+    /// Identifies what the graph shows; a new key means there is something new to play.
+    private var playbackKey: String {
+        "\(replayToken)|" + timeBlocks.map { "\($0.id)=\($0.vibeScore.map { String($0) } ?? "-")" }.joined(separator: ",")
+    }
     
     @State private var currentTimeIndex: Int = 0
     @State private var isDragging: Bool = false
@@ -75,14 +85,18 @@ struct InteractiveTimelineView: View {
                 .padding(.bottom, 4)
         }
         .onAppear {
-            // 自動ループ再生を開始
-            resetAndStartPlayback()
+            // Play once per data; when it has already played, rest at the end point
+            if Self.playedKeys.contains(playbackKey) {
+                showEndPoint()
+            } else {
+                resetAndStartPlayback()
+            }
         }
         .onDisappear {
             stopPlayback()
         }
-        // データが変更されたらリセット
-        .onChange(of: timeBlocks) { _, _ in
+        // Replay only when what the graph shows changes (not on every stage update of a recording)
+        .onChange(of: playbackKey) { _, _ in
             resetAndStartPlayback()
         }
         // インジケーターが移動したときに、イベントから離れたら吹き出しを消す
@@ -554,7 +568,14 @@ struct InteractiveTimelineView: View {
         }
     }
     
+    /// Place the indicator at the last point without animation or haptics.
+    private func showEndPoint() {
+        stopPlayback()
+        currentTimeIndex = max(0, findLastValidDataIndex())
+    }
+
     private func resetAndStartPlayback() {
+        Self.playedKeys.insert(playbackKey)
         // すべての状態をリセット
         stopPlayback()
         isDragging = false
