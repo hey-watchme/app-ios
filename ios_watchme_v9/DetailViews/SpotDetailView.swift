@@ -63,6 +63,11 @@ struct SpotDetailView: View {
                         metricsCard
                     }
 
+                    // Vocal emotion labels (emotion2vec, experimental)
+                    if !vocalEmotionSpeakers.isEmpty {
+                        vocalEmotionCard
+                    }
+
                     // Sounds detected by the fixed classifier
                     if !soundSummaries.isEmpty {
                         soundsCard
@@ -369,6 +374,96 @@ struct SpotDetailView: View {
         }
     }
 
+    // MARK: - Vocal emotion (emotion2vec, experimental)
+
+    private struct VocalEmotionSpeaker: Identifiable {
+        let id: String
+        let role: String?
+        let turns: Int
+        let means: [(label: String, score: Double)]
+    }
+
+    private static let emotionJapanese: [String: String] = [
+        "angry": "怒り", "disgusted": "嫌悪", "fearful": "恐れ", "happy": "喜び", "neutral": "中立",
+        "sad": "悲しみ", "surprised": "驚き", "other": "その他", "unknown": "不明", "<unk>": "不明",
+    ]
+
+    private var vocalEmotionSpeakers: [VocalEmotionSpeaker] {
+        guard let raw = spotData.vocalEmotionRaw, let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              object["available"] as? Bool == true,
+              let speakers = object["speakers"] as? [String: [String: Any]] else { return [] }
+        let roles = speakerRoles
+        return speakers.keys.sorted().map { label in
+            let m = speakers[label] ?? [:]
+            let means = (m["mean_scores"] as? [String: Double] ?? [:])
+                .map { (label: $0.key, score: $0.value) }
+                .sorted { $0.score > $1.score }
+                .prefix(3)
+            return VocalEmotionSpeaker(id: label, role: roles[label], turns: m["turns"] as? Int ?? 0, means: Array(means))
+        }
+    }
+
+    private var vocalEmotionCard: some View {
+        let order = vocalEmotionSpeakers.map(\.id)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "face.dashed")
+                    .font(.system(size: 14))
+                    .foregroundColor(.accentCoral)
+                Text("VOCAL EMOTION")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(Color(white: 0.45))
+                    .tracking(0.8)
+                Text("emotion2vec・試験中")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.accentCoral)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.accentCoral.opacity(0.15)))
+                Spacer()
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(vocalEmotionSpeakers) { s in
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 8) {
+                            Text(s.id)
+                                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                                .foregroundColor(speakerColor(s.id, order: order))
+                            Text(s.role ?? "")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(Color(white: 0.85))
+                            Spacer()
+                            Text("\(s.turns) 発話")
+                                .font(.system(size: 11, design: .monospaced))
+                                .foregroundColor(Color(white: 0.45))
+                        }
+                        HStack(spacing: 14) {
+                            ForEach(s.means, id: \.label) { item in
+                                metricValue(Self.emotionJapanese[item.label] ?? item.label, String(format: "%.0f%%", item.score * 100))
+                            }
+                        }
+                    }
+                }
+            }
+
+            Text("声だけから推定したラベル（発話ごとの平均）。文字起こしの内容は見ていない。分析の文章には使っていない")
+                .font(.system(size: 11))
+                .foregroundColor(Color(white: 0.4))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(Color.darkCard)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(Color.accentCoral.opacity(0.25), lineWidth: 1)
+                )
+        )
+    }
+
     // MARK: - Sounds (sound event detection)
 
     private struct SoundSummary: Identifiable {
@@ -497,6 +592,10 @@ struct SpotDetailView: View {
 
                     if let metricsRaw {
                         rawDataDisclosure(id: "metrics", title: "Metrics", content: metricsRaw)
+                    }
+
+                    if let vocal = spotData.vocalEmotionRaw {
+                        rawDataDisclosure(id: "vocal", title: "Emotion (emotion2vec)", content: vocal)
                     }
 
                     if let scene = spotData.sceneDescriptionRaw {
@@ -692,6 +791,7 @@ struct SpotDetailView: View {
     private var hasAnyRawData: Bool {
         spotData.vibeTranscriberResult != nil
             || spotData.metricsRaw != nil
+            || spotData.vocalEmotionRaw != nil
             || spotData.sceneDescriptionRaw != nil
             || !spotData.behaviorTimePoints.isEmpty
             || (spotData.emotionFeaturesResultHumeRaw.map { !$0.isEmpty } ?? false)

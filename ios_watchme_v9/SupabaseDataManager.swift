@@ -815,6 +815,7 @@ class SupabaseDataManager: ObservableObject {
             var sceneDescriptionMap: [String: String] = [:]
             var audioKeyMap: [String: String] = [:]
             var metricsMap: [String: String] = [:]
+            var vocalEmotionMap: [String: String] = [:]
             let spotResultsRaw = try await supabase
                 .from("spot_results")
                 .select("local_time, profile_result")
@@ -841,6 +842,11 @@ class SupabaseDataManager: ObservableObject {
                         }
                         if let audioKey = profileResult["audio_key"] as? String {
                             audioKeyMap[localTime] = audioKey
+                        }
+                        if let vocal = profileResult["vocal_emotion"] as? [String: Any],
+                           let vocalData = try? JSONSerialization.data(withJSONObject: vocal, options: [.prettyPrinted, .sortedKeys]),
+                           let vocalStr = String(data: vocalData, encoding: .utf8) {
+                            vocalEmotionMap[localTime] = vocalStr
                         }
                         if let metrics = profileResult["metrics"] as? [String: Any],
                            let metricsData = try? JSONSerialization.data(withJSONObject: metrics, options: [.prettyPrinted, .sortedKeys]),
@@ -883,7 +889,8 @@ class SupabaseDataManager: ObservableObject {
                     emotionFeaturesResultHumeRaw: humeMap[localTime],
                     sceneDescriptionRaw: sceneDescriptionMap[localTime],
                     audioKey: audioKeyMap[localTime],
-                    metricsRaw: metricsMap[localTime]
+                    metricsRaw: metricsMap[localTime],
+                    vocalEmotionRaw: vocalEmotionMap[localTime]
                 )
             }
 
