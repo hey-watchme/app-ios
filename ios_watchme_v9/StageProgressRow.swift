@@ -27,11 +27,13 @@ struct StageProgressRow: View {
                     }
                 }
             }
-            if let failed = ordered.first(where: { $0.status == "failed" }), !compact, let error = failed.error {
-                Text("\(failed.label): \(error)")
-                    .font(.system(size: 10))
-                    .foregroundColor(.accentCoral)
-                    .lineLimit(2)
+            if !compact {
+                ForEach(ordered.filter { $0.status == "failed" }) { failed in
+                    Text("\(failed.label): \(failed.error ?? "失敗")")
+                        .font(.system(size: 10))
+                        .foregroundColor(.accentCoral)
+                        .lineLimit(2)
+                }
             }
         }
     }

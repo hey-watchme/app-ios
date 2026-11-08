@@ -1253,13 +1253,21 @@ struct SpotAnalysisCard: View {
             // Card content
             VStack(alignment: .leading, spacing: 10) {
                 // While the pipeline runs, the card shows how far it has got
-                if timeBlock.summary == nil || timeBlock.stages.isInProgress {
+                if timeBlock.stages.isInProgress {
+                    StageProgressRow(stages: timeBlock.stages, compact: true)
+                } else if timeBlock.summary == nil {
+                    // Finished (or stopped) without an analysis
                     if timeBlock.stages.isEmpty {
-                        Text("分析中…")
+                        Text("分析の結果がありません")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Color(white: 0.6))
                     } else {
-                        StageProgressRow(stages: timeBlock.stages, compact: true)
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("分析できませんでした")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundColor(.accentCoral)
+                            StageProgressRow(stages: timeBlock.stages, compact: true)
+                        }
                     }
                 }
 
