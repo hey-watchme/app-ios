@@ -328,3 +328,66 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
     }
 }
+// MARK: - Transcript and scene (shared by the result card and the detail view)
+
+extension DashboardTimeBlock {
+    struct ConversationTurn: Identifiable {
+        let id: Int
+        let speaker: String?
+        let text: String
+    }
+
+    var transcriptObject: [String: Any]? {
+        guard let raw = vibeTranscriberResult, let data = raw.data(using: .utf8) else { return nil }
+        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
+    }
+
+    /// Splits the stored transcription ("SPEAKER S1: ...\nSPEAKER S2: ...") into turns.
+    var conversationTurns: [ConversationTurn] {
+        guard let text = transcriptObject?["transcription"] as? String else { return [] }
+        let prefix = "SPEAKER "
+        return text.split(separator: "\n").enumerated().compactMap { index, rawLine in
+            let line = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !line.isEmpty else { return nil }
+            if line.hasPrefix(prefix), let colon = line.firstIndex(of: ":") {
+                let speaker = String(line[line.index(line.startIndex, offsetBy: prefix.count)..<colon])
+                let body = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
+                return ConversationTurn(id: index, speaker: speaker, text: body)
+            }
+            return ConversationTurn(id: index, speaker: nil, text: line)
+        }
+    }
+
+    private var sceneObject: [String: Any]? {
+        guard let raw = sceneDescriptionRaw,
+              let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return object["scene"] as? [String: Any]
+    }
+
+    /// Who each speaker label sounds like, estimated from the voice by the scene stage (e.g. "S1" -> "子ども").
+    var speakerRoles: [String: String] {
+        guard let roles = sceneObject?["speaker_roles"] as? [[String: Any]] else { return [:] }
+        var result: [String: String] = [:]
+        for entry in roles {
+            if let label = entry["label"] as? String, let role = entry["role"] as? String {
+                result[label] = role
+            }
+        }
+        return result
+    }
+
+    /// One or two sentences describing the scene (scene stage).
+    var sceneSummary: String? {
+        guard let summary = sceneObject?["summary"] as? String, !summary.isEmpty else { return nil }
+        return summary
+    }
+
+    /// A field of a stage's progress payload. While the pipeline runs, these short previews
+    /// are all there is; the full results arrive when Persist writes the recording.
+    func stagePayload(_ stage: String, _ key: String) -> String? {
+        guard case .object(let payload)? = stages.first(where: { $0.stage == stage })?.payload,
+              case .string(let value)? = payload[key], !value.isEmpty else { return nil }
+        return value
+    }
+}

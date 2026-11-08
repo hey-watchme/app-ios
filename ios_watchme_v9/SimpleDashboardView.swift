@@ -140,20 +140,6 @@ struct SimpleDashboardView: View {
                         if isLoading {
                             SkeletonView()
                         } else {
-                            // 0. Recordings still being analyzed (the card fills in stage by stage)
-                            if !inProgressBlocks.isEmpty {
-                                SpotAnalysisListSection(
-                                    title: "分析中",
-                                    spotResults: inProgressBlocks,
-                                    showMoreButton: false,
-                                    onTapSpot: { block in
-                                        selectedSpotForDetail = block
-                                    }
-                                )
-                                .padding(.horizontal, 20)
-                                .transition(.opacity)
-                            }
-
                             // 1. Horizon Metrics (Top Scrollable Pills)
                             MetricsHorizonView(
                                 vibeScore: dashboardSummary?.averageVibe.map { Double($0) },
@@ -169,7 +155,16 @@ struct SimpleDashboardView: View {
                                     isCommentFieldFocused = false
                                     showVibeSheet = true
                                 }
-                                
+
+                            // Latest recording, filling in as its analysis runs
+                            if let latest = timeBlocks.last {
+                                LatestSpotCard(timeBlock: latest) {
+                                    selectedSpotForDetail = latest
+                                }
+                                .padding(.horizontal, 20)
+                                .transition(.opacity)
+                            }
+
                             // 3. Vibe Timeline (under hero)
                             vibeGraphCard
                                 .padding(.horizontal, 20)
@@ -621,20 +616,6 @@ struct SimpleDashboardView: View {
         }
     }
 
-    // Latest 1 analysis (newest)
-    private var latestAnalysisSection: some View {
-        let latestBlock = Array(timeBlocks.suffix(1))
-
-        return SpotAnalysisListSection(
-            title: "最新情報",
-            spotResults: latestBlock,
-            showMoreButton: false,
-            onTapSpot: { block in
-                selectedSpotForDetail = block
-            }
-        )
-    }
-
     // Phase 2: フィルタリングロジック（明示的な更新）
     private func updateFilteredData() {
         // rating > 0 のブロックをフィルタリング（rating == 0 または nil を除外）
@@ -668,11 +649,6 @@ struct SimpleDashboardView: View {
 
         // ハイライト表示用データの準備（新しい順）
         highlightBlocks = conversationBlocks.reversed()
-    }
-
-    /// Recordings whose analysis has not finished yet, newest first.
-    private var inProgressBlocks: [DashboardTimeBlock] {
-        timeBlocks.filter { $0.stages.isInProgress }.reversed()
     }
 
     // Highlight section (conversation-focused, no fallback)

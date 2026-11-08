@@ -673,48 +673,9 @@ struct SpotDetailView: View {
 
     // MARK: - Conversation (speaker-labelled transcript)
 
-    private struct ConversationTurn: Identifiable {
-        let id: Int
-        let speaker: String?
-        let text: String
-    }
-
-    private var transcriptObject: [String: Any]? {
-        guard let raw = spotData.vibeTranscriberResult, let data = raw.data(using: .utf8) else { return nil }
-        return try? JSONSerialization.jsonObject(with: data) as? [String: Any]
-    }
-
-    /// Splits the stored transcription ("SPEAKER S1: ...\nSPEAKER S2: ...") into turns.
-    private var conversationTurns: [ConversationTurn] {
-        guard let text = transcriptObject?["transcription"] as? String else { return [] }
-        let prefix = "SPEAKER "
-        return text.split(separator: "\n").enumerated().compactMap { index, rawLine in
-            let line = rawLine.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty else { return nil }
-            if line.hasPrefix(prefix), let colon = line.firstIndex(of: ":") {
-                let speaker = String(line[line.index(line.startIndex, offsetBy: prefix.count)..<colon])
-                let body = line[line.index(after: colon)...].trimmingCharacters(in: .whitespaces)
-                return ConversationTurn(id: index, speaker: speaker, text: body)
-            }
-            return ConversationTurn(id: index, speaker: nil, text: line)
-        }
-    }
-
-    /// Who each speaker label sounds like, estimated from the voice by the scene stage (e.g. "S1" -> "子ども").
-    private var speakerRoles: [String: String] {
-        guard let raw = spotData.sceneDescriptionRaw,
-              let data = raw.data(using: .utf8),
-              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let scene = object["scene"] as? [String: Any],
-              let roles = scene["speaker_roles"] as? [[String: Any]] else { return [:] }
-        var result: [String: String] = [:]
-        for entry in roles {
-            if let label = entry["label"] as? String, let role = entry["role"] as? String {
-                result[label] = role
-            }
-        }
-        return result
-    }
+    private var transcriptObject: [String: Any]? { spotData.transcriptObject }
+    private var conversationTurns: [DashboardTimeBlock.ConversationTurn] { spotData.conversationTurns }
+    private var speakerRoles: [String: String] { spotData.speakerRoles }
 
     private var conversationDisclosure: some View {
         let engine = transcriptObject?["asr_model"] as? String
