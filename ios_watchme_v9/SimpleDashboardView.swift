@@ -140,6 +140,20 @@ struct SimpleDashboardView: View {
                         if isLoading {
                             SkeletonView()
                         } else {
+                            // 0. Recordings still being analyzed (the card fills in stage by stage)
+                            if !inProgressBlocks.isEmpty {
+                                SpotAnalysisListSection(
+                                    title: "分析中",
+                                    spotResults: inProgressBlocks,
+                                    showMoreButton: false,
+                                    onTapSpot: { block in
+                                        selectedSpotForDetail = block
+                                    }
+                                )
+                                .padding(.horizontal, 20)
+                                .transition(.opacity)
+                            }
+
                             // 1. Horizon Metrics (Top Scrollable Pills)
                             MetricsHorizonView(
                                 vibeScore: dashboardSummary?.averageVibe.map { Double($0) },
@@ -387,7 +401,7 @@ struct SimpleDashboardView: View {
         }
         .task(id: deviceManager.selectedDeviceID) {
             guard let deviceId = deviceManager.selectedDeviceID else { await realtime.stop(); return }
-            realtime.onChange = { refreshCurrentDayIfNeeded(reason: "realtime") }
+            realtime.onChange = { Task { await silentRefreshCurrentDay() } }
             await realtime.watch(deviceId: deviceId)
         }
         .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
@@ -556,6 +570,21 @@ struct SimpleDashboardView: View {
         return dashboardSummary != nil || !timeBlocks.isEmpty || !subjectComments.isEmpty
     }
 
+    /// Realtime: reload today's data without the skeleton, so only the changed parts redraw.
+    private func silentRefreshCurrentDay() async {
+        guard let deviceId = deviceManager.selectedDeviceID else { return }
+        guard isToday(localDate, timezone: deviceManager.getTimezone(for: deviceId)) else { return }
+        guard !isLoading else { return }
+        await loadAllData(showLoading: false)
+        // The cached copy of today is now stale; drop it so the next visit reloads.
+        let cacheKey = "\(deviceId)_\(localDate)"
+        dataCache.removeValue(forKey: cacheKey)
+        cacheKeys.removeAll { $0 == cacheKey }
+        #if DEBUG
+        print("🔄 [Dashboard Refresh] silent (realtime)")
+        #endif
+    }
+
     private func refreshCurrentDayIfNeeded(reason: String) {
         guard let deviceId = deviceManager.selectedDeviceID else { return }
         let timezone = deviceManager.getTimezone(for: deviceId)
@@ -639,6 +668,11 @@ struct SimpleDashboardView: View {
 
         // ハイライト表示用データの準備（新しい順）
         highlightBlocks = conversationBlocks.reversed()
+    }
+
+    /// Recordings whose analysis has not finished yet, newest first.
+    private var inProgressBlocks: [DashboardTimeBlock] {
+        timeBlocks.filter { $0.stages.isInProgress }.reversed()
     }
 
     // Highlight section (conversation-focused, no fallback)
@@ -897,7 +931,9 @@ struct SimpleDashboardView: View {
     }
 
 
-    private func loadAllData() async {
+    /// showLoading: false keeps the current content on screen and swaps the data in place
+    /// (used for Realtime updates, so the page does not flash or jump to the top).
+    private func loadAllData(showLoading: Bool = true) async {
         // 📊 パフォーマンス最適化: 詳細ログを削減
         guard let deviceId = deviceManager.selectedDeviceID else {
             // データをクリア
@@ -912,13 +948,17 @@ struct SimpleDashboardView: View {
         }
 
         // ローディング開始
-        await MainActor.run {
-            isLoading = true
+        if showLoading {
+            await MainActor.run {
+                isLoading = true
+            }
         }
 
         defer {
-            Task { @MainActor in
-                isLoading = false
+            if showLoading {
+                Task { @MainActor in
+                    isLoading = false
+                }
             }
         }
 
