@@ -97,6 +97,7 @@ struct SimpleDashboardView: View {
 
     // Pull-to-Refresh trigger (simple approach)
     @State private var refreshTrigger = 0
+    @StateObject private var realtime = RealtimeWatcher()  // reload the day as analysis stages finish
     @State private var lastHandledPushTimestamp: Date?
 
     // コメント入力用
@@ -383,6 +384,11 @@ struct SimpleDashboardView: View {
                     dataCache.removeValue(forKey: oldKey)
                 }
             }
+        }
+        .task(id: deviceManager.selectedDeviceID) {
+            guard let deviceId = deviceManager.selectedDeviceID else { await realtime.stop(); return }
+            realtime.onChange = { refreshCurrentDayIfNeeded(reason: "realtime") }
+            await realtime.watch(deviceId: deviceId)
         }
         .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
             // デバイスが切り替わったときにデータとキャッシュをクリア（Phase 1-A）
@@ -1206,6 +1212,17 @@ struct SpotAnalysisCard: View {
 
             // Card content
             VStack(alignment: .leading, spacing: 10) {
+                // While the pipeline runs, the card shows how far it has got
+                if timeBlock.summary == nil || timeBlock.stages.isInProgress {
+                    if timeBlock.stages.isEmpty {
+                        Text("分析中…")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(white: 0.6))
+                    } else {
+                        StageProgressRow(stages: timeBlock.stages, compact: true)
+                    }
+                }
+
                 if let firstLine = summaryFirstLine {
                     Text(firstLine)
                         .font(.system(size: 13, weight: .medium))

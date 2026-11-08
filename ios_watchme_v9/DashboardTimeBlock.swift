@@ -90,6 +90,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let audioKey: String?  // S3 key of the recording (development playback)
     let metricsRaw: String?  // Fixed measurements (profile_result.metrics) as JSON
     let vocalEmotionRaw: String?  // emotion2vec scores (profile_result.vocal_emotion) as JSON
+    let stages: [SpotStage]  // per-stage progress (spot_stages); empty for old recordings
 
     // 表示用の時刻文字列（初期化時に1回だけ計算してキャッシュ）
     let displayTime: String
@@ -148,6 +149,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         audioKey = nil
         metricsRaw = nil
         vocalEmotionRaw = nil
+        stages = []
 
         // displayTimeを初期化時に1回だけ計算（キャッシュ）
         displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
@@ -297,7 +299,8 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          sceneDescriptionRaw: String? = nil,
          audioKey: String? = nil,
          metricsRaw: String? = nil,
-         vocalEmotionRaw: String? = nil) {
+         vocalEmotionRaw: String? = nil,
+         stages: [SpotStage] = []) {
 
         self.deviceId = deviceId
         self.date = localDate
@@ -319,6 +322,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.audioKey = audioKey
         self.metricsRaw = metricsRaw
         self.vocalEmotionRaw = vocalEmotionRaw
+        self.stages = stages
 
         // Calculate displayTime
         self.displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)

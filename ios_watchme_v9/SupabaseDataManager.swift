@@ -738,11 +738,21 @@ class SupabaseDataManager: ObservableObject {
                 let vibe_score: Double?
                 let rating: Int?
                 let created_at: String?
+                let recorded_at: String?
+            }
+
+            struct StageRow: Decodable {
+                let recorded_at: String
+                let stage: String
+                let status: String
+                let payload: JSONValue?
+                let error: String?
+                let updated_at: String?
             }
 
             let spotResultsQuery = supabase
                 .from("spot_results")
-                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at, profile_result")
+                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at, recorded_at, profile_result")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
                 .order("local_time", ascending: true)
@@ -867,6 +877,29 @@ class SupabaseDataManager: ObservableObject {
 
             print("✅ Fetched \(spotResults.count) spot results, STT:\(vibeTranscriberMap.count) SED:\(behaviorMap.count) SER:\(humeMap.count)")
 
+            // Per-stage progress for these recordings (spot_stages, keyed by recorded_at)
+            var stagesMap: [String: [SpotStage]] = [:]
+            let recordedAts = spotResults.compactMap(\.recorded_at)
+            if !recordedAts.isEmpty {
+                let stageRows: [StageRow] = (try? await supabase
+                    .from("spot_stages")
+                    .select("recorded_at, stage, status, payload, error, updated_at")
+                    .eq("device_id", value: deviceId)
+                    .in("recorded_at", values: recordedAts)
+                    .execute()
+                    .value) ?? []
+                let localTimeByRecordedAt = Dictionary(uniqueKeysWithValues: spotResults.compactMap { r -> (String, String)? in
+                    guard let ra = r.recorded_at, let lt = r.local_time else { return nil }
+                    return (ra, lt)
+                })
+                for row in stageRows {
+                    guard let localTime = localTimeByRecordedAt[row.recorded_at] else { continue }
+                    stagesMap[localTime, default: []].append(
+                        SpotStage(stage: row.stage, status: row.status, payload: row.payload, error: row.error, updatedAt: row.updated_at)
+                    )
+                }
+            }
+
             let timeBlocks: [DashboardTimeBlock] = spotResults.compactMap { result in
                 guard let localTime = result.local_time else { return nil }
 
@@ -890,7 +923,8 @@ class SupabaseDataManager: ObservableObject {
                     sceneDescriptionRaw: sceneDescriptionMap[localTime],
                     audioKey: audioKeyMap[localTime],
                     metricsRaw: metricsMap[localTime],
-                    vocalEmotionRaw: vocalEmotionMap[localTime]
+                    vocalEmotionRaw: vocalEmotionMap[localTime],
+                    stages: stagesMap[localTime] ?? []
                 )
             }
 

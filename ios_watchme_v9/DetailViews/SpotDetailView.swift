@@ -28,6 +28,18 @@ struct SpotDetailView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 16) {
+                    // How far the analysis has got (hidden for old recordings without stage rows)
+                    if !spotData.stages.isEmpty {
+                        StageProgressRow(stages: spotData.stages)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color.darkCard)
+                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
+                            )
+                    }
+
                     // Vibe Score
                     if let vibeScore = spotData.vibeScore {
                         vibeScoreCard(vibeScore)
