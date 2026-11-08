@@ -114,6 +114,7 @@ struct SimpleDashboardView: View {
     @State private var showBehaviorSheet = false
     @State private var showEmotionSheet = false
     @State private var selectedSpotForDetail: DashboardTimeBlock?
+    @State private var showActivityLog = false
     private let floatingHeaderContentInset: CGFloat = 40
 
     var body: some View {
@@ -140,12 +141,28 @@ struct SimpleDashboardView: View {
                         if isLoading {
                             SkeletonView()
                         } else {
-                            // 1. Horizon Metrics (Top Scrollable Pills)
-                            MetricsHorizonView(
-                                vibeScore: dashboardSummary?.averageVibe.map { Double($0) },
-                                activityCount: timeBlocks.count
-                            )
-                            .transition(.opacity)
+                            // 1. Activity (analysis events as they arrive); the metric pills hold the place until there are any
+                            let activityItems = ActivityFeed.items(from: timeBlocks)
+                            if activityItems.isEmpty {
+                                MetricsHorizonView(
+                                    vibeScore: dashboardSummary?.averageVibe.map { Double($0) },
+                                    activityCount: timeBlocks.count
+                                )
+                                .transition(.opacity)
+                            } else {
+                                ActivityStripView(
+                                    items: activityItems,
+                                    timezone: currentTimezone,
+                                    onTapItem: { item in
+                                        selectedSpotForDetail = timeBlocks.first { $0.id == item.recordingID }
+                                    },
+                                    onShowLog: {
+                                        isCommentFieldFocused = false
+                                        showActivityLog = true
+                                    }
+                                )
+                                .transition(.opacity)
+                            }
                             
                             // 2. Main Hero Gauge
                             ModernHeroGaugeView(dashboardSummary: dashboardSummary)
@@ -450,6 +467,29 @@ struct SimpleDashboardView: View {
                             }
                         }
                     }
+            }
+        }
+        .sheet(isPresented: $showActivityLog) {
+            NavigationView {
+                ActivityLogView(blocks: timeBlocks, timezone: currentTimezone) { block in
+                    showActivityLog = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
+                        selectedSpotForDetail = block
+                    }
+                }
+                .navigationBarTitleDisplayMode(.inline)
+                .navigationTitle("アクティビティログ")
+                .toolbarBackground(Color.darkBase, for: .navigationBar)
+                .toolbarBackground(.visible, for: .navigationBar)
+                .toolbarColorScheme(.dark, for: .navigationBar)
+                .tint(.white)
+                .toolbar {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("閉じる") {
+                            showActivityLog = false
+                        }
+                    }
+                }
             }
         }
         .sheet(isPresented: $showBehaviorSheet) {

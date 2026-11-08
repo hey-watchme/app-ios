@@ -54,7 +54,7 @@ struct SpotStage: Codable, Equatable, Identifiable {
     }
 
     /// Supabase timestamps carry microseconds ("2026-11-08T07:20:38.479095+00:00").
-    private static func parse(_ value: String?) -> Date? {
+    static func parse(_ value: String?) -> Date? {
         guard let value else { return nil }
         let trimmed = value.replacingOccurrences(of: #"\.\d+"#, with: "", options: .regularExpression)
         return ISO8601DateFormatter().date(from: trimmed)
