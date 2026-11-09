@@ -21,8 +21,8 @@ struct ActivityItem: Identifiable, Equatable {
 enum ActivityFeed {
     /// Events of the given recordings, running ones first, then newest first.
     /// Queued stages are left out: only what is moving or has finished is shown.
-    static func items(from blocks: [DashboardTimeBlock]) -> [ActivityItem] {
-        blocks.flatMap(items(for:)).sorted { a, b in
+    static func items(from blocks: [DashboardTimeBlock], viewingDate: String? = nil) -> [ActivityItem] {
+        blocks.flatMap { items(for: $0, viewingDate: viewingDate) }.sorted { a, b in
             let aRunning = a.status == "running", bRunning = b.status == "running"
             if aRunning != bRunning { return aRunning }
             return (a.date ?? .distantPast) > (b.date ?? .distantPast)
@@ -30,19 +30,20 @@ enum ActivityFeed {
     }
 
     /// Events of one recording: the recording itself, then each stage that has started.
-    static func items(for block: DashboardTimeBlock) -> [ActivityItem] {
+    static func items(for block: DashboardTimeBlock, viewingDate: String? = nil) -> [ActivityItem] {
         let stages = block.stages.map(\.effective)
+        let name = recordingName(block, viewingDate: viewingDate)
         let recordingStatus: String
         let recordingDetail: String
         if block.stages.isInProgress {
             recordingStatus = "running"
-            recordingDetail = "\(block.displayTime) の録音を分析中"
+            recordingDetail = "\(name)を分析中"
         } else if stages.contains(where: { $0.status == "failed" }) {
             recordingStatus = "failed"
-            recordingDetail = "\(block.displayTime) の録音・一部できませんでした"
+            recordingDetail = "\(name)・一部できませんでした"
         } else {
             recordingStatus = "completed"
-            recordingDetail = "\(block.displayTime) の録音・分析済み"
+            recordingDetail = "\(name)・分析済み"
         }
 
         var items = [ActivityItem(
@@ -64,6 +65,16 @@ enum ActivityFeed {
             ))
         }
         return items
+    }
+
+    /// "15:02 の録音", or "11/6 15:02 の録音" when it was recorded on a day other than the one being viewed.
+    static func recordingName(_ block: DashboardTimeBlock, viewingDate: String?) -> String {
+        guard let viewingDate, let date = block.date, date != viewingDate else {
+            return "\(block.displayTime) の録音"
+        }
+        let parts = date.split(separator: "-")
+        let monthDay = parts.count == 3 ? "\(Int(parts[1]) ?? 0)/\(Int(parts[2]) ?? 0)" : date
+        return "\(monthDay) \(block.displayTime) の録音"
     }
 
     private static func detail(for stage: SpotStage) -> String {
@@ -211,6 +222,7 @@ struct ActivityStripView: View {
 struct ActivityLogView: View {
     let blocks: [DashboardTimeBlock]
     let timezone: TimeZone
+    var viewingDate: String? = nil
     let onTapRecording: (DashboardTimeBlock) -> Void
 
     var body: some View {
@@ -234,12 +246,12 @@ struct ActivityLogView: View {
 
     private func recordingSection(_ block: DashboardTimeBlock) -> some View {
         // Recording first, then the stages in the order they finished
-        let events = ActivityFeed.items(for: block)
+        let events = ActivityFeed.items(for: block, viewingDate: viewingDate)
         let rows = [events[0]] + events.dropFirst().sorted { ($0.date ?? .distantFuture) < ($1.date ?? .distantFuture) }
 
         return VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("\(block.displayTime) の録音")
+                Text(ActivityFeed.recordingName(block, viewingDate: viewingDate))
                     .font(.system(size: 13, weight: .bold))
                     .foregroundColor(.white)
                 Spacer()

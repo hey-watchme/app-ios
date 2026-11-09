@@ -108,23 +108,6 @@ final class ChunkUploader: NSObject, ObservableObject {
         if record != nil { kick() }
     }
 
-    /// Bring a file from elsewhere (camera roll, Files) under the journal and send it.
-    func enqueue(externalFile source: URL, deviceId: String, recordedAt: Date, timezone: TimeZone) async throws -> ChunkRecord {
-        let fileName = Self.fileName(for: recordedAt, timezone: timezone, extension: source.pathExtension.lowercased() == "m4a" ? "m4a" : "wav")
-        let destination = UploadJournal.documentsDirectory.appendingPathComponent(fileName)
-        try FileManager.default.createDirectory(at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
-        if FileManager.default.fileExists(atPath: destination.path) {
-            try FileManager.default.removeItem(at: destination)
-        }
-        try FileManager.default.moveItem(at: source, to: destination)
-        let record = ChunkRecord(id: UUID().uuidString, fileName: fileName, deviceId: deviceId, recordedAt: recordedAt,
-                                 sessionId: nil, sequence: nil, durationSeconds: WAVFile.duration(of: destination), state: .recorded)
-        await journal.add(record)
-        await refresh()
-        kick()
-        return record
-    }
-
     /// YYYY-MM-DD/HH-mm-ss.ext in the device's timezone (the same layout the recorder uses).
     nonisolated static func fileName(for date: Date, timezone: TimeZone, extension ext: String = "wav") -> String {
         let formatter = DateFormatter()
@@ -185,11 +168,11 @@ final class ChunkUploader: NSObject, ObservableObject {
         await refresh()
     }
 
-    /// Set by the recorder while a chunk is open, so reconcile() does not "repair" a live file.
-    var activeRecordingId: String?
+    /// Chunks being written right now (by the recorder or an import), so reconcile() does not "repair" a live file.
+    var activeRecordingIds = Set<String>()
 
     private func isRecordingNow(_ id: String) -> Bool {
-        activeRecordingId == id
+        activeRecordingIds.contains(id)
     }
 
     private func recover(_ record: ChunkRecord) async {

@@ -713,6 +713,41 @@ class SupabaseDataManager: ObservableObject {
         return await fetchDashboardTimeBlocks(deviceId: deviceId, localDate: localDate, timezone: targetTimezone)
     }
 
+    /// Recordings the server received on `localDate` that were recorded on another day (files imported
+    /// from the camera roll or a recorder). Their analysis lives on the day they were recorded; this lets
+    /// the day they arrived show them in its activity so they can be found and opened.
+    func fetchReceivedFromOtherDays(deviceId: String, localDate: String, timezone: TimeZone) async -> [DashboardTimeBlock] {
+        guard let dayStart = LocalDate.date(from: localDate, timezone: timezone),
+              let dayEnd = LocalDate.calendar(timezone: timezone).date(byAdding: .day, value: 1, to: dayStart) else { return [] }
+        let iso = ISO8601DateFormatter()
+        struct Row: Decodable {
+            let local_date: String?
+            let local_time: String?
+        }
+        do {
+            let rows: [Row] = try await supabase
+                .from("spot_results")
+                .select("local_date, local_time")
+                .eq("device_id", value: deviceId)
+                .neq("local_date", value: localDate)
+                .gte("created_at", value: iso.string(from: dayStart))
+                .lt("created_at", value: iso.string(from: dayEnd))
+                .execute()
+                .value
+            var blocks: [DashboardTimeBlock] = []
+            for date in Set(rows.compactMap(\.local_date)).sorted() {
+                let wanted = Set(rows.filter { $0.local_date == date }.compactMap(\.local_time))
+                let dayBlocks = await fetchDashboardTimeBlocks(deviceId: deviceId, localDate: date, timezone: timezone)
+                // Both lists read local_time from the same column, so the strings match exactly.
+                blocks += dayBlocks.filter { wanted.contains($0.localTime ?? "") }
+            }
+            return blocks
+        } catch {
+            print("❌ [SupabaseDataManager] fetchReceivedFromOtherDays failed: \(error)")
+            return []
+        }
+    }
+
     func fetchDashboardTimeBlocks(deviceId: String, localDate: String, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
         #if DEBUG
         print("📊 Fetching spot results with features for device: \(deviceId)")

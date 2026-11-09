@@ -189,6 +189,7 @@ struct FullScreenRecordingView: View {
             })
             .environmentObject(deviceManager)
             .environmentObject(userAccountManager)
+            .environmentObject(store)
         }
         .onChange(of: videoProcessingStarted) { oldValue, newValue in
             // 動画処理が開始されたら録音モーダルを閉じる

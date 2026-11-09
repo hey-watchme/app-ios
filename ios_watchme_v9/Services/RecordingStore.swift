@@ -154,6 +154,47 @@ final class RecordingStore: ObservableObject {
         audioService.stopSession()   // state is updated from sessionEnded
     }
 
+    /// Import an audio or video file: cut it into 5-minute chunks stamped with when it was
+    /// recorded, journal them and send them like a live recording. No length limit.
+    func importFile(at url: URL, originalDates: AudioImporter.FileDates?) async throws {
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            throw AudioImportError.readFailed("デバイスが選択されていません")
+        }
+        var shown = -1
+        let result = try await AudioImporter.importFile(
+            at: url, originalDates: originalDates, deviceId: deviceId, timezone: deviceManager.selectedDeviceTimezone
+        ) { progress in
+            let percent = Int(progress * 100)
+            guard percent != shown else { return }
+            shown = percent
+            ToastManager.shared.showProgressWithPhase(phase: "音声を取り込み中...", subtitle: "\(percent)%", progress: progress)
+        }
+
+        importSessions[result.sessionId] = result.chunkCount
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.timeZone = deviceManager.selectedDeviceTimezone
+        formatter.dateFormat = "M/d HH:mm"
+        let minutes = Int((result.durationSeconds / 60).rounded())
+        ToastManager.shared.announce(
+            title: "\(formatter.string(from: result.startedAt)) の録音として取り込みました",
+            subtitle: "\(result.startSource.label)・約\(minutes)分を\(result.chunkCount)本に分けて送ります"
+        )
+        announceImportDeliveredIfDone(result.sessionId)
+    }
+
+    private var importSessions: [String: Int] = [:]   // sessionId -> chunk count, until all are delivered
+
+    private func announceImportDeliveredIfDone(_ sessionId: String) {
+        guard let count = importSessions[sessionId],
+              !uploader.pending.contains(where: { $0.sessionId == sessionId }) else { return }
+        importSessions[sessionId] = nil
+        ToastManager.shared.showSuccess(
+            title: "取り込んだ録音を送り終えました",
+            subtitle: "\(count)本を送りました。分析結果をお待ちください"
+        )
+    }
+
     /// Resend everything waiting, now (also chunks parked as blocked).
     func retryAllNow() async {
         await uploader.retryAllNow()
@@ -176,14 +217,12 @@ final class RecordingStore: ObservableObject {
     // MARK: - Recorder events
 
     private func handleChunkStarted(_ record: ChunkRecord) {
-        uploader.activeRecordingId = record.id
+        uploader.activeRecordingIds.insert(record.id)
         Task { await uploader.chunkStarted(record) }
     }
 
     private func handleChunkFinished(_ id: String) {
-        if uploader.activeRecordingId == id {
-            uploader.activeRecordingId = nil
-        }
+        uploader.activeRecordingIds.remove(id)
         state.sessionChunksFinished += 1
         lastSessionChunks = state.sessionChunksFinished
         Task { await uploader.chunkFinished(id: id) }
@@ -220,7 +259,7 @@ final class RecordingStore: ObservableObject {
     // MARK: - Uploader events
 
     private func handlePendingChanged(_ pending: [ChunkRecord]) {
-        state.pending = pending.filter { $0.id != uploader.activeRecordingId }
+        state.pending = pending.filter { !uploader.activeRecordingIds.contains($0.id) }
         if let sessionId = state.currentSessionId ?? lastSessionId {
             let waiting = pending.filter { $0.sessionId == sessionId && $0.state != .recording }.count
             state.sessionChunksDelivered = max(0, lastSessionChunks - waiting)
@@ -228,6 +267,10 @@ final class RecordingStore: ObservableObject {
     }
 
     private func handleChunkUploaded(_ record: ChunkRecord) {
+        if let sessionId = record.sessionId, importSessions[sessionId] != nil {
+            announceImportDeliveredIfDone(sessionId)
+            return
+        }
         if record.sessionId == nil {
             ToastManager.shared.showSuccess(title: "送信完了", subtitle: "分析結果をお待ちください")
             return

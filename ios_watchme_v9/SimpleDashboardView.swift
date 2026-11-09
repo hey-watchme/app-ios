@@ -73,6 +73,7 @@ struct SimpleDashboardView: View {
     @State private var subject: Subject?
     @State private var dashboardSummary: DashboardSummary?  // メインデータソース
     @State private var timeBlocks: [DashboardTimeBlock] = []  // グラフ用データ（spot_results）
+    @State private var otherDayBlocks: [DashboardTimeBlock] = []  // received this day, recorded on another (imports)
     @State private var subjectComments: [SubjectComment] = []  // コメント機能追加
     @State private var isLoading = false
     @State private var lastLoadedDeviceID: String? = nil  // 最後に読み込んだデバイスID
@@ -143,7 +144,7 @@ struct SimpleDashboardView: View {
                             SkeletonView()
                         } else {
                             // 1. Activity (analysis events as they arrive); the metric pills hold the place until there are any
-                            let activityItems = ActivityFeed.items(from: timeBlocks)
+                            let activityItems = ActivityFeed.items(from: timeBlocks + otherDayBlocks, viewingDate: localDate)
                             if activityItems.isEmpty {
                                 MetricsHorizonView(
                                     vibeScore: dashboardSummary?.averageVibe.map { Double($0) },
@@ -155,7 +156,7 @@ struct SimpleDashboardView: View {
                                     items: activityItems,
                                     timezone: currentTimezone,
                                     onTapItem: { item in
-                                        selectedSpotForDetail = timeBlocks.first { $0.id == item.recordingID }
+                                        selectedSpotForDetail = (timeBlocks + otherDayBlocks).first { $0.id == item.recordingID }
                                     },
                                     onShowLog: {
                                         isCommentFieldFocused = false
@@ -413,6 +414,9 @@ struct SimpleDashboardView: View {
                 }
             }
         }
+        .task(id: LoadDataTrigger(localDate: localDate, deviceId: deviceManager.selectedDeviceID, refreshTrigger: refreshTrigger)) {
+            await loadOtherDayBlocks()
+        }
         .task(id: deviceManager.selectedDeviceID) {
             guard let deviceId = deviceManager.selectedDeviceID else { await realtime.stop(); return }
             realtime.onChange = { Task { await silentRefreshCurrentDay() } }
@@ -473,7 +477,7 @@ struct SimpleDashboardView: View {
         }
         .sheet(isPresented: $showActivityLog) {
             NavigationView {
-                ActivityLogView(blocks: timeBlocks, timezone: currentTimezone) { block in
+                ActivityLogView(blocks: otherDayBlocks + timeBlocks, timezone: currentTimezone, viewingDate: localDate) { block in
                     showActivityLog = false
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
                         selectedSpotForDetail = block
@@ -613,6 +617,7 @@ struct SimpleDashboardView: View {
         guard isToday(localDate, timezone: deviceManager.getTimezone(for: deviceId)) else { return }
         guard !isLoading else { return }
         await loadAllData(showLoading: false)
+        await loadOtherDayBlocks()
         // The cached copy of today is now stale; drop it so the next visit reloads.
         let cacheKey = "\(deviceId)_\(localDate)"
         dataCache.removeValue(forKey: cacheKey)
@@ -620,6 +625,18 @@ struct SimpleDashboardView: View {
         #if DEBUG
         print("🔄 [Dashboard Refresh] silent (realtime)")
         #endif
+    }
+
+    /// Recordings that arrived on this day but belong to another (imported files), for the activity strip and log.
+    private func loadOtherDayBlocks() async {
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            await MainActor.run { otherDayBlocks = [] }
+            return
+        }
+        let blocks = await dataManager.fetchReceivedFromOtherDays(
+            deviceId: deviceId, localDate: localDate, timezone: deviceManager.getTimezone(for: deviceId)
+        )
+        await MainActor.run { otherDayBlocks = blocks }
     }
 
     private func refreshCurrentDayIfNeeded(reason: String) {

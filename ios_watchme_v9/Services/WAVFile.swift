@@ -70,6 +70,25 @@ enum WAVFile {
         return Double(size - layout.dataOffset) / bytesPerSecond
     }
 
+    /// A 44-byte PCM header for our format (16 kHz, 16-bit, mono). Sizes are fixed up by repairHeader().
+    static func header(dataSize: UInt32) -> Data {
+        var data = Data()
+        data.append(contentsOf: Array("RIFF".utf8))
+        data.append(littleEndianBytes(36 &+ dataSize))
+        data.append(contentsOf: Array("WAVE".utf8))
+        data.append(contentsOf: Array("fmt ".utf8))
+        data.append(littleEndianBytes(16))                         // fmt chunk size
+        data.append(contentsOf: [1, 0])                             // PCM
+        data.append(contentsOf: [1, 0])                             // mono
+        data.append(littleEndianBytes(16_000))                      // sample rate
+        data.append(littleEndianBytes(UInt32(bytesPerSecond)))      // byte rate
+        data.append(contentsOf: [2, 0])                             // block align
+        data.append(contentsOf: [16, 0])                            // bits per sample
+        data.append(contentsOf: Array("data".utf8))
+        data.append(littleEndianBytes(dataSize))
+        return data
+    }
+
     /// Rewrite the RIFF and data sizes from the file length. Returns the duration in seconds.
     @discardableResult
     static func repairHeader(at url: URL) throws -> Double {

@@ -336,6 +336,7 @@ ios_watchme_v9/
 │   ├── ChunkUploader.swift        # 署名付き URL で S3 に背景送信、届くまで再送
 │   ├── UploadJournal.swift        # 断片の記録（Documents/upload-journal.json）
 │   ├── WAVFile.swift              # 途中で終わった WAV のヘッダ修復
+│   ├── AudioImporter.swift        # ファイル・動画を 5 分ごとの WAV に変換して送る（録った時刻で）
 │   └── ToastManager.swift         # グローバルトースト通知システム
 └── Models/                        # その他データモデル
 ```
