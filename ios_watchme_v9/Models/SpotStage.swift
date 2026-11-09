@@ -43,11 +43,17 @@ struct SpotStage: Codable, Equatable, Identifiable {
     /// instead of showing a spinner forever.
     static let runningLimit: TimeInterval = 20 * 60
     static let queuedLimit: TimeInterval = 60 * 60
+    /// Heavy stages wait in a work queue and may legitimately sit there for hours when many
+    /// chunks arrive at once. These match the pipeline's task timeouts (platform infra/envs/stg/queues.tf).
+    static let queuedLimitByStage: [String: TimeInterval] = [
+        "sound_events": 3 * 60 * 60,
+        "emotion": 24 * 60 * 60,
+    ]
 
     /// Status as the app should show it, with stale queued/running rows turned into failed.
     var effective: SpotStage {
         guard status == "queued" || status == "running", let updated = Self.parse(updatedAt) else { return self }
-        let limit = status == "running" ? Self.runningLimit : Self.queuedLimit
+        let limit = status == "running" ? Self.runningLimit : (Self.queuedLimitByStage[stage] ?? Self.queuedLimit)
         guard Date().timeIntervalSince(updated) > limit else { return self }
         return SpotStage(stage: stage, status: "failed", payload: payload,
                          error: "応答がありません（\(Int(limit / 60))分以上）", updatedAt: updatedAt)
