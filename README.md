@@ -331,9 +331,11 @@ ios_watchme_v9/
 ├── DashboardTimeBlock.swift       # spot_resultsデータモデル
 ├── Services/
 │   ├── RecordingStore.swift       # 録音状態管理
-│   ├── AudioRecorderService.swift # 録音実行サービス
+│   ├── AudioRecorderService.swift # 録音実行サービス（5分ごとの分割、60分の上限）
 │   ├── AudioMonitorService.swift  # 音声レベル監視サービス
-│   ├── UploaderService.swift      # アップロードサービス
+│   ├── ChunkUploader.swift        # 署名付き URL で S3 に背景送信、届くまで再送
+│   ├── UploadJournal.swift        # 断片の記録（Documents/upload-journal.json）
+│   ├── WAVFile.swift              # 途中で終わった WAV のヘッダ修復
 │   └── ToastManager.swift         # グローバルトースト通知システム
 └── Models/                        # その他データモデル
 ```

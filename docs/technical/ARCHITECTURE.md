@@ -25,7 +25,7 @@
 ┌─────────────────────────────────────────────────────────────┐
 │                      Services Layer                         │
 ├─────────────────────────────────────────────────────────────┤
-│  RecordingStore   AudioRecorderService   UploaderService   │
+│  RecordingStore  AudioRecorderService  ChunkUploader  UploadJournal │
 │  ImageCacheManager   PushNotificationManager               │
 └─────────────────────────────────────────────────────────────┘
                               ↓
@@ -84,6 +84,8 @@
 |----------|------|---------|
 | **ImageCacheManager** | 画像キャッシュ | タイムスタンプによるキャッシュ無効化 |
 | **RecordingStore** | 録音状態管理 | - |
+| **AudioRecorderService** | 5 分ごとの分割録音、60 分の上限、中断からの再開 | - |
+| **ChunkUploader** / **UploadJournal** | 断片の記録（ディスク）と、署名付き URL への背景送信・再送 | 設計は platform `docs/long-recording.md` |
 | **PushNotificationManager** | プッシュ通知 | - |
 
 ## 🔴 構造的問題

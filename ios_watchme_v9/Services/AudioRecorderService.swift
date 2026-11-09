@@ -2,143 +2,144 @@
 //  AudioRecorderService.swift
 //  ios_watchme_v9
 //
-//  録音の実行にのみ責任を持つ、状態を持たないサービス
-//  AVFoundationの操作に特化
+//  Records one session as a series of 5-minute WAV chunks (16 kHz, 16-bit, mono).
+//  Recording never stops at a chunk boundary: the next recorder is prepared first,
+//  then the current one is stopped and the next started (a gap of milliseconds).
+//  A session ends when the person stops it, at 60 minutes, when an interruption
+//  cannot be resumed, or when writing fails. Every event is published so the
+//  store can journal each chunk the moment it starts. See platform/docs/long-recording.md.
+//
+//  All methods must be called on the main thread (timers and AVFoundation callbacks are too).
 //
 
 import Foundation
 import AVFoundation
 import Combine
 
-// MARK: - AudioRecorderService（録音専門サービス）
+enum RecordingEndReason {
+    case stopped          // the person stopped
+    case limitReached     // 60 minutes
+    case interrupted      // a call / Siri took the microphone and recording could not resume
+    case failed(Error)    // writing failed (disk full, audio system reset, ...)
+}
+
 final class AudioRecorderService: NSObject {
-    // MARK: - Properties
-    private var audioRecorder: AVAudioRecorder?
-    private var currentRecordingURL: URL?
-    private var audioSession: AVAudioSession
+    static let chunkSeconds: TimeInterval = 300
+    static let maxSessionSeconds: TimeInterval = 3600
+    /// Enough for a whole session (about 115 MB) with room to spare.
+    static let minimumFreeBytes: Int64 = 200 * 1024 * 1024
+
+    private struct ActiveChunk {
+        let id: String
+        let url: URL
+        let sequence: Int
+    }
+
+    private struct ActiveSession {
+        let id: String
+        let deviceId: String
+        let timezone: TimeZone
+        let startedAt: Date
+        var nextSequence = 0
+        var interrupted = false
+    }
 
     // MARK: - Publishers
-    private let recordingCompletedSubject = PassthroughSubject<Result<RecordingInfo, Error>, Never>()
-    private let audioLevelSubject = PassthroughSubject<Float, Never>()
 
-    var recordingCompletedPublisher: AnyPublisher<Result<RecordingInfo, Error>, Never> {
-        recordingCompletedSubject.eraseToAnyPublisher()
-    }
+    /// A chunk file was opened and is being written. Journal it now.
+    let chunkStarted = PassthroughSubject<ChunkRecord, Never>()
+    /// The chunk file is closed and complete (record id). Send it.
+    let chunkFinished = PassthroughSubject<String, Never>()
+    /// The session is over.
+    let sessionEnded = PassthroughSubject<RecordingEndReason, Never>()
+    /// true while the microphone is taken by a call etc. and we wait to resume.
+    let interruptionChanged = PassthroughSubject<Bool, Never>()
 
-    var audioLevelPublisher: AnyPublisher<Float, Never> {
-        audioLevelSubject.eraseToAnyPublisher()
-    }
+    // MARK: - State
 
-    /// Fires when a call, Siri or another app takes the microphone and the recording is finished early.
-    private let interruptedSubject = PassthroughSubject<Void, Never>()
+    private let audioSession = AVAudioSession.sharedInstance()
+    private var recorder: AVAudioRecorder?
+    private var current: ActiveChunk?
+    private var session: ActiveSession?
+    private var rotationTimer: Timer?
+    private var limitTimer: Timer?
+    /// Recorder -> chunk, until the recorder's delegate reports the file closed.
+    private var closing: [ObjectIdentifier: ActiveChunk] = [:]
+    private var observers: [NSObjectProtocol] = []
 
-    var interruptedPublisher: AnyPublisher<Void, Never> {
-        interruptedSubject.eraseToAnyPublisher()
-    }
+    var isRecording: Bool { session != nil }
+    var currentSessionId: String? { session?.id }
+    var currentChunkId: String? { current?.id }
 
-    // MARK: - Metering
-    private var meterTimer: Timer?
-    private var interruptionObserver: NSObjectProtocol?
-    private var mediaResetObserver: NSObjectProtocol?
+    // MARK: - Init
 
-    // MARK: - Initialization
     override init() {
-        self.audioSession = AVAudioSession.sharedInstance()
         super.init()
-
-        interruptionObserver = NotificationCenter.default.addObserver(
-            forName: AVAudioSession.interruptionNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] notification in
-            self?.handleInterruption(notification)
-        }
-
-        // The audio system restarted (rare); the recorder is dead, so finish what we have.
-        mediaResetObserver = NotificationCenter.default.addObserver(
-            forName: AVAudioSession.mediaServicesWereResetNotification,
-            object: nil,
-            queue: .main
-        ) { [weak self] _ in
-            self?.finishEarly(reason: "media services were reset")
-        }
+        let center = NotificationCenter.default
+        observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] note in
+            self?.handleInterruption(note)
+        })
+        observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.handleMediaServicesReset()
+        })
     }
 
     deinit {
-        if let interruptionObserver {
-            NotificationCenter.default.removeObserver(interruptionObserver)
+        observers.forEach { NotificationCenter.default.removeObserver($0) }
+    }
+
+    // MARK: - Session control
+
+    func configureAudioSession() throws {
+        do {
+            try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
+            try audioSession.setActive(true, options: [])
+        } catch {
+            // Fall back to plain recording
+            try audioSession.setCategory(.record, mode: .default)
+            try audioSession.setActive(true)
         }
-        if let mediaResetObserver {
-            NotificationCenter.default.removeObserver(mediaResetObserver)
+        if audioSession.isInputGainSettable {
+            try? audioSession.setInputGain(0.8)
         }
     }
 
-    // MARK: - Public Methods
+    /// Start a session. Returns its id. Throws when nothing was recorded.
+    func startSession(deviceId: String, timezone: TimeZone) throws -> String {
+        guard session == nil else { throw RecordingError.alreadyRecording }
+        try ensureFreeSpace()
 
-    /// オーディオセッションの事前準備（重い処理を先に実行）
-    func prepareAudioSession() async throws {
-        // バックグラウンドスレッドで実行してメインスレッドをブロックしない
-        try await Task.detached(priority: .userInitiated) { [weak self] in
-            guard let self = self else { return }
+        let newSession = ActiveSession(id: UUID().uuidString, deviceId: deviceId, timezone: timezone, startedAt: Date())
+        session = newSession
+        do {
+            try startChunk()
+        } catch {
+            session = nil
+            throw error
+        }
 
-            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                do {
-                    // iOS 17対応: カテゴリーを先に設定してからアクティブ化
-                    try self.audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
-
-                    // セッションをアクティブ化
-                    try self.audioSession.setActive(true, options: [])
-
-                    // マイクゲイン設定（設定可能な場合のみ）
-                    if self.audioSession.isInputGainSettable {
-                        // 1.0は最大値すぎる可能性があるので0.8に
-                        try? self.audioSession.setInputGain(0.8)
-                    }
-
-                    print("✅ AudioRecorderService: オーディオセッション準備完了")
-                    continuation.resume()
-                } catch {
-                    print("❌ AudioRecorderService: オーディオセッション準備失敗 - \(error)")
-
-                    // エラー時は代替設定を試す
-                    do {
-                        try self.audioSession.setCategory(.record, mode: .default)
-                        try self.audioSession.setActive(true)
-                        print("⚠️ AudioRecorderService: 代替設定で成功")
-                        continuation.resume()
-                    } catch {
-                        continuation.resume(throwing: error)
-                    }
-                }
-            }
-        }.value
+        limitTimer?.invalidate()
+        limitTimer = Timer.scheduledTimer(withTimeInterval: Self.maxSessionSeconds, repeats: false) { [weak self] _ in
+            self?.endSession(.limitReached)
+        }
+        print("🎙️ AudioRecorderService: session started \(newSession.id)")
+        return newSession.id
     }
 
-    /// 録音開始
-    func startRecording(fileName: String) async throws {
-        // 既存の録音を停止
-        if audioRecorder?.isRecording == true {
-            audioRecorder?.stop()
-            audioRecorder = nil
-        }
+    /// The person stopped. The last chunk is closed and reported through chunkFinished.
+    func stopSession() {
+        endSession(.stopped)
+    }
 
-        // ファイルURL生成
-        let documentsPath = getDocumentsDirectory()
-        let components = fileName.split(separator: "/")
+    // MARK: - Chunks
 
-        var fileURL: URL
-        if components.count == 2 {
-            // 日付ディレクトリを含む形式
-            let dateDir = documentsPath.appendingPathComponent(String(components[0]))
-            try? FileManager.default.createDirectory(at: dateDir, withIntermediateDirectories: true)
-            fileURL = dateDir.appendingPathComponent(String(components[1]))
-        } else {
-            fileURL = documentsPath.appendingPathComponent(fileName)
-        }
+    private func startChunk() throws {
+        guard var active = session else { return }
+        let now = Date()
+        let fileName = ChunkUploader.fileName(for: now, timezone: active.timezone)
+        let url = UploadJournal.documentsDirectory.appendingPathComponent(fileName)
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
 
-        currentRecordingURL = fileURL
-
-        // 録音設定（16kHz、高品質）
         let settings: [String: Any] = [
             AVFormatIDKey: Int(kAudioFormatLinearPCM),
             AVSampleRateKey: 16000.0,
@@ -146,235 +147,174 @@ final class AudioRecorderService: NSObject {
             AVLinearPCMBitDepthKey: 16,
             AVLinearPCMIsFloatKey: false,
             AVLinearPCMIsBigEndianKey: false,
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
-
-        // レコーダー作成
-        audioRecorder = try AVAudioRecorder(url: fileURL, settings: settings)
-        audioRecorder?.delegate = self
-        audioRecorder?.isMeteringEnabled = true
-        audioRecorder?.prepareToRecord()
-
-        // 録音開始
-        guard audioRecorder?.record() == true else {
+        let next = try AVAudioRecorder(url: url, settings: settings)
+        next.delegate = self
+        guard next.prepareToRecord(), next.record() else {
             throw RecordingError.startFailed
         }
 
-        // メータリング開始（0.1秒間隔）
-        startMetering()
+        let chunk = ActiveChunk(id: UUID().uuidString, url: url, sequence: active.nextSequence)
+        active.nextSequence += 1
+        active.interrupted = false
+        session = active
+        recorder = next
+        current = chunk
+        closing[ObjectIdentifier(next)] = chunk
 
-        print("🎙️ AudioRecorderService: 録音開始 - \(fileName)")
+        chunkStarted.send(ChunkRecord(
+            id: chunk.id, fileName: fileName, deviceId: active.deviceId, recordedAt: now,
+            sessionId: active.id, sequence: chunk.sequence, durationSeconds: nil, state: .recording
+        ))
+        scheduleRotation()
+        print("🎙️ AudioRecorderService: chunk \(chunk.sequence) started - \(fileName)")
     }
 
-    /// 録音停止
-    func stopRecording() async throws -> URL {
-        // Not checking isRecording: if the system paused the recorder, stop() still finishes
-        // the file so it gets uploaded instead of being left behind.
-        guard let recorder = audioRecorder else {
-            throw RecordingError.notRecording
-        }
-
-        // メータリング停止
-        stopMetering()
-
-        // 録音停止
-        recorder.stop()
-        audioRecorder = nil
-
-        guard let url = currentRecordingURL else {
-            throw RecordingError.noRecordingURL
-        }
-
-        print("⏹️ AudioRecorderService: 録音停止 - \(url.lastPathComponent)")
-
-        return url
-    }
-
-    /// 録音ファイル削除
-    func deleteRecordingFile(url: URL) async throws {
-        if FileManager.default.fileExists(atPath: url.path) {
-            try FileManager.default.removeItem(at: url)
-            print("🗑️ AudioRecorderService: ファイル削除 - \(url.lastPathComponent)")
+    private func scheduleRotation() {
+        rotationTimer?.invalidate()
+        rotationTimer = Timer.scheduledTimer(withTimeInterval: Self.chunkSeconds, repeats: false) { [weak self] _ in
+            self?.rotate()
         }
     }
 
-    /// 既存録音ファイルの読み込み
-    func loadRecordings() async throws -> [RecordingModel] {
-        let documentsPath = getDocumentsDirectory()
-        var recordings: [RecordingModel] = []
-
-        // 日付ディレクトリを取得（最新30日分）
-        let dateDirectories = try FileManager.default.contentsOfDirectory(
-            at: documentsPath,
-            includingPropertiesForKeys: [.isDirectoryKey, .creationDateKey]
-        ).filter { url in
-            let isDirectory = (try? url.resourceValues(forKeys: [.isDirectoryKey]))?.isDirectory ?? false
-            let dirName = url.lastPathComponent
-            // Check for YYYY-MM-DD format using regex
-            return isDirectory && dirName.range(of: "^\\d{4}-\\d{2}-\\d{2}$", options: .regularExpression) != nil
-        }.sorted { $0.lastPathComponent > $1.lastPathComponent }
-        .prefix(30)
-
-        // 各日付ディレクトリ内のWAVファイルを読み込み
-        for dateDir in dateDirectories {
-            let dateDirName = dateDir.lastPathComponent
-
-            let wavFiles = try FileManager.default.contentsOfDirectory(
-                at: dateDir,
-                includingPropertiesForKeys: [.creationDateKey, .fileSizeKey]
-            ).filter { $0.pathExtension.lowercased() == "wav" }
-
-            for url in wavFiles {
-                let fileName = "\(dateDirName)/\(url.lastPathComponent)"
-                let resourceValues = try url.resourceValues(forKeys: [.creationDateKey])
-                let creationDate = resourceValues.creationDate ?? Date()
-
-                let recording = RecordingModel(fileName: fileName, date: creationDate)
-
-                // 有効なファイルのみ追加
-                if recording.fileExists() && recording.fileSize > 0 {
-                    recordings.append(recording)
-                }
-            }
+    /// Close the current chunk and immediately open the next one.
+    private func rotate() {
+        guard session != nil else { return }
+        finishCurrentChunk()
+        do {
+            try startChunk()
+        } catch {
+            print("❌ AudioRecorderService: could not start the next chunk - \(error)")
+            endSession(.failed(error))
         }
-
-        return recordings
     }
 
-    // MARK: - Private Methods
+    private func finishCurrentChunk() {
+        rotationTimer?.invalidate()
+        rotationTimer = nil
+        guard let active = recorder else { return }
+        recorder = nil
+        current = nil
+        active.stop()   // the delegate reports the closed file -> chunkFinished
+    }
 
-    /// The system pauses the recorder when the microphone is taken. Finish the file instead,
-    /// so what was recorded so far is uploaded rather than left half-written.
+    private func endSession(_ reason: RecordingEndReason) {
+        guard session != nil else { return }
+        finishCurrentChunk()
+        limitTimer?.invalidate()
+        limitTimer = nil
+        session = nil
+        interruptionChanged.send(false)
+        sessionEnded.send(reason)
+        print("⏹️ AudioRecorderService: session ended (\(reason))")
+    }
+
+    // MARK: - Things that take the microphone away
+
     private func handleInterruption(_ notification: Foundation.Notification) {
-        guard let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
-              AVAudioSession.InterruptionType(rawValue: rawType) == .began else { return }
-        finishEarly(reason: "interrupted")
-    }
+        guard var active = session,
+              let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
 
-    private func finishEarly(reason: String) {
-        guard let recorder = audioRecorder else { return }
-        stopMetering()
-        recorder.stop()
-        audioRecorder = nil
-        interruptedSubject.send()
-        print("⚠️ AudioRecorderService: recording finished early (\(reason)) - \(recorder.url.lastPathComponent)")
-    }
+        switch type {
+        case .began:
+            // Close what we have so it gets sent; wait for the end of the interruption to resume.
+            finishCurrentChunk()
+            active.interrupted = true
+            session = active
+            interruptionChanged.send(true)
+            print("⚠️ AudioRecorderService: interrupted, chunk closed; waiting to resume")
 
-    private func startMetering() {
-        meterTimer?.invalidate()
-
-        // メインスレッドでTimerを作成（RunLoop必須）
-        DispatchQueue.main.async { [weak self] in
-            self?.meterTimer = Timer.scheduledTimer(withTimeInterval: 0.1, repeats: true) { [weak self] _ in
-                self?.updateMeters()
+        case .ended:
+            guard active.interrupted else { return }
+            let options = AVAudioSession.InterruptionOptions(rawValue: notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
+            guard options.contains(.shouldResume) else {
+                endSession(.interrupted)
+                return
             }
+            do {
+                try audioSession.setActive(true, options: [])
+                try startChunk()
+                interruptionChanged.send(false)
+                print("▶️ AudioRecorderService: resumed after interruption")
+            } catch {
+                print("❌ AudioRecorderService: could not resume after interruption - \(error)")
+                endSession(.interrupted)
+            }
+
+        @unknown default:
+            break
         }
     }
 
-    private func stopMetering() {
-        meterTimer?.invalidate()
-        meterTimer = nil
+    /// The audio system restarted under us. The recorder is dead; keep what was written and go on.
+    private func handleMediaServicesReset() {
+        guard session != nil else { return }
+        finishCurrentChunk()
+        do {
+            try configureAudioSession()
+            try startChunk()
+            print("▶️ AudioRecorderService: continued after a media services reset")
+        } catch {
+            endSession(.failed(error))
+        }
     }
 
-    private func updateMeters() {
-        guard let recorder = audioRecorder, recorder.isRecording else { return }
+    // MARK: - Checks
 
-        recorder.updateMeters()
-
-        let averagePower = recorder.averagePower(forChannel: 0)
-
-        // デシベル値を0-1に正規化
-        let minDb: Float = -50.0
-        let maxDb: Float = -10.0
-        let normalizedValue = (averagePower - minDb) / (maxDb - minDb)
-        let clampedValue = max(0.0, min(1.0, normalizedValue))
-
-        // パブリッシュ
-        audioLevelSubject.send(clampedValue)
-    }
-
-    private func getDocumentsDirectory() -> URL {
-        FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+    private func ensureFreeSpace() throws {
+        let values = try? UploadJournal.documentsDirectory.resourceValues(forKeys: [.volumeAvailableCapacityForImportantUsageKey])
+        if let free = values?.volumeAvailableCapacityForImportantUsage, free < Self.minimumFreeBytes {
+            throw RecordingError.notEnoughSpace(freeBytes: free)
+        }
     }
 }
 
 // MARK: - AVAudioRecorderDelegate
+
 extension AudioRecorderService: AVAudioRecorderDelegate {
     func audioRecorderDidFinishRecording(_ recorder: AVAudioRecorder, successfully flag: Bool) {
-        let url = recorder.url
-
-        if flag {
-            // ファイル存在とサイズ確認
-            do {
-                let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
-                let fileSize = attributes[.size] as? Int64 ?? 0
-
-                if fileSize > 0 {
-                    // 成功
-                    let dateDir = url.deletingLastPathComponent().lastPathComponent
-                    let fileName = "\(dateDir)/\(url.lastPathComponent)"
-
-                    let info = RecordingInfo(
-                        fileName: fileName,
-                        date: Date(),
-                        fileURL: url
-                    )
-
-                    recordingCompletedSubject.send(.success(info))
-                    print("✅ AudioRecorderService: 録音完了通知送信 - \(fileName)")
-                } else {
-                    // 0バイトファイル
-                    try? FileManager.default.removeItem(at: url)
-                    recordingCompletedSubject.send(.failure(RecordingError.emptyFile))
-                    print("❌ AudioRecorderService: 0バイトファイル")
-                }
-            } catch {
-                recordingCompletedSubject.send(.failure(error))
-                print("❌ AudioRecorderService: ファイル確認エラー - \(error)")
-            }
-        } else {
-            recordingCompletedSubject.send(.failure(RecordingError.recordingFailed))
-            print("❌ AudioRecorderService: 録音失敗")
+        guard let chunk = closing.removeValue(forKey: ObjectIdentifier(recorder)) else { return }
+        if !flag {
+            // The file may still hold audio; the uploader repairs or drops it.
+            print("⚠️ AudioRecorderService: chunk \(chunk.sequence) did not finish cleanly")
         }
-
-        // リセット
-        currentRecordingURL = nil
+        chunkFinished.send(chunk.id)
     }
 
-    /// Encoding failed (e.g. the disk is full). AVAudioRecorder stops; report it instead of staying silent.
+    /// Writing failed (e.g. the disk is full). The recorder has stopped on its own.
     func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
-        print("❌ AudioRecorderService: encode error - \(error?.localizedDescription ?? "unknown")")
-        stopMetering()
-        if audioRecorder === recorder {
-            audioRecorder = nil
+        let failure = error ?? RecordingError.recordingFailed
+        print("❌ AudioRecorderService: encode error - \(failure)")
+        if self.recorder === recorder {
+            self.recorder = nil
+            current = nil
         }
-        currentRecordingURL = nil
-        recordingCompletedSubject.send(.failure(error ?? RecordingError.recordingFailed))
+        if let chunk = closing.removeValue(forKey: ObjectIdentifier(recorder)) {
+            chunkFinished.send(chunk.id)
+        }
+        endSession(.failed(failure))
     }
 }
 
 // MARK: - Errors
+
 enum RecordingError: LocalizedError {
     case startFailed
-    case notRecording
-    case noRecordingURL
+    case alreadyRecording
     case recordingFailed
-    case emptyFile
+    case notEnoughSpace(freeBytes: Int64)
 
     var errorDescription: String? {
         switch self {
         case .startFailed:
             return "録音の開始に失敗しました"
-        case .notRecording:
-            return "録音中ではありません"
-        case .noRecordingURL:
-            return "録音ファイルのURLが見つかりません"
+        case .alreadyRecording:
+            return "すでに録音中です"
         case .recordingFailed:
             return "録音に失敗しました"
-        case .emptyFile:
-            return "録音ファイルが空です"
+        case .notEnoughSpace(let free):
+            return "空き容量が足りません（残り \(free / 1_048_576) MB。60分の録音には約 200 MB 必要です）"
         }
     }
 }
-
-// String.matches(_:) extension is already defined in AudioRecorder.swift

@@ -553,6 +553,19 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         return true
     }
 
+    // MARK: - バックグラウンド転送の完了（アプリが終了していても OS が起こして呼ぶ）
+
+    func application(_ application: UIApplication,
+                     handleEventsForBackgroundURLSession identifier: String,
+                     completionHandler: @escaping () -> Void) {
+        guard identifier == ChunkUploader.backgroundSessionIdentifier else {
+            completionHandler()
+            return
+        }
+        ChunkUploader.shared.backgroundCompletionHandler = completionHandler
+        ChunkUploader.shared.start()
+    }
+
     // MARK: - デバイストークン取得成功
 
     func application(_ application: UIApplication,

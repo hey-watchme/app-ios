@@ -95,19 +95,27 @@ class ToastManager: ObservableObject {
     /// 便利メソッド：エラートースト
     func showError(title: String, subtitle: String? = nil) {
         show(ToastMessage(type: .error, title: title, subtitle: subtitle))
+        notifyIfInBackground(title: title, body: subtitle)
+    }
 
-        // A toast cannot be seen while the app is in the background (screen locked during an
-        // upload, for example). Post a local notification so a failure is never silent.
-        if UIApplication.shared.applicationState != .active {
-            let content = UNMutableNotificationContent()
-            content.title = title
-            content.body = subtitle ?? ""
-            content.sound = .default
-            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
-            UNUserNotificationCenter.current().add(request) { error in
-                if let error {
-                    print("❌ [Toast] local notification failed: \(error)")
-                }
+    /// Information the person must not miss even with the screen off (e.g. the 60-minute stop).
+    func announce(title: String, subtitle: String? = nil) {
+        show(ToastMessage(type: .info, title: title, subtitle: subtitle))
+        notifyIfInBackground(title: title, body: subtitle)
+    }
+
+    /// A toast cannot be seen while the app is in the background (screen locked while
+    /// recording or sending). Post a local notification so nothing is silent.
+    private func notifyIfInBackground(title: String, body: String?) {
+        guard UIApplication.shared.applicationState != .active else { return }
+        let content = UNMutableNotificationContent()
+        content.title = title
+        content.body = body ?? ""
+        content.sound = .default
+        let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+        UNUserNotificationCenter.current().add(request) { error in
+            if let error {
+                print("❌ [Toast] local notification failed: \(error)")
             }
         }
     }

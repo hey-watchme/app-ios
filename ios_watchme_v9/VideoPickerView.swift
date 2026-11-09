@@ -134,11 +134,10 @@ struct VideoPickerView: View {
             }
             try await Task.sleep(nanoseconds: 300_000_000) // 0.3s
 
-            // Success
             await MainActor.run {
-                ToastManager.shared.showSuccess(
-                    title: "送信完了",
-                    subtitle: "分析結果をお待ちください"
+                ToastManager.shared.showInfo(
+                    title: "送信を始めました",
+                    subtitle: "届き次第お知らせします"
                 )
             }
 
@@ -309,37 +308,15 @@ struct VideoPickerView: View {
         }
     }
 
+    /// Hand the file to the upload queue: it is journaled, sent in the background and retried until delivered.
     private func uploadExtractedAudio(_ audioURL: URL) async throws {
-        guard let deviceID = deviceManager.selectedDeviceID,
-              let userID = userAccountManager.effectiveUserId else {
-            print("❌ Missing device ID or user ID")
+        guard let deviceID = deviceManager.selectedDeviceID else {
+            print("❌ Missing device ID")
             throw VideoProcessingError.missingRequiredData
         }
-
-        // Create upload request using the same structure as recording uploads
-        let uploadRequest = UploadRequest(
-            fileURL: audioURL,
-            fileName: audioURL.lastPathComponent,
-            userID: userID,
-            deviceID: deviceID,
-            recordedAt: Date(),
-            timezone: deviceManager.selectedDeviceTimezone
+        _ = try await ChunkUploader.shared.enqueue(
+            externalFile: audioURL, deviceId: deviceID, recordedAt: Date(), timezone: deviceManager.selectedDeviceTimezone
         )
-
-        // Use the uploader service directly
-        let uploaderService = UploaderService()
-
-        do {
-            try await uploaderService.upload(uploadRequest)
-            print("✅ Audio upload successful")
-
-            // Clean up temporary file
-            try? FileManager.default.removeItem(at: audioURL)
-
-        } catch {
-            print("❌ Upload failed: \(error)")
-            throw error
-        }
     }
 
 }

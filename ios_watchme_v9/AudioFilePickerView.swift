@@ -104,15 +104,15 @@ struct AudioFilePickerView: View {
             try? await Task.sleep(nanoseconds: 300_000_000)
 
             await MainActor.run {
-                ToastManager.shared.showSuccess(
-                    title: "送信完了",
-                    subtitle: "分析結果をお待ちください"
+                ToastManager.shared.showInfo(
+                    title: "送信を始めました",
+                    subtitle: "届き次第お知らせします"
                 )
             }
         } catch {
             await MainActor.run {
                 ToastManager.shared.showError(
-                    title: "送信失敗",
+                    title: "送信できませんでした",
                     subtitle: error.localizedDescription
                 )
             }
@@ -231,25 +231,14 @@ struct AudioFilePickerView: View {
         return outputURL
     }
 
+    /// Hand the file to the upload queue: it is journaled, sent in the background and retried until delivered.
     private func uploadAudioFile(_ audioURL: URL) async throws {
-        guard let deviceID = deviceManager.selectedDeviceID,
-              let userID = userAccountManager.effectiveUserId else {
+        guard let deviceID = deviceManager.selectedDeviceID else {
             throw AudioFileProcessingError.missingRequiredData
         }
-
-        let uploadRequest = UploadRequest(
-            fileURL: audioURL,
-            fileName: audioURL.lastPathComponent,
-            userID: userID,
-            deviceID: deviceID,
-            recordedAt: Date(),
-            timezone: deviceManager.selectedDeviceTimezone
+        _ = try await ChunkUploader.shared.enqueue(
+            externalFile: audioURL, deviceId: deviceID, recordedAt: Date(), timezone: deviceManager.selectedDeviceTimezone
         )
-
-        let uploaderService = UploaderService()
-        try await uploaderService.upload(uploadRequest)
-
-        try? FileManager.default.removeItem(at: audioURL)
     }
 }
 
