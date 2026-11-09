@@ -9,6 +9,7 @@
 import Foundation
 import Combine
 import AVFoundation
+import UIKit
 
 // MARK: - State（単一の信頼できる状態）
 struct RecordingState {
@@ -17,9 +18,12 @@ struct RecordingState {
     var recordingStartTime: Date?
     var recordingDuration: TimeInterval = 0
     var currentSlot: String = ""
+    var currentRecordingFileName: String?
 
-    // 録音ファイル管理
+    // 録音ファイル管理（端末に残っている＝まだ送れていない録音）
     var recordings: [RecordingModel] = []
+    var autoUploadingFileName: String?
+    var uploadErrors: [String: String] = [:]  // fileName -> last error message
 
     // アップロード状態
     var isUploading = false
@@ -64,6 +68,7 @@ final class RecordingStore: ObservableObject {
     // MARK: - Private Properties
     private var cancellables = Set<AnyCancellable>()
     private var recordingTimer: Timer?
+    private var lastPendingReminderAt: Date?
 
     // MARK: - Initialization
     init(
@@ -90,7 +95,38 @@ final class RecordingStore: ObservableObject {
             }
             .store(in: &cancellables)
 
+        audioService.interruptedPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] in
+                self?.handleRecordingInterrupted()
+            }
+            .store(in: &cancellables)
+
+        // アプリを開くたびに、送れていない録音が残っていれば知らせる
+        NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                Task { await self?.remindPendingRecordingsIfAny() }
+            }
+            .store(in: &cancellables)
+
         // Note: AudioLevelは現在使用していない（AudioMonitorServiceが直接UIに提供）
+    }
+
+    /// Recordings left on the device were never sent (upload failed, or the app was closed while
+    /// recording). Say so whenever the app comes to the foreground, at most every 5 minutes.
+    private func remindPendingRecordingsIfAny() async {
+        guard !state.isRecording, !state.isUploading, state.autoUploadingFileName == nil else { return }
+        if let last = lastPendingReminderAt, Date().timeIntervalSince(last) < 300 { return }
+
+        await loadRecordings()
+        guard !state.recordings.isEmpty else { return }
+
+        lastPendingReminderAt = Date()
+        ToastManager.shared.showError(
+            title: "未送信の録音が\(state.recordings.count)件あります",
+            subtitle: "録音画面から再送するか削除できます"
+        )
     }
 
     // MARK: - Public Methods（UIからの指示を受け取るインターフェース）
@@ -166,12 +202,14 @@ final class RecordingStore: ObservableObject {
         // 実際の録音開始（非同期、軽量）
         do {
             let fileName = generateFileName()
+            state.currentRecordingFileName = fileName
             try await audioService.startRecording(fileName: fileName)
             print("✅ RecordingStore: 録音開始成功")
         } catch {
             // エラー時はUIを戻す
             state.isRecording = false
             state.recordingStartTime = nil
+            state.currentRecordingFileName = nil
             stopRecordingTimer()
 
             state.errorMessage = "録音開始に失敗しました: \(error.localizedDescription)"
@@ -198,21 +236,26 @@ final class RecordingStore: ObservableObject {
 
             // 録音完了処理はrecordingCompletedPublisher経由で受け取る
         } catch {
-            state.errorMessage = "録音停止に失敗しました: \(error.localizedDescription)"
-            state.showError = true
+            // The sheet closes right after stopping, so an in-sheet message would never be seen
+            ToastManager.shared.showError(
+                title: "録音を止められませんでした",
+                subtitle: error.localizedDescription
+            )
             print("❌ RecordingStore: 録音停止失敗 - \(error)")
         }
     }
 
     /// 一括アップロード開始
     func startBatchUpload() async {
-        guard !state.isUploading else {
+        guard !state.isUploading, state.autoUploadingFileName == nil else {
             print("⚠️ RecordingStore: 既にアップロード中です")
             return
         }
 
-        // アップロード対象を選定
-        let uploadTargets = state.recordings.filter { !$0.isUploaded && $0.fileExists() && $0.fileSize > 0 }
+        // アップロード対象を選定（大きすぎて今は送れないものは端末に残す）
+        let uploadTargets = state.recordings.filter {
+            !$0.isUploaded && $0.fileExists() && $0.fileSize > 0 && !Self.exceedsUploadLimit($0)
+        }
 
         guard !uploadTargets.isEmpty else {
             state.errorMessage = "アップロード対象のファイルがありません"
@@ -232,6 +275,16 @@ final class RecordingStore: ObservableObject {
         await processUploadQueue()
     }
 
+    /// 端末に残っている（まだ送れていない）録音を読み直す。録音画面を開くたびに呼ぶ
+    func reloadPendingRecordings() async {
+        await loadRecordings()
+    }
+
+    /// サーバーが今は受け取れない大きさか（S3 への直接アップロードに変えるまでの制限）
+    static func exceedsUploadLimit(_ recording: RecordingModel) -> Bool {
+        recording.fileSize > UploaderService.maxUploadBytes
+    }
+
     /// エラーをクリア
     func clearError() {
         state.showError = false
@@ -248,6 +301,7 @@ final class RecordingStore: ObservableObject {
     func deleteRecording(_ recording: RecordingModel) async {
         // リストから即座に削除（UI更新）
         state.recordings.removeAll { $0.fileName == recording.fileName }
+        state.uploadErrors[recording.fileName] = nil
 
         // 実際のファイル削除
         do {
@@ -300,10 +354,17 @@ final class RecordingStore: ObservableObject {
         return SlotTimeUtility.getCurrentSlot(timezone: deviceManager.selectedDeviceTimezone)
     }
 
+    /// YYYY-MM-DD/HH-mm-ss.wav. Down to the second so a new recording never overwrites
+    /// an earlier one that is still waiting to be sent (30-minute slot names did).
     private func generateFileName() -> String {
-        let dateString = SlotTimeUtility.getDateString(from: Date(), timezone: deviceManager.selectedDeviceTimezone)
-        let slot = getCurrentSlot()
-        return "\(dateString)/\(slot).wav"
+        let now = Date()
+        let timezone = deviceManager.selectedDeviceTimezone
+        let dateString = SlotTimeUtility.getDateString(from: now, timezone: timezone)
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.dateFormat = "HH-mm-ss"
+        formatter.timeZone = timezone
+        return "\(dateString)/\(formatter.string(from: now)).wav"
     }
 
     private func startRecordingTimer() {
@@ -322,7 +383,22 @@ final class RecordingStore: ObservableObject {
         state.recordingDuration = 0
     }
 
+    /// A call or Siri took the microphone. The service already finished the file, and the
+    /// completion handler uploads it; here only the UI state is brought back.
+    private func handleRecordingInterrupted() {
+        // The session has to be set up again before the next recording
+        state.isAudioSessionPrepared = false
+        guard state.isRecording else { return }
+        state.isRecording = false
+        stopRecordingTimer()
+        ToastManager.shared.showError(
+            title: "録音が中断されました",
+            subtitle: "電話などでマイクが使われたため、そこまでの録音を送信します"
+        )
+    }
+
     private func handleRecordingCompleted(_ result: Result<RecordingInfo, Error>) {
+        state.currentRecordingFileName = nil
         switch result {
         case .success(let info):
             print("📝 RecordingStore: 録音完了 - \(info.fileName)")
@@ -336,14 +412,21 @@ final class RecordingStore: ObservableObject {
             }
 
         case .failure(let error):
-            state.errorMessage = "録音に失敗しました: \(error.localizedDescription)"
-            state.showError = true
+            // The sheet is usually closed by now, so use a toast
+            state.isRecording = false
+            stopRecordingTimer()
+            ToastManager.shared.showError(
+                title: "録音に失敗しました",
+                subtitle: error.localizedDescription
+            )
             print("❌ RecordingStore: 録音失敗 - \(error)")
         }
     }
 
     private func attemptAutoUpload(_ recording: RecordingModel) async {
         print("🚀 RecordingStore: 自動アップロード開始 - \(recording.fileName)")
+        state.autoUploadingFileName = recording.fileName
+        defer { state.autoUploadingFileName = nil }
 
         // トースト表示（送信中 0% - 100%）
         ToastManager.shared.showProgressWithPhase(
@@ -373,8 +456,12 @@ final class RecordingStore: ObservableObject {
                 progress: 1.0
             )
 
-            // 成功
-            try await audioService.deleteRecordingFile(url: recording.getFileURL())
+            // 成功。消せなかったときは未送信に見えるが、再送すると 409 で送信済みとして消える
+            do {
+                try await audioService.deleteRecordingFile(url: recording.getFileURL())
+            } catch {
+                print("⚠️ RecordingStore: uploaded, but the local file could not be deleted - \(error)")
+            }
             print("✅ RecordingStore: 自動アップロード成功、ファイル削除済み")
 
             // Brief delay to show 100% before showing success
@@ -387,17 +474,21 @@ final class RecordingStore: ObservableObject {
             )
 
         } catch {
-            // 失敗：リストに追加
+            // 失敗：端末に残し、録音画面の「未送信の録音」に出す
+            state.recordings.removeAll { $0.fileName == recording.fileName }
             state.recordings.insert(recording, at: 0)
+            state.uploadErrors[recording.fileName] = error.localizedDescription
             print("❌ RecordingStore: 自動アップロード失敗、リストに追加 - \(error)")
 
-            // エラーメッセージを取得（サーバーからの詳細メッセージを優先）
-            let errorMessage = error.localizedDescription
-
             // 失敗トースト表示（サーバーからのエラーメッセージを表示）
+            let reason = error.localizedDescription.trimmingCharacters(in: CharacterSet(charactersIn: "。."))
+            let isTooLarge: Bool
+            if case UploadError.tooLarge = error { isTooLarge = true } else { isTooLarge = false }
             ToastManager.shared.showError(
-                title: "送信失敗",
-                subtitle: errorMessage
+                title: "送信できませんでした",
+                subtitle: isTooLarge
+                    ? "\(reason)。録音は端末に残しました"
+                    : "\(reason)。録音は端末に残っていて、録音画面から再送できます"
             )
         }
     }
@@ -430,6 +521,7 @@ final class RecordingStore: ObservableObject {
 
                 // 成功
                 state.uploadStats.success += 1
+                state.uploadErrors[recording.fileName] = nil
 
                 // リストから削除
                 state.recordings.removeAll { $0.fileName == recording.fileName }
@@ -442,6 +534,7 @@ final class RecordingStore: ObservableObject {
             } catch {
                 // 失敗
                 state.uploadStats.failure += 1
+                state.uploadErrors[recording.fileName] = error.localizedDescription
                 print("❌ RecordingStore: アップロード失敗 - \(recording.fileName): \(error)")
             }
         }
@@ -474,11 +567,16 @@ final class RecordingStore: ObservableObject {
 
     private func loadRecordings() async {
         do {
-            let recordings = try await audioService.loadRecordings()
+            let busy = Set([state.currentRecordingFileName, state.autoUploadingFileName].compactMap { $0 })
+            let recordings = try await audioService.loadRecordings().filter { !busy.contains($0.fileName) }
             state.recordings = recordings.sorted { $0.date > $1.date }
             print("📋 RecordingStore: 録音ファイル読み込み完了 - \(recordings.count)件")
         } catch {
             print("❌ RecordingStore: 録音ファイル読み込み失敗 - \(error)")
+            ToastManager.shared.showError(
+                title: "端末の録音を読み込めませんでした",
+                subtitle: error.localizedDescription
+            )
         }
     }
 

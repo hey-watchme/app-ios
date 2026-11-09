@@ -8,6 +8,7 @@
 
 import Foundation
 import Combine
+import UIKit
 
 // MARK: - UploadRequest（純粋なデータ構造）
 struct UploadRequest {
@@ -21,6 +22,13 @@ struct UploadRequest {
 
 // MARK: - UploaderService（アップロード専門サービス）
 final class UploaderService {
+    // MARK: - Limits
+
+    /// Largest file the server accepts today. API Gateway hands the body to Lambda base64-encoded
+    /// (about 4/3 larger) and Lambda takes at most 6 MB, so about 2 min 17 s of 16 kHz mono WAV.
+    /// Goes away when uploads move to S3 presigned URLs.
+    static let maxUploadBytes: Int64 = 4_400_000
+
     // MARK: - Properties
     private let serverURL = "https://api.hey-watch.me"
     private var uploadTask: URLSessionUploadTask?
@@ -45,6 +53,9 @@ final class UploaderService {
         guard fileSize > 0 else {
             throw UploadError.emptyFile
         }
+        guard fileSize <= Self.maxUploadBytes else {
+            throw UploadError.tooLarge
+        }
 
         // アップロードURL生成
         guard let uploadURL = URL(string: "\(serverURL)/upload") else {
@@ -65,12 +76,23 @@ final class UploaderService {
         uploadRequest.timeoutInterval = 120.0
         uploadRequest.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
 
+        // Keep the upload alive if the screen locks or the app is closed right after stopping.
+        let backgroundTask = await BackgroundTask.begin(name: "recording-upload")
+        defer { Task { await backgroundTask.end() } }
+
         // アップロード実行（Dataを直接送信、二重ラップ解消）
         let (data, response) = try await URLSession.shared.upload(for: uploadRequest, from: multipartBody)
 
         // レスポンス確認
         guard let httpResponse = response as? HTTPURLResponse else {
             throw UploadError.invalidResponse
+        }
+
+        // 409: the server already has this recording (an earlier attempt got through but its
+        // response was lost). Treat as sent so the local copy is not resent forever.
+        if httpResponse.statusCode == 409 {
+            print("ℹ️ UploaderService: already received by the server - \(request.fileName)")
+            return
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
@@ -157,10 +179,33 @@ final class UploaderService {
     }
 }
 
+// MARK: - BackgroundTask
+
+/// Asks iOS for extra time to finish work after the app leaves the foreground.
+@MainActor
+private final class BackgroundTask {
+    private var identifier: UIBackgroundTaskIdentifier = .invalid
+
+    static func begin(name: String) -> BackgroundTask {
+        let task = BackgroundTask()
+        task.identifier = UIApplication.shared.beginBackgroundTask(withName: name) { [weak task] in
+            task?.end()
+        }
+        return task
+    }
+
+    func end() {
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
+    }
+}
+
 // MARK: - Errors
 enum UploadError: LocalizedError {
     case fileNotFound
     case emptyFile
+    case tooLarge
     case invalidURL
     case invalidResponse
     case serverError(statusCode: Int, message: String?)
@@ -172,6 +217,8 @@ enum UploadError: LocalizedError {
             return "ファイルが見つかりません"
         case .emptyFile:
             return "ファイルが空です"
+        case .tooLarge:
+            return "録音が長すぎて今は送れません（上限は約2分）"
         case .invalidURL:
             return "無効なURLです"
         case .invalidResponse:

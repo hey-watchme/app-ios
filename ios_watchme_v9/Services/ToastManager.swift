@@ -7,6 +7,7 @@
 //
 
 import SwiftUI
+import UserNotifications
 
 // MARK: - ToastMessage（トーストメッセージの定義）
 
@@ -94,6 +95,21 @@ class ToastManager: ObservableObject {
     /// 便利メソッド：エラートースト
     func showError(title: String, subtitle: String? = nil) {
         show(ToastMessage(type: .error, title: title, subtitle: subtitle))
+
+        // A toast cannot be seen while the app is in the background (screen locked during an
+        // upload, for example). Post a local notification so a failure is never silent.
+        if UIApplication.shared.applicationState != .active {
+            let content = UNMutableNotificationContent()
+            content.title = title
+            content.body = subtitle ?? ""
+            content.sound = .default
+            let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+            UNUserNotificationCenter.current().add(request) { error in
+                if let error {
+                    print("❌ [Toast] local notification failed: \(error)")
+                }
+            }
+        }
     }
 
     /// 便利メソッド：情報トースト

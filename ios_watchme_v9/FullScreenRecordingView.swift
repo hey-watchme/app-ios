@@ -68,6 +68,10 @@ struct FullScreenRecordingView: View {
                     // ビデオ選択ボタン（録音していない時のみ表示）
                     if !store.state.isRecording {
                         VStack(spacing: 12) {
+                            if !store.state.recordings.isEmpty {
+                                PendingRecordingsPanel()
+                            }
+
                             HStack(spacing: 12) {
                                 Button(action: {
                                     showVideoPicker = true
@@ -145,6 +149,10 @@ struct FullScreenRecordingView: View {
 
             Task {
                 await store.initialize()
+                // Recordings left on the device are the ones not sent yet
+                if !store.state.isUploading {
+                    await store.reloadPendingRecordings()
+                }
             }
         }
         .onDisappear {
@@ -253,6 +261,138 @@ struct FullScreenRecordingView: View {
 }
 
 // MARK: - Subviews
+
+/// 端末に残っている（まだ送れていない）録音の一覧と、まとめて再送するボタン
+struct PendingRecordingsPanel: View {
+    @EnvironmentObject var store: RecordingStore
+    @State private var recordingToDelete: RecordingModel?
+
+    private let maxVisibleRows = 3
+
+    var body: some View {
+        let recordings = store.state.recordings
+        let sendableCount = recordings.filter { !RecordingStore.exceedsUploadLimit($0) }.count
+        let isBusy = store.state.isUploading || store.state.autoUploadingFileName != nil
+
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.accentTealMuted)
+                Text("未送信の録音 \(recordings.count)件")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+                Spacer()
+            }
+
+            ForEach(recordings.prefix(maxVisibleRows), id: \.fileName) { recording in
+                row(for: recording, isBusy: isBusy)
+            }
+
+            if recordings.count > maxVisibleRows {
+                Text("ほか \(recordings.count - maxVisibleRows)件")
+                    .font(.caption)
+                    .foregroundColor(.white.opacity(0.75))
+            }
+
+            if sendableCount > 0 {
+                Button(action: {
+                    Task { await store.startBatchUpload() }
+                }) {
+                    HStack(spacing: 8) {
+                        if isBusy {
+                            ProgressView()
+                                .tint(.white)
+                        }
+                        Text(isBusy ? "送信中..." : "まとめて再送")
+                            .font(.system(size: 15, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                    .background(
+                        Capsule()
+                            .fill(Color.white.opacity(0.2))
+                            .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                    )
+                }
+                .disabled(isBusy)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.12))
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.white.opacity(0.25), lineWidth: 1))
+        )
+        .confirmationDialog(
+            "この録音を削除しますか？",
+            isPresented: Binding(
+                get: { recordingToDelete != nil },
+                set: { if !$0 { recordingToDelete = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("削除", role: .destructive) {
+                if let recording = recordingToDelete {
+                    Task { await store.deleteRecording(recording) }
+                }
+                recordingToDelete = nil
+            }
+            Button("キャンセル", role: .cancel) {
+                recordingToDelete = nil
+            }
+        } message: {
+            Text("送信していない録音は元に戻せません")
+        }
+    }
+
+    private func row(for recording: RecordingModel, isBusy: Bool) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("\(Self.dateText(recording.date))・\(Self.durationText(recording.fileSize))")
+                    .font(.system(size: 14, weight: .medium, design: .rounded))
+                    .foregroundColor(.white)
+
+                if let note = note(for: recording) {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.75))
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer()
+
+            Button(action: { recordingToDelete = recording }) {
+                Image(systemName: "trash")
+                    .font(.system(size: 15))
+                    .foregroundColor(.white.opacity(0.85))
+                    .padding(4)
+            }
+            .disabled(isBusy)
+        }
+    }
+
+    private func note(for recording: RecordingModel) -> String? {
+        if RecordingStore.exceedsUploadLimit(recording) {
+            return UploadError.tooLarge.errorDescription
+        }
+        return store.state.uploadErrors[recording.fileName]
+    }
+
+    private static func dateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M/d HH:mm"
+        return formatter.string(from: date)
+    }
+
+    /// Length from the file size: recordings are 16 kHz, 16-bit mono WAV (32,000 bytes per second).
+    private static func durationText(_ fileSize: Int64) -> String {
+        let seconds = Int(max(fileSize - 44, 0) / 32_000)
+        return seconds >= 60 ? "\(seconds / 60)分\(seconds % 60)秒" : "\(seconds)秒"
+    }
+}
 
 /// エラーメッセージ表示
 struct ErrorMessageView: View {

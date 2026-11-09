@@ -29,13 +29,48 @@ final class AudioRecorderService: NSObject {
         audioLevelSubject.eraseToAnyPublisher()
     }
 
+    /// Fires when a call, Siri or another app takes the microphone and the recording is finished early.
+    private let interruptedSubject = PassthroughSubject<Void, Never>()
+
+    var interruptedPublisher: AnyPublisher<Void, Never> {
+        interruptedSubject.eraseToAnyPublisher()
+    }
+
     // MARK: - Metering
     private var meterTimer: Timer?
+    private var interruptionObserver: NSObjectProtocol?
+    private var mediaResetObserver: NSObjectProtocol?
 
     // MARK: - Initialization
     override init() {
         self.audioSession = AVAudioSession.sharedInstance()
         super.init()
+
+        interruptionObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            self?.handleInterruption(notification)
+        }
+
+        // The audio system restarted (rare); the recorder is dead, so finish what we have.
+        mediaResetObserver = NotificationCenter.default.addObserver(
+            forName: AVAudioSession.mediaServicesWereResetNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] _ in
+            self?.finishEarly(reason: "media services were reset")
+        }
+    }
+
+    deinit {
+        if let interruptionObserver {
+            NotificationCenter.default.removeObserver(interruptionObserver)
+        }
+        if let mediaResetObserver {
+            NotificationCenter.default.removeObserver(mediaResetObserver)
+        }
     }
 
     // MARK: - Public Methods
@@ -133,7 +168,9 @@ final class AudioRecorderService: NSObject {
 
     /// 録音停止
     func stopRecording() async throws -> URL {
-        guard let recorder = audioRecorder, recorder.isRecording else {
+        // Not checking isRecording: if the system paused the recorder, stop() still finishes
+        // the file so it gets uploaded instead of being left behind.
+        guard let recorder = audioRecorder else {
             throw RecordingError.notRecording
         }
 
@@ -205,6 +242,23 @@ final class AudioRecorderService: NSObject {
     }
 
     // MARK: - Private Methods
+
+    /// The system pauses the recorder when the microphone is taken. Finish the file instead,
+    /// so what was recorded so far is uploaded rather than left half-written.
+    private func handleInterruption(_ notification: Foundation.Notification) {
+        guard let rawType = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+              AVAudioSession.InterruptionType(rawValue: rawType) == .began else { return }
+        finishEarly(reason: "interrupted")
+    }
+
+    private func finishEarly(reason: String) {
+        guard let recorder = audioRecorder else { return }
+        stopMetering()
+        recorder.stop()
+        audioRecorder = nil
+        interruptedSubject.send()
+        print("⚠️ AudioRecorderService: recording finished early (\(reason)) - \(recorder.url.lastPathComponent)")
+    }
 
     private func startMetering() {
         meterTimer?.invalidate()
@@ -285,6 +339,17 @@ extension AudioRecorderService: AVAudioRecorderDelegate {
 
         // リセット
         currentRecordingURL = nil
+    }
+
+    /// Encoding failed (e.g. the disk is full). AVAudioRecorder stops; report it instead of staying silent.
+    func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
+        print("❌ AudioRecorderService: encode error - \(error?.localizedDescription ?? "unknown")")
+        stopMetering()
+        if audioRecorder === recorder {
+            audioRecorder = nil
+        }
+        currentRecordingURL = nil
+        recordingCompletedSubject.send(.failure(error ?? RecordingError.recordingFailed))
     }
 }
 
