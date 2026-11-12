@@ -49,7 +49,7 @@ enum ActivityFeed {
         var items = [ActivityItem(
             id: "\(block.id)_recording",
             recordingID: block.id,
-            title: "録音を受信",
+            title: "録音を送信",
             status: recordingStatus,
             detail: recordingDetail,
             date: SpotStage.parse(block.createdAt)
@@ -58,7 +58,7 @@ enum ActivityFeed {
             items.append(ActivityItem(
                 id: "\(block.id)_\(stage.stage)",
                 recordingID: block.id,
-                title: stage.label,
+                title: stage.stage == "day_so_far" ? SpotStage.dayAnalysisLabel(for: block.date) : stage.label,
                 status: stage.status,
                 detail: detail(for: stage),
                 date: SpotStage.parse(stage.updatedAt)

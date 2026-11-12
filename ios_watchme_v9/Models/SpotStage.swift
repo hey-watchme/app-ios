@@ -36,10 +36,20 @@ struct SpotStage: Codable, Equatable, Identifiable {
         "events": "出来事",
         "emotion": "声の表情",
         "profile": "分析",
-        "day_so_far": "ここまで",
+        "day_so_far": "1日の分析",
     ]
 
     var label: String { Self.labels[stage] ?? stage }
+
+    /// Name of the day's running analysis (day_so_far) for a given local date:
+    /// "今日の分析" for today, "11/6 の分析" for another day, "1日の分析" when the date is unknown.
+    static func dayAnalysisLabel(for localDate: String?, timezone: TimeZone = .current) -> String {
+        guard let localDate else { return "1日の分析" }
+        if localDate == LocalDate.today(timezone: timezone) { return "今日の分析" }
+        let parts = localDate.split(separator: "-")
+        guard parts.count == 3, let month = Int(parts[1]), let day = Int(parts[2]) else { return "1日の分析" }
+        return "\(month)/\(day) の分析"
+    }
 
     /// A stage cannot legitimately stay "running" longer than a Lambda can run (15 min),
     /// nor "queued" longer than the whole pipeline takes. Past these, the pipeline stopped

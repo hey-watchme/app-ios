@@ -109,7 +109,7 @@ struct ModernHeroGaugeView: View {
                     
                     // The summary is rebuilt after every recording: the day so far, not a finished day
                     if let count = dashboardSummary?.processedCount, count > 0 {
-                        Text("ここまで・\(count) 件の録音から")
+                        Text("\(SpotStage.dayAnalysisLabel(for: dashboardSummary?.date))・\(count) 件の録音から")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(Color(white: 0.45))
                             .tracking(0.5)
