@@ -22,14 +22,18 @@ struct SpotStage: Codable, Equatable, Identifiable {
         case updatedAt = "updated_at"
     }
 
-    /// Pipeline order, as shown on the card.
-    static let order = ["transcribe", "sound_events", "measure", "scene", "emotion", "profile", "day_so_far"]
+    /// Stages in the order their results usually arrive, as shown on the card.
+    /// Sound events run alongside measure and scene and usually finish after them (platform
+    /// infra/envs/stg/pipeline.tf). Vocal emotion ("emotion") was removed on 2026-11-12;
+    /// older recordings still have its row, which is not shown.
+    static let order = ["transcribe", "measure", "scene", "sound_events", "events", "profile", "day_so_far"]
 
     static let labels: [String: String] = [
         "transcribe": "文字起こし",
         "sound_events": "周りの音",
         "measure": "会話の指標",
         "scene": "場面",
+        "events": "出来事",
         "emotion": "声の表情",
         "profile": "分析",
         "day_so_far": "ここまで",
@@ -47,7 +51,6 @@ struct SpotStage: Codable, Equatable, Identifiable {
     /// chunks arrive at once. These match the pipeline's task timeouts (platform infra/envs/stg/queues.tf).
     static let queuedLimitByStage: [String: TimeInterval] = [
         "sound_events": 3 * 60 * 60,
-        "emotion": 24 * 60 * 60,
     ]
 
     /// Status as the app should show it, with stale queued/running rows turned into failed.
