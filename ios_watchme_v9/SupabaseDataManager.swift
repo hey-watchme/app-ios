@@ -774,6 +774,7 @@ class SupabaseDataManager: ObservableObject {
                 let rating: Int?
                 let created_at: String?
                 let recorded_at: String?
+                let llm_model: String?
             }
 
             struct StageRow: Decodable {
@@ -787,7 +788,7 @@ class SupabaseDataManager: ObservableObject {
 
             let spotResultsQuery = supabase
                 .from("spot_results")
-                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at, recorded_at, profile_result")
+                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at, recorded_at, llm_model, profile_result")
                 .eq("device_id", value: deviceId)
                 .eq("local_date", value: dateString)
                 .order("local_time", ascending: true)
@@ -861,6 +862,7 @@ class SupabaseDataManager: ObservableObject {
             var audioKeyMap: [String: String] = [:]
             var metricsMap: [String: String] = [:]
             var vocalEmotionMap: [String: String] = [:]
+            var recordingMap: [String: String] = [:]
             let spotResultsRaw = try await supabase
                 .from("spot_results")
                 .select("local_time, profile_result")
@@ -887,6 +889,11 @@ class SupabaseDataManager: ObservableObject {
                         }
                         if let audioKey = profileResult["audio_key"] as? String {
                             audioKeyMap[localTime] = audioKey
+                        }
+                        if let recording = profileResult["recording"] as? [String: Any],
+                           let recordingData = try? JSONSerialization.data(withJSONObject: recording, options: [.sortedKeys]),
+                           let recordingStr = String(data: recordingData, encoding: .utf8) {
+                            recordingMap[localTime] = recordingStr
                         }
                         if let vocal = profileResult["vocal_emotion"] as? [String: Any],
                            let vocalData = try? JSONSerialization.data(withJSONObject: vocal, options: [.prettyPrinted, .sortedKeys]),
@@ -959,7 +966,10 @@ class SupabaseDataManager: ObservableObject {
                     audioKey: audioKeyMap[localTime],
                     metricsRaw: metricsMap[localTime],
                     vocalEmotionRaw: vocalEmotionMap[localTime],
-                    stages: stagesMap[localTime] ?? []
+                    stages: stagesMap[localTime] ?? [],
+                    recordedAt: result.recorded_at,
+                    recordingRaw: recordingMap[localTime],
+                    llmModel: result.llm_model
                 )
             }
 

@@ -91,6 +91,9 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let metricsRaw: String?  // Fixed measurements (profile_result.metrics) as JSON
     let vocalEmotionRaw: String?  // emotion2vec scores (profile_result.vocal_emotion) as JSON
     let stages: [SpotStage]  // per-stage progress (spot_stages); empty for old recordings
+    let recordedAt: String?  // spot_results.recorded_at (UTC); keys the events of this recording
+    let recordingRaw: String?  // profile_result.recording (session, chunk sequence, duration) as JSON
+    let llmModel: String?  // model that wrote the analysis (spot_results.llm_model)
 
     // 表示用の時刻文字列（初期化時に1回だけ計算してキャッシュ）
     let displayTime: String
@@ -150,6 +153,9 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         metricsRaw = nil
         vocalEmotionRaw = nil
         stages = []
+        recordedAt = nil
+        recordingRaw = nil
+        llmModel = nil
 
         // displayTimeを初期化時に1回だけ計算（キャッシュ）
         displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
@@ -300,7 +306,10 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          audioKey: String? = nil,
          metricsRaw: String? = nil,
          vocalEmotionRaw: String? = nil,
-         stages: [SpotStage] = []) {
+         stages: [SpotStage] = [],
+         recordedAt: String? = nil,
+         recordingRaw: String? = nil,
+         llmModel: String? = nil) {
 
         self.deviceId = deviceId
         self.date = localDate
@@ -323,6 +332,9 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.metricsRaw = metricsRaw
         self.vocalEmotionRaw = vocalEmotionRaw
         self.stages = stages
+        self.recordedAt = recordedAt
+        self.recordingRaw = recordingRaw
+        self.llmModel = llmModel
 
         // Calculate displayTime
         self.displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)

@@ -60,6 +60,11 @@ struct SpotDetailView: View {
                         contentCard(title: "Analysis", content: analysis, icon: "brain.head.profile")
                     }
 
+                    // Countable events (reprimand, praise, ...)
+                    if let recordedAt = spotData.recordedAt {
+                        SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime)
+                    }
+
                     // Behavior
                     if let behavior = spotData.behavior {
                         contentCard(title: "Behavior", content: behavior, icon: "figure.walk")
@@ -75,6 +80,12 @@ struct SpotDetailView: View {
                         metricsCard
                     }
 
+                    // The rest of the measurements
+                    SpotMeasurementDetailsCard(metricsRaw: spotData.metricsRaw, speakerRoles: speakerRoles)
+
+                    // What the multimodal model heard
+                    SpotListenerCard(sceneRaw: spotData.sceneDescriptionRaw)
+
                     // Vocal emotion labels (emotion2vec, experimental)
                     if !vocalEmotionSpeakers.isEmpty {
                         vocalEmotionCard
@@ -84,6 +95,15 @@ struct SpotDetailView: View {
                     if !soundSummaries.isEmpty {
                         soundsCard
                     }
+
+                    // Length, chunk, models used
+                    SpotRecordingInfoCard(
+                        recordingRaw: spotData.recordingRaw,
+                        transcript: transcriptObject,
+                        sceneRaw: spotData.sceneDescriptionRaw,
+                        llmModel: spotData.llmModel,
+                        recordedAt: spotData.recordedAt
+                    )
 
                     // Raw data
                     rawAnalysisSection
