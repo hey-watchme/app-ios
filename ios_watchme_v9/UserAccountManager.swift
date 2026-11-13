@@ -535,15 +535,6 @@ class UserAccountManager: ObservableObject {
             let auth_provider: String
         }
 
-        struct AnonymousUserProfileWithRole: Encodable {
-            let user_id: String
-            let name: String
-            let email: String
-            let created_at: String
-            let auth_provider: String
-            let role: String
-        }
-
         let createdAt = ISO8601DateFormatter().string(from: Date())
         let baseProfile = AnonymousUserProfile(
             user_id: userId,
@@ -563,49 +554,12 @@ class UserAccountManager: ObservableObject {
             await fetchUserProfile(userId: userId)
             return
         } catch {
-            guard isUsersRoleConstraintError(error) else {
-                print("❌ 匿名ユーザープロファイル作成エラー: \(error)")
-                return
-            }
-
-            // 環境ごとに public.users.role のCHECK制約が異なるため候補を順番に試す
-            let roleCandidates = ["viewer", "individual", "user", "guest", "staff", "parent", "admin"]
-            for role in roleCandidates {
-                do {
-                    let profileWithRole = AnonymousUserProfileWithRole(
-                        user_id: userId,
-                        name: "ゲストユーザー",
-                        email: "anonymous",
-                        created_at: createdAt,
-                        auth_provider: "anonymous",
-                        role: role
-                    )
-
-                    try await supabase
-                        .from("users")
-                        .insert(profileWithRole)
-                        .execute()
-
-                    print("✅ 匿名ユーザープロファイル作成成功 (auth_provider: anonymous, role: \(role))")
-                    await fetchUserProfile(userId: userId)
-                    return
-                } catch {
-                    if !isUsersRoleConstraintError(error) {
-                        print("❌ 匿名ユーザープロファイル作成エラー（role=\(role)）: \(error)")
-                        return
-                    }
-                }
-            }
-
-            print("❌ 匿名ユーザープロファイル作成失敗: users_role_check に適合する role 値が見つかりません")
+            // role is never sent: it is set on the server only (platform migration
+            // 20261113010000_users_role_guard.sql). Retrying with role values made
+            // anonymous users admins before 2026-11-13.
+            print("❌ 匿名ユーザープロファイル作成エラー: \(error)")
             // Continue even if profile creation fails
         }
-    }
-
-    private func isUsersRoleConstraintError(_ error: Error) -> Bool {
-        guard let postgrestError = error as? PostgrestError else { return false }
-        return postgrestError.code == "23514" &&
-            postgrestError.message.contains("users_role_check")
     }
 
     // MARK: - Google OAuth認証
