@@ -20,6 +20,14 @@ import UIKit
 class SupabaseClientManager {
     static let shared = SupabaseClientManager()
 
+    /// "Bearer <the signed-in user's access token>" (refreshed when expired), or nil when
+    /// nobody is signed in. Tables are protected by RLS and the API checks this token,
+    /// so requests that read user data or send recordings must carry it.
+    func bearerToken() async -> String? {
+        guard let token = try? await client.auth.session.accessToken else { return nil }
+        return "Bearer \(token)"
+    }
+
     private(set) lazy var client: SupabaseClient = {
         let startTime = Date()
         print("⏱️ [SUPABASE-LAZY] Supabaseクライアント遅延初期化開始（事前初期化されていない場合）: \(startTime)")

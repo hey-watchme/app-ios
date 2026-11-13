@@ -652,73 +652,57 @@ class NetworkManager: ObservableObject {
         }
     }
 
-    // アカウント削除（管理画面API経由）
-    func deleteAccount(userId: String) async throws {
-        let adminURL = "https://admin.hey-watch.me/api/users/\(userId)"
-
-        guard let url = URL(string: adminURL) else {
-            throw NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "無効なURL"])
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
-        request.timeoutInterval = 30.0
-
-        print("🗑️ アカウント削除リクエスト送信: \(adminURL)")
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NSError(domain: "NetworkManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "無効なレスポンス"])
-        }
-
-        print("📡 アカウント削除レスポンス: \(httpResponse.statusCode)")
-
-        if let responseString = String(data: data, encoding: .utf8) {
-            print("📡 レスポンスボディ: \(responseString)")
-        }
-
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = "アカウント削除失敗: ステータスコード \(httpResponse.statusCode)"
-            print("❌ \(errorMessage)")
-            throw NSError(domain: "NetworkManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-        }
-
-        print("✅ アカウント削除成功")
+    /// Result of DELETE /devices/{id}: the device is deleted only when no other account
+    /// is linked to it; otherwise just this account's link is removed.
+    struct DeviceRemoval: Decodable {
+        let deleted: Bool
+        let other_users: Int
     }
 
-    // デバイス削除（管理画面API経由）
-    func deleteDevice(deviceId: String) async throws {
-        let adminURL = "https://admin.hey-watch.me/api/devices/\(deviceId)"
+    /// DELETE /account: delete the signed-in user's account and data on the server
+    /// (platform backend/functions/account). Throws with the server's reason on failure.
+    func deleteAccount(userId: String) async throws {
+        _ = try await accountRequest(path: "/account")
+        print("✅ アカウント削除成功: \(userId)")
+    }
 
-        guard let url = URL(string: adminURL) else {
-            throw NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "Invalid URL"])
+    /// DELETE /devices/{id}: delete a device and its recordings, or only unlink it when
+    /// another account is still linked.
+    func deleteDevice(deviceId: String) async throws -> DeviceRemoval {
+        let data = try await accountRequest(path: "/devices/\(deviceId.lowercased())")
+        return try JSONDecoder().decode(DeviceRemoval.self, from: data)
+    }
+
+    private func accountRequest(path: String) async throws -> Data {
+        guard let url = URL(string: "\(serverURL)\(path)") else {
+            throw NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "無効なURL"])
         }
-
+        guard let bearer = await SupabaseClientManager.shared.bearerToken() else {
+            throw NSError(domain: "NetworkManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "ログインし直してからもう一度お試しください"])
+        }
         var request = URLRequest(url: url)
         request.httpMethod = "DELETE"
-        request.timeoutInterval = 30.0
-
-        print("🗑️ Device delete request sent: \(adminURL)")
+        request.timeoutInterval = 60
+        request.setValue(bearer, forHTTPHeaderField: "Authorization")
 
         let (data, response) = try await URLSession.shared.data(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse else {
-            throw NSError(domain: "NetworkManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid response"])
+        guard let http = response as? HTTPURLResponse else {
+            throw NSError(domain: "NetworkManager", code: -2, userInfo: [NSLocalizedDescriptionKey: "サーバーの応答が読めませんでした"])
         }
-
-        print("📡 Device delete response: \(httpResponse.statusCode)")
-
-        if let responseString = String(data: data, encoding: .utf8) {
-            print("📡 Response body: \(responseString)")
+        // Only a JSON 200 from the API counts: a page served at the wrong address must
+        // never look like success.
+        let isJSON = (http.value(forHTTPHeaderField: "Content-Type") ?? "").contains("application/json")
+        guard http.statusCode == 200, isJSON else {
+            let detail = (try? JSONSerialization.jsonObject(with: data) as? [String: Any])?["detail"] as? String
+            let message: String
+            switch http.statusCode {
+            case 401: message = "ログインし直してからもう一度お試しください"
+            case 404: message = detail ?? "見つかりませんでした"
+            default: message = "削除できませんでした（\(http.statusCode)）。時間をおいてもう一度お試しください"
+            }
+            print("❌ DELETE \(path): \(http.statusCode) \(detail ?? "")")
+            throw NSError(domain: "NetworkManager", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
         }
-
-        guard httpResponse.statusCode == 200 else {
-            let errorMessage = "Device deletion failed: status code \(httpResponse.statusCode)"
-            print("❌ \(errorMessage)")
-            throw NSError(domain: "NetworkManager", code: httpResponse.statusCode, userInfo: [NSLocalizedDescriptionKey: errorMessage])
-        }
-
-        print("✅ Device deleted successfully")
+        return data
     }
 } 

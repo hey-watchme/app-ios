@@ -189,38 +189,18 @@ class DeviceManager: ObservableObject {
         let timezone = TimeZone.current.identifier
         print("🌍 Device timezone: \(timezone)")
 
-        let deviceData = DeviceInsert(
-            device_type: "ios",
-            timezone: timezone
-        )
-
-        let response: [Device] = try await supabase
-            .from("devices")
-            .upsert(deviceData)
-            .select()
+        // register_device() creates the device and links it to this user as owner in one
+        // step: with RLS a user can only see devices they are linked to (platform
+        // supabase/migrations/20261113000000_core_rls.sql).
+        let deviceId: String = try await supabase
+            .rpc("register_device", params: RegisterDeviceParams(p_device_type: "ios", p_timezone: timezone))
             .execute()
             .value
 
-        guard let device = response.first else {
+        guard !deviceId.isEmpty else {
             throw DeviceRegistrationError.noDeviceReturned
         }
-
-        let deviceId = device.device_id
-        print("✅ Step 1: Device registered: \(deviceId)")
-
-        // Step 2: Register user-device relationship
-        let userDeviceRelation = UserDeviceInsert(
-            user_id: userId,
-            device_id: deviceId,
-            role: "owner"
-        )
-
-        try await supabase
-            .from("user_devices")
-            .insert(userDeviceRelation, returning: .minimal)
-            .execute()
-
-        print("✅ Step 2: User-device relationship registered")
+        print("✅ Steps 1-2: Device registered and linked: \(deviceId)")
 
         // Step 3: Add sample device (best-effort)
         let sampleDeviceRelation = UserDeviceInsert(
@@ -553,31 +533,18 @@ class DeviceManager: ObservableObject {
             throw DeviceAddError.alreadyAdded
         }
         
-        // まずdevicesテーブルにデバイスが存在するか確認
+        // link_device() checks that the device exists and links this user as owner. A device
+        // the user is not linked to yet cannot be read directly (RLS).
         do {
-            let existingDevices: [Device] = try await supabase
-                .from("devices")
-                .select("*")
-                .eq("device_id", value: deviceId)
+            let linked: Bool = try await supabase
+                .rpc("link_device", params: LinkDeviceParams(p_device_id: deviceId))
                 .execute()
                 .value
-            
-            if existingDevices.isEmpty {
+
+            if !linked {
                 throw DeviceAddError.deviceNotFound
             }
-            
-            // user_devicesテーブルに追加（ownerロールで）
-            let userDevice = UserDeviceInsert(
-                user_id: userId,
-                device_id: deviceId,
-                role: "owner"  // デフォルトでownerロールに変更
-            )
-            
-            try await supabase
-                .from("user_devices")
-                .insert(userDevice)
-                .execute()
-            
+
             print("✅ Device added via QR code: \(deviceId)")
             
             // デバイス一覧を再取得
@@ -644,39 +611,9 @@ class DeviceManager: ObservableObject {
                 throw DeviceUnlinkError.unlinkFailed("デバイス連携の削除に失敗しました")
             }
             
+            // Only this account's link is removed; the device and its recordings stay
+            // (deleting them is "このデバイスを削除", the account API).
             print("✅ Successfully unlinked device: \(deviceId)")
-
-            // このデバイスを他のユーザーが参照しているかチェック
-            let remainingReferences: [UserDevice] = try await supabase
-                .from("user_devices")
-                .select("*")
-                .eq("device_id", value: deviceId)
-                .execute()
-                .value
-
-            print("🔍 Remaining references for device \(deviceId): \(remainingReferences.count)")
-
-            // 誰も参照していない場合、devicesテーブルのstatusをinactiveに更新
-            if remainingReferences.isEmpty {
-                print("⚠️ No users referencing this device. Updating status to inactive...")
-
-                // devicesテーブルのstatusを更新
-                struct DeviceStatusUpdate: Codable {
-                    let status: String
-                }
-
-                let statusUpdate = DeviceStatusUpdate(status: "inactive")
-
-                try await supabase
-                    .from("devices")
-                    .update(statusUpdate)
-                    .eq("device_id", value: deviceId)
-                    .execute()
-
-                print("✅ Device status updated to inactive")
-            } else {
-                print("ℹ️ Device still referenced by \(remainingReferences.count) user(s), keeping status as is")
-            }
 
             // ローカルのデバイスリストから削除
             await MainActor.run {
@@ -756,9 +693,15 @@ struct DeviceInfo {
 }
 
 // Supabase Insert用データモデル
-struct DeviceInsert: Codable {
-    let device_type: String
-    let timezone: String // IANAタイムゾーン識別子（例: "Asia/Tokyo"）
+/// Parameters of the register_device() database function.
+struct RegisterDeviceParams: Encodable {
+    let p_device_type: String
+    let p_timezone: String // IANA time zone identifier (e.g. "Asia/Tokyo")
+}
+
+/// Parameters of the link_device() database function.
+struct LinkDeviceParams: Encodable {
+    let p_device_id: String
 }
 
 // Supabase Response用データモデル

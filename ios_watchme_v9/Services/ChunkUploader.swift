@@ -299,13 +299,16 @@ final class ChunkUploader: NSObject, ObservableObject {
         case badResponse
 
         var isPermanent: Bool {
-            if case .http(let status, _) = self { return (400...499).contains(status) && status != 408 && status != 429 }
+            // 401: the session may just need refreshing, so it is retried like a network error.
+            if case .http(let status, _) = self { return (400...499).contains(status) && ![401, 408, 429].contains(status) }
             return false
         }
 
         var errorDescription: String? {
             switch self {
             case .http(404, _): return "このデバイスがサーバーに登録されていません。デバイスを連携し直してください"
+            case .http(401, _): return "ログインの確認ができませんでした。ログインし直すと送られます"
+            case .http(403, _): return "このデバイスはこのアカウントに連携されていません"
             case .http(let status, let detail): return "サーバーが受け付けませんでした（\(status)\(detail.map { ": \($0)" } ?? "")）"
             case .badResponse: return "サーバーの応答が読めませんでした"
             }
@@ -317,6 +320,9 @@ final class ChunkUploader: NSObject, ObservableObject {
         request.httpMethod = "POST"
         request.timeoutInterval = 20
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        if let bearer = await SupabaseClientManager.shared.bearerToken() {
+            request.setValue(bearer, forHTTPHeaderField: "Authorization")
+        }
 
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]

@@ -142,7 +142,7 @@ class SupabaseDataManager: ObservableObject {
         
         var request = URLRequest(url: requestURL)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(await SupabaseClientManager.shared.bearerToken() ?? "Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
@@ -209,7 +209,7 @@ class SupabaseDataManager: ObservableObject {
         // リクエストの構築
         var request = URLRequest(url: requestURL)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(await SupabaseClientManager.shared.bearerToken() ?? "Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
@@ -318,7 +318,7 @@ class SupabaseDataManager: ObservableObject {
         // リクエストの構築
         var request = URLRequest(url: requestURL)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(await SupabaseClientManager.shared.bearerToken() ?? "Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         
@@ -1553,7 +1553,7 @@ extension SupabaseDataManager {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(await SupabaseClientManager.shared.bearerToken() ?? "Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue(self.supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -1627,7 +1627,7 @@ extension SupabaseDataManager {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(await SupabaseClientManager.shared.bearerToken() ?? "Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue(self.supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
@@ -1691,7 +1691,7 @@ extension SupabaseDataManager {
 
         var request = URLRequest(url: url)
         request.httpMethod = "GET"
-        request.setValue("Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
+        request.setValue(await SupabaseClientManager.shared.bearerToken() ?? "Bearer \(self.supabaseAnonKey)", forHTTPHeaderField: "Authorization")
         request.setValue(self.supabaseAnonKey, forHTTPHeaderField: "apikey")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
 

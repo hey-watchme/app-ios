@@ -210,7 +210,7 @@ struct AccountSettingsView: View {
                     }
                 }
             } message: {
-                Text("アカウントを削除すると、すべてのデータが完全に削除されます。この操作は取り消せません。")
+                Text("アカウントと、このアカウントだけが使っているデバイスの録音・分析結果・観測対象のプロフィールがすべて削除されます。他のアカウントも連携しているデバイスは、連携だけを解除します。この操作は取り消せません。")
             }
             .alert("削除エラー", isPresented: $showDeleteAccountError) {
                 Button("OK", role: .cancel) { }
@@ -301,7 +301,7 @@ struct AccountSettingsView: View {
             // NetworkManagerを必要な時にだけ作成（軽量化）
             let networkManager = NetworkManager(userAccountManager: userAccountManager, deviceManager: deviceManager)
 
-            // 管理画面APIでアカウント削除
+            // サーバーのアカウント削除 API（DELETE /account）
             try await networkManager.deleteAccount(userId: userId)
 
             print("✅ アカウント削除完了 - ログアウト処理を開始")

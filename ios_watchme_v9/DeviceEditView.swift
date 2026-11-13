@@ -24,6 +24,7 @@ struct DeviceEditView: View {
     @State private var showUnlinkConfirmation = false
     @State private var isUnlinking = false
     @State private var showUnlinkSuccess = false
+    @State private var showSharedDeviceNotice = false
     @State private var showDeleteConfirmation = false
     @State private var isDeleting = false
 
@@ -236,6 +237,13 @@ struct DeviceEditView: View {
         } message: {
             Text("デバイス情報を更新しました")
         }
+        .alert("連携を解除しました", isPresented: $showSharedDeviceNotice) {
+            Button("OK") {
+                isPresented = false
+            }
+        } message: {
+            Text("他のアカウントもこのデバイスに連携しているため、このアカウントの連携だけを解除しました。デバイスと録音は残っています。")
+        }
         .alert("エラー", isPresented: $showErrorAlert) {
             Button("OK") { }
         } message: {
@@ -259,7 +267,7 @@ struct DeviceEditView: View {
                 }
             }
         } message: {
-            Text("デバイス本体とすべての連携が削除されます。この操作は取り消せません。\n\n本当に削除しますか？")
+            Text("このデバイスと、記録したすべての録音・分析結果が削除されます。この操作は取り消せません。\n\n他のアカウントも連携している場合は、このアカウントの連携だけを解除し、デバイスと録音は残します。")
         }
     }
     
@@ -343,18 +351,24 @@ struct DeviceEditView: View {
         do {
             // NetworkManagerを遅延初期化（削除時のみインスタンス化）
             let networkManager = NetworkManager()
-            try await networkManager.deleteDevice(deviceId: device.device_id)
-
-            // 成功したら少し待ってから画面を閉じる
-            try? await Task.sleep(nanoseconds: 500_000_000)
-
-            await MainActor.run {
-                isPresented = false
-            }
+            let removal = try await networkManager.deleteDevice(deviceId: device.device_id)
 
             // デバイスリストを再読み込み
             if let userId = userAccountManager.effectiveUserId {
                 await deviceManager.loadDevices(for: userId)
+            }
+
+            if removal.deleted {
+                // 成功したら少し待ってから画面を閉じる
+                try? await Task.sleep(nanoseconds: 500_000_000)
+                await MainActor.run {
+                    isPresented = false
+                }
+            } else {
+                await MainActor.run {
+                    isDeleting = false
+                    showSharedDeviceNotice = true
+                }
             }
         } catch {
             await MainActor.run {
