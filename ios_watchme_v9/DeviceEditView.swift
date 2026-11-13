@@ -107,43 +107,8 @@ struct DeviceEditView: View {
                         }
                     }
 
-                    // QRコード共有セクション
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label("デバイス共有用QRコード", systemImage: "qrcode")
-                            .font(.headline)
-                            .foregroundColor(.primary)
-
-                        // Drawn on the device from the device ID (no server round trip)
-                        if let qrImage = QRCodeService.image(for: device.device_id) {
-                            VStack(spacing: 12) {
-                                Image(uiImage: qrImage)
-                                    .interpolation(.none)
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(width: 200, height: 200)
-                                    .frame(maxWidth: .infinity)
-                                    .padding()
-                                    .background(Color.white)
-                                    .cornerRadius(12)
-
-                                ShareLink(
-                                    item: Image(uiImage: qrImage),
-                                    preview: SharePreview("デバイス共有用QRコード", image: Image(uiImage: qrImage))
-                                ) {
-                                    Label("QRコードを共有", systemImage: "square.and.arrow.up")
-                                        .font(.body)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.white)
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 12)
-                                        .background(Color.accentTeal)
-                                        .cornerRadius(12)
-                                }
-                            }
-                        }
-                    }
-                    .padding(.top, 8)
-
+                    // Sharing a device with another account by QR code is hidden while the app
+                    // is used with this iPhone only (2026-11-14); dedicated recorders are invite-only.
 
                     // Unlink device button (always visible if user can unlink)
                     if device.canUnlinkDevice {

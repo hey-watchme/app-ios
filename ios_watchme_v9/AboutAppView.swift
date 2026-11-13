@@ -63,7 +63,6 @@ struct AboutAppView: View {
                                     .foregroundColor(.primary)
 
                                 VStack(alignment: .leading, spacing: 12) {
-                                    FeatureRow(icon: "mic.fill", title: "デバイスを使った自動音声記録（オプション）", description: "対応デバイス利用時に自動音声記録を有効化できます")
                                     FeatureRow(icon: "waveform", title: "アプリ単体での録音・分析", description: "端末マイク・カメラロール動画・端末内音声ファイルに対応")
                                     FeatureRow(icon: "brain", title: "AI感情分析", description: "最新のAI技術で感情を分析")
                                     FeatureRow(icon: "chart.line.uptrend.xyaxis", title: "データ可視化", description: "感情や行動をグラフで表示")

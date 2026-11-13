@@ -38,15 +38,9 @@ struct DeviceSettingsView: View {
     @State private var isLoading = true
 
     // MARK: - Sheet State
-    @State private var showQRScanner = false
     @State private var editingContext: SubjectEditingContext? = nil
     @State private var deviceEditingContext: DeviceEditingContext? = nil
 
-    // MARK: - Alert State
-    @State private var showAddDeviceAlert = false
-    @State private var addDeviceError: String?
-    @State private var showSuccessAlert = false
-    @State private var addedDeviceId: String?
 
     // MARK: - Body
     var body: some View {
@@ -91,7 +85,7 @@ struct DeviceSettingsView: View {
                         }
                     }
 
-                    DeviceAddCard()
+                    DedicatedRecorderNotice()
 
                     Spacer(minLength: 100)
 
@@ -134,11 +128,6 @@ struct DeviceSettingsView: View {
         // 📊 パフォーマンス最適化: デバイス選択時のstate変更による不要なリロードを防止
         // デバイスデータは既にDeviceManagerで管理されているため、特別な処理は不要
         // SubjectUpdated通知は削除（selectedSubjectが計算プロパティになったため不要）
-        .sheet(isPresented: $showQRScanner) {
-            QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in
-                Task { await handleQRCodeScanned(scannedCode) }
-            }
-        }
         .sheet(item: $editingContext) { context in
             SubjectRegistrationView(
                 deviceID: context.deviceID,
@@ -166,18 +155,6 @@ struct DeviceSettingsView: View {
             .environmentObject(dataManager)
             .environmentObject(userAccountManager)
         }
-        .alert("デバイス追加エラー", isPresented: $showAddDeviceAlert, presenting: addDeviceError) { _ in
-            Button("OK", role: .cancel) { }
-        } message: { error in
-            Text(error)
-        }
-        .alert("デバイスを追加しました", isPresented: $showSuccessAlert) {
-            Button("OK", role: .cancel) { }
-        } message: {
-            if let deviceId = addedDeviceId {
-                Text("device_id: \(deviceId.prefix(8))... が閲覧可能になりました！")
-            }
-        }
     }
 
     // MARK: - Empty State
@@ -193,7 +170,7 @@ struct DeviceSettingsView: View {
                     .font(.title3)
                     .foregroundColor(Color(white: 0.56))
 
-                Text("他のデバイスから測定データを\n共有することができます")
+                Text("この iPhone で録音すると、ここに表示されます")
                     .font(.footnote)
                     .foregroundColor(Color(white: 0.56))
                     .multilineTextAlignment(.center)
@@ -251,46 +228,30 @@ struct DeviceSettingsView: View {
     }
 
 
-    // MARK: - Device Add Card
+    // MARK: - Dedicated recorder notice
+    /// WatchMe records with this iPhone. Dedicated recorders exist but are offered by
+    /// invitation only for now, so instead of an "add device" flow the page only says
+    /// how to ask about them (no button that leads nowhere).
     @ViewBuilder
-    private func DeviceAddCard() -> some View {
+    private func DedicatedRecorderNotice() -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("新しいデバイス")
+            Text("専用の録音デバイス")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(.white)
                 .padding(.horizontal)
 
-            UnifiedCard(title: "デバイスを追加") {
-                VStack(spacing: 16) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("録音デバイスに表示されたQRコードをスキャンすると、デバイス一覧に追加されます。")
-                            .font(.caption)
-                            .foregroundColor(Color(white: 0.56))
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        Text("デモデータ登録する時も、こちらからご登録いただけます。")
-                            .font(.caption)
-                            .foregroundColor(Color(white: 0.56))
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Button(action: {
-                        showQRScanner = true
-                    }) {
-                        HStack {
-                            Image(systemName: "qrcode")
-                            Text("QRコードをスキャン")
-                        }
-                        .font(.body)
-                        .fontWeight(.medium)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(Color.accentTeal)
-                        .cornerRadius(12)
-                    }
+            UnifiedCard(title: "招待制で提供しています") {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("WatchMe はこの iPhone のマイクで録音して分析します。据え置き型などの専用の録音デバイスは、現在、招待制で提供しています。")
+                        .font(.caption)
+                        .foregroundColor(Color(white: 0.56))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text("ご関心のある方は、公式サイトのお問い合わせフォームからご連絡ください。")
+                        .font(.caption)
+                        .foregroundColor(Color(white: 0.56))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
             .padding(.horizontal)
         }
@@ -299,30 +260,6 @@ struct DeviceSettingsView: View {
     // MARK: - Data Loading
     // loadAllData()とloadSampleDevice()は削除
     // → DeviceManagerで一元管理されるため不要
-
-    /// QRコードをスキャンしてデバイスを追加
-    private func handleQRCodeScanned(_ code: String) async {
-        if deviceManager.devices.contains(where: { $0.device_id == code }) {
-            addDeviceError = "このデバイスは既に追加されています。"
-            showAddDeviceAlert = true
-            return
-        }
-
-        do {
-            if let userId = userAccountManager.effectiveUserId {
-                try await deviceManager.addDeviceByQRCode(code, for: userId)
-                addedDeviceId = code
-                showSuccessAlert = true
-                // DeviceManagerのfetchUserDevicesが自動的にinitializeDevicesを呼び出す
-            } else {
-                addDeviceError = "ユーザー情報の取得に失敗しました。"
-                showAddDeviceAlert = true
-            }
-        } catch {
-            addDeviceError = "デバイスの追加に失敗しました: \(error.localizedDescription)"
-            showAddDeviceAlert = true
-        }
-    }
 }
 
 // MARK: - Preview

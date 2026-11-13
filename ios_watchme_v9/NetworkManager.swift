@@ -662,18 +662,37 @@ class NetworkManager: ObservableObject {
     /// DELETE /account: delete the signed-in user's account and data on the server
     /// (platform backend/functions/account). Throws with the server's reason on failure.
     func deleteAccount(userId: String) async throws {
-        _ = try await accountRequest(path: "/account")
+        _ = try await accountRequest(method: "DELETE", path: "/account")
         print("✅ アカウント削除成功: \(userId)")
     }
 
     /// DELETE /devices/{id}: delete a device and its recordings, or only unlink it when
     /// another account is still linked.
     func deleteDevice(deviceId: String) async throws -> DeviceRemoval {
-        let data = try await accountRequest(path: "/devices/\(deviceId.lowercased())")
+        let data = try await accountRequest(method: "DELETE", path: "/devices/\(deviceId.lowercased())")
         return try JSONDecoder().decode(DeviceRemoval.self, from: data)
     }
 
-    private func accountRequest(path: String) async throws -> Data {
+    /// The signed-in user's research consent (GET /account/research-consent).
+    func fetchResearchConsent() async throws -> ResearchConsentState {
+        let data = try await accountRequest(method: "GET", path: "/account/research-consent")
+        return try JSONDecoder().decode(ResearchConsentState.self, from: data)
+    }
+
+    /// Record the user's choice (PUT /account/research-consent). Turning it off deletes
+    /// the kept audio of this account's devices on the server.
+    func setResearchConsent(_ consented: Bool, source: String) async throws -> ResearchConsentState {
+        let body: [String: Any] = [
+            "consented": consented,
+            "policy_version": ResearchConsentInfo.policyVersion,
+            "source": source,
+        ]
+        let data = try await accountRequest(method: "PUT", path: "/account/research-consent",
+                                            body: try JSONSerialization.data(withJSONObject: body))
+        return try JSONDecoder().decode(ResearchConsentState.self, from: data)
+    }
+
+    private func accountRequest(method: String, path: String, body: Data? = nil) async throws -> Data {
         guard let url = URL(string: "\(serverURL)\(path)") else {
             throw NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "無効なURL"])
         }
@@ -681,9 +700,13 @@ class NetworkManager: ObservableObject {
             throw NSError(domain: "NetworkManager", code: 401, userInfo: [NSLocalizedDescriptionKey: "ログインし直してからもう一度お試しください"])
         }
         var request = URLRequest(url: url)
-        request.httpMethod = "DELETE"
+        request.httpMethod = method
         request.timeoutInterval = 60
         request.setValue(bearer, forHTTPHeaderField: "Authorization")
+        if let body {
+            request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+            request.httpBody = body
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
@@ -698,9 +721,9 @@ class NetworkManager: ObservableObject {
             switch http.statusCode {
             case 401: message = "ログインし直してからもう一度お試しください"
             case 404: message = detail ?? "見つかりませんでした"
-            default: message = "削除できませんでした（\(http.statusCode)）。時間をおいてもう一度お試しください"
+            default: message = "処理できませんでした（\(http.statusCode)）。時間をおいてもう一度お試しください"
             }
-            print("❌ DELETE \(path): \(http.statusCode) \(detail ?? "")")
+            print("❌ \(method) \(path): \(http.statusCode) \(detail ?? "")")
             throw NSError(domain: "NetworkManager", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: message])
         }
         return data

@@ -17,6 +17,8 @@ struct SignUpView: View {
     @State private var showPasswordConfirm: Bool = false
     @State private var agreeToTerms: Bool = false
     @State private var subscribeNewsletter: Bool = true
+    @State private var agreeResearch: Bool = false  // opt-in: never pre-checked
+    @State private var showResearchDetails: Bool = false
     @State private var showSuccessView: Bool = false
     @State private var isFormValidState: Bool = false
     @State private var showLogin: Bool = false
@@ -279,6 +281,50 @@ struct SignUpView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
 
+                    // 研究への協力（任意・オプトイン）
+                    HStack(alignment: .top, spacing: 12) {
+                        Button(action: {
+                            agreeResearch.toggle()
+                        }) {
+                            Image(systemName: agreeResearch ? "checkmark.square.fill" : "square")
+                                .foregroundColor(agreeResearch ? Color.primary : Color.secondary)
+                                .font(.title3)
+                        }
+
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("研究に協力する（任意）：録音した音声を、分析の精度を確かめ改善するために保管することに同意します。あとからマイページで変更できます。")
+                                .font(.caption)
+                                .foregroundColor(.primary)
+                                .fixedSize(horizontal: false, vertical: true)
+                            Button(action: {
+                                showResearchDetails = true
+                            }) {
+                                Text("詳しく見る")
+                                    .font(.caption)
+                                    .foregroundColor(Color.primary)
+                                    .underline()
+                            }
+                        }
+
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .sheet(isPresented: $showResearchDetails) {
+                        NavigationStack {
+                            ScrollView {
+                                ResearchConsentDetailsView()
+                                    .padding(24)
+                            }
+                            .navigationTitle(ResearchConsentInfo.title)
+                            .navigationBarTitleDisplayMode(.inline)
+                            .toolbar {
+                                ToolbarItem(placement: .confirmationAction) {
+                                    Button("閉じる") { showResearchDetails = false }
+                                }
+                            }
+                        }
+                    }
+
                     // エラーメッセージ
                     if let errorMessage = userAccountManager.authError {
                         Text(errorMessage)
@@ -382,6 +428,9 @@ struct SignUpView: View {
 
     // サインアップ処理
     private func handleSignUp() async {
+        // Sent to the server on the first sign-in of this account (the session may not
+        // exist yet if the email has to be confirmed).
+        ResearchConsentStore.rememberSignupChoice(agreeResearch, email: email)
         await userAccountManager.signUp(
             email: email,
             password: password,

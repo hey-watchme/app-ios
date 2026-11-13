@@ -14,6 +14,7 @@ struct ContentView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var recordingStore: RecordingStore
     @EnvironmentObject var toastManager: ToastManager
+    @ObservedObject private var researchConsent = ResearchConsentStore.shared
 
     // シンプルな状態管理
     @State private var selectedLocalDate: String = ""
@@ -193,6 +194,16 @@ struct ContentView: View {
                 .environmentObject(deviceManager)
                 .environmentObject(dataManager)
                 .preferredColorScheme(.light)
+        }
+        .task {
+            // Research consent: apply the sign-up choice, or ask once (not for guests).
+            await researchConsent.syncAfterSignIn(
+                email: userAccountManager.currentUser?.email,
+                isAnonymous: userAccountManager.isAnonymousUser
+            )
+        }
+        .sheet(isPresented: $researchConsent.showFirstLoginPrompt) {
+            ResearchConsentPromptView(store: researchConsent)
         }
         .onAppear {
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み

@@ -196,6 +196,11 @@ struct UserInfoView: View {
                                         .background(Color(.separator))
                                 }
 
+                                // 研究への協力（オプトイン。ゲストには出さない）
+                                if !isAnonymous {
+                                    ResearchConsentRow(store: ResearchConsentStore.shared)
+                                }
+
                                 // 会員登録日
                                 if let createdAt = profile.createdAt {
                                     let formattedDate = formatDate(createdAt)
