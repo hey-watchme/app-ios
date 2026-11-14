@@ -250,6 +250,9 @@ struct DeviceSettingsView: View {
                         .font(.caption)
                         .foregroundColor(Color(white: 0.56))
                         .fixedSize(horizontal: false, vertical: true)
+                    Link("お問い合わせフォームを開く", destination: URL(string: "https://hey-watch.me/contact")!)
+                        .font(.caption)
+                        .foregroundColor(.accentTeal)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
