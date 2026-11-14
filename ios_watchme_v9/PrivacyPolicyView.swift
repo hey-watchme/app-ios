@@ -184,7 +184,7 @@ struct PrivacyPolicyView: View {
                                 本ポリシーに関するお問い合わせは、以下の窓口までお願いします。
 
                                 WatchMe Team
-                                メール: privacy@watchme.app
+                                メール: support@hey-watch.me
                                 Web: https://hey-watch.me/privacy
 
                                 お問い合わせフォーム: アプリ内設定画面より

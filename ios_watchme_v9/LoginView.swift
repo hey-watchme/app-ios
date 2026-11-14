@@ -239,7 +239,7 @@ struct LoginView: View {
                                         .foregroundColor(.accentTealMuted)
                                         .fontWeight(.medium)
 
-                                    Text("Gmailの+1は、Supabaseでは別のメールアドレスとして認識されます。\n通常のメールアドレス（matsumotokaya@gmail.com）でサインアップしてください。")
+                                    Text("登録したメールアドレスに届いた確認メールのリンクを開いてから、もう一度ログインしてください。")
                                         .font(.caption2)
                                         .foregroundColor(.secondary)
                                         .multilineTextAlignment(.center)
