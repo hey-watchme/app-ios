@@ -688,8 +688,66 @@ class UserAccountManager: ObservableObject {
         }
     }
 
+    // MARK: - Sign in with Apple
+    /// Sign in to Supabase with the ID token from the native Apple sheet (AppleSignIn.swift).
+    /// Apple sends the name only the first time a person authorizes the app, so it is
+    /// passed in here and stored on the new profile.
+    func signInWithApple(idToken: String, nonce: String, fullName: PersonNameComponents?) async {
+        await MainActor.run {
+            isLoading = true
+            authError = nil
+        }
+
+        do {
+            let session = try await supabase.auth.signInWithIdToken(
+                credentials: OpenIDConnectCredentials(provider: .apple, idToken: idToken, nonce: nonce)
+            )
+
+            let user = SupabaseUser(
+                id: session.user.id.uuidString,
+                email: session.user.email ?? "",
+                accessToken: session.accessToken,
+                refreshToken: session.refreshToken,
+                profile: nil,
+                expiresAt: Date().addingTimeInterval(3600)
+            )
+
+            await MainActor.run {
+                self.currentUser = user
+                self.isAuthenticated = true
+                self.authState = .authenticated(userId: user.id)
+                self.saveUserToDefaults(user)
+                self.isLoading = false
+            }
+
+            var displayName: String?
+            if let fullName {
+                let formatted = PersonNameComponentsFormatter.localizedString(from: fullName, style: .default)
+                    .trimmingCharacters(in: .whitespaces)
+                displayName = formatted.isEmpty ? nil : formatted
+            }
+            await createOrUpdateUserProfile(userId: user.id, email: user.email,
+                                            provider: "apple", displayName: displayName)
+            startTokenRefreshTimer()
+            await initializeAuthenticatedUser(authUserId: user.id)
+        } catch {
+            await MainActor.run {
+                self.isLoading = false
+                self.authError = "Apple でのサインインに失敗しました: \(error.localizedDescription)"
+                print("❌ Apple sign-in error: \(error)")
+            }
+        }
+    }
+
+    /// Show an error from the Apple sheet itself (not for a cancel).
+    func reportAppleSignInError(_ message: String) {
+        authError = message
+        isLoading = false
+    }
+
     // Create or update user profile (for OAuth users)
-    private func createOrUpdateUserProfile(userId: String, email: String, avatarUrl: String? = nil) async {
+    private func createOrUpdateUserProfile(userId: String, email: String, avatarUrl: String? = nil,
+                                           provider: String = "google", displayName: String? = nil) async {
         do {
             // Check if profile exists
             let existingProfiles: [UserProfile] = try await supabase
@@ -710,13 +768,14 @@ class UserAccountManager: ObservableObject {
                     let avatar_url: String?
                 }
 
-                let displayName = email.components(separatedBy: "@").first ?? "ユーザー"
+                let fallbackName = email.components(separatedBy: "@").first.flatMap { $0.isEmpty ? nil : $0 } ?? "ユーザー"
+                let name = displayName ?? fallbackName
                 let profileData = NewUserProfile(
                     user_id: userId,
-                    name: displayName,
+                    name: name,
                     email: email,
                     created_at: ISO8601DateFormatter().string(from: Date()),
-                    auth_provider: "google",
+                    auth_provider: provider,
                     avatar_url: avatarUrl
                 )
 
@@ -740,7 +799,7 @@ class UserAccountManager: ObservableObject {
 
                     let updateData = UpdateUserProfile(
                         email: email,
-                        auth_provider: "google",
+                        auth_provider: provider,
                         avatar_url: avatarUrl
                     )
 

@@ -57,6 +57,9 @@ struct LoginView: View {
 
                 // ログインフォーム
                 VStack(spacing: 16) {
+                    // Sign in with Apple
+                    AppleSignInButton(label: .signIn)
+
                     // Googleログインボタン（メイン）
                     Button(action: {
                         focusedField = nil

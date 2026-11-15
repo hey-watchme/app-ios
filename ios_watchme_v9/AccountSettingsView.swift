@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import AuthenticationServices
 
 struct AccountSettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -301,8 +302,22 @@ struct AccountSettingsView: View {
             // NetworkManagerを必要な時にだけ作成（軽量化）
             let networkManager = NetworkManager(userAccountManager: userAccountManager, deviceManager: deviceManager)
 
+            // Apple accounts: ask Apple once more so the server can revoke the app's tokens.
+            var appleCode: String?
+            if userAccountManager.currentUser?.profile?.authProvider?.lowercased() == "apple" {
+                do {
+                    appleCode = try await AppleReauthorizer.authorizationCode()
+                } catch {
+                    if (error as? ASAuthorizationError)?.code == .canceled {
+                        isDeletingAccount = false
+                        return
+                    }
+                    throw error
+                }
+            }
+
             // サーバーのアカウント削除 API（DELETE /account）
-            try await networkManager.deleteAccount(userId: userId)
+            try await networkManager.deleteAccount(userId: userId, appleAuthorizationCode: appleCode)
 
             print("✅ アカウント削除完了 - ログアウト処理を開始")
 

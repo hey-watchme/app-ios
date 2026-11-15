@@ -661,8 +661,14 @@ class NetworkManager: ObservableObject {
 
     /// DELETE /account: delete the signed-in user's account and data on the server
     /// (platform backend/functions/account). Throws with the server's reason on failure.
-    func deleteAccount(userId: String) async throws {
-        _ = try await accountRequest(method: "DELETE", path: "/account")
+    /// For an account that signed in with Apple, pass a fresh authorization code so the
+    /// server can revoke the app's Apple tokens.
+    func deleteAccount(userId: String, appleAuthorizationCode: String? = nil) async throws {
+        var body: Data?
+        if let appleAuthorizationCode {
+            body = try JSONSerialization.data(withJSONObject: ["apple_authorization_code": appleAuthorizationCode])
+        }
+        _ = try await accountRequest(method: "DELETE", path: "/account", body: body)
         print("✅ アカウント削除成功: \(userId)")
     }
 

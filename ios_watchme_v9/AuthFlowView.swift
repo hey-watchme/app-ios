@@ -157,6 +157,9 @@ struct AuthFlowView: View {
 
                 // Buttons
                 VStack(spacing: 16) {
+                    // Sign in with Apple
+                    AppleSignInButton(label: .continue, height: 50, cornerRadius: 12)
+
                     // Google Sign In (Real implementation)
                     Button(action: {
                         signInWithGoogle()
