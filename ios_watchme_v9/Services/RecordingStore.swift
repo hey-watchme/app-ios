@@ -79,7 +79,7 @@ final class RecordingStore: ObservableObject {
 
         audioService.chunkFinished
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] id in self?.handleChunkFinished(id) }
+            .sink { [weak self] finished in self?.handleChunkFinished(finished.id, isFinal: finished.isFinal) }
             .store(in: &cancellables)
 
         audioService.sessionEnded
@@ -178,7 +178,7 @@ final class RecordingStore: ObservableObject {
         let minutes = Int((result.durationSeconds / 60).rounded())
         ToastManager.shared.announce(
             title: "\(formatter.string(from: result.startedAt)) の録音として取り込みました",
-            subtitle: "\(result.startSource.label)・約\(minutes)分を\(result.chunkCount)本に分けて送ります"
+            subtitle: "\(result.startSource.label)・約\(minutes)分の録音を送ります"
         )
         announceImportDeliveredIfDone(result.sessionId)
     }
@@ -186,13 +186,10 @@ final class RecordingStore: ObservableObject {
     private var importSessions: [String: Int] = [:]   // sessionId -> chunk count, until all are delivered
 
     private func announceImportDeliveredIfDone(_ sessionId: String) {
-        guard let count = importSessions[sessionId],
+        guard importSessions[sessionId] != nil,
               !uploader.pending.contains(where: { $0.sessionId == sessionId }) else { return }
         importSessions[sessionId] = nil
-        ToastManager.shared.showSuccess(
-            title: "取り込んだ録音を送り終えました",
-            subtitle: "\(count)本を送りました。分析結果をお待ちください"
-        )
+        ToastManager.shared.showSuccess(title: "取り込んだ録音を送り終えました", subtitle: "分析結果をお待ちください")
     }
 
     /// Resend everything waiting, now (also chunks parked as blocked).
@@ -221,11 +218,11 @@ final class RecordingStore: ObservableObject {
         Task { await uploader.chunkStarted(record) }
     }
 
-    private func handleChunkFinished(_ id: String) {
+    private func handleChunkFinished(_ id: String, isFinal: Bool) {
         uploader.activeRecordingIds.remove(id)
         state.sessionChunksFinished += 1
         lastSessionChunks = state.sessionChunksFinished
-        Task { await uploader.chunkFinished(id: id) }
+        Task { await uploader.chunkFinished(id: id, isFinal: isFinal) }
     }
 
     private func handleSessionEnded(_ reason: RecordingEndReason) {
@@ -278,11 +275,8 @@ final class RecordingStore: ObservableObject {
         // The whole session is delivered once nothing of it is left and recording has stopped
         guard record.sessionId == lastSessionId, !state.isRecording,
               !uploader.pending.contains(where: { $0.sessionId == record.sessionId }) else { return }
-        let count = max(lastSessionChunks, (record.sequence ?? 0) + 1)
-        ToastManager.shared.showSuccess(
-            title: "録音を送り終えました",
-            subtitle: count > 1 ? "\(count)本の断片を送りました。分析結果をお待ちください" : "分析結果をお待ちください"
-        )
+        // One recording, one result: the 5-minute pieces are not the person's concern.
+        ToastManager.shared.showSuccess(title: "録音を送り終えました", subtitle: "分析結果をお待ちください")
     }
 
     private func handleChunkFailed(_ record: ChunkRecord) {

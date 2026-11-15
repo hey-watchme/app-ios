@@ -255,11 +255,12 @@ struct FullScreenRecordingView: View {
         }
     }
 
+    /// While recording, only "sending" now and then: the 5-minute pieces are the machine's business.
     private var sessionProgressText: String {
-        let finished = store.state.sessionChunksFinished
-        let delivered = store.state.sessionChunksDelivered
-        let base = "\(RecordingStore.chunkMinutes)分ごとに送られます・最長\(RecordingStore.maxMinutes)分"
-        return finished > 0 ? "送信済み \(delivered) / \(finished)・\(base)" : base
+        let limit = "最長\(RecordingStore.maxMinutes)分"
+        guard let sessionId = store.state.currentSessionId else { return limit }
+        let sending = store.state.pending.contains { $0.sessionId == sessionId }
+        return sending ? "録音データを送信中・\(limit)" : limit
     }
 
     private func formatTime(_ time: TimeInterval) -> String {
@@ -381,9 +382,6 @@ struct PendingRecordingsPanel: View {
         var parts = [Self.dateText(record.recordedAt)]
         if let duration = record.durationSeconds {
             parts.append(Self.durationText(duration))
-        }
-        if let sequence = record.sequence {
-            parts.append("断片 \(sequence + 1)")
         }
         return parts.joined(separator: "・")
     }

@@ -34,6 +34,12 @@ struct ChunkRecord: Codable, Identifiable, Equatable {
     var nextRetryAt: Date?
     var s3Key: String?
     var recovered: Bool = false   // true when the file was repaired after a crash
+    /// Session chunks: true for the session's last chunk, false for the others, nil when unknown
+    /// (journaled before 2026-11-15). The server analyses the whole recording once the last
+    /// chunk is in (platform/docs/long-recording.md「録音1回で結果1つ」).
+    var isFinal: Bool?
+    /// Session chunks: the start of chunk 0, which keys the session's one result.
+    var sessionStartedAt: Date?
 
     var fileURL: URL {
         UploadJournal.documentsDirectory.appendingPathComponent(fileName)

@@ -42,14 +42,16 @@ final class AudioRecorderService: NSObject {
         let startedAt: Date
         var nextSequence = 0
         var interrupted = false
+        /// Start of chunk 0: the session's one result is keyed by it (sent with every chunk).
+        var firstChunkAt: Date?
     }
 
     // MARK: - Publishers
 
     /// A chunk file was opened and is being written. Journal it now.
     let chunkStarted = PassthroughSubject<ChunkRecord, Never>()
-    /// The chunk file is closed and complete (record id). Send it.
-    let chunkFinished = PassthroughSubject<String, Never>()
+    /// The chunk file is closed and complete. Send it. `isFinal`: the last chunk of the session.
+    let chunkFinished = PassthroughSubject<(id: String, isFinal: Bool), Never>()
     /// The session is over.
     let sessionEnded = PassthroughSubject<RecordingEndReason, Never>()
     /// true while the microphone is taken by a call etc. and we wait to resume.
@@ -65,6 +67,8 @@ final class AudioRecorderService: NSObject {
     private var limitTimer: Timer?
     /// Recorder -> chunk, until the recorder's delegate reports the file closed.
     private var closing: [ObjectIdentifier: ActiveChunk] = [:]
+    /// Chunks closed by the end of their session, until the recorder reports them closed.
+    private var finalChunkIds = Set<String>()
     private var observers: [NSObjectProtocol] = []
 
     var isRecording: Bool { session != nil }
@@ -155,6 +159,9 @@ final class AudioRecorderService: NSObject {
         }
 
         let chunk = ActiveChunk(id: UUID().uuidString, url: url, sequence: active.nextSequence)
+        if active.firstChunkAt == nil {
+            active.firstChunkAt = now
+        }
         active.nextSequence += 1
         active.interrupted = false
         session = active
@@ -164,7 +171,8 @@ final class AudioRecorderService: NSObject {
 
         chunkStarted.send(ChunkRecord(
             id: chunk.id, fileName: fileName, deviceId: active.deviceId, recordedAt: now,
-            sessionId: active.id, sequence: chunk.sequence, durationSeconds: nil, state: .recording
+            sessionId: active.id, sequence: chunk.sequence, durationSeconds: nil, state: .recording,
+            sessionStartedAt: active.firstChunkAt
         ))
         scheduleRotation()
         print("🎙️ AudioRecorderService: chunk \(chunk.sequence) started - \(fileName)")
@@ -200,6 +208,11 @@ final class AudioRecorderService: NSObject {
 
     private func endSession(_ reason: RecordingEndReason) {
         guard session != nil else { return }
+        // The chunk being written is the last one. (After an interruption that could not be
+        // resumed nothing is being written; the server closes such a session on its own.)
+        if let last = current {
+            finalChunkIds.insert(last.id)
+        }
         finishCurrentChunk()
         limitTimer?.invalidate()
         limitTimer = nil
@@ -279,19 +292,22 @@ extension AudioRecorderService: AVAudioRecorderDelegate {
             // The file may still hold audio; the uploader repairs or drops it.
             print("⚠️ AudioRecorderService: chunk \(chunk.sequence) did not finish cleanly")
         }
-        chunkFinished.send(chunk.id)
+        chunkFinished.send((id: chunk.id, isFinal: finalChunkIds.remove(chunk.id) != nil))
     }
 
     /// Writing failed (e.g. the disk is full). The recorder has stopped on its own.
     func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
         let failure = error ?? RecordingError.recordingFailed
         print("❌ AudioRecorderService: encode error - \(failure)")
-        if self.recorder === recorder {
+        let wasCurrent = self.recorder === recorder
+        if wasCurrent {
             self.recorder = nil
             current = nil
         }
         if let chunk = closing.removeValue(forKey: ObjectIdentifier(recorder)) {
-            chunkFinished.send(chunk.id)
+            // The session ends with this chunk.
+            finalChunkIds.remove(chunk.id)
+            chunkFinished.send((id: chunk.id, isFinal: wasCurrent))
         }
         endSession(.failed(failure))
     }

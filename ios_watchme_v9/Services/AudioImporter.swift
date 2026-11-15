@@ -227,13 +227,14 @@ enum AudioImporter {
                 currentBytes += take
                 totalBytes += take
                 if currentBytes >= AudioImporter.bytesPerChunk {
-                    try await closeChunk()
+                    // More may follow; a file of exactly whole chunks is closed by the server on its own.
+                    try await closeChunk(isFinal: false)
                 }
             }
         }
 
         func finish() async throws {
-            try await closeChunk()
+            try await closeChunk(isFinal: true)
         }
 
         private func openChunk() async throws {
@@ -253,12 +254,13 @@ enum AudioImporter {
             ChunkUploader.shared.activeRecordingIds.insert(id)
             await ChunkUploader.shared.chunkStarted(ChunkRecord(
                 id: id, fileName: fileName, deviceId: deviceId, recordedAt: recordedAt,
-                sessionId: sessionId, sequence: chunkCount, durationSeconds: nil, state: .recording
+                sessionId: sessionId, sequence: chunkCount, durationSeconds: nil, state: .recording,
+                sessionStartedAt: startedAt
             ))
             chunkCount += 1
         }
 
-        private func closeChunk() async throws {
+        private func closeChunk(isFinal: Bool) async throws {
             guard let open = handle, let id = currentId else { return }
             try open.synchronize()
             try open.close()
@@ -275,7 +277,7 @@ enum AudioImporter {
                 }
                 try WAVFile.repairHeader(at: record.fileURL)
             }
-            await ChunkUploader.shared.chunkFinished(id: id)
+            await ChunkUploader.shared.chunkFinished(id: id, isFinal: isFinal)
         }
     }
 }

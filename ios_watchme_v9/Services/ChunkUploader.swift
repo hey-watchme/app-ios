@@ -95,10 +95,13 @@ final class ChunkUploader: NSObject, ObservableObject {
         await refresh()
     }
 
-    /// The file is closed: queue it for sending.
-    func chunkFinished(id: String) async {
+    /// The file is closed: queue it for sending. `isFinal` marks a session's last chunk.
+    func chunkFinished(id: String, isFinal: Bool? = nil) async {
         let record = await journal.update(id: id) { record in
             record.state = .recorded
+            if record.sessionId != nil, let isFinal {
+                record.isFinal = isFinal
+            }
             record.nextRetryAt = nil
             if let url = Optional(record.fileURL), let duration = WAVFile.duration(of: url) {
                 record.durationSeconds = duration
@@ -336,6 +339,10 @@ final class ChunkUploader: NSObject, ObservableObject {
             if let sequence = record.sequence { body["sequence"] = sequence }
         }
         if let duration = record.durationSeconds { body["duration_seconds"] = duration }
+        if record.sessionId != nil {
+            if let isFinal = record.isFinal { body["final"] = isFinal }
+            if let startedAt = record.sessionStartedAt { body["session_started_at"] = formatter.string(from: startedAt) }
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
