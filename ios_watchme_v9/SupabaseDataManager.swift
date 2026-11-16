@@ -15,7 +15,6 @@ struct DashboardData {
     let emotionReport: EmotionReport?
     let subject: Subject?
     let dashboardSummary: DashboardSummary?  // メインデータソース（気分データ含む）
-    let subjectComments: [SubjectComment]?  // コメント機能追加
 }
 
 // MARK: - Supabaseデータ管理クラス
@@ -412,9 +411,6 @@ class SupabaseDataManager: ObservableObject {
             // DeviceManager.devices[].subjectのみを使用
         }
 
-        // コメントを取得
-        let comments = await fetchComments(subjectId: subject?.subjectId ?? "", localDate: localDate)
-
         // @Publishedプロパティも更新（互換性のため）
         await MainActor.run {
             self.dailyReport = dashboardSummary
@@ -428,8 +424,7 @@ class SupabaseDataManager: ObservableObject {
             behaviorReport: nil,  // Phase 2で実装予定
             emotionReport: nil,   // Phase 2で実装予定
             subject: subject,
-            dashboardSummary: dashboardSummary,
-            subjectComments: comments.isEmpty ? nil : comments
+            dashboardSummary: dashboardSummary
         )
     }
     
@@ -1400,106 +1395,6 @@ class SupabaseDataManager: ObservableObject {
         }
     }
     
-    // MARK: - Comment Methods
-    
-    /// コメントを追加
-    func addComment(subjectId: String, userId: String, commentText: String, date: Date) async throws {
-        let dateString = LocalDate.string(from: date, timezone: TimeZone.current)
-        try await addComment(subjectId: subjectId, userId: userId, commentText: commentText, localDate: dateString)
-    }
-
-    func addComment(subjectId: String, userId: String, commentText: String, localDate: String) async throws {
-        let dateString = localDate
-
-        let comment = [
-            "subject_id": subjectId,
-            "user_id": userId,
-            "comment_text": commentText,
-            "date": dateString  // 日付を追加
-        ]
-
-        try await supabase
-            .from("subject_comments")
-            .insert(comment)
-            .execute()
-    }
-    
-    /// コメントを削除
-    func deleteComment(commentId: String) async throws {
-        try await supabase
-            .from("subject_comments")
-            .delete()
-            .eq("comment_id", value: commentId)
-            .execute()
-    }
-    
-    /// コメントを再取得（リフレッシュ用）
-    func fetchComments(subjectId: String, date: Date) async -> [SubjectComment] {
-        let dateString = LocalDate.string(from: date, timezone: TimeZone.current)
-        return await fetchComments(subjectId: subjectId, localDate: dateString)
-    }
-
-    func fetchComments(subjectId: String, localDate: String) async -> [SubjectComment] {
-        let dateString = localDate
-
-        do {
-            // まずコメントを取得
-            let comments: [SubjectComment] = try await supabase
-                .from("subject_comments")
-                .select("*")
-                .eq("subject_id", value: subjectId)
-                .eq("date", value: dateString)  // 日付でフィルタリング
-                .order("created_at", ascending: false)
-                .limit(50)
-                .execute()
-                .value
-
-            // ユーザーIDのリストを作成
-            let userIds = Array(Set(comments.map { $0.userId }))
-
-            if !userIds.isEmpty {
-                // ユーザー情報を一括取得
-                struct UserInfo: Codable {
-                    let user_id: String
-                    let name: String?
-                    let avatar_url: String?
-                }
-
-                let users: [UserInfo] = try await supabase
-                    .from("users")
-                    .select("user_id, name, avatar_url")
-                    .in("user_id", values: userIds)
-                    .execute()
-                    .value
-
-                // ユーザー情報を辞書化
-                let userDict = Dictionary(uniqueKeysWithValues: users.map { ($0.user_id, $0) })
-
-                // コメントにユーザー情報を結合
-                let enrichedComments = comments.map { comment in
-                    let userInfo = userDict[comment.userId]
-                    return SubjectComment(
-                        id: comment.id,
-                        subjectId: comment.subjectId,
-                        userId: comment.userId,
-                        commentText: comment.commentText,
-                        createdAt: comment.createdAt,
-                        date: comment.date,
-                        userName: userInfo?.name,
-                        userAvatarUrl: userInfo?.avatar_url
-                    )
-                }
-
-                return enrichedComments
-            }
-
-            return comments
-        } catch {
-            print("❌ Failed to fetch comments: \(error)")
-            return []
-        }
-    }
-
     // MARK: - Feedback / Report
 
     /// フィードバック・通報を送信

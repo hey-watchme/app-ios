@@ -11,7 +11,6 @@ import UIKit
 // フィードバックのコンテキスト
 enum FeedbackContext {
     case general                           // 一般的なお問い合わせ
-    case reportComment(commentId: String, commentText: String)  // コメント通報
     case bugReport                         // バグ報告
     case other                             // その他
 }
@@ -37,8 +36,6 @@ struct FeedbackFormView: View {
         switch context {
         case .general:
             _selectedCategory = State(initialValue: .inquiry)
-        case .reportComment:
-            _selectedCategory = State(initialValue: .reportContent)
         case .bugReport:
             _selectedCategory = State(initialValue: .bugReport)
         case .other:
@@ -53,29 +50,6 @@ struct FeedbackFormView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        // コンテキスト情報の表示（コメント通報時）
-                        if case .reportComment(_, let commentText) = context {
-                            VStack(alignment: .leading, spacing: 8) {
-                                Text("通報対象のコメント")
-                                    .font(.subheadline)
-                                    .fontWeight(.semibold)
-                                    .foregroundColor(.secondary)
-
-                                Text(commentText)
-                                    .font(.body)
-                                    .foregroundColor(.primary)
-                                    .padding()
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                                    .background(Color(.systemBackground))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: 8)
-                                            .stroke(Color(.separator), lineWidth: 1)
-                                    )
-                                    .cornerRadius(8)
-                            }
-                            .padding(.horizontal)
-                        }
-
                         // カテゴリ選択
                         VStack(alignment: .leading, spacing: 8) {
                             Text("カテゴリ")
@@ -189,8 +163,6 @@ struct FeedbackFormView: View {
         switch context {
         case .general:
             return "お問い合わせ"
-        case .reportComment:
-            return "コメントを通報"
         case .bugReport:
             return "バグを報告"
         case .other:
@@ -218,14 +190,10 @@ struct FeedbackFormView: View {
 
         // コンテキストタイプと対象IDを決定
         let contextType: MessageContextType
-        var targetCommentId: String? = nil
 
         switch context {
         case .general:
             contextType = .general
-        case .reportComment(let commentId, _):
-            contextType = .comment
-            targetCommentId = commentId
         case .bugReport:
             contextType = .bug
         case .other:
@@ -238,7 +206,7 @@ struct FeedbackFormView: View {
             category: selectedCategory.rawValue,
             messageBody: messageBody,
             contextType: contextType.rawValue,
-            targetCommentId: targetCommentId,
+            targetCommentId: nil,
             targetUserId: nil,
             appVersion: appVersion,
             osVersion: "iOS \(osVersion)",
@@ -271,15 +239,4 @@ struct FeedbackFormView: View {
 
     return FeedbackFormView(context: .general)
         .environmentObject(userAccountManager)
-}
-
-#Preview("コメント通報") {
-    let deviceManager = DeviceManager()
-    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
-
-    return FeedbackFormView(context: .reportComment(
-        commentId: "test-comment-id",
-        commentText: "これは不適切なコメントのサンプルテキストです。"
-    ))
-    .environmentObject(userAccountManager)
 }

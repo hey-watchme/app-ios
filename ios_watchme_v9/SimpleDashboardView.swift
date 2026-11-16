@@ -22,7 +22,6 @@ struct CachedDashboardData {
     let emotionReport: EmotionReport?
     let subject: Subject?
     let timeBlocks: [DashboardTimeBlock]  // グラフ用データ
-    let subjectComments: [SubjectComment]
     let cachedEmotionPercentages: [(String, Double, String, Color)]
     let timestamp: Date
 }
@@ -74,7 +73,6 @@ struct SimpleDashboardView: View {
     @State private var dashboardSummary: DashboardSummary?  // メインデータソース
     @State private var timeBlocks: [DashboardTimeBlock] = []  // グラフ用データ（spot_results）
     @State private var otherDayBlocks: [DashboardTimeBlock] = []  // received this day, recorded on another (imports)
-    @State private var subjectComments: [SubjectComment] = []  // コメント機能追加
     @State private var isLoading = false
     @State private var lastLoadedDeviceID: String? = nil  // 最後に読み込んだデバイスID
 
@@ -101,15 +99,6 @@ struct SimpleDashboardView: View {
     @State private var timelineReplayToken = 0  // pull to refresh replays the vibe timeline animation
     @StateObject private var realtime = RealtimeWatcher()  // reload the day as analysis stages finish
     @State private var lastHandledPushTimestamp: Date?
-
-    // コメント入力用
-    @State private var newCommentText = ""
-    @State private var isAddingComment = false
-    @FocusState private var isCommentFieldFocused: Bool  // キーボード制御用
-
-    // コメント通報用
-    @State private var showReportCommentSheet = false
-    @State private var reportTargetComment: SubjectComment?
 
     // モーダル表示管理
     @State private var showVibeSheet = false
@@ -159,7 +148,6 @@ struct SimpleDashboardView: View {
                                         selectedSpotForDetail = (timeBlocks + otherDayBlocks).first { $0.id == item.recordingID }
                                     },
                                     onShowLog: {
-                                        isCommentFieldFocused = false
                                         showActivityLog = true
                                     }
                                 )
@@ -171,7 +159,6 @@ struct SimpleDashboardView: View {
                                 .padding(.horizontal, 20)
                                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
                                 .onTapGesture {
-                                    isCommentFieldFocused = false
                                     showVibeSheet = true
                                 }
 
@@ -218,14 +205,6 @@ struct SimpleDashboardView: View {
                                     .transition(.opacity.combined(with: .move(edge: .top)))
                             }
 
-                            // Comments
-                            if let subject = subject, (!subjectComments.isEmpty || dashboardSummary != nil) {
-                                commentSection(subject: subject)
-                                    .padding(.horizontal, 20)
-                                    .padding(.top, 8)
-                                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-                            }
-
                             Spacer(minLength: 100)
                         }
                     }
@@ -233,7 +212,6 @@ struct SimpleDashboardView: View {
                     .animation(.easeInOut(duration: 0.3), value: isLoading)
                     .animation(.easeInOut(duration: 0.3), value: dashboardSummary?.date)
                     .animation(.easeInOut(duration: 0.3), value: timeBlocks.count)
-                    .animation(.easeInOut(duration: 0.3), value: subjectComments.count)
                 }
             }
             .coordinateSpace(name: "scroll")
@@ -268,12 +246,6 @@ struct SimpleDashboardView: View {
                 }
                 .ignoresSafeArea()
             )
-            .scrollDismissesKeyboard(.interactively)  // スクロール時にキーボードを閉じる
-            .onTapGesture {
-                // ScrollView内の空白部分をタップしたらキーボードを閉じる
-                // 既存のボタンやNavigationLinkには影響しない
-                isCommentFieldFocused = false
-            }
             
             // 固定日付ヘッダー（条件付き表示）
             if showStickyHeader {
@@ -322,7 +294,6 @@ struct SimpleDashboardView: View {
                         self.emotionReport = cached.emotionReport
                         self.subject = cached.subject
                         self.timeBlocks = cached.timeBlocks  // グラフ用データ
-                        self.subjectComments = cached.subjectComments
                         self.cachedEmotionPercentages = cached.cachedEmotionPercentages
 
                         // Phase 2: キャッシュ復元時もフィルタリング実行
@@ -387,7 +358,6 @@ struct SimpleDashboardView: View {
                     emotionReport: self.emotionReport,
                     subject: self.subject,
                     timeBlocks: self.timeBlocks,  // グラフ用データ
-                    subjectComments: self.subjectComments,
                     cachedEmotionPercentages: self.cachedEmotionPercentages,
                     timestamp: Date()
                 )
@@ -530,15 +500,6 @@ struct SimpleDashboardView: View {
                     }
             }
         }
-        .sheet(isPresented: $showReportCommentSheet) {
-            if let comment = reportTargetComment {
-                FeedbackFormView(context: .reportComment(
-                    commentId: comment.id,
-                    commentText: comment.commentText
-                ))
-                .environmentObject(userAccountManager)
-            }
-        }
         .sheet(item: $selectedSpotForDetail) { spot in
             if let deviceId = deviceManager.selectedDeviceID {
                 SpotDetailView(deviceId: deviceId, spotData: spot)
@@ -608,7 +569,7 @@ struct SimpleDashboardView: View {
             return true
         }
 
-        return dashboardSummary != nil || !timeBlocks.isEmpty || !subjectComments.isEmpty
+        return dashboardSummary != nil || !timeBlocks.isEmpty
     }
 
     /// Realtime: reload today's data without the skeleton, so only the changed parts redraw.
@@ -722,7 +683,6 @@ struct SimpleDashboardView: View {
                 selectedSpotForDetail = block
             },
             onTapShowMore: {
-                isCommentFieldFocused = false
                 showVibeSheet = true
             }
         )
@@ -772,7 +732,6 @@ struct SimpleDashboardView: View {
             }
         }
         .onTapGesture {
-            isCommentFieldFocused = false  // キーボードを閉じる
             showBehaviorSheet = true
         }
     }
@@ -794,7 +753,6 @@ struct SimpleDashboardView: View {
             }
         }
         .onTapGesture {
-            isCommentFieldFocused = false  // キーボードを閉じる
             showEmotionSheet = true
         }
     }
@@ -963,7 +921,6 @@ struct SimpleDashboardView: View {
         subject = nil
         dashboardSummary = nil
         timeBlocks = []  // グラフ用データもクリア
-        subjectComments = []  // コメントもクリア
     }
 
 
@@ -1020,7 +977,6 @@ struct SimpleDashboardView: View {
             self.emotionReport = result.emotionReport
             self.subject = result.subject
             self.dashboardSummary = result.dashboardSummary
-            self.subjectComments = result.subjectComments ?? []
             self.timeBlocks = fetchedTimeBlocks  // グラフ用データ
 
             // 📊 パフォーマンス最適化: 感情データのキャッシュを更新
@@ -1041,199 +997,6 @@ struct SimpleDashboardView: View {
             self.updateFilteredData()
         }
     }
-    
-    // MARK: - コメントセクション
-    
-    @ViewBuilder
-    private func commentSection(subject: Subject) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("Comments")
-                    .font(.system(size: 20, weight: .bold))
-                    .foregroundStyle(.white)
-
-                Spacer()
-
-                Text("\(subjectComments.count)")
-                    .font(.system(size: 12, weight: .bold, design: .monospaced))
-                    .foregroundStyle(Color(white: 0.36))
-            }
-
-            // Input field
-            VStack(spacing: 12) {
-                HStack(alignment: .top) {
-                    Image(systemName: "person.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundStyle(Color.accentTeal)
-
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("Add a comment...", text: $newCommentText, axis: .vertical)
-                            .textFieldStyle(.plain)
-                            .font(.system(size: 14))
-                            .foregroundColor(.white)
-                            .lineLimit(3...6)
-                            .padding(12)
-                            .background(Color.white.opacity(0.06))
-                            .cornerRadius(12)
-                            .focused($isCommentFieldFocused)
-                            .submitLabel(.done)
-                            .onSubmit {
-                                isCommentFieldFocused = false
-                            }
-
-                        if !newCommentText.isEmpty {
-                            HStack {
-                                Spacer()
-
-                                Button("Cancel") {
-                                    newCommentText = ""
-                                }
-                                .font(.system(size: 12))
-                                .foregroundStyle(Color(white: 0.56))
-
-                                Button("Post") {
-                                    Task {
-                                        await addComment(subjectId: subject.subjectId)
-                                    }
-                                    isCommentFieldFocused = false
-                                }
-                                .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(.white)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 6)
-                                .background(Color.accentTeal)
-                                .cornerRadius(10)
-                                .disabled(isAddingComment)
-                            }
-                        }
-                    }
-                }
-                .padding(14)
-                .background(Color.darkCard)
-                .cornerRadius(16)
-            }
-
-            VStack(spacing: 8) {
-                ForEach(subjectComments) { comment in
-                    commentRow(comment)
-                }
-            }
-
-            if subjectComments.isEmpty {
-                Text("No comments yet")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color(white: 0.36))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 20)
-            }
-        }
-    }
-    
-    @ViewBuilder
-    private func commentRow(_ comment: SubjectComment) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            AvatarView(userId: comment.userId, size: 28, avatarUrl: comment.userAvatarUrl)
-
-            VStack(alignment: .leading, spacing: 4) {
-                HStack {
-                    Text(comment.displayName)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.white)
-
-                    Text(comment.formattedDate)
-                        .font(.system(size: 11))
-                        .foregroundStyle(Color(white: 0.36))
-
-                    Spacer()
-                }
-
-                Text(comment.commentText)
-                    .font(.system(size: 14))
-                    .foregroundStyle(Color(white: 0.78))
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if let currentUserId = userAccountManager.effectiveUserId {
-                    HStack {
-                        Spacer()
-
-                        if comment.userId == currentUserId {
-                            Button {
-                                Task {
-                                    await deleteComment(commentId: comment.id)
-                                }
-                            } label: {
-                                Image(systemName: "trash")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(Color(white: 0.25))
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        } else {
-                            Button {
-                                reportTargetComment = comment
-                                showReportCommentSheet = true
-                            } label: {
-                                Image(systemName: "exclamationmark.bubble")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(Color(white: 0.25))
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                    }
-                    .padding(.top, 2)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding(12)
-        .background(Color.darkCard)
-        .cornerRadius(12)
-    }
-    
-    // コメント追加
-    private func addComment(subjectId: String) async {
-        guard !newCommentText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-              let userId = userAccountManager.effectiveUserId else {
-            return
-        }
-        
-        isAddingComment = true
-        defer { isAddingComment = false }
-        
-        do {
-            try await dataManager.addComment(
-                subjectId: subjectId,
-                userId: userId,
-                commentText: newCommentText.trimmingCharacters(in: .whitespacesAndNewlines),
-                localDate: localDate
-            )
-
-            // コメント追加成功後
-            newCommentText = ""
-
-            // コメントリストを再取得（同じ日付のコメントのみ）
-            let comments = await dataManager.fetchComments(subjectId: subjectId, localDate: localDate)
-            await MainActor.run {
-                self.subjectComments = comments
-            }
-        } catch {
-            print("❌ Failed to add comment: \(error)")
-        }
-    }
-    
-    // コメント削除
-    private func deleteComment(commentId: String) async {
-        do {
-            try await dataManager.deleteComment(commentId: commentId)
-
-            // 削除成功後、コメントリストから削除
-            await MainActor.run {
-                self.subjectComments.removeAll { $0.id == commentId }
-            }
-        } catch {
-            print("❌ Failed to delete comment: \(error)")
-        }
-    }
-
 }
 
 // MARK: - Spot Analysis Card
