@@ -86,6 +86,7 @@ struct MainAppView: View {
     @State private var showAuthFlow = false  // 統合認証フロー（オンボーディング + アカウント選択）
     @State private var authFlowCompleted = false  // 認証フロー完了フラグ
     @State private var showRecordingSheet = false
+    @State private var aiConsentGranted = false
     @State private var showFirstLaunchGuide = false
     @AppStorage("has_seen_first_launch_guide") private var hasSeenFirstLaunchGuide = false
     @State private var showMicTip = false
@@ -190,6 +191,7 @@ struct MainAppView: View {
                         hasSeenMicTip = true
                     },
                     onRecordTap: {
+                        aiConsentGranted = AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id)
                         showRecordingSheet = true
                     }
                 )
@@ -199,10 +201,20 @@ struct MainAppView: View {
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .sheet(isPresented: $showRecordingSheet) {
                 ZStack {
-                    FullScreenRecordingView()
-                        .environmentObject(deviceManager)
-                        .environmentObject(userAccountManager)
-                        .environmentObject(recordingStore)
+                    if aiConsentGranted || AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id) {
+                        FullScreenRecordingView()
+                            .environmentObject(deviceManager)
+                            .environmentObject(userAccountManager)
+                            .environmentObject(recordingStore)
+                    } else {
+                        AIProcessingConsentView(
+                            onAgree: {
+                                AIProcessingConsent.grant(userId: userAccountManager.currentUser?.id)
+                                aiConsentGranted = true
+                            },
+                            onDecline: { showRecordingSheet = false }
+                        )
+                    }
 
                     VStack {
                         ToastOverlay(toastManager: ToastManager.shared)
