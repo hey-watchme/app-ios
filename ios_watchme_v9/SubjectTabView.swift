@@ -118,7 +118,8 @@ struct SubjectTabView: View {
                                     .lineSpacing(4)
                             }
 
-                            // プロフィール編集ボタン
+                            // プロフィール編集ボタン（ゲストには登録の案内、サンプルなど編集できない観測対象には出さない）
+                            if !userAccountManager.authState.isAuthenticated || canEditSelectedSubject {
                             Button(action: {
                                 guard userAccountManager.authState.isAuthenticated else {
                                     userAccountManager.promptSignUp("プロフィールを編集する")
@@ -140,6 +141,7 @@ struct SubjectTabView: View {
                                     RoundedRectangle(cornerRadius: 8)
                                         .stroke(Color.white.opacity(0.10), lineWidth: 1)
                                 )
+                            }
                             }
                         }
                         .padding(20)
@@ -301,6 +303,10 @@ struct SubjectTabView: View {
         default:
             return device.device_type
         }
+    }
+
+    private var canEditSelectedSubject: Bool {
+        deviceManager.devices.first(where: { $0.device_id == deviceManager.selectedDeviceID })?.canEditSubject ?? false
     }
 
     private func buildInitialValuesFromAccount() -> SubjectRegistrationView.InitialValues {

@@ -23,7 +23,7 @@ struct SampleModeBanner: View {
                 .background(Circle().fill(Color.accentTeal.opacity(0.14)))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(isGuest ? "ゲストモード・サンプルを表示中" : "サンプルを表示中")
+                Text(isGuest ? "ゲストモード・サンプルを表示中" : "これはサンプルデバイスです")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
                     .lineLimit(1)
@@ -38,7 +38,7 @@ struct SampleModeBanner: View {
             Spacer(minLength: 4)
 
             Button(action: onPrimary) {
-                Text(isGuest ? "使い始める" : "戻る")
+                Text(isGuest ? "使い始める" : "自分の記録へ")
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(Color.darkBase)
                     .padding(.horizontal, 14)
@@ -65,7 +65,7 @@ struct SampleModeBanner: View {
 
     private var detail: String {
         let name = (subjectName?.isEmpty == false) ? "\(subjectName!)さん" : "架空の子ども"
-        return isGuest ? "\(name)（架空）の記録です" : "\(name)（架空）の記録を見ています"
+        return "\(name)（架空）の記録です"
     }
 }
 

@@ -216,25 +216,32 @@ class DeviceManager: ObservableObject {
 
         print("📊 Found \(userDevices.count) user-device relationship(s)")
 
-        guard !userDevices.isEmpty else {
-            return []
+        var devices: [Device] = []
+        if !userDevices.isEmpty {
+            let deviceIds = userDevices.map { $0.device_id }
+
+            // Fetch devices with subjects
+            devices = try await supabase
+                .from("devices")
+                .select("*, subjects(*)")
+                .in("device_id", values: deviceIds)
+                .execute()
+                .value
+
+            // Attach roles to devices
+            for i in 0..<devices.count {
+                if let userDevice = userDevices.first(where: { $0.device_id == devices[i].device_id }) {
+                    devices[i].role = userDevice.role
+                }
+            }
         }
 
-        let deviceIds = userDevices.map { $0.device_id }
-
-        // Fetch devices with subjects
-        var devices: [Device] = try await supabase
-            .from("devices")
-            .select("*, subjects(*)")
-            .in("device_id", values: deviceIds)
-            .execute()
-            .value
-
-        // Attach roles to devices
-        for i in 0..<devices.count {
-            if let userDevice = userDevices.first(where: { $0.device_id == devices[i].device_id }) {
-                devices[i].role = userDevice.role
-            }
+        // Signed-in users can open the sample too. It is not linked to the account
+        // (no role, so it cannot be edited, unlinked or recorded to); RLS lets every
+        // signed-in user read it (platform migration 20261117020000_sample_read_signed_in.sql).
+        if !devices.contains(where: { $0.isDemo }),
+           let sample = try? await fetchSampleDeviceInternal() {
+            devices.append(sample)
         }
 
         print("✅ Fetched \(devices.count) device(s)")
