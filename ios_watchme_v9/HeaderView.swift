@@ -24,31 +24,23 @@ struct HeaderView: View {
     var body: some View {
         HStack(spacing: 10) {
             // 分析対象または選択中デバイス表示（デバイス設定画面へのリンク）
-            NavigationLink(destination: 
-                DeviceSettingsView()
-                    .environmentObject(userAccountManager)
-                    .environmentObject(deviceManager)
-                    .environmentObject(dataManager)
-            ) {
-                currentTargetView
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(
-                        Capsule()
-                            .fill(Color.black.opacity(glassBaseOpacity))
-                            .overlay(
-                                Capsule()
-                                    .fill(.ultraThinMaterial)
-                                    .opacity(glassMaterialOpacity)
-                            )
-                    )
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                    )
-                    .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 5)
+            if userAccountManager.authState.isAuthenticated {
+                NavigationLink(destination:
+                    DeviceSettingsView()
+                        .environmentObject(userAccountManager)
+                        .environmentObject(deviceManager)
+                        .environmentObject(dataManager)
+                ) {
+                    targetPill
+                }
+                .buttonStyle(.plain)
+            } else {
+                // Sample mode: devices and subjects need an account
+                Button(action: { userAccountManager.promptSignUp("観測対象やデバイスを設定する") }) {
+                    targetPill
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
             
             Spacer()
 
@@ -100,6 +92,26 @@ struct HeaderView: View {
         }
     }
     
+    private var targetPill: some View {
+        currentTargetView
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color.black.opacity(glassBaseOpacity))
+                    .overlay(
+                        Capsule()
+                            .fill(.ultraThinMaterial)
+                            .opacity(glassMaterialOpacity)
+                    )
+            )
+            .overlay(
+                Capsule()
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 5)
+    }
+
     // 現在の分析対象またはデバイス情報を表示するView
     @ViewBuilder
     private var currentTargetView: some View {
@@ -215,7 +227,11 @@ struct HeaderView: View {
 
     private var notificationButton: some View {
         Button(action: {
-            showNotificationSheet = true
+            if userAccountManager.authState.isAuthenticated {
+                showNotificationSheet = true
+            } else {
+                userAccountManager.promptSignUp("お知らせを受け取る")
+            }
         }) {
             ZStack(alignment: .topTrailing) {
                 Image(systemName: "bell")

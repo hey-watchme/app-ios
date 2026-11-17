@@ -8,13 +8,15 @@
 import SwiftUI
 
 struct LoginView: View {
+    /// "新規ではじめる": close this and start the onboarding. nil hides the link
+    /// (e.g. when opened from the sign-up sheet in sample mode).
+    var onStartNew: (() -> Void)? = nil
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var toastManager: ToastManager
     @EnvironmentObject var deviceManager: DeviceManager
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var showPassword: Bool = false
-    @State private var showOnboarding: Bool = false
     @State private var showValidationErrors: Bool = false
     @State private var isProcessing: Bool = false
     @Environment(\.dismiss) private var dismiss
@@ -268,31 +270,26 @@ struct LoginView: View {
                 .padding(.horizontal, 28)
 
                 // 新規登録リンク
-                Button(action: {
-                    showOnboarding = true
-                }) {
-                    Text("新規ではじめる")
-                        .font(.footnote)
-                        .foregroundColor(Color.accentTeal)
+                if let onStartNew {
+                    Button(action: {
+                        dismiss()
+                        onStartNew()
+                    }) {
+                        Text("新規ではじめる")
+                            .font(.footnote)
+                            .foregroundColor(Color.accentTeal)
+                    }
+                    .padding(.top, 16)
                 }
-                .padding(.top, 16)
 
                 Spacer()
             }
-        }
-        .fullScreenCover(isPresented: $showOnboarding) {
-            AuthFlowView(isPresented: $showOnboarding)
-                .environmentObject(userAccountManager)
-                .environmentObject(deviceManager)
-                .environmentObject(toastManager)
         }
         .onChange(of: userAccountManager.isAuthenticated) { oldValue, newValue in
             print("🔍 LoginView - isAuthenticated変更検知: \(oldValue) → \(newValue)")
             if newValue {
                 print("🔄 ログイン成功 - LoginViewからdismiss実行")
                 // Note: デバイス登録はUserAccountManager.initializeAuthenticatedUser()で実行される
-                // オンボーディングシートを閉じる
-                showOnboarding = false
                 // LoginView自体も閉じる
                 dismiss()
             }

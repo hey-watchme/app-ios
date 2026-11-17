@@ -85,6 +85,8 @@ class UserAccountManager: ObservableObject {
     @Published var isLoading: Bool = false
     @Published var isCheckingAuthStatus: Bool = true  // 認証状態確認中フラグ
     @Published var guestId: String? = nil  // ゲストID（分析用、必須ではない）
+    /// Set when a signed-out visitor tries something that needs an account; the main view shows the sign-up sheet.
+    @Published var signUpPrompt: SignUpPrompt? = nil
     
     // DeviceManagerへの参照
     private let deviceManager: DeviceManager
@@ -279,6 +281,8 @@ class UserAccountManager: ObservableObject {
                 await MainActor.run {
                     self.initializeGuestMode()
                 }
+                // Load the sample before leaving the logo screen, so the dashboard is laid out once.
+                await self.deviceManager.loadSampleForGuest()
                 print("⏱️ [AUTH-CHECK] ゲストモード初期化完了: \(Date().timeIntervalSince(guestStart))秒")
                 await MainActor.run {
                     self.isCheckingAuthStatus = false  // 認証確認完了
@@ -288,35 +292,28 @@ class UserAccountManager: ObservableObject {
         }
     }
 
-    // MARK: - ゲストモード管理（権限ベース設計）
+    // MARK: - Sample mode (not signed in)
+    /// Not signed in: no account is created. The demo device is read with the anon key
+    /// (platform supabase/migrations/20261117000000_sample_mode_read.sql).
     func initializeGuestMode() {
-        let guestInitStart = Date()
-        print("⏱️ [GUEST-INIT] Read-Only Mode (Guest) 初期化開始")
-
-        // 状態を閲覧専用に設定（@MainActorで実行）
         Task { @MainActor in
             self.authState = .unauthenticated
             self.isAuthenticated = false
             self.currentUser = nil
-
-            // DeviceManagerの状態をクリア
-            self.deviceManager.clearState()
-            print("⏱️ [GUEST-INIT] DeviceManager状態クリア: \(Date().timeIntervalSince(guestInitStart))秒")
-
-            // ゲストモード用に空のデバイスリストで利用可能状態にする
-            self.deviceManager.state = .available([])
-            print("📱 [GUEST-INIT] DeviceManager状態を.available([])に設定")
-
-            print("⏱️ [GUEST-INIT] Read-Only Mode初期化完了: \(Date().timeIntervalSince(guestInitStart))秒")
         }
+        // The sample itself is loaded by the caller (checkAuthStatus awaits it before
+        // the logo screen goes away; clearLocalAuthData and signOut load it too).
 
         // ゲストIDは分析用に生成（必須ではない）
         if guestId == nil {
             createGuestUser()
         }
+    }
 
-        // サンプルデバイスの自動選択は行わない
-        // ユーザーがガイド画面で「サンプルを見る」を選択したときのみデバイスを選択
+    /// Ask a signed-out visitor to sign up. `action` names what they tried, e.g. "録音する".
+    @MainActor
+    func promptSignUp(_ action: String? = nil) {
+        signUpPrompt = SignUpPrompt(action: action)
     }
 
     func createGuestUser() {
@@ -360,7 +357,7 @@ class UserAccountManager: ObservableObject {
 
     // Get user status label for display
     var userStatusLabel: String {
-        guard let user = currentUser else { return "未認証" }
+        guard let user = currentUser else { return "サンプルを表示しています" }
 
         if isAnonymousUser {
             return "ゲストユーザー"
@@ -462,106 +459,6 @@ class UserAccountManager: ObservableObject {
         }
     }
     
-    // MARK: - 匿名認証機能
-    func signInAnonymously() async {
-        await MainActor.run {
-            isLoading = true
-            authError = nil
-        }
-
-        print("🔐 匿名ログイン開始")
-
-        // 念のため端末内の既存セッションを破棄してから匿名ログインする。
-        // これによりログアウト直後でも同一ゲストが再開されるケースを防ぐ。
-        do {
-            try await supabase.auth.signOut(scope: .local)
-        } catch {
-            print("⚠️ 匿名ログイン前のローカルサインアウトに失敗: \(error)")
-        }
-        clearSupabaseSessionFromKeychain()
-
-        do {
-            let session = try await supabase.auth.signInAnonymously()
-
-            print("✅ 匿名ログイン成功")
-
-            // Valid token for 1 hour
-            let expiresAt = Date().addingTimeInterval(3600)
-
-            let user = SupabaseUser(
-                id: session.user.id.uuidString,
-                email: "anonymous",  // Mark as anonymous
-                accessToken: session.accessToken,
-                refreshToken: session.refreshToken,
-                profile: nil,
-                expiresAt: expiresAt
-            )
-
-            await MainActor.run {
-                self.currentUser = user
-                self.isAuthenticated = true
-                self.authState = .authenticated(userId: user.id)
-                self.saveUserToDefaults(user)
-                self.isLoading = false
-            }
-
-            print("🔄 Authentication state updated: authState = authenticated (anonymous)")
-
-            // Create profile in public.users table
-            await createAnonymousUserProfile(userId: user.id)
-
-            // Start token refresh timer
-            startTokenRefreshTimer()
-
-            // Initialize authenticated user flow
-            await initializeAuthenticatedUser(authUserId: user.id)
-
-        } catch {
-            await MainActor.run {
-                self.isLoading = false
-                self.authError = "匿名ログインに失敗しました: \(error.localizedDescription)"
-                print("❌ 匿名ログインエラー: \(error)")
-            }
-        }
-    }
-
-    // Create anonymous user profile in public.users table
-    private func createAnonymousUserProfile(userId: String) async {
-        struct AnonymousUserProfile: Encodable {
-            let user_id: String
-            let name: String
-            let email: String
-            let created_at: String
-            let auth_provider: String
-        }
-
-        let createdAt = ISO8601DateFormatter().string(from: Date())
-        let baseProfile = AnonymousUserProfile(
-            user_id: userId,
-            name: "ゲストユーザー",
-            email: "anonymous",
-            created_at: createdAt,
-            auth_provider: "anonymous"
-        )
-
-        do {
-            try await supabase
-                .from("users")
-                .insert(baseProfile)
-                .execute()
-
-            print("✅ 匿名ユーザープロファイル作成成功 (auth_provider: anonymous)")
-            await fetchUserProfile(userId: userId)
-            return
-        } catch {
-            // role is never sent: it is set on the server only (platform migration
-            // 20261113010000_users_role_guard.sql). Retrying with role values made
-            // anonymous users admins before 2026-11-13.
-            print("❌ 匿名ユーザープロファイル作成エラー: \(error)")
-            // Continue even if profile creation fails
-        }
-    }
-
     // MARK: - Google OAuth認証
     func signInWithGoogle() async {
         await MainActor.run {
@@ -1007,6 +904,7 @@ class UserAccountManager: ObservableObject {
                 self.shouldResetToWelcome = true
             }
         }
+        await deviceManager.loadSampleForGuest()
 
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
@@ -1045,13 +943,12 @@ class UserAccountManager: ObservableObject {
 
             // DeviceManagerの状態もクリア
             self.deviceManager.clearState()
-            // ゲストモード用に空のデバイスリストで利用可能状態にする
-            self.deviceManager.state = .available([])
 
             // トークンリフレッシュタイマーを停止
             self.refreshTimer?.invalidate()
             self.refreshTimer = nil
         }
+        await deviceManager.loadSampleForGuest()
 
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
@@ -1092,11 +989,12 @@ class UserAccountManager: ObservableObject {
         // 1. プロファイル取得
         await fetchUserProfile(userId: authUserId)
 
-        // 匿名ユーザーでプロファイルが未作成の場合は再作成を試行
-        if currentUser?.profile?.userId == nil,
-           (currentUser?.email == "anonymous" || currentUser?.email.isEmpty == true) {
-            print("⚠️ 匿名ユーザープロファイルが未取得のため、作成を再試行します")
-            await createAnonymousUserProfile(userId: authUserId)
+        // Anonymous logins from before sample mode (2026-11-17) are no longer used:
+        // sign them out; signed-out visitors see the sample without an account.
+        if isAnonymousUser || currentUser?.email == "anonymous" {
+            print("ℹ️ Old anonymous session found; signing out to sample mode")
+            await signOut()
+            return
         }
 
         // 2. デバイス取得（public.usersのuser_id優先、未取得時はauth user_idにフォールバック）
@@ -1605,15 +1503,6 @@ class WebAuthenticationPresentationContextProvider: NSObject, ASWebAuthenticatio
 }
 
 extension UserAccountManager {
-    enum AnonymousUpgradeResult: Equatable {
-        case upgraded
-        case cancelled
-        case notAnonymousUser
-        case switchedToExistingGoogleAccount
-        case oauthFailed(String)
-        case unknownFailure
-    }
-
     // Direct implementation using ASWebAuthenticationSession (Alternative to Supabase SDK)
     // This ensures that the OAuth callback URL is properly received by the app
     func signInWithGoogleDirect() async {
@@ -1668,151 +1557,12 @@ extension UserAccountManager {
         }
     }
 
-    // MARK: - Anonymous User Upgrade
-
-    /// Upgrade anonymous user to Google account
-    /// Returns explicit result for all expected routes
-    func upgradeAnonymousToGoogle() async -> AnonymousUpgradeResult {
-        // Check if current user is anonymous
-        guard isAnonymousUser else {
-            await MainActor.run {
-                authError = "現在のユーザーは匿名ユーザーではありません"
-            }
-            return .notAnonymousUser
-        }
-
-        await MainActor.run {
-            isLoading = true
-            authError = nil
-        }
-
-        let originalAnonymousUser = currentUser
-        let originalAnonymousUserId = originalAnonymousUser?.id
-
-        print("🔐 匿名ユーザーアップグレード開始 (Google)")
-
-        // Build OAuth URL for linking with scopes for profile and email
-        let scopes = "openid email profile"
-        let encodedScopes = scopes.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? scopes
-        let authURL = URL(string: "\(supabaseURL)/auth/v1/authorize?provider=google&redirect_to=watchme://auth/callback&scopes=\(encodedScopes)")!
-        print("🔗 OAuth URL: \(authURL)")
-
-        return await withCheckedContinuation { continuation in
-            Task { @MainActor in
-                let contextProvider = WebAuthenticationPresentationContextProvider()
-
-                let session = ASWebAuthenticationSession(
-                    url: authURL,
-                    callbackURLScheme: "watchme"
-                ) { callbackURL, error in
-                    Task {
-                        if let error = error {
-                            let isCancelled = (error as NSError).code == ASWebAuthenticationSessionError.canceledLogin.rawValue
-                            await MainActor.run {
-                                self.isLoading = false
-                                // User cancelled or error occurred
-                                if !isCancelled {
-                                    self.authError = "Google連携に失敗しました: \(error.localizedDescription)"
-                                    print("❌ Google連携エラー: \(error)")
-                                } else {
-                                    print("ℹ️ ユーザーがGoogle連携をキャンセルしました")
-                                }
-                            }
-                            if isCancelled {
-                                continuation.resume(returning: .cancelled)
-                            } else {
-                                continuation.resume(returning: .oauthFailed(error.localizedDescription))
-                            }
-                            return
-                        }
-
-                        if let callbackURL = callbackURL {
-                            print("✅ OAuth callback received: \(callbackURL)")
-                            await self.handleOAuthCallback(url: callbackURL)
-
-                            // Guard: if auth user id changed, this is not an in-place upgrade.
-                            // It means user signed in to another existing Google account.
-                            let switchedToAnotherAccount = await MainActor.run { () -> Bool in
-                                guard let originalId = originalAnonymousUserId,
-                                      let currentId = self.currentUser?.id else {
-                                    return false
-                                }
-                                return originalId != currentId
-                            }
-
-                            if switchedToAnotherAccount {
-                                print("⚠️ アップグレード中に別アカウントへ切り替わりました。アップグレードを失敗扱いにします。")
-
-                                _ = await self.restoreAnonymousSessionAfterUpgradeFailure(originalAnonymousUser)
-
-                                await MainActor.run {
-                                    self.isLoading = false
-                                    // この結果は upgradeAnonymousToGoogle() の戻り値で呼び出し元UIが通知する
-                                    // (グローバルauthErrorを使うと通知が二重表示される)
-                                }
-                                continuation.resume(returning: .switchedToExistingGoogleAccount)
-                                return
-                            }
-
-                            // Check if upgrade was successful
-                            let success = await MainActor.run {
-                                self.isAuthenticated && !self.isAnonymousUser
-                            }
-                            await MainActor.run {
-                                self.isLoading = false
-                            }
-                            continuation.resume(returning: success ? .upgraded : .unknownFailure)
-                        } else {
-                            await MainActor.run {
-                                self.isLoading = false
-                            }
-                            continuation.resume(returning: .unknownFailure)
-                        }
-                    }
-                }
-
-                session.presentationContextProvider = contextProvider
-                session.prefersEphemeralWebBrowserSession = false
-                session.start()
-
-                print("✅ ASWebAuthenticationSession started for upgrade")
-            }
-        }
-    }
-
-    // Restore original anonymous session when upgrade flow switched to another account.
-    private func restoreAnonymousSessionAfterUpgradeFailure(_ originalUser: SupabaseUser?) async -> Bool {
-        guard let originalUser else {
-            print("⚠️ 元の匿名ユーザー情報がないためセッション復元をスキップ")
-            return false
-        }
-
-        guard let refreshToken = originalUser.refreshToken else {
-            print("⚠️ 元の匿名ユーザーのrefresh tokenがないためセッション復元に失敗")
-            return false
-        }
-
-        do {
-            _ = try await supabase.auth.setSession(
-                accessToken: originalUser.accessToken,
-                refreshToken: refreshToken
-            )
-
-            await MainActor.run {
-                self.currentUser = originalUser
-                self.isAuthenticated = true
-                self.authState = .authenticated(userId: originalUser.id)
-                self.saveUserToDefaults(originalUser)
-            }
-
-            await fetchUserProfile(userId: originalUser.id)
-            await initializeAuthenticatedUser(authUserId: originalUser.id)
-            print("✅ 匿名セッションの復元に成功")
-            return true
-        } catch {
-            print("❌ 匿名セッション復元失敗: \(error)")
-            return false
-        }
-    }
 }
 #endif
+
+/// A request to show the sign-up sheet to a signed-out visitor.
+struct SignUpPrompt: Identifiable, Equatable {
+    let id = UUID()
+    /// What the visitor tried to do ("録音する"); nil when they asked to start.
+    let action: String?
+}

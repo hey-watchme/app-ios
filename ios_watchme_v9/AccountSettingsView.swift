@@ -22,7 +22,6 @@ struct AccountSettingsView: View {
     @State private var isDeletingAccount = false
     @State private var deleteAccountError: String?
     @State private var showDeleteAccountError = false
-    @State private var showUpgradeAccount = false  // 匿名アップグレードシート
     @State private var showTutorialResetFeedback = false
     
     var body: some View {
@@ -48,38 +47,6 @@ struct AccountSettingsView: View {
                 }
                 .listRowBackground(Color(.systemBackground))
                 #endif
-
-                // 匿名ユーザー向けアップグレード導線（匿名認証済みユーザーのみ表示）
-                if userAccountManager.isAnonymousUser {
-                    Section {
-                        Button(action: {
-                            showUpgradeAccount = true
-                        }) {
-                            HStack {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text("アカウント登録")
-                                        .font(.subheadline)
-                                        .fontWeight(.semibold)
-                                        .foregroundColor(.primary)
-                                    Text("Googleアカウントで、現在のゲストデータをそのまま引き継げます")
-                                        .font(.caption)
-                                        .foregroundColor(.secondary)
-                                }
-                                Spacer()
-                                Image(systemName: "arrow.right.circle.fill")
-                                    .foregroundColor(Color.safeColor("AppAccentColor"))
-                                    .font(.title2)
-                            }
-                            .contentShape(Rectangle())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    } header: {
-                        Text("ゲストモード")
-                    } footer: {
-                        Text("ゲストユーザーはログアウトすると、データが失われる可能性があります。通常アカウントへアップグレードして保護してください。")
-                    }
-                    .listRowBackground(Color(.systemBackground))
-                }
 
                 // このアプリについて
                 Section {
@@ -147,7 +114,8 @@ struct AccountSettingsView: View {
                 }
                 .listRowBackground(Color(.systemBackground))
                 
-                // アカウント管理
+                // アカウント管理（ログインしているときだけ）
+                if userAccountManager.authState.isAuthenticated {
                 Section {
                     Button(action: {
                         showLogoutConfirmation = true
@@ -176,6 +144,7 @@ struct AccountSettingsView: View {
                     Text("アカウント削除は取り消せません。")
                 }
                 .listRowBackground(Color(.systemBackground))
+                }
             }
             .scrollContentBackground(.automatic)
             .listStyle(.insetGrouped)
@@ -252,12 +221,6 @@ struct AccountSettingsView: View {
             }
             .sheet(isPresented: $showPrivacyPolicy) {
                 PrivacyPolicyView()
-                    .preferredColorScheme(.light)
-            }
-            .sheet(isPresented: $showUpgradeAccount) {
-                UpgradeAccountView()
-                    .environmentObject(userAccountManager)
-                    .environmentObject(ToastManager.shared)
                     .preferredColorScheme(.light)
             }
         }

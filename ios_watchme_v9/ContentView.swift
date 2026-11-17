@@ -22,20 +22,28 @@ struct ContentView: View {
     @Binding var showRecordingSheet: Bool
     @State private var showQRScanner = false
     @State private var showDeviceRegistrationConfirm = false
-    @State private var showSignUpPrompt = false  // ゲストモード時の会員登録促進シート
     @State private var showMyPage = false  // マイページ表示制御
 
     // 録音機能は新しいRecordingStoreが内部で管理
 
     // 動的な日付範囲管理（無限スクロール対応）
-    // 初期値として今日の日付を設定（TabViewが空にならないように）
-    @State private var dateRange: [String] = []
+    // Filled in init so the pager is laid out once, already on today (an empty
+    // range filled in onAppear made the first frame jump).
+    @State private var dateRange: [String]
     @State private var isLoadingMoreDates = false
 
     // 初期ロード日数（起動時のパフォーマンス最適化）
     private let initialDaysToLoad = 7
     // 追加ロード日数（スクロール時）
     private let additionalDaysToLoad = 7
+
+    init(showRecordingSheet: Binding<Bool>) {
+        _showRecordingSheet = showRecordingSheet
+        let today = LocalDate.today(timezone: TimeZone.current)
+        let dates = LocalDate.trailingDays(endingAt: today, count: 7, timezone: TimeZone.current)
+        _dateRange = State(initialValue: dates.isEmpty ? [today] : dates)
+        _selectedLocalDate = State(initialValue: today)
+    }
     
     var body: some View {
         ZStack {
@@ -130,6 +138,8 @@ struct ContentView: View {
                                 // ✅ CLAUDE.md: public.usersのuser_idを使用
                                 if let userId = userAccountManager.effectiveUserId {
                                     await deviceManager.loadDevices(for: userId)
+                                } else {
+                                    await deviceManager.loadSampleForGuest()
                                 }
                             }
                         }) {
@@ -144,6 +154,9 @@ struct ContentView: View {
                     Spacer()
                 }
             }
+            // Fill the screen in every state: the header overlay takes this view's width,
+            // and the narrow loading state squeezed it before the dashboard arrived.
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
             .overlay(alignment: .top) {
                 HeaderView(
                     showLogoutConfirmation: $showLogoutConfirmation,
@@ -151,13 +164,6 @@ struct ContentView: View {
                     showMyPage: $showMyPage
                 )
                 .zIndex(10)
-            }
-            
-            // デモモードバナー（device_type == "demo"のデバイス選択時に表示）
-            if deviceManager.isDemoDeviceSelected || deviceManager.isSampleDeviceSelected {
-                DemoModeBanner()
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                    .animation(.easeInOut(duration: 0.3), value: deviceManager.isDemoDeviceSelected)
             }
         }
         .sheet(isPresented: $showQRScanner) {
@@ -185,10 +191,6 @@ struct ContentView: View {
         } message: {
             Text("このデバイスのマイクを使って音声情報を分析します。")
         }
-        .sheet(isPresented: $showSignUpPrompt) {
-            SignUpView()
-                .environmentObject(userAccountManager)
-        }
         .sheet(isPresented: $showMyPage) {
             UserInfoView(userAccountManager: userAccountManager)
                 .environmentObject(deviceManager)
@@ -197,6 +199,7 @@ struct ContentView: View {
         }
         .task {
             // Research consent: apply the sign-up choice, or ask once (not for guests).
+            guard userAccountManager.authState.isAuthenticated else { return }
             await researchConsent.syncAfterSignIn(
                 email: userAccountManager.currentUser?.email,
                 isAnonymous: userAccountManager.isAnonymousUser

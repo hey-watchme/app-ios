@@ -201,24 +201,8 @@ class DeviceManager: ObservableObject {
             throw DeviceRegistrationError.noDeviceReturned
         }
         print("✅ Steps 1-2: Device registered and linked: \(deviceId)")
-
-        // Step 3: Add sample device (best-effort)
-        let sampleDeviceRelation = UserDeviceInsert(
-            user_id: userId,
-            device_id: DeviceManager.sampleDeviceID,
-            role: "viewer"
-        )
-
-        do {
-            try await supabase
-                .from("user_devices")
-                .insert(sampleDeviceRelation, returning: .minimal)
-                .execute()
-            print("✅ Step 3: Sample device added")
-        } catch {
-            print("⚠️ Step 3: Sample device already exists (skipped)")
-        }
-
+        // The sample device is no longer linked to new accounts: signed-out visitors
+        // see it in sample mode instead (loadSampleForGuest).
         return deviceId
     }
 
@@ -287,6 +271,38 @@ class DeviceManager: ObservableObject {
         return nil
     }
     
+
+    // MARK: - Sample mode (signed out)
+    /// Show the demo device to a signed-out visitor. It is read with the anon key
+    /// (RLS lets anon read demo devices only). The selection is not saved, so a later
+    /// sign-in starts on the user's own device.
+    func loadSampleForGuest() async {
+        let alreadyShown = await MainActor.run { () -> Bool in
+            if case .available(let current) = state,
+               current.count == 1, current.first?.isDemo == true,
+               selectedDeviceID == current.first?.device_id {
+                return true
+            }
+            if case .available = state { return false }
+            state = .loading
+            return false
+        }
+        if alreadyShown { return }
+
+        do {
+            let sample = try await fetchSampleDeviceInternal()
+            await MainActor.run {
+                // Set the list and the selection together so the dashboard is laid out once.
+                state = .available(sample.map { [$0] } ?? [])
+                selectedDeviceID = sample?.device_id
+            }
+        } catch {
+            print("❌ Failed to load the sample device: \(error)")
+            await MainActor.run {
+                state = .error("サンプルを読み込めませんでした。通信状況を確かめてください。")
+            }
+        }
+    }
 
     // MARK: - Deprecated (Old initialization logic removed)
     // MARK: - サンプルデバイス選択（DB連携済みのみ）

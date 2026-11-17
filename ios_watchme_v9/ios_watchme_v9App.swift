@@ -83,8 +83,9 @@ struct MainAppView: View {
     @EnvironmentObject var toastManager: ToastManager
     @EnvironmentObject var recordingStore: RecordingStore
     @State private var showLogin = false
-    @State private var showAuthFlow = false  // 統合認証フロー（オンボーディング + アカウント選択）
-    @State private var authFlowCompleted = false  // 認証フロー完了フラグ
+    @State private var showOnboarding = false
+    /// Signed-out visitors who finished the onboarding go straight to sample mode on later launches.
+    @AppStorage("sample_mode_entered") private var sampleModeEntered = false
     @State private var showRecordingSheet = false
     @State private var aiConsentGranted = false
     @State private var showFirstLaunchGuide = false
@@ -105,6 +106,21 @@ struct MainAppView: View {
         case report  // レポート
         case subject  // 分析対象
     }
+
+    /// Which top-level screen is shown. Switching is animated in one place.
+    private enum Stage: Equatable {
+        case checking, signedIn, sample, onboarding, opening
+    }
+
+    private var stage: Stage {
+        if userAccountManager.isCheckingAuthStatus { return .checking }
+        if userAccountManager.authState.isAuthenticated { return .signedIn }
+        if sampleModeEntered { return .sample }
+        if showOnboarding { return .onboarding }
+        return .opening
+    }
+
+    private var isGuest: Bool { !userAccountManager.authState.isAuthenticated }
 
     var body: some View {
         ZStack {
@@ -156,6 +172,14 @@ struct MainAppView: View {
             .environmentObject(dataManager)
     }
 
+    /// The sample banner shows whenever the demo device is selected (always, for signed-out visitors).
+    private var showSampleBanner: Bool {
+        deviceManager.isDemoDeviceSelected
+    }
+
+    /// Room the banner takes above the footer, so scrolling content can reach past it.
+    private let sampleBannerReserve: CGFloat = 64
+
     /// 共通化されたタブビュー構造
     private var mainTabView: some View {
         NavigationStack {
@@ -178,27 +202,53 @@ struct MainAppView: View {
                         .allowsHitTesting(selectedTab == .subject)
                 }
             }
+            .safeAreaInset(edge: .bottom, spacing: 0) {
+                Color.clear.frame(height: showSampleBanner ? sampleBannerReserve : 0)
+            }
             .overlay(alignment: .bottom) {
-                // スワイプ体験を維持するため、コンテンツ構造は変えずにフッターのみ浮島化
-                CustomFooterNavigation(
-                    selectedTab: $selectedTab,
-                    showRecordButton: deviceManager.shouldShowFAB,
-                    showMicTip: showMicTip,
-                    onDismissMicTip: {
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                            showMicTip = false
-                        }
-                        hasSeenMicTip = true
-                    },
-                    onRecordTap: {
-                        aiConsentGranted = AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id)
-                        showRecordingSheet = true
+                // The banner sits on top of the footer with its own gap, never under it.
+                VStack(spacing: 10) {
+                    if showSampleBanner {
+                        SampleModeBanner(
+                            isGuest: isGuest,
+                            subjectName: deviceManager.selectedSubject?.name,
+                            onPrimary: handleSampleBannerAction
+                        )
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
-                )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 8)
+
+                    // スワイプ体験を維持するため、コンテンツ構造は変えずにフッターのみ浮島化
+                    CustomFooterNavigation(
+                        selectedTab: $selectedTab,
+                        showRecordButton: isGuest || deviceManager.shouldShowFAB,
+                        showMicTip: showMicTip,
+                        onDismissMicTip: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                showMicTip = false
+                            }
+                            hasSeenMicTip = true
+                        },
+                        onRecordTap: {
+                            if isGuest {
+                                userAccountManager.promptSignUp("録音する")
+                                return
+                            }
+                            aiConsentGranted = AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id)
+                            showRecordingSheet = true
+                        }
+                    )
+                }
+                .padding(.horizontal, 16)
+                .padding(.bottom, 8)
+                .animation(.easeInOut(duration: 0.25), value: showSampleBanner)
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
+            .sheet(item: $userAccountManager.signUpPrompt) { prompt in
+                SignUpPromptView(action: prompt.action)
+                    .environmentObject(userAccountManager)
+                    .environmentObject(deviceManager)
+                    .environmentObject(toastManager)
+            }
             .sheet(isPresented: $showRecordingSheet) {
                 ZStack {
                     if aiConsentGranted || AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id) {
@@ -227,31 +277,41 @@ struct MainAppView: View {
         }
     }
 
+    private func handleSampleBannerAction() {
+        if isGuest {
+            userAccountManager.promptSignUp()
+            return
+        }
+        // Signed in but viewing the sample: go back to the user's own device.
+        let own = deviceManager.realDevices.first(where: { $0.role == "owner" }) ?? deviceManager.realDevices.first
+        deviceManager.selectDevice(own?.device_id)
+    }
+
     private var mainContent: some View {
         ZStack {
-            if userAccountManager.isCheckingAuthStatus {
+            switch stage {
+            case .checking:
                 loadingView
-            } else if userAccountManager.authState.isAuthenticated {
-                authenticatedView
-            } else {
-                unauthenticatedView
+            case .signedIn:
+                mainTabView
+                    .transition(.opacity)
+            case .sample:
+                mainTabView
+                    .transition(.opacity)
+            case .onboarding:
+                AuthFlowView(onFinish: enterSampleMode)
+                    .transition(.opacity)
+            case .opening:
+                initialView
+                    .transition(.opacity)
             }
         }
-        .fullScreenCover(isPresented: $showAuthFlow) {
-            AuthFlowView(isPresented: $showAuthFlow)
-                .environmentObject(userAccountManager)
-                .environmentObject(deviceManager)
-                .environmentObject(toastManager)
-        }
+        .animation(.easeInOut(duration: 0.3), value: stage)
         .sheet(isPresented: $showLogin) {
-            LoginView()
+            LoginView(onStartNew: { showOnboarding = true })
                 .environmentObject(userAccountManager)
-        }
-        .onChange(of: showAuthFlow) { oldValue, newValue in
-            if oldValue == true && newValue == false {
-                print("✅ 認証フロー完了")
-                authFlowCompleted = true
-            }
+                .environmentObject(toastManager)
+                .environmentObject(deviceManager)
         }
         .task {
             viewStartTime = Date()
@@ -260,28 +320,25 @@ struct MainAppView: View {
         }
         .onChange(of: userAccountManager.authState) { oldValue, newValue in
             print("🔄 MainAppView: 権限レベル変化 \(oldValue) → \(newValue)")
+            selectedTab = .home
+            showOnboarding = false
             if newValue.isAuthenticated {
                 showLogin = false
-                showAuthFlow = false
-                authFlowCompleted = true
-                selectedTab = .home
-                print("✅ 全権限モード - すべてのモーダルを閉じてホーム画面に遷移")
+                userAccountManager.signUpPrompt = nil
                 if !hasSeenFirstLaunchGuide {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                         showFirstLaunchGuide = true
                     }
                 }
             } else {
-                selectedTab = .home
-                authFlowCompleted = false
-                print("🔄 閲覧専用モード - 初期状態にリセット")
+                // Signed out: back to the opening screen
+                sampleModeEntered = false
             }
         }
         .onChange(of: userAccountManager.shouldResetToWelcome) { oldValue, newValue in
             if newValue == true {
-                print("🔄 閲覧専用モード - 初期画面に戻る")
                 selectedTab = .home
-                authFlowCompleted = false
+                sampleModeEntered = false
                 userAccountManager.shouldResetToWelcome = false
             }
         }
@@ -297,6 +354,13 @@ struct MainAppView: View {
                 await userAccountManager.handleOAuthCallback(url: url)
             }
         }
+    }
+
+    /// End of the onboarding: start in sample mode, signed out (no account is created).
+    private func enterSampleMode() {
+        selectedTab = .home
+        sampleModeEntered = true
+        showOnboarding = false
     }
 
     private var loadingView: some View {
@@ -323,28 +387,10 @@ struct MainAppView: View {
             .padding(.top, 120)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        // Center on the whole screen like the launch screen, so the logo does not jump.
+        .ignoresSafeArea()
         .onAppear {
             print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
-        }
-    }
-
-    private var authenticatedView: some View {
-        mainTabView
-            .onAppear {
-                print("📱 MainAppView: 全権限モード - メイン画面表示")
-            }
-    }
-
-    private var unauthenticatedView: some View {
-        Group {
-            if authFlowCompleted {
-                mainTabView
-                    .onAppear {
-                        print("📱 MainAppView: 閲覧専用モード - ガイド画面表示")
-                    }
-            } else {
-                initialView
-            }
         }
     }
 
@@ -364,15 +410,14 @@ struct MainAppView: View {
                     .resizable()
                     .aspectRatio(contentMode: .fit)
                     .frame(width: 200, height: 70)
-                    // ※ロゴが黒文字の場合はダークモード用に白抜き画像にするなどの調整が必要ですが、ここではそのままにしています
 
                 Spacer()
 
                 // ボタンを最下部に配置
                 VStack(spacing: 16) {
-                    // はじめるボタン → 認証フロー表示
+                    // はじめる → オンボーディング → サンプルモード（アカウントは作らない）
                     Button(action: {
-                        showAuthFlow = true
+                        showOnboarding = true
                     }) {
                         Text("はじめる")
                             .fontWeight(.semibold)
@@ -415,8 +460,6 @@ struct MainAppView: View {
             print("⏱️ [VIEW] 初期画面表示（はじめる/ログイン）: \(Date().timeIntervalSince(viewStartTime))秒")
         }
     }
-
-    // checkAndRegisterDevice関数は削除されました（自動登録を行わないため）
 }
 
 // カスタムフッターナビゲーション

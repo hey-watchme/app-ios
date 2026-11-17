@@ -13,7 +13,8 @@ struct UserInfoView: View {
     let userAccountManager: UserAccountManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showAccountSettings = false  // アカウント設定画面
-    @State private var showUpgradeAccount = false  // 匿名アップグレード画面
+    @State private var showSignUpPrompt = false  // sample mode: sign-up sheet
+    @EnvironmentObject var deviceManager: DeviceManager
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -72,8 +73,8 @@ struct UserInfoView: View {
                                         .frame(height: 60)
                                     
                                     // 名前（判定ロジックと表示を一致させる）
-                                    if userAccountManager.isAnonymousUser {
-                                        Text("ゲストユーザー")
+                                    if userAccountManager.currentUser == nil {
+                                        Text("ゲスト（ログインしていません）")
                                             .font(.title2)
                                             .fontWeight(.bold)
                                             .foregroundColor(.primary)
@@ -244,19 +245,19 @@ struct UserInfoView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 20)
 
-                // 匿名ユーザーの場合「アカウント登録」ボタンを表示
-                if userAccountManager.isAnonymousUser {
-                    Text("ゲストユーザーはログアウトすると、データが失われる可能性があります。")
+                // Sample mode: start using WatchMe (sign up or log in)
+                if userAccountManager.currentUser == nil {
+                    Text("いまはサンプル（架空の子どもの記録）を表示しています。ご家族の録音を分析するには、アカウントを登録してください。")
                         .font(.caption)
-                        .foregroundColor(Color.safeColor("WarningColor"))
+                        .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 24)
                         .padding(.top, 24)
 
                     Button(action: {
-                        showUpgradeAccount = true
+                        showSignUpPrompt = true
                     }) {
-                        Text("アカウント登録")
+                        Text("使い始める")
                             .fontWeight(.semibold)
                             .foregroundColor(.white)
                             .frame(maxWidth: .infinity)
@@ -279,13 +280,15 @@ struct UserInfoView: View {
         .sheet(isPresented: $showAccountSettings) {
             AccountSettingsView()
                 .environmentObject(userAccountManager)
+                .environmentObject(deviceManager)
                 .preferredColorScheme(.light)
         }
-        .sheet(isPresented: $showUpgradeAccount) {
-            UpgradeAccountView()
+        .sheet(isPresented: $showSignUpPrompt) {
+            SignUpPromptView(action: nil)
                 .environmentObject(userAccountManager)
+                .environmentObject(deviceManager)
                 .environmentObject(ToastManager.shared)
-                .preferredColorScheme(.light)
+                .preferredColorScheme(.dark)
         }
         .preferredColorScheme(.light)
     }

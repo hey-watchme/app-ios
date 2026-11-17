@@ -120,6 +120,10 @@ struct SubjectTabView: View {
 
                             // プロフィール編集ボタン
                             Button(action: {
+                                guard userAccountManager.authState.isAuthenticated else {
+                                    userAccountManager.promptSignUp("プロフィールを編集する")
+                                    return
+                                }
                                 subjectInitialValues = nil
                                 showSubjectEdit = true
                             }) {
