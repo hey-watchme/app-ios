@@ -2,10 +2,11 @@
 //  DailyReportView.swift
 //  ios_watchme_v9
 //
-//  Daily分析の推移レポート（モックアップ）
+//  Daily分析の推移レポート
 //
 
 import SwiftUI
+import Charts
 
 struct DailyReportView: View {
     @EnvironmentObject var deviceManager: DeviceManager
@@ -36,6 +37,26 @@ struct DailyReportView: View {
     @State private var selectedDailyDate: String = ""
     @State private var selectedDailySummary: DashboardSummary?
     @State private var selectedSpotResults: [DashboardTimeBlock] = []
+
+    // Bar selected in the chart (local_date). Falls back to the latest day with data.
+    @State private var selectedChartDate: String?
+    @State private var sortNewestFirst = true
+
+    /// One bar of the chart
+    private struct ChartPoint: Identifiable {
+        let id: String
+        let day: Date
+        let score: Double
+        let summary: DashboardSummary
+
+        var midday: Date { day.addingTimeInterval(12 * 60 * 60) }
+    }
+
+    private static let dayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }()
 
     var body: some View {
         ScrollView {
@@ -161,8 +182,9 @@ struct DailyReportView: View {
         // This avoids loading potentially 90 days * N recordings upfront
         spotResultsByDate = [:]
 
-        // Fill missing days with nil data to show full time axis
-        dailySummaries = fillMissingDays(results: results, startDate: startDate, endDate: today)
+        // Days without a record are not listed; the chart keeps the full time axis by its domain
+        dailySummaries = results
+        selectedChartDate = nil
         isLoading = false
     }
 
@@ -194,64 +216,6 @@ struct DailyReportView: View {
         spotResultsByDate[selectedDailyDate] = spotResults
         selectedSpotResults = spotResults
         isLoadingSpotResults = false
-    }
-
-    /// Fill missing days with placeholder data to show complete time axis
-    private func fillMissingDays(results: [DashboardSummary], startDate: Date, endDate: Date) -> [DashboardSummary] {
-        let calendar = Calendar.current
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-
-        // Create a dictionary of existing data keyed by date
-        var dataByDate: [String: DashboardSummary] = [:]
-        for result in results {
-            dataByDate[result.date] = result
-        }
-
-        // Generate all dates in the range
-        var allSummaries: [DashboardSummary] = []
-        var currentDate = startDate
-
-        while currentDate <= endDate {
-            let dateString = formatter.string(from: currentDate)
-
-            if let existingData = dataByDate[dateString] {
-                // Use existing data
-                allSummaries.append(existingData)
-            } else {
-                // Create placeholder for missing data
-                let placeholder = createPlaceholderSummary(for: dateString)
-                allSummaries.append(placeholder)
-            }
-
-            // Move to next day
-            guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else {
-                break
-            }
-            currentDate = nextDate
-        }
-
-        return allSummaries
-    }
-
-    /// Create a placeholder summary for a missing day
-    private func createPlaceholderSummary(for dateString: String) -> DashboardSummary {
-        // Use a temporary UUID for missing data
-        let placeholderDeviceId = UUID(uuidString: "00000000-0000-0000-0000-000000000000") ?? UUID()
-
-        return DashboardSummary(
-            deviceId: placeholderDeviceId,
-            date: dateString,
-            processedCount: nil,
-            lastTimeBlock: nil,
-            createdAt: nil,
-            updatedAt: nil,
-            averageVibe: nil, // nil indicates missing data
-            vibeScores: nil,
-            analysisResult: nil,
-            insights: nil,
-            burstEvents: nil
-        )
     }
 
     // MARK: - Period Selector (Dropdown Menu Style)
@@ -324,151 +288,254 @@ struct DailyReportView: View {
 
     // MARK: - Graph Section
 
+    private var chartPoints: [ChartPoint] {
+        dailySummaries.compactMap { summary in
+            guard let vibe = summary.averageVibe,
+                  let day = Self.dayFormatter.date(from: summary.date) else { return nil }
+            return ChartPoint(id: summary.date, day: day, score: Double(vibe), summary: summary)
+        }
+    }
+
     private var graphSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        let points = chartPoints
+        let selected = points.first { $0.id == selectedChartDate } ?? points.last
+
+        return VStack(alignment: .leading, spacing: 16) {
             Text("気分の推移")
                 .font(.title3)
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
 
-            vibeGraph
+            VStack(spacing: 0) {
+                if let selected {
+                    digestBalloon(selected)
+                }
+
+                vibeChart(points: points, selected: selected)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.darkCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
         }
     }
 
-    private var vibeGraph: some View {
-        GeometryReader { geometry in
-            let totalWidth = geometry.size.width - 40 // Right side scale space
-            let barWidth = totalWidth / CGFloat(dailySummaries.count)
-            let barPaddingRatio: CGFloat = 0.15
-            let barInnerWidth = barWidth * (1 - barPaddingRatio * 2)
-            let chartHeight: CGFloat = 150
-            let halfHeight = chartHeight / 2
-            let maxValue: Double = 50.0
+    private func vibeChart(points: [ChartPoint], selected: ChartPoint?) -> some View {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let start = calendar.date(byAdding: .day, value: -(selectedPeriod.days - 1), to: today) ?? today
+        let end = calendar.date(byAdding: .day, value: 1, to: today) ?? today
 
-            HStack(spacing: 0) {
-                // Graph area
-                VStack(spacing: 4) {
-                    // Chart area
-                    ZStack(alignment: .top) {
-                        // Background grid lines (from top to bottom: 50, 25, 0, -25, -50)
-                        VStack(spacing: 0) {
-                            // 50 line (top)
-                            gridLine(value: 50, isZero: false)
-                            Spacer().frame(height: chartHeight / 4)
+        // Scores normally stay within -50...50; widen only if a day goes beyond
+        let maxAbs = points.map { abs($0.score) }.max() ?? 0
+        let bound = max(50.0, (maxAbs / 25).rounded(.up) * 25)
+        let labelStride = selectedPeriod.days <= 7 ? 1 : (selectedPeriod.days <= 30 ? 7 : 14)
 
-                            // 25 line
-                            gridLine(value: 25, isZero: false)
-                            Spacer().frame(height: chartHeight / 4)
+        return Chart {
+            RuleMark(y: .value("基準", 0))
+                .foregroundStyle(Color.white.opacity(0.25))
+                .lineStyle(StrokeStyle(lineWidth: 1))
 
-                            // 0 line (center)
-                            gridLine(value: 0, isZero: true)
-                            Spacer().frame(height: chartHeight / 4)
+            if let selected {
+                RuleMark(x: .value("選択", selected.midday))
+                    .foregroundStyle(Color.white.opacity(0.25))
+                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
+            }
 
-                            // -25 line
-                            gridLine(value: -25, isZero: false)
-                            Spacer().frame(height: chartHeight / 4)
-
-                            // -50 line (bottom)
-                            gridLine(value: -50, isZero: false)
-                        }
-                        .frame(height: chartHeight)
-
-                        // Bar chart (centered at 0, extending up/down)
-                        HStack(alignment: .center, spacing: 0) {
-                            ForEach(dailySummaries.indices, id: \.self) { index in
-                                let hasData = dailySummaries[index].averageVibe != nil
-                                let vibeScore = Double(dailySummaries[index].averageVibe ?? 0)
-                                let barHeight = abs(vibeScore) / maxValue * halfHeight
-                                let isPositive = vibeScore >= 0
-                                let barColor = isPositive ? Color.accentTeal : Color.accentCoral
-
-                                ZStack {
-                                    if !hasData {
-                                        // No data: show gray placeholder at center
-                                        VStack(spacing: 0) {
-                                            Spacer()
-                                                .frame(height: halfHeight - 2)
-                                            Rectangle()
-                                                .fill(Color.white.opacity(0.16))
-                                                .frame(width: barInnerWidth, height: 4)
-                                            Spacer()
-                                                .frame(height: halfHeight - 2)
-                                        }
-                                    } else if isPositive {
-                                        // Positive: extends upward from center
-                                        VStack(spacing: 0) {
-                                            Spacer()
-                                                .frame(height: halfHeight - barHeight)
-                                            Rectangle()
-                                                .fill(barColor)
-                                                .frame(width: barInnerWidth, height: barHeight)
-                                            Spacer()
-                                                .frame(height: halfHeight)
-                                        }
-                                    } else {
-                                        // Negative: extends downward from center
-                                        VStack(spacing: 0) {
-                                            Spacer()
-                                                .frame(height: halfHeight)
-                                            Rectangle()
-                                                .fill(barColor)
-                                                .frame(width: barInnerWidth, height: barHeight)
-                                            Spacer()
-                                                .frame(height: halfHeight - barHeight)
-                                        }
-                                    }
-                                }
-                                .frame(width: barWidth, height: chartHeight)
-                            }
-                        }
-                    }
-                    .frame(height: chartHeight)
-
-                    // Label area (date)
-                    HStack(spacing: 0) {
-                        ForEach(dailySummaries.indices, id: \.self) { index in
-                            Text(shouldShowLabel(index: index, total: dailySummaries.count) ? formatDateLabel(dailySummaries[index].date) : "")
-                                .font(.caption2)
-                                .foregroundColor(Color(white: 0.56))
-                                .frame(width: barWidth)
-                                .lineLimit(1)
-                                .minimumScaleFactor(0.5)
-                        }
-                    }
-                }
-                .frame(width: totalWidth)
-
-                // Right side scale (perfectly aligned with grid lines)
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text("50")
-                        .font(.caption2)
-                        .foregroundColor(Color(white: 0.56))
-                    Spacer().frame(height: chartHeight / 4)
-
-                    Text("25")
-                        .font(.caption2)
-                        .foregroundColor(Color(white: 0.56))
-                    Spacer().frame(height: chartHeight / 4)
-
-                    Text("0")
-                        .font(.caption2)
-                        .foregroundColor(Color(white: 0.56))
-                    Spacer().frame(height: chartHeight / 4)
-
-                    Text("-25")
-                        .font(.caption2)
-                        .foregroundColor(Color(white: 0.56))
-                    Spacer().frame(height: chartHeight / 4)
-
-                    Text("-50")
-                        .font(.caption2)
-                        .foregroundColor(Color(white: 0.56))
-                }
-                .frame(width: 30, height: chartHeight)
+            ForEach(points) { point in
+                BarMark(
+                    x: .value("日付", point.day, unit: .day),
+                    y: .value("気分", point.score)
+                )
+                .foregroundStyle(point.score >= 0 ? Color.accentTeal : Color.accentCoral)
+                .opacity(point.id == selected?.id ? 1.0 : 0.45)
             }
         }
-        .frame(height: 180)
-        .padding(16)
+        .chartXScale(domain: start...end)
+        .chartYScale(domain: -bound...bound)
+        .chartYAxis {
+            AxisMarks(position: .trailing, values: [-bound, -bound / 2, 0, bound / 2, bound]) { _ in
+                AxisGridLine()
+                    .foregroundStyle(Color.white.opacity(0.10))
+                AxisValueLabel()
+                    .foregroundStyle(Color(white: 0.56))
+            }
+        }
+        .chartXAxis {
+            AxisMarks(values: .stride(by: .day, count: labelStride)) { _ in
+                AxisValueLabel(format: .dateTime.month(.defaultDigits).day(), centered: labelStride == 1)
+                    .foregroundStyle(Color(white: 0.56))
+            }
+        }
+        .chartOverlay { proxy in
+            GeometryReader { geometry in
+                if let anchor = proxy.plotFrame {
+                    let plot = geometry[anchor]
+
+                    ZStack(alignment: .topLeading) {
+                        // Tap anywhere in the chart to select the nearest day with data
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture { location in
+                                guard let tapped: Date = proxy.value(atX: location.x - plot.minX) else { return }
+                                let nearest = points.min {
+                                    abs($0.midday.timeIntervalSince(tapped)) < abs($1.midday.timeIntervalSince(tapped))
+                                }
+                                selectedChartDate = nearest?.id
+                            }
+
+                        // Tail of the balloon, pointing at the selected bar
+                        if let selected, let x = proxy.position(forX: selected.midday) {
+                            BalloonTail()
+                                .fill(Color.darkElevated)
+                                .frame(width: 14, height: 8)
+                                .position(x: plot.minX + x, y: 4)
+                                .allowsHitTesting(false)
+                        }
+                    }
+                }
+            }
+        }
+        .frame(height: 190)
+    }
+
+    /// Digest of the selected day. Tapping it opens the detail view.
+    private func digestBalloon(_ point: ChartPoint) -> some View {
+        Button(action: {
+            openDetail(point.summary)
+        }) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 8) {
+                    Text(formatDate(point.id))
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
+
+                    Text(String(format: "%.1f", point.score))
+                        .font(.subheadline)
+                        .fontWeight(.bold)
+                        .foregroundColor(vibeScoreColor(point.score))
+
+                    Spacer()
+
+                    HStack(spacing: 2) {
+                        Text("詳細")
+                        Image(systemName: "chevron.right")
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.accentTeal)
+                }
+
+                Text(point.summary.insights?.isEmpty == false ? point.summary.insights ?? "" : "この日の要約はまだありません")
+                    .font(.caption)
+                    .foregroundColor(Color(white: 0.70))
+                    .lineLimit(3, reservesSpace: true)
+                    .multilineTextAlignment(.leading)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(Color.darkElevated)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private struct BalloonTail: Shape {
+        func path(in rect: CGRect) -> Path {
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+            path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
+            path.closeSubpath()
+            return path
+        }
+    }
+
+    private func openDetail(_ summary: DashboardSummary) {
+        selectedDailyDate = summary.date
+        selectedDailySummary = summary
+        showDailyDetailSheet = true
+    }
+
+    // MARK: - Daily Summary List
+
+    private var dailySummaryList: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack {
+                Text("日次サマリー")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Button(action: {
+                    sortNewestFirst.toggle()
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.up.arrow.down")
+                        Text(sortNewestFirst ? "新しい順" : "古い順")
+                    }
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.accentTeal)
+                }
+            }
+
+            // dailySummaries is ascending by date (as fetched)
+            ForEach(sortNewestFirst ? dailySummaries.reversed() : dailySummaries, id: \.date) { summary in
+                dailySummaryRow(summary: summary)
+            }
+        }
+    }
+
+    private func dailySummaryRow(summary: DashboardSummary) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(formatDate(summary.date))
+                    .font(.headline)
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                if let vibe = summary.averageVibe {
+                    Text(String(format: "%.1f", Double(vibe)))
+                        .font(.title3)
+                        .fontWeight(.bold)
+                        .foregroundColor(vibeScoreColor(Double(vibe)))
+                }
+            }
+
+            if let insights = summary.insights, !insights.isEmpty {
+                Text(insights)
+                    .font(.subheadline)
+                    .foregroundColor(Color(white: 0.56))
+                    .lineLimit(2)
+            }
+
+            Button(action: {
+                openDetail(summary)
+            }) {
+                HStack {
+                    Text("詳細を見る")
+                        .font(.caption)
+                        .fontWeight(.medium)
+                    Image(systemName: "chevron.right")
+                        .font(.caption)
+                }
+                .foregroundColor(.accentTeal)
+            }
+        }
+        .padding()
         .background(
             RoundedRectangle(cornerRadius: 12)
                 .fill(Color.darkCard)
@@ -477,94 +544,6 @@ struct DailyReportView: View {
                         .stroke(Color.white.opacity(0.08), lineWidth: 1)
                 )
         )
-    }
-
-    private func gridLine(value: Int, isZero: Bool) -> some View {
-        HStack {
-            Rectangle()
-                .fill(isZero ? Color.white.opacity(0.20) : Color.white.opacity(0.10))
-                .frame(height: isZero ? 1.0 : 0.5)
-            Spacer()
-        }
-    }
-
-    // MARK: - Daily Summary List
-
-    private var dailySummaryList: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("日次サマリー")
-                .font(.title3)
-                .fontWeight(.semibold)
-                .foregroundColor(.white)
-
-            ForEach(dailySummaries, id: \.date) { summary in
-                dailySummaryRow(summary: summary)
-            }
-        }
-    }
-
-    private func dailySummaryRow(summary: DashboardSummary) -> some View {
-        let hasData = summary.averageVibe != nil
-
-        return VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(formatDate(summary.date))
-                    .font(.headline)
-                    .foregroundColor(hasData ? .white : Color(white: 0.56))
-
-                Spacer()
-
-                if hasData {
-                    Text(String(format: "%.1f", Double(summary.averageVibe ?? 0)))
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(vibeScoreColor(Double(summary.averageVibe ?? 0)))
-                } else {
-                    Text("データなし")
-                        .font(.subheadline)
-                        .foregroundColor(Color(white: 0.56))
-                }
-            }
-
-            if hasData {
-                if let insights = summary.insights, !insights.isEmpty {
-                    Text(insights)
-                        .font(.subheadline)
-                        .foregroundColor(Color(white: 0.56))
-                        .lineLimit(2)
-                }
-
-                Button(action: {
-                    selectedDailyDate = summary.date
-                    selectedDailySummary = summary
-                    showDailyDetailSheet = true
-                }) {
-                    HStack {
-                        Text("詳細を見る")
-                        .font(.caption)
-                            .fontWeight(.medium)
-                        Image(systemName: "chevron.right")
-                            .font(.caption)
-                    }
-                    .foregroundColor(.accentTeal)
-                }
-            } else {
-                Text("この日のデータは記録されていません")
-                    .font(.caption)
-                    .foregroundColor(Color(white: 0.50))
-                    .italic()
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(hasData ? Color.darkCard : Color.darkCard.opacity(0.7))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
-        )
-        .opacity(hasData ? 1.0 : 0.6)
     }
 
     // MARK: - Helpers
@@ -579,33 +558,6 @@ struct DailyReportView: View {
         formatter.dateFormat = "M/d (E)"
         formatter.locale = Locale(identifier: "ja_JP")
         return formatter.string(from: date)
-    }
-
-    private func formatDateLabel(_ dateString: String) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: dateString) else {
-            return String(dateString.suffix(2))
-        }
-
-        let calendar = Calendar.current
-        let day = calendar.component(.day, from: date)
-        return String(day)
-    }
-
-    /// Determine if a label should be shown (only show first, middle, last to avoid crowding)
-    private func shouldShowLabel(index: Int, total: Int) -> Bool {
-        if total <= 7 {
-            // 7 or fewer: show all
-            return true
-        } else if total <= 12 {
-            // 8-12: show first, middle, last
-            return index == 0 || index == total / 2 || index == total - 1
-        } else {
-            // 30 days or 90 days: show first, quarter points, last
-            let quarter = total / 4
-            return index == 0 || index == quarter || index == quarter * 2 || index == quarter * 3 || index == total - 1
-        }
     }
 
     private func vibeScoreColor(_ score: Double) -> Color {
