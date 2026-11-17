@@ -126,6 +126,10 @@ final class RecordingStore: ObservableObject {
             presentError("デバイスが選択されていません")
             return
         }
+        guard !deviceManager.isDemoDeviceSelected else {
+            presentError("サンプルには録音できません。自分のデバイスを選んでください")
+            return
+        }
         guard await requestMicrophonePermissionIfNeeded() else {
             presentError("マイクへのアクセスが許可されていません。設定アプリから許可してください。")
             return
@@ -159,6 +163,9 @@ final class RecordingStore: ObservableObject {
     func importFile(at url: URL, originalDates: AudioImporter.FileDates?) async throws {
         guard let deviceId = deviceManager.selectedDeviceID else {
             throw AudioImportError.readFailed("デバイスが選択されていません")
+        }
+        guard !deviceManager.isDemoDeviceSelected else {
+            throw AudioImportError.readFailed("サンプルには取り込めません。自分のデバイスを選んでください")
         }
         var shown = -1
         let result = try await AudioImporter.importFile(

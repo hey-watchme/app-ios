@@ -57,10 +57,6 @@ class DeviceManager: ObservableObject {
         !realDevices.isEmpty
     }
 
-    var isViewingSample: Bool {
-        selectedDeviceID == DeviceManager.sampleDeviceID
-    }
-
     // MARK: - State-based Helper Properties (SSOT)
 
     /// Whether the device manager is ready to use (has loaded devices and selected one)
@@ -483,26 +479,27 @@ class DeviceManager: ObservableObject {
         return device.isDemo
     }
 
-    // MARK: - FAB表示判定
-    /// 選択中のデバイスタイプがobserverの場合はFABを非表示
-    var shouldShowFAB: Bool {
-        guard let deviceId = selectedDeviceID else {
-            return false  // デバイス未選択の場合はFABを非表示
+    // MARK: - Record button
+    /// The record button is shown for every device except a dedicated recorder
+    /// (device_type "observer"): its subject is recorded by that device, and a second
+    /// recorder on the iPhone would be confusing. The demo device keeps the button; what
+    /// a tap does there is decided by the caller (sign up, or record on the user's own device).
+    /// To be revisited when dedicated recorders are introduced.
+    var showsRecordButton: Bool {
+        guard let deviceId = selectedDeviceID,
+              let device = devices.first(where: { $0.device_id == deviceId }) else {
+            return true
         }
-
-        // サンプルデバイスの場合（device_type = "observer"）
-        if deviceId == DeviceManager.sampleDeviceID {
-            return false  // observerなのでFABを非表示
-        }
-
-        // devicesから選択中のデバイスを取得
-        guard let device = devices.first(where: { $0.device_id == deviceId }) else {
-            return false  // デバイスが見つからない場合はFABを非表示
-        }
-
-        // device_typeが "observer" の場合のみFABを非表示
-        // それ以外（ios, android, その他）の場合は表示
         return device.device_type.lowercased() != "observer"
+    }
+
+    /// The device a signed-in user records on when the sample is on screen: their own
+    /// iPhone first, then any device they own, never the demo or a dedicated recorder.
+    var ownRecordingDevice: Device? {
+        let candidates = realDevices.filter { $0.device_type.lowercased() != "observer" }
+        return candidates.first(where: { $0.role == "owner" && $0.device_type.lowercased() == "ios" })
+            ?? candidates.first(where: { $0.role == "owner" })
+            ?? candidates.first
     }
     
     // MARK: - タイムゾーン関連

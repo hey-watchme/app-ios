@@ -220,7 +220,7 @@ struct MainAppView: View {
                     // スワイプ体験を維持するため、コンテンツ構造は変えずにフッターのみ浮島化
                     CustomFooterNavigation(
                         selectedTab: $selectedTab,
-                        showRecordButton: isGuest || deviceManager.shouldShowFAB,
+                        showRecordButton: deviceManager.showsRecordButton,
                         showMicTip: showMicTip,
                         onDismissMicTip: {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -228,14 +228,7 @@ struct MainAppView: View {
                             }
                             hasSeenMicTip = true
                         },
-                        onRecordTap: {
-                            if isGuest {
-                                userAccountManager.promptSignUp("録音する")
-                                return
-                            }
-                            aiConsentGranted = AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id)
-                            showRecordingSheet = true
-                        }
+                        onRecordTap: handleRecordTap
                     )
                 }
                 .padding(.horizontal, 16)
@@ -275,6 +268,24 @@ struct MainAppView: View {
                 .presentationDragIndicator(.visible)
             }
         }
+    }
+
+    /// Record button. Signed-out visitors are asked to sign up. Signed-in users who are
+    /// looking at the sample record on their own device (the sample is read-only).
+    private func handleRecordTap() {
+        if isGuest {
+            userAccountManager.promptSignUp("録音する")
+            return
+        }
+        if deviceManager.isDemoDeviceSelected {
+            guard let own = deviceManager.ownRecordingDevice else {
+                toastManager.showError(title: "録音できません", subtitle: "サンプルには録音できません。録音に使うデバイスがありません")
+                return
+            }
+            deviceManager.selectDevice(own.device_id)
+        }
+        aiConsentGranted = AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id)
+        showRecordingSheet = true
     }
 
     private func handleSampleBannerAction() {
