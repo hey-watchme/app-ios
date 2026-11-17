@@ -31,25 +31,10 @@
 	<string>1</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
-	<key>NSCameraUsageDescription</key>
-	<string>QRコードをスキャンしてデバイスを追加するため、およびアバター写真を撮影するためにカメラを使用します</string>
-	<key>NSMicrophoneUsageDescription</key>
-	<string>このアプリは音声を録音してサーバーにアップロードするためにマイクへのアクセスが必要です。</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>アバター画像を選択するためにフォトライブラリへのアクセスが必要です</string>
 	<key>NSAppTransportSecurity</key>
 	<dict>
 		<key>NSExceptionDomains</key>
 		<dict>
-			<key>watchme-vault.s3.ap-southeast-2.amazonaws.com</key>
-			<dict>
-				<key>NSExceptionAllowsInsecureHTTPLoads</key>
-				<false/>
-				<key>NSExceptionRequiresForwardSecrecy</key>
-				<false/>
-				<key>NSIncludesSubdomains</key>
-				<true/>
-			</dict>
 			<key>watchme-avatars.s3.ap-southeast-2.amazonaws.com</key>
 			<dict>
 				<key>NSExceptionAllowsInsecureHTTPLoads</key>
@@ -68,8 +53,23 @@
 				<key>NSIncludesSubdomains</key>
 				<true/>
 			</dict>
+			<key>watchme-vault.s3.ap-southeast-2.amazonaws.com</key>
+			<dict>
+				<key>NSExceptionAllowsInsecureHTTPLoads</key>
+				<false/>
+				<key>NSExceptionRequiresForwardSecrecy</key>
+				<false/>
+				<key>NSIncludesSubdomains</key>
+				<true/>
+			</dict>
 		</dict>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>QRコードを読み取って録音デバイスを追加するときと、プロフィール写真を撮るときにカメラを使います。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>家族の会話などを録音し、その場の様子を分析して記録に残すためにマイクを使います。録音はサーバーに送って分析します。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>プロフィール写真を選ぶときと、撮影済みの動画から音声を取り込むときに写真ライブラリを使います。</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
