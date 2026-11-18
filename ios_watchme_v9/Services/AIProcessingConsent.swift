@@ -3,7 +3,7 @@
 //  ios_watchme_v9
 //
 //  Before the first recording or import, explain where the audio goes (our servers,
-//  Google Gemini, OpenAI) and ask for permission (App Review Guideline 5.1.2(i)).
+//  ElevenLabs, Google Gemini, OpenAI) and ask for permission (App Review Guideline 5.1.2(i)).
 //  The answer is kept on this iPhone per account and per version of the explanation;
 //  changing what is sent means bumping `version` so everyone is asked again.
 //
@@ -11,7 +11,7 @@
 import SwiftUI
 
 enum AIProcessingConsent {
-    static let version = "2026-11-17"
+    static let version = "2026-11-18"
 
     private static func key(_ userId: String) -> String { "aiProcessingConsent.\(userId)" }
 
@@ -27,8 +27,9 @@ enum AIProcessingConsent {
 
     static let points = [
         "音声は、東京にある当社のサーバー（Amazon Web Services）に送って分析します。音声は分析が終わってから3日で削除します（研究への協力に同意した場合を除く）。",
-        "文字起こしと場面の説明のために、音声を Google（Gemini API）に送ります。",
-        "分析の文章と出来事の数え上げのために、文字起こしと測定値を OpenAI に送ります。音声は送りません。",
+        "文字起こしのために、音声を ElevenLabs に送ります。送った音声と文字起こしは、同社の米国のサーバーで処理・保存されます。",
+        "録音を聞いて、場面・話している人・出来事を記録するために、音声、文字起こし、声の測定値、登録された観測対象の情報を Google（Gemini API）に送ります。",
+        "分析の文章のために、文字起こし、上の記録、登録された観測対象の情報を OpenAI に送ります。音声は送りません。",
         "送ったデータは本アプリの分析のためだけに使われ、各社の AI モデルの学習には使われません。",
         "録音には、その場にいるご家族などの声も含まれます。",
     ]

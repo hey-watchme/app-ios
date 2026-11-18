@@ -17,7 +17,7 @@ struct PrivacyPolicyView: View {
 
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
-                        Text("最終更新日: 2026年11月14日")
+                        Text("最終更新日: 2026年11月18日")
                             .font(.caption)
                             .foregroundColor(.secondary)
 
@@ -75,7 +75,7 @@ struct PrivacyPolicyView: View {
                                 • 利用者は、自分が連携しているデバイスのデータだけを閲覧できます
 
                                 【保存場所】
-                                • データは日本国内（東京）のサーバーに保存します。分析の一部は、下記の外部サービスで処理します
+                                • データは日本国内（東京）のサーバーに保存します。分析の一部は、下記の外部サービスで処理します（文字起こしに使う ElevenLabs では、音声と文字起こしが米国のサーバーに保存されます）
 
                                 【保存期間】
                                 • 音声: 分析が終わってから3日で削除します（研究への協力に同意した場合を除く）
@@ -102,12 +102,16 @@ struct PrivacyPolicyView: View {
                                 content: """
                                 本アプリは、録音の分析と保存のために、以下の外部サービスを利用しています。各サービスに送ったデータは、本アプリの処理のためだけに使われ、各社の AI モデルの学習には使われない契約・設定で利用しています。
 
+                                【ElevenLabs（Speech to Text API）】
+                                • 文字起こし（音声を送ります。音声と文字起こしは、同社の米国のサーバーで処理・保存されます）
+                                • プライバシーポリシー: https://elevenlabs.io/privacy-policy
+
                                 【Google（Gemini API）】
-                                • 文字起こし、録音の場面の説明
+                                • 録音を聞いての、場面・話している人・出来事の記録（音声、文字起こし、声の測定値、登録された観測対象の情報を送ります）
                                 • プライバシーポリシー: https://policies.google.com/privacy
 
                                 【OpenAI（API）】
-                                • 分析の文章、出来事の抽出（文字起こしと測定値を送ります。音声は送りません）
+                                • 分析の文章（文字起こし、上の記録、登録された観測対象の情報を送ります。音声は送りません）
                                 • プライバシーポリシー: https://openai.com/policies/privacy-policy
 
                                 【Amazon Web Services（東京リージョン）】
