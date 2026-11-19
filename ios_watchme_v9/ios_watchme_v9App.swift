@@ -104,7 +104,6 @@ struct MainAppView: View {
     enum FooterTab {
         case home  // ホーム
         case report  // レポート
-        case subject  // 分析対象
     }
 
     /// Which top-level screen is shown. Switching is animated in one place.
@@ -165,12 +164,6 @@ struct MainAppView: View {
             .environmentObject(dataManager)
     }
 
-    private var subjectContent: some View {
-        SubjectTabView()
-            .environmentObject(userAccountManager)
-            .environmentObject(deviceManager)
-            .environmentObject(dataManager)
-    }
 
     /// The sample banner shows whenever the demo device is selected (always, for signed-out visitors).
     private var showSampleBanner: Bool {
@@ -195,11 +188,6 @@ struct MainAppView: View {
                         .opacity(selectedTab == .report ? 1 : 0)
                         .zIndex(selectedTab == .report ? 1 : 0)
                         .allowsHitTesting(selectedTab == .report)
-
-                    subjectContent
-                        .opacity(selectedTab == .subject ? 1 : 0)
-                        .zIndex(selectedTab == .subject ? 1 : 0)
-                        .allowsHitTesting(selectedTab == .subject)
                 }
             }
             .safeAreaInset(edge: .bottom, spacing: 0) {
@@ -493,7 +481,6 @@ struct CustomFooterNavigation: View {
             HStack(spacing: 8) {
                 footerTabButton(.home, activeIcon: "house.fill", inactiveIcon: "house", title: "ホーム")
                 footerTabButton(.report, activeIcon: "heart.text.square.fill", inactiveIcon: "heart.text.square", title: "レポート")
-                footerTabButton(.subject, activeIcon: "person.fill", inactiveIcon: "person", title: "分析対象")
             }
             .frame(maxWidth: .infinity)
 

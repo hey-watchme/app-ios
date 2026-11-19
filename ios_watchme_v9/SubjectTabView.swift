@@ -2,7 +2,9 @@
 //  SubjectTabView.swift
 //  ios_watchme_v9
 //
-//  分析対象タブ - 分析対象の情報表示・編集画面
+//  分析対象 - opened from the subject name at the top left. The selected subject's
+//  profile and the device it records with, the other subjects to switch to, adding one,
+//  and (low-key) every linked device. platform docs/product/subjects-and-devices.md
 //
 
 import SwiftUI
@@ -11,6 +13,8 @@ struct SubjectTabView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
+    @EnvironmentObject var recordingStore: RecordingStore
+    @Environment(\.dismiss) private var dismiss
 
     @State private var showSubjectEdit = false
     @State private var showNeuralInfo = false
@@ -18,15 +22,127 @@ struct SubjectTabView: View {
     @State private var selectedCognitiveType: CognitiveTypeOption = .behavioralImpulsive
     @State private var isUpdatingType = false
     @State private var subjectInitialValues: SubjectRegistrationView.InitialValues? = nil
+    @State private var showAddSubject = false
+    @State private var editingDevice: Device? = nil
+    @State private var showRecordingSwitchAlert = false
 
     var body: some View {
-        ZStack(alignment: .top) {
-            Color.darkBase.ignoresSafeArea()
+        ScrollView {
+            VStack(spacing: 0) {
+                if let subject = deviceManager.selectedSubject {
+                    profileSection(subject)
+                } else {
+                    unnamedSection
+                        .padding(.top, 40)
+                        .padding(.bottom, 24)
+                }
+                managementSections
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                Spacer(minLength: 60)
+            }
+        }
+        .background(Color.darkBase.ignoresSafeArea())
+        .navigationTitle("分析対象")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(Color.darkBase, for: .navigationBar)
+        .toolbarBackground(.visible, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .tint(.white)
+        .sheet(isPresented: $showAddSubject) {
+            SubjectRegistrationView(
+                deviceID: "",
+                isPresented: $showAddSubject,
+                editingSubject: nil,
+                createsContainer: true
+            )
+            .environmentObject(dataManager)
+            .environmentObject(deviceManager)
+            .environmentObject(userAccountManager)
+        }
+        .sheet(item: Binding(
+            get: { editingDevice.map { IdentifiedDevice(device: $0) } },
+            set: { editingDevice = $0?.device }
+        )) { item in
+            DeviceEditView(
+                device: item.device,
+                isPresented: Binding(get: { editingDevice != nil }, set: { if !$0 { editingDevice = nil } })
+            )
+            .environmentObject(deviceManager)
+            .environmentObject(dataManager)
+            .environmentObject(userAccountManager)
+        }
+        .alert("録音中です", isPresented: $showRecordingSwitchAlert) {
+            Button("OK") { }
+        } message: {
+            Text("録音を止めてから、分析対象を切り替えてください。")
+        }
+        .sheet(isPresented: $showSubjectEdit) {
+            if let deviceId = deviceManager.selectedDeviceID {
+                SubjectRegistrationView(
+                    deviceID: deviceId,
+                    isPresented: $showSubjectEdit,
+                    editingSubject: deviceManager.selectedSubject,
+                    initialValues: subjectInitialValues
+                )
+                .environmentObject(dataManager)
+                .environmentObject(deviceManager)
+                .environmentObject(userAccountManager)
+            }
+        }
+        .onChange(of: showSubjectEdit) { _, isPresented in
+            if !isPresented {
+                subjectInitialValues = nil
+            }
+        }
+        .sheet(isPresented: $showNeuralInfo) {
+            InfoSheet(
+                title: "神経機能モデルとは",
+                content: """
+                前頭葉ネットワークを中心とした認知神経科学の視点で、注意・実行・感情制御の機能を整理したモデルです。
 
-            if let subject = deviceManager.selectedSubject {
-                // 分析対象が設定されている場合
-                ScrollView {
-                    VStack(spacing: 0) {
+                このモデルは以下の5つの機能で構成されています：
+
+                🎯 注意制御：集中力・注意の切替・持続力
+                🧭 実行機能：計画・優先順位・段取り
+                ⚙️ ワーキングメモリ：情報の保持・操作
+                ❤️ 感情制御：衝動・不安・共感の調整
+                🌈 発想流動性：創造性・連想力
+
+                ADHD傾向やASD傾向の理解にも役立つフレームワークです。
+                """
+            )
+        }
+        .sheet(isPresented: $showIntelligenceInfo) {
+            InfoSheet(
+                title: "知性の形式モデルとは",
+                content: """
+                ハワード・ガードナーの多重知能理論を拡張したモデルです。
+
+                知能は単一の数値（IQ）ではなく、複数の独立した知性の組み合わせで構成されています。
+
+                このモデルでは9つの知性領域を評価します：
+
+                • 言語的知性：言葉で考える
+                • 論理数学的知性：構造・法則で考える
+                • 空間的知性：イメージで考える
+                • 身体運動的知性：体を通して考える
+                • 音楽的知性：リズム・音で考える
+                • 対人的知性：他者との関係で理解する
+                • 内省的知性：自分を理解する
+                • 博物的知性：パターンで理解する
+                • 存在的知性：哲学的に考える
+
+                すべての人に独自の知性の組み合わせがあり、それぞれに価値があります。
+                """
+            )
+        }
+    }
+
+    // MARK: - Profile (selected subject)
+
+    @ViewBuilder
+    private func profileSection(_ subject: Subject) -> some View {
                         // 地図ヘッダー（4:3 比率で表示、上を少し見切らせる）
                         // Location display: city/prefecture if available, otherwise show Japan map
                         GeometryReader { proxy in
@@ -118,7 +234,7 @@ struct SubjectTabView: View {
                                     .lineSpacing(4)
                             }
 
-                            // プロフィール編集ボタン（ゲストには登録の案内、サンプルなど編集できない観測対象には出さない）
+                            // プロフィール編集ボタン（ゲストには登録の案内、サンプルなど編集できない分析対象には出さない）
                             if !userAccountManager.authState.isAuthenticated || canEditSelectedSubject {
                             Button(action: {
                                 guard userAccountManager.authState.isAuthenticated else {
@@ -161,34 +277,18 @@ struct SubjectTabView: View {
                         .padding(.horizontal, 0)
                         .padding(.top, 0)
 
-                        // 認知タイプセクション - 一旦非表示
-                        // cognitiveTypeSection
-                        //     .padding(.horizontal, 20)
-                        //     .padding(.top, 20)
+    }
 
-                        // 神経機能モデル（レーダーチャート）- 一旦非表示
-                        // neuralFunctionSection
-                        //     .padding(.horizontal, 20)
-                        //     .padding(.top, 20)
-
-                        // 知性の形式モデル - 一旦非表示
-                        // intelligenceSection
-                        //     .padding(.horizontal, 20)
-                        //     .padding(.top, 20)
-
-                        Spacer(minLength: 50)
-                    }
-                }
-            } else {
-                // 分析対象が未設定の場合
+    /// The selected container has no subject profile yet (名称未設定).
+    private var unnamedSection: some View {
                 VStack(spacing: 20) {
                     Image(systemName: "person.crop.circle.badge.plus")
                         .font(.system(size: 80))
                         .foregroundColor(Color(white: 0.50))
-                    Text("未登録")
+                    Text("名称未設定")
                         .font(.title3)
                         .foregroundColor(.white)
-                    Text("選択中のデバイス（\(currentDeviceTypeLabel)）で音声分析している対象者を登録しておくことで、分析の精度が向上します。年齢、性別、プロフィールの情報等が分析の前提として活用されます。")
+                    Text("この分析対象の名前やプロフィールを登録しておくと、分析の精度が上がります。年齢、性別、プロフィールの情報等が分析の前提として活用されます。")
                         .font(.caption)
                         .foregroundColor(Color(white: 0.56))
                         .multilineTextAlignment(.center)
@@ -197,7 +297,7 @@ struct SubjectTabView: View {
                     // 新規登録ボタン
                     VStack(spacing: 12) {
                         SubjectActionButton(
-                            title: "分析対象を新規登録",
+                            title: "名前とプロフィールを登録",
                             systemImage: "plus.circle.fill",
                             style: .primary
                         ) {
@@ -217,70 +317,156 @@ struct SubjectTabView: View {
                     .padding(.horizontal, 24)
                     .padding(.top, 10)
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .padding(.top, 100)
+    }
+
+    // MARK: - Device, other subjects, adding
+
+    private var selectedDevice: Device? {
+        deviceManager.devices.first { $0.device_id == deviceManager.selectedDeviceID }
+    }
+
+    private var otherSubjects: [Device] {
+        deviceManager.devices.filter { $0.device_id != deviceManager.selectedDeviceID }
+    }
+
+    private var managementSections: some View {
+        VStack(alignment: .leading, spacing: 28) {
+            if let device = selectedDevice {
+                section("録音に使うデバイス") {
+                    Button { editingDevice = device } label: {
+                        row(icon: deviceIcon(device), title: deviceLabel(device),
+                            detail: String(device.device_id.prefix(8)))
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            section("ほかの分析対象") {
+                VStack(spacing: 0) {
+                    ForEach(otherSubjects, id: \.device_id) { device in
+                        Button { switchTo(device) } label: {
+                            subjectRow(device)
+                        }
+                        .buttonStyle(.plain)
+                        Divider().background(Color.white.opacity(0.08))
+                    }
+                    if userAccountManager.authState.isAuthenticated {
+                        Button { showAddSubject = true } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "plus.circle.fill")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.accentTeal)
+                                Text("分析対象を増やす")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.accentTeal)
+                                Spacer()
+                            }
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+
+            if userAccountManager.authState.isAuthenticated {
+                NavigationLink {
+                    DeviceSettingsView()
+                        .environmentObject(userAccountManager)
+                        .environmentObject(deviceManager)
+                        .environmentObject(dataManager)
+                } label: {
+                    row(icon: "iphone.gen3", title: "すべてのデバイス", detail: nil)
+                }
+                .buttonStyle(.plain)
             }
         }
-        .sheet(isPresented: $showSubjectEdit) {
-            if let deviceId = deviceManager.selectedDeviceID {
-                SubjectRegistrationView(
-                    deviceID: deviceId,
-                    isPresented: $showSubjectEdit,
-                    editingSubject: deviceManager.selectedSubject,
-                    initialValues: subjectInitialValues
-                )
-                .environmentObject(dataManager)
-                .environmentObject(deviceManager)
-                .environmentObject(userAccountManager)
+    }
+
+    private func section<Content: View>(_ title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(Color(white: 0.56))
+            content()
+                .padding(.horizontal, 14)
+                .background(RoundedRectangle(cornerRadius: 12).fill(Color.darkCard))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
+        }
+    }
+
+    private func row(icon: String, title: String, detail: String?) -> some View {
+        HStack(spacing: 12) {
+            Image(systemName: icon)
+                .font(.system(size: 18))
+                .foregroundColor(Color(white: 0.7))
+                .frame(width: 28)
+            Text(title)
+                .font(.system(size: 15))
+                .foregroundColor(.white)
+            Spacer()
+            if let detail {
+                Text(detail)
+                    .font(.system(size: 12, design: .monospaced))
+                    .foregroundColor(Color(white: 0.45))
             }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12))
+                .foregroundColor(Color(white: 0.35))
         }
-        .onChange(of: showSubjectEdit) { _, isPresented in
-            if !isPresented {
-                subjectInitialValues = nil
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    private func subjectRow(_ device: Device) -> some View {
+        HStack(spacing: 12) {
+            AvatarView(type: .subject, id: device.subject?.subjectId, size: 32, avatarUrl: device.subject?.avatarUrl)
+            Text(subjectName(device))
+                .font(.system(size: 15))
+                .foregroundColor(device.subject?.name?.isEmpty == false ? .white : Color(white: 0.56))
+            if device.isDemo {
+                Text("サンプル")
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundColor(.accentTeal)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.accentTeal.opacity(0.15)))
             }
+            Spacer()
+            Image(systemName: "chevron.right")
+                .font(.system(size: 12))
+                .foregroundColor(Color(white: 0.35))
         }
-        .sheet(isPresented: $showNeuralInfo) {
-            InfoSheet(
-                title: "神経機能モデルとは",
-                content: """
-                前頭葉ネットワークを中心とした認知神経科学の視点で、注意・実行・感情制御の機能を整理したモデルです。
+        .padding(.vertical, 10)
+        .contentShape(Rectangle())
+    }
 
-                このモデルは以下の5つの機能で構成されています：
+    private func subjectName(_ device: Device) -> String {
+        if let name = device.subject?.name, !name.isEmpty { return name }
+        return "名称未設定"
+    }
 
-                🎯 注意制御：集中力・注意の切替・持続力
-                🧭 実行機能：計画・優先順位・段取り
-                ⚙️ ワーキングメモリ：情報の保持・操作
-                ❤️ 感情制御：衝動・不安・共感の調整
-                🌈 発想流動性：創造性・連想力
-
-                ADHD傾向やASD傾向の理解にも役立つフレームワークです。
-                """
-            )
+    private func deviceLabel(_ device: Device) -> String {
+        switch device.device_type.lowercased() {
+        case "ios": return "iPhone"
+        case "demo": return "サンプル"
+        case "observer": return "録音機"
+        default: return device.device_type
         }
-        .sheet(isPresented: $showIntelligenceInfo) {
-            InfoSheet(
-                title: "知性の形式モデルとは",
-                content: """
-                ハワード・ガードナーの多重知能理論を拡張したモデルです。
+    }
 
-                知能は単一の数値（IQ）ではなく、複数の独立した知性の組み合わせで構成されています。
+    private func deviceIcon(_ device: Device) -> String {
+        device.device_type.lowercased() == "observer" ? "mic.circle" : "iphone.gen3"
+    }
 
-                このモデルでは9つの知性領域を評価します：
-
-                • 言語的知性：言葉で考える
-                • 論理数学的知性：構造・法則で考える
-                • 空間的知性：イメージで考える
-                • 身体運動的知性：体を通して考える
-                • 音楽的知性：リズム・音で考える
-                • 対人的知性：他者との関係で理解する
-                • 内省的知性：自分を理解する
-                • 博物的知性：パターンで理解する
-                • 存在的知性：哲学的に考える
-
-                すべての人に独自の知性の組み合わせがあり、それぞれに価値があります。
-                """
-            )
+    /// Recordings go to the selected subject, so it cannot change while recording.
+    private func switchTo(_ device: Device) {
+        guard !recordingStore.state.isRecording else {
+            showRecordingSwitchAlert = true
+            return
         }
+        deviceManager.selectDevice(device.device_id)
+        dismiss()
     }
 
     private var currentDeviceTypeLabel: String {
@@ -805,4 +991,10 @@ struct InfoSheet: View {
             }
         }
     }
+}
+
+/// A Device wrapped for sheet(item:).
+private struct IdentifiedDevice: Identifiable {
+    let device: Device
+    var id: String { device.device_id }
 }

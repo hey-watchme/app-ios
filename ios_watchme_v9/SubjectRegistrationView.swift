@@ -27,6 +27,9 @@ struct SubjectRegistrationView: View {
     @Binding var isPresented: Bool  // 互換性のため残す
     let editingSubject: Subject? // 編集対象の分析対象（nilの場合は新規登録）
     let initialValues: InitialValues?
+    /// Adding a new analysis subject: a recording container (devices row) is created for it
+    /// on save and selected afterwards, so recordings go to the new subject. deviceID is unused.
+    let createsContainer: Bool
     
     // フォーム入力項目
     @State private var name: String = ""
@@ -93,12 +96,14 @@ struct SubjectRegistrationView: View {
         deviceID: String,
         isPresented: Binding<Bool>,
         editingSubject: Subject?,
-        initialValues: InitialValues? = nil
+        initialValues: InitialValues? = nil,
+        createsContainer: Bool = false
     ) {
         self.deviceID = deviceID
         self._isPresented = isPresented
         self.editingSubject = editingSubject
         self.initialValues = initialValues
+        self.createsContainer = createsContainer
     }
     
     var body: some View {
@@ -579,12 +584,18 @@ struct SubjectRegistrationView: View {
                 createdByUserId: currentUser.id
             )
 
-            // デバイスにsubject_idを設定
-            try await dataManager.updateDeviceSubjectId(deviceId: deviceID, subjectId: subjectId)
+            // Link the subject to its recording container (a new one when adding a subject)
+            let targetDeviceID = createsContainer
+                ? try await deviceManager.registerDevice(userId: currentUser.id)
+                : deviceID
+            try await dataManager.updateDeviceSubjectId(deviceId: targetDeviceID, subjectId: subjectId)
 
             // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
             if let userId = userAccountManager.currentUser?.id {
                 await deviceManager.loadDevices(for: userId)
+            }
+            if createsContainer {
+                await MainActor.run { deviceManager.selectDevice(targetDeviceID) }
             }
 
             await MainActor.run {

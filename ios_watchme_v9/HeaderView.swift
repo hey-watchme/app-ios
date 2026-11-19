@@ -11,6 +11,7 @@ struct HeaderView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
+    @EnvironmentObject var recordingStore: RecordingStore
     @Binding var showLogoutConfirmation: Bool
     @Binding var showRecordingSheet: Bool
     @Binding var showMyPage: Bool  // マイページ表示制御
@@ -23,20 +24,21 @@ struct HeaderView: View {
     
     var body: some View {
         HStack(spacing: 10) {
-            // 分析対象または選択中デバイス表示（デバイス設定画面へのリンク）
+            // The selected analysis subject; opens the 分析対象 screen (subject, its device, the others)
             if userAccountManager.authState.isAuthenticated {
                 NavigationLink(destination:
-                    DeviceSettingsView()
+                    SubjectTabView()
                         .environmentObject(userAccountManager)
                         .environmentObject(deviceManager)
                         .environmentObject(dataManager)
+                        .environmentObject(recordingStore)
                 ) {
                     targetPill
                 }
                 .buttonStyle(.plain)
             } else {
                 // Sample mode: devices and subjects need an account
-                Button(action: { userAccountManager.promptSignUp("観測対象やデバイスを設定する") }) {
+                Button(action: { userAccountManager.promptSignUp("分析対象やデバイスを設定する") }) {
                     targetPill
                 }
                 .buttonStyle(.plain)
@@ -128,12 +130,12 @@ struct HeaderView: View {
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white.opacity(0.95))
                 } else {
-                    Text("分析対象")
+                    Text("名称未設定")
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }
-        } else if let deviceId = deviceManager.selectedDeviceID {
+        } else if deviceManager.selectedDeviceID != nil {
             // デバイスが選択されている場合
             if deviceManager.isSampleDeviceSelected {
                 // サンプルデバイス選択中
@@ -148,7 +150,7 @@ struct HeaderView: View {
                             .foregroundColor(.white)
                     }
 
-                    Text("サンプルデバイス")
+                    Text("サンプル")
                         .font(.subheadline)
                         .foregroundColor(.white.opacity(0.86))
                 }
@@ -160,15 +162,14 @@ struct HeaderView: View {
                             .fill(Color.white.opacity(0.08))
                             .frame(width: 32, height: 32)
 
-                        Image(systemName: "iphone")
+                        Image(systemName: "person")
                             .font(.system(size: 18))
                             .foregroundColor(.white.opacity(0.86))
                     }
 
-                    // デバイスIDの最初の8文字を表示
-                    let shortDeviceId = String(deviceId.prefix(8))
-                    Text(shortDeviceId)
-                        .font(.system(size: 15, weight: .medium, design: .monospaced))
+                    // A recording container without a subject profile yet (the device id is in the 分析対象 screen)
+                    Text("名称未設定")
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.white.opacity(0.92))
                 }
             }

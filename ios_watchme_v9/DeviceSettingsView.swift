@@ -2,8 +2,7 @@
 //  DeviceSettingsView.swift
 //  ios_watchme_v9
 //
-//  デバイス設定画面（マイページのデバイス版）
-//  独立したページとして実装
+//  すべてのデバイス - every linked recording container, opened from the 分析対象 screen
 //
 
 import SwiftUI
@@ -57,35 +56,13 @@ struct DeviceSettingsView: View {
                         .frame(maxWidth: .infinity, minHeight: 200)
 
                 case .available(let allDevices):
-                    // Classify devices by type
-                    let observerDevices = allDevices.filter { $0.device_type == "observer" }
-                    let iosDevices = allDevices.filter { $0.device_type == "ios" || $0.device_type == "android" }
-                    let sampleDevices = allDevices.filter { $0.device_type == "demo" }
-
-                    // Show empty state only if no devices at all
+                    // One list: subjects are chosen on the 分析対象 screen, so devices are not
+                    // grouped by kind here (docs/product/subjects-and-devices.md)
                     if allDevices.isEmpty {
                         EmptyDeviceState()
                     } else {
-                        // Observer Section
-                        if !observerDevices.isEmpty {
-                            DeviceList(title: "Observer", devices: observerDevices)
-                            Spacer().frame(height: 50)
-                        }
-
-                        // iPhone Section
-                        if !iosDevices.isEmpty {
-                            DeviceList(title: "iPhone", devices: iosDevices)
-                            Spacer().frame(height: 50)
-                        }
-
-                        // Sample Devices Section
-                        if !sampleDevices.isEmpty {
-                            DeviceList(title: "サンプルデバイス", devices: sampleDevices, isSampleSection: true)
-                            Spacer().frame(height: 50)
-                        }
+                        DeviceList(devices: allDevices)
                     }
-
-                    DedicatedRecorderNotice()
 
                     Spacer(minLength: 100)
 
@@ -109,7 +86,7 @@ struct DeviceSettingsView: View {
             }
         }
         .background(Color.darkBase.ignoresSafeArea())
-        .navigationTitle("デバイス設定")
+        .navigationTitle("すべてのデバイス")
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(Color.darkBase, for: .navigationBar)
         .toolbarBackground(.visible, for: .navigationBar)
@@ -182,13 +159,8 @@ struct DeviceSettingsView: View {
 
     // MARK: - Device List
     @ViewBuilder
-    private func DeviceList(title: String, devices: [Device], isSampleSection: Bool = false) -> some View {
+    private func DeviceList(devices: [Device]) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text(title)
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.horizontal)
-
             // Display devices (reversed order)
             ForEach(devices.reversed(), id: \.device_id) { device in
                 DeviceCard(
@@ -227,38 +199,6 @@ struct DeviceSettingsView: View {
         }
     }
 
-
-    // MARK: - Dedicated recorder notice
-    /// WatchMe records with this iPhone. Dedicated recorders exist but are offered by
-    /// invitation only for now, so instead of an "add device" flow the page only says
-    /// how to ask about them (no button that leads nowhere).
-    @ViewBuilder
-    private func DedicatedRecorderNotice() -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("専用の録音デバイス")
-                .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(.white)
-                .padding(.horizontal)
-
-            UnifiedCard(title: "招待制で提供しています") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("WatchMe はこの iPhone のマイクで録音して分析します。据え置き型などの専用の録音デバイスは、現在、招待制で提供しています。")
-                        .font(.caption)
-                        .foregroundColor(Color(white: 0.56))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Text("ご関心のある方は、公式サイトのお問い合わせフォームからご連絡ください。")
-                        .font(.caption)
-                        .foregroundColor(Color(white: 0.56))
-                        .fixedSize(horizontal: false, vertical: true)
-                    Link("お問い合わせフォームを開く", destination: URL(string: "https://hey-watch.me/contact")!)
-                        .font(.caption)
-                        .foregroundColor(.accentTeal)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            .padding(.horizontal)
-        }
-    }
 
     // MARK: - Data Loading
     // loadAllData()とloadSampleDevice()は削除
