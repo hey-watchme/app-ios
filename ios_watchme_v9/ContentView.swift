@@ -15,6 +15,7 @@ struct ContentView: View {
     @EnvironmentObject var recordingStore: RecordingStore
     @EnvironmentObject var toastManager: ToastManager
     @ObservedObject private var researchConsent = ResearchConsentStore.shared
+    @ObservedObject private var audioKeep = AudioKeepStore.shared
 
     // シンプルな状態管理
     @State private var selectedLocalDate: String = ""
@@ -204,10 +205,20 @@ struct ContentView: View {
                 email: userAccountManager.currentUser?.email,
                 isAnonymous: userAccountManager.isAnonymousUser
             )
+            await audioKeep.syncAfterSignIn(isAnonymous: userAccountManager.isAnonymousUser)
         }
         .sheet(isPresented: $researchConsent.showFirstLoginPrompt) {
             ResearchConsentPromptView(store: researchConsent)
         }
+        // Keeping audio is asked after the research question, never on top of it
+        .background(
+            Color.clear.sheet(isPresented: Binding(
+                get: { audioKeep.showPrompt && !researchConsent.showFirstLoginPrompt },
+                set: { if !$0 { audioKeep.showPrompt = false } }
+            )) {
+                AudioKeepPromptView(store: audioKeep)
+            }
+        )
         .onAppear {
             // デバイス初期化処理はMainAppViewの認証成功時に実行済み
             // 日付範囲の初期化

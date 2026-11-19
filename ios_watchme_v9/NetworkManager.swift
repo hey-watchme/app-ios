@@ -698,6 +698,21 @@ class NetworkManager: ObservableObject {
         return try JSONDecoder().decode(ResearchConsentState.self, from: data)
     }
 
+    /// Whether the signed-in user keeps audio for playback (GET /account/audio-keep).
+    func fetchAudioKeep() async throws -> AudioKeepState {
+        let data = try await accountRequest(method: "GET", path: "/account/audio-keep")
+        return try JSONDecoder().decode(AudioKeepState.self, from: data)
+    }
+
+    /// Record the choice (PUT /account/audio-keep). Turning it off deletes the kept audio
+    /// of this account's devices on the server.
+    func setAudioKeep(_ keep: Bool) async throws -> AudioKeepState {
+        let body: [String: Any] = ["keep": keep, "policy_version": AudioKeepInfo.policyVersion]
+        let data = try await accountRequest(method: "PUT", path: "/account/audio-keep",
+                                            body: try JSONSerialization.data(withJSONObject: body))
+        return try JSONDecoder().decode(AudioKeepState.self, from: data)
+    }
+
     private func accountRequest(method: String, path: String, body: Data? = nil) async throws -> Data {
         guard let url = URL(string: "\(serverURL)\(path)") else {
             throw NSError(domain: "NetworkManager", code: -1, userInfo: [NSLocalizedDescriptionKey: "無効なURL"])

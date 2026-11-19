@@ -111,6 +111,7 @@ struct SpotEventsCard: View {
         let seq: Int
         let event_type: String
         let start_sec: Double
+        let end_sec: Double
         let actor: String
         let target: String?
         let intensity: String?
@@ -206,6 +207,10 @@ struct SpotEventsCard: View {
                         .font(.system(size: 10))
                         .foregroundColor(Color(white: 0.5))
                 }
+                if SavedRecordings.canSave(deviceId: deviceId) {
+                    EventPlayButton(id: "\(recordedAt)-\(event.seq)", deviceId: deviceId, recordedAt: recordedAt,
+                                    start: event.start_sec, end: event.end_sec)
+                }
             }
             if let evidence = event.evidence {
                 Text("「\(evidence)」")
@@ -255,7 +260,7 @@ struct SpotEventsCard: View {
         guard let latest = runs.first else { return }
         let rows: [Event] = (try? await client
             .from("spot_events")
-            .select("seq, event_type, start_sec, actor, target, intensity, evidence, confidence")
+            .select("seq, event_type, start_sec, end_sec, actor, target, intensity, evidence, confidence")
             .eq("device_id", value: deviceId)
             .eq("recorded_at", value: recordedAt)
             .eq("extractor_version", value: latest.extractor_version)

@@ -43,6 +43,9 @@ struct DailyReportView: View {
 
     struct BalloonEvent: Identifiable {
         let id: String
+        let recordedAt: String
+        let start: Double      // seconds from the start of the recording
+        let end: Double
         let clock: String      // local time of the event, HH:mm
         let type: String
         let intensity: String?
@@ -626,10 +629,9 @@ struct DailyReportView: View {
     private func digestBalloon(_ point: ChartPoint) -> some View {
         let insights = dailySummaries.first { $0.date == point.id }?.insights ?? ""
 
-        return Button(action: {
-            openDetail(point.id)
-        }) {
-            VStack(alignment: .leading, spacing: 6) {
+        // Not a Button: the event lines have their own play buttons, which a Button
+        // around them would swallow. Tapping anywhere else opens the day.
+        return VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Text(formatDate(point.id))
                         .font(.subheadline)
@@ -682,8 +684,11 @@ struct DailyReportView: View {
                 RoundedRectangle(cornerRadius: 10)
                     .fill(Color.darkElevated)
             )
-        }
-        .buttonStyle(.plain)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                openDetail(point.id)
+            }
+            .accessibilityAddTraits(.isButton)
     }
 
     /// The events counted for the selected day and metric, with the words that were heard.
@@ -722,6 +727,11 @@ struct DailyReportView: View {
                             .font(.caption)
                             .foregroundColor(Color(white: 0.78))
                             .lineLimit(1)
+                        Spacer(minLength: 0)
+                        if let deviceId = deviceManager.selectedDeviceID, SavedRecordings.canSave(deviceId: deviceId) {
+                            EventPlayButton(id: event.id, deviceId: deviceId, recordedAt: event.recordedAt,
+                                            start: event.start, end: event.end)
+                        }
                     }
                 }
                 if balloonEvents.count > shown {
@@ -747,6 +757,7 @@ struct DailyReportView: View {
             let seq: Int
             let event_type: String
             let start_sec: Double
+            let end_sec: Double
             let intensity: String?
             let evidence: String?
         }
@@ -761,7 +772,7 @@ struct DailyReportView: View {
                 .eq("device_id", value: deviceId).eq("local_date", value: localDate)
                 .execute().value
             async let rowsTask: [Row] = client.from("spot_events")
-                .select("recorded_at, extractor_version, seq, event_type, start_sec, intensity, evidence")
+                .select("recorded_at, extractor_version, seq, event_type, start_sec, end_sec, intensity, evidence")
                 .eq("device_id", value: deviceId).eq("local_date", value: localDate)
                 .in("event_type", values: selectedMetric.eventTypes)
                 .neq("confidence", value: "low")
@@ -778,6 +789,7 @@ struct DailyReportView: View {
                 .map { row -> (Date?, BalloonEvent) in
                     let at = starts[row.recorded_at].map { $0.addingTimeInterval(row.start_sec) }
                     return (at, BalloonEvent(id: "\(row.recorded_at)-\(row.seq)",
+                                             recordedAt: row.recorded_at, start: row.start_sec, end: row.end_sec,
                                              clock: at.map { Self.clockFormatter.string(from: $0) } ?? "--:--",
                                              type: row.event_type, intensity: row.intensity, evidence: row.evidence))
                 }

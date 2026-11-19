@@ -200,6 +200,7 @@ struct UserInfoView: View {
                                 // 研究への協力（オプトイン。ゲストには出さない）
                                 if !isAnonymous {
                                     ResearchConsentRow(store: ResearchConsentStore.shared)
+                                    AudioKeepRow(store: AudioKeepStore.shared)
                                 }
 
                                 // 会員登録日
