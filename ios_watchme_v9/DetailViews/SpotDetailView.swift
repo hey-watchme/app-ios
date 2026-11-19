@@ -699,6 +699,7 @@ struct SpotDetailView: View {
 
     private var conversationDisclosure: some View {
         let engine = transcriptObject?["asr_model"] as? String
+        let fallbackFrom = (transcriptObject?["asr_fallback"] as? [String: Any])?["from"] as? String
         let speakerOrder = conversationTurns.compactMap(\.speaker).reduce(into: [String]()) { order, speaker in
             if !order.contains(speaker) { order.append(speaker) }
         }
@@ -706,6 +707,25 @@ struct SpotDetailView: View {
 
         return DisclosureGroup {
             VStack(alignment: .leading, spacing: 10) {
+                if let engine {
+                    VStack(alignment: .leading, spacing: 2) {
+                        HStack(spacing: 8) {
+                            Text("主要モデル")
+                                .font(.system(size: 11))
+                                .foregroundColor(Color(white: 0.45))
+                            Text(engine)
+                                .font(.system(size: 12, weight: .medium, design: .monospaced))
+                                .foregroundColor(Color(white: 0.78))
+                        }
+                        if let fallbackFrom {
+                            Text("\(fallbackFrom) が使えなかったため切り替え")
+                                .font(.system(size: 11))
+                                .foregroundColor(.orange)
+                        }
+                    }
+                    .padding(.bottom, 4)
+                }
+
                 if !roles.isEmpty {
                     VStack(alignment: .leading, spacing: 4) {
                         ForEach(speakerOrder, id: \.self) { speaker in
@@ -742,13 +762,6 @@ struct SpotDetailView: View {
                             .lineSpacing(3)
                             .textSelection(.enabled)
                     }
-                }
-
-                if let engine {
-                    Text(engine)
-                        .font(.system(size: 11, design: .monospaced))
-                        .foregroundColor(Color(white: 0.45))
-                        .padding(.top, 4)
                 }
             }
             .padding(.vertical, 8)
