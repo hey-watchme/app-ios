@@ -12,7 +12,7 @@ import SwiftUI
 
 // MARK: - Shared card chrome
 
-private struct DetailCardHeader: View {
+struct DetailCardHeader: View {
     let icon: String
     let title: String
     var badge: String? = nil
@@ -39,7 +39,7 @@ private struct DetailCardHeader: View {
     }
 }
 
-private struct DetailCardStyle: ViewModifier {
+struct DetailCardStyle: ViewModifier {
     func body(content: Content) -> some View {
         content
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -52,11 +52,11 @@ private struct DetailCardStyle: ViewModifier {
     }
 }
 
-private extension View {
+extension View {
     func detailCard() -> some View { modifier(DetailCardStyle()) }
 }
 
-private func detailRow(_ label: String, _ value: String) -> some View {
+func detailRow(_ label: String, _ value: String) -> some View {
     HStack(alignment: .top, spacing: 8) {
         Text(label)
             .font(.system(size: 12, weight: .medium))

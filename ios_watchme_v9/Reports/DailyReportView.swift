@@ -29,14 +29,10 @@ struct DailyReportView: View {
 
     @State private var selectedPeriod: ReportPeriod = .week
     @State private var dailySummaries: [DashboardSummary] = []
-    @State private var spotResultsByDate: [String: [DashboardTimeBlock]] = [:]
     @State private var isLoading = false
-    @State private var isLoadingSpotResults = false
 
     @State private var showDailyDetailSheet = false
     @State private var selectedDailyDate: String = ""
-    @State private var selectedDailySummary: DashboardSummary?
-    @State private var selectedSpotResults: [DashboardTimeBlock] = []
 
     // Bar selected in the chart (local_date). Falls back to the latest day with data.
     @State private var selectedChartDate: String?
@@ -95,24 +91,10 @@ struct DailyReportView: View {
         }
         .background(Color.darkBase)
         .sheet(isPresented: $showDailyDetailSheet) {
-            if let deviceId = deviceManager.selectedDeviceID,
-               let dailySummary = selectedDailySummary {
-                DailyDetailView(
-                    deviceId: deviceId,
-                    localDate: selectedDailyDate,
-                    dailySummary: dailySummary,
-                    spotResults: selectedSpotResults
-                )
-                .environmentObject(deviceManager)
-                .environmentObject(dataManager)
-            }
-        }
-        .onChange(of: showDailyDetailSheet) { _, newValue in
-            if newValue {
-                // Fetch spot results when opening detail view
-                Task {
-                    await loadSpotResultsForSelectedDate()
-                }
+            if let deviceId = deviceManager.selectedDeviceID {
+                DailyDetailView(deviceId: deviceId, localDate: selectedDailyDate)
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
             }
         }
         .task {
@@ -178,44 +160,10 @@ struct DailyReportView: View {
         }
         #endif
 
-        // Note: Spot results will be fetched on-demand when user opens detail view
-        // This avoids loading potentially 90 days * N recordings upfront
-        spotResultsByDate = [:]
-
         // Days without a record are not listed; the chart keeps the full time axis by its domain
         dailySummaries = results
         selectedChartDate = nil
         isLoading = false
-    }
-
-    private func loadSpotResultsForSelectedDate() async {
-        guard let deviceId = deviceManager.selectedDeviceID else { return }
-
-        // Check if already loaded
-        if let cached = spotResultsByDate[selectedDailyDate] {
-            selectedSpotResults = cached
-            return
-        }
-
-        isLoadingSpotResults = true
-
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        guard let date = formatter.date(from: selectedDailyDate) else {
-            isLoadingSpotResults = false
-            return
-        }
-
-        let timezone = deviceManager.getTimezone(for: deviceId)
-        let spotResults = await dataManager.fetchDashboardTimeBlocks(
-            deviceId: deviceId,
-            date: date,
-            timezone: timezone
-        )
-
-        spotResultsByDate[selectedDailyDate] = spotResults
-        selectedSpotResults = spotResults
-        isLoadingSpotResults = false
     }
 
     // MARK: - Period Selector (Dropdown Menu Style)
@@ -462,7 +410,6 @@ struct DailyReportView: View {
 
     private func openDetail(_ summary: DashboardSummary) {
         selectedDailyDate = summary.date
-        selectedDailySummary = summary
         showDailyDetailSheet = true
     }
 
