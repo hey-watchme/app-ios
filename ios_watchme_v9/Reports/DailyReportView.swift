@@ -37,6 +37,17 @@ struct DailyReportView: View {
     @State private var dailySummaries: [DashboardSummary] = []      // the selected period
     @State private var previousSummaries: [DashboardSummary] = []   // the period before it
     @State private var eventDays: [String: ReportDayCounts] = [:]   // local_date -> counted events, both periods
+    /// The counted events behind the balloon's number: the selected day and metric, in time order.
+    @State private var balloonEvents: [BalloonEvent] = []
+    @State private var balloonEventsKey = ""
+
+    struct BalloonEvent: Identifiable {
+        let id: String
+        let clock: String      // local time of the event, HH:mm
+        let type: String
+        let intensity: String?
+        let evidence: String?
+    }
     @State private var isLoading = false
 
     /// The day whose detail sheet is open. The sheet takes the date from here, so it never
@@ -655,12 +666,16 @@ struct DailyReportView: View {
                         .foregroundColor(Color(white: 0.56))
                 }
 
-                Text(insights.isEmpty ? "この日の要約はまだありません" : insights)
-                    .font(.caption)
-                    .foregroundColor(Color(white: 0.70))
-                    .lineLimit(3, reservesSpace: true)
-                    .multilineTextAlignment(.leading)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if selectedMetric.isVibe {
+                    Text(insights.isEmpty ? "この日の要約はまだありません" : insights)
+                        .font(.caption)
+                        .foregroundColor(Color(white: 0.70))
+                        .lineLimit(3, reservesSpace: true)
+                        .multilineTextAlignment(.leading)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                } else {
+                    eventLines(for: point)
+                }
             }
             .padding(12)
             .background(
@@ -670,6 +685,130 @@ struct DailyReportView: View {
         }
         .buttonStyle(.plain)
     }
+
+    /// The events counted for the selected day and metric, with the words that were heard.
+    private func eventLines(for point: ChartPoint) -> some View {
+        let key = "\(deviceManager.selectedDeviceID ?? "")|\(point.id)|\(selectedMetric.id)"
+        let shown = 4
+        let loaded = balloonEventsKey == key
+
+        return VStack(alignment: .leading, spacing: 4) {
+            if !loaded {
+                Text("読み込み中…")
+                    .font(.caption)
+                    .foregroundColor(Color(white: 0.5))
+            } else if balloonEvents.isEmpty {
+                Text("この日は数えられていません")
+                    .font(.caption)
+                    .foregroundColor(Color(white: 0.5))
+            } else {
+                ForEach(balloonEvents.prefix(shown)) { event in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(event.clock)
+                            .font(.system(size: 11, weight: .medium, design: .monospaced))
+                            .foregroundColor(Color(white: 0.55))
+                        if selectedMetric.eventTypes.count > 1 {
+                            Text(SpotEventsCard.typeNames[event.type] ?? event.type)
+                                .font(.caption2)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.white)
+                        }
+                        if let intensity = event.intensity, intensity != "mild" {
+                            Text(intensity == "severe" ? "非常に強い" : "強め")
+                                .font(.caption2)
+                                .foregroundColor(.accentCoral)
+                        }
+                        Text(event.evidence.map { "「\($0)」" } ?? "（言葉の記録なし）")
+                            .font(.caption)
+                            .foregroundColor(Color(white: 0.78))
+                            .lineLimit(1)
+                    }
+                }
+                if balloonEvents.count > shown {
+                    Text("ほか \(balloonEvents.count - shown)件（詳細で全部見られます）")
+                        .font(.caption2)
+                        .foregroundColor(Color(white: 0.5))
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, minHeight: 58, alignment: .topLeading)
+        .task(id: key) { await loadBalloonEvents(key: key, localDate: point.id) }
+    }
+
+    /// Same rows the day's detail counts: the newest extractor version of each recording,
+    /// low-confidence events left out.
+    private func loadBalloonEvents(key: String, localDate: String) async {
+        guard let deviceId = deviceManager.selectedDeviceID, !selectedMetric.isVibe else { return }
+        struct Run: Decodable { let recorded_at: String; let extractor_version: String }
+        struct Spot: Decodable { let recorded_at: String; let local_time: String? }
+        struct Row: Decodable {
+            let recorded_at: String
+            let extractor_version: String
+            let seq: Int
+            let event_type: String
+            let start_sec: Double
+            let intensity: String?
+            let evidence: String?
+        }
+        let client = SupabaseClientManager.shared.client
+        do {
+            async let runsTask: [Run] = client.from("spot_event_runs")
+                .select("recorded_at, extractor_version")
+                .eq("device_id", value: deviceId).eq("local_date", value: localDate)
+                .execute().value
+            async let spotsTask: [Spot] = client.from("spot_results")
+                .select("recorded_at, local_time")
+                .eq("device_id", value: deviceId).eq("local_date", value: localDate)
+                .execute().value
+            async let rowsTask: [Row] = client.from("spot_events")
+                .select("recorded_at, extractor_version, seq, event_type, start_sec, intensity, evidence")
+                .eq("device_id", value: deviceId).eq("local_date", value: localDate)
+                .in("event_type", values: selectedMetric.eventTypes)
+                .neq("confidence", value: "low")
+                .execute().value
+            let (runs, spots, rows) = try await (runsTask, spotsTask, rowsTask)
+            var newest: [String: String] = [:]
+            for run in runs where (newest[run.recorded_at] ?? "") < run.extractor_version {
+                newest[run.recorded_at] = run.extractor_version
+            }
+            let starts = Dictionary(spots.compactMap { spot in spot.local_time.flatMap(Self.localStart).map { (spot.recorded_at, $0) } },
+                                    uniquingKeysWith: { first, _ in first })
+            let events = rows
+                .filter { newest[$0.recorded_at] == $0.extractor_version }
+                .map { row -> (Date?, BalloonEvent) in
+                    let at = starts[row.recorded_at].map { $0.addingTimeInterval(row.start_sec) }
+                    return (at, BalloonEvent(id: "\(row.recorded_at)-\(row.seq)",
+                                             clock: at.map { Self.clockFormatter.string(from: $0) } ?? "--:--",
+                                             type: row.event_type, intensity: row.intensity, evidence: row.evidence))
+                }
+                .sorted { ($0.0 ?? .distantPast) < ($1.0 ?? .distantPast) }
+                .map(\.1)
+            balloonEvents = events
+        } catch {
+            print("❌ [DailyReport] Failed to fetch the day's events: \(error)")
+            balloonEvents = []
+        }
+        balloonEventsKey = key
+    }
+
+    /// local_time is the wall-clock time of the recording, written without a zone; read it as UTC
+    /// and print it as UTC so it comes back unchanged.
+    private static func localStart(_ localTime: String) -> Date? {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        // Seconds are enough; the fraction has a varying number of digits
+        formatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+        return formatter.date(from: String(localTime.prefix(19)).replacingOccurrences(of: "T", with: " "))
+    }
+
+    private static let clockFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
 
     private struct BalloonTail: Shape {
         func path(in rect: CGRect) -> Path {
