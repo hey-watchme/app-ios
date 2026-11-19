@@ -259,6 +259,10 @@ struct SubjectTabView: View {
                                 )
                             }
                             }
+
+                            // Questions about the person, from the analyses (hidden when none are open)
+                            QuestionsEntry(deviceId: deviceManager.selectedDeviceID, scope: "person",
+                                           place: .profile(name: subject.name))
                         }
                         .padding(20)
                         .background(Color.darkCard)

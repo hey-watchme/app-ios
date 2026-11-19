@@ -171,6 +171,10 @@ struct SimpleDashboardView: View {
                                 .transition(.opacity)
                             }
 
+                            // Questions the analysis could not settle (hidden when none are open)
+                            QuestionsEntry(deviceId: deviceManager.selectedDeviceID, place: .dashboard)
+                                .padding(.horizontal, 20)
+
                             // 3. Vibe Timeline (under hero)
                             vibeGraphCard
                                 .padding(.horizontal, 20)
