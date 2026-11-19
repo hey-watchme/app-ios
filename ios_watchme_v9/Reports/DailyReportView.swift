@@ -4,9 +4,14 @@
 //
 //  Daily分析の推移レポート
 //
+//  The chart shows one metric at a time, chosen from its heading: the day's Vibe or the
+//  counted events (ReportMetric). The solid line is the selected period; the dashed line is
+//  the period before it, moved forward by the period's length so the two overlap day by day.
+//
 
 import SwiftUI
 import Charts
+import Supabase
 
 struct DailyReportView: View {
     @EnvironmentObject var deviceManager: DeviceManager
@@ -28,7 +33,10 @@ struct DailyReportView: View {
     }
 
     @State private var selectedPeriod: ReportPeriod = .week
-    @State private var dailySummaries: [DashboardSummary] = []
+    @State private var selectedMetric: ReportMetric = .vibe
+    @State private var dailySummaries: [DashboardSummary] = []      // the selected period
+    @State private var previousSummaries: [DashboardSummary] = []   // the period before it
+    @State private var eventDays: [String: ReportDayCounts] = [:]   // local_date -> counted events, both periods
     @State private var isLoading = false
 
     /// The day whose detail sheet is open. The sheet takes the date from here, so it never
@@ -39,16 +47,15 @@ struct DailyReportView: View {
     }
     @State private var openDay: OpenDay?
 
-    // Bar selected in the chart (local_date). Falls back to the latest day with data.
+    // Day selected in the chart (local_date). Falls back to the latest day with data.
     @State private var selectedChartDate: String?
     @State private var sortNewestFirst = true
 
-    /// One bar of the chart
+    /// One day of a line in the chart
     private struct ChartPoint: Identifiable {
-        let id: String
-        let day: Date
-        let score: Double
-        let summary: DashboardSummary
+        let id: String    // local_date the value belongs to
+        let day: Date     // where it is drawn (the period before is moved forward)
+        let value: Double
 
         var midday: Date { day.addingTimeInterval(12 * 60 * 60) }
     }
@@ -119,36 +126,49 @@ struct DailyReportView: View {
 
     // MARK: - Data Loading
 
+    /// First day of the selected period and of the period before it
+    private var periodStarts: (current: Date, previous: Date) {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let current = calendar.date(byAdding: .day, value: -(selectedPeriod.days - 1), to: today) ?? today
+        let previous = calendar.date(byAdding: .day, value: -selectedPeriod.days, to: current) ?? current
+        return (current, previous)
+    }
+
     private func loadData() async {
         guard let deviceId = deviceManager.selectedDeviceID else {
             dailySummaries = []
+            previousSummaries = []
+            eventDays = [:]
             return
         }
 
         isLoading = true
 
-        let calendar = Calendar.current
         let today = Date()
-        let startDate = calendar.date(byAdding: .day, value: -(selectedPeriod.days - 1), to: today) ?? today
+        let starts = periodStarts
+        let startString = Self.dayFormatter.string(from: starts.current)
 
         #if DEBUG
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
         print("📅 [DailyReport] Selected period: \(selectedPeriod.rawValue)")
         print("📅 [DailyReport] Days requested: \(selectedPeriod.days)")
-        print("📅 [DailyReport] Start date: \(formatter.string(from: startDate))")
-        print("📅 [DailyReport] End date: \(formatter.string(from: today))")
+        print("📅 [DailyReport] Start date: \(startString) (period before from \(Self.dayFormatter.string(from: starts.previous)))")
+        print("📅 [DailyReport] End date: \(Self.dayFormatter.string(from: today))")
         #endif
 
-        // Fetch daily summaries
-        let results = await dataManager.fetchDailyResultsRange(
+        // The selected period and the one before it (the dashed line), in one read each
+        async let summariesTask = dataManager.fetchDailyResultsRange(
             deviceId: deviceId,
-            startDate: startDate,
+            startDate: starts.previous,
             endDate: today
         )
+        async let runsTask = fetchEventRuns(deviceId: deviceId, from: starts.previous, to: today)
+        let fetched = await summariesTask
+        let runs = await runsTask
+        let results = fetched.filter { $0.date >= startString }
 
         #if DEBUG
-        print("📊 [DailyReport] Fetched \(results.count) daily records")
+        print("📊 [DailyReport] Fetched \(results.count) daily records, \(fetched.count - results.count) of the period before, \(runs.count) event runs")
         if !results.isEmpty {
             print("📊 [DailyReport] First date: \(results.first?.date ?? "unknown")")
             print("📊 [DailyReport] Last date: \(results.last?.date ?? "unknown")")
@@ -167,8 +187,41 @@ struct DailyReportView: View {
 
         // Days without a record are not listed; the chart keeps the full time axis by its domain
         dailySummaries = results
+        previousSummaries = fetched.filter { $0.date < startString }
+        eventDays = ReportEvents.days(from: runs)
         selectedChartDate = nil
         isLoading = false
+    }
+
+    /// The device's spot_event_runs between two local dates. Read in pages until the total
+    /// the server reports is reached: one response holds a limited number of rows, and a
+    /// short answer would silently lower the counts.
+    private func fetchEventRuns(deviceId: String, from: Date, to: Date) async -> [ReportEventRun] {
+        let client = SupabaseClientManager.shared.client
+        let pageSize = 1000
+        var rows: [ReportEventRun] = []
+        do {
+            while true {
+                let response: PostgrestResponse<[ReportEventRun]> = try await client
+                    .from("spot_event_runs")
+                    .select("local_date, recorded_at, extractor_version, audio_seconds, counts", count: .exact)
+                    .eq("device_id", value: deviceId)
+                    .gte("local_date", value: Self.dayFormatter.string(from: from))
+                    .lte("local_date", value: Self.dayFormatter.string(from: to))
+                    .order("recorded_at", ascending: true)
+                    .order("extractor_version", ascending: true)
+                    .range(from: rows.count, to: rows.count + pageSize - 1)
+                    .execute()
+                rows += response.value
+                if response.value.isEmpty { break }
+                if let total = response.count, rows.count >= total { break }
+            }
+        } catch {
+            // Part of the rows would show counts that are too low; show none instead
+            print("❌ [DailyReport] Failed to fetch spot_event_runs: \(error)")
+            return []
+        }
+        return rows
     }
 
     // MARK: - Period Selector (Dropdown Menu Style)
@@ -241,30 +294,72 @@ struct DailyReportView: View {
 
     // MARK: - Graph Section
 
-    private var chartPoints: [ChartPoint] {
-        dailySummaries.compactMap { summary in
-            guard let vibe = summary.averageVibe,
-                  let day = Self.dayFormatter.date(from: summary.date) else { return nil }
-            return ChartPoint(id: summary.date, day: day, score: Double(vibe), summary: summary)
+    /// local_date -> value of the selected metric, for both periods. A day without a value
+    /// (no recording, or no recording that looked for the events) has no entry: it is
+    /// missing, not zero.
+    private var metricValues: [String: Double] {
+        if selectedMetric.isVibe {
+            let scored = (previousSummaries + dailySummaries).compactMap { summary in
+                summary.averageVibe.map { (summary.date, Double($0)) }
+            }
+            return Dictionary(scored, uniquingKeysWith: { _, last in last })
         }
+        return eventDays.compactMapValues { $0.value(of: selectedMetric).map(Double.init) }
+    }
+
+    /// The two lines of the chart: the selected period, and the period before it moved forward
+    /// by the period's length.
+    private var chartSeries: (current: [ChartPoint], previous: [ChartPoint]) {
+        let calendar = Calendar.current
+        let starts = periodStarts
+        var current: [ChartPoint] = []
+        var previous: [ChartPoint] = []
+        for (date, value) in metricValues {
+            guard let day = Self.dayFormatter.date(from: date) else { continue }
+            if day >= starts.current {
+                current.append(ChartPoint(id: date, day: day, value: value))
+            } else if day >= starts.previous,
+                      let moved = calendar.date(byAdding: .day, value: selectedPeriod.days, to: day) {
+                previous.append(ChartPoint(id: date, day: moved, value: value))
+            }
+        }
+        return (current.sorted { $0.day < $1.day }, previous.sorted { $0.day < $1.day })
     }
 
     private var graphSection: some View {
-        let points = chartPoints
-        let selected = points.first { $0.id == selectedChartDate } ?? points.last
+        let series = chartSeries
+        let selected = series.current.first { $0.id == selectedChartDate } ?? series.current.last
 
         return VStack(alignment: .leading, spacing: 16) {
-            Text("気分の推移")
-                .font(.title3)
-                .fontWeight(.semibold)
-                .foregroundColor(.white)
+            metricMenu
 
-            VStack(spacing: 0) {
-                if let selected {
-                    digestBalloon(selected)
+            VStack(alignment: .leading, spacing: 0) {
+                if series.current.isEmpty && series.previous.isEmpty {
+                    Text(selectedMetric.isVibe
+                         ? "この期間の気分の値はまだありません"
+                         : "この期間の録音では、「\(selectedMetric.name)」を数えていません")
+                        .font(.subheadline)
+                        .foregroundColor(Color(white: 0.56))
+                        .frame(maxWidth: .infinity, alignment: .center)
+                        .padding(.vertical, 24)
+                } else {
+                    if let selected {
+                        digestBalloon(selected)
+                    }
+
+                    trendChart(points: series.current, previous: series.previous, selected: selected)
+
+                    chartLegend(showsPrevious: !series.previous.isEmpty)
+                        .padding(.top, 10)
+
+                    if !selectedMetric.isVibe {
+                        Text("その日の録音で数えた回数です。録音の長さではならしていません。")
+                            .font(.system(size: 11))
+                            .foregroundColor(Color(white: 0.4))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 8)
+                    }
                 }
-
-                vibeChart(points: points, selected: selected)
             }
             .padding(16)
             .background(
@@ -278,21 +373,81 @@ struct DailyReportView: View {
         }
     }
 
-    private func vibeChart(points: [ChartPoint], selected: ChartPoint?) -> some View {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        let start = calendar.date(byAdding: .day, value: -(selectedPeriod.days - 1), to: today) ?? today
-        let end = calendar.date(byAdding: .day, value: 1, to: today) ?? today
+    /// The chart's heading. Pressing it lists the metrics the chart can show.
+    private var metricMenu: some View {
+        Menu {
+            metricButton(.vibe)
+            Section("出来事のまとまり") {
+                ForEach(ReportMetric.axes) { metric in
+                    metricButton(metric)
+                }
+            }
+            Section("出来事") {
+                ForEach(ReportMetric.events) { metric in
+                    metricButton(metric)
+                }
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Text("\(selectedMetric.name)の推移")
+                    .font(.title3)
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                Image(systemName: "chevron.down")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundColor(Color(white: 0.56))
+            }
+        }
+    }
 
-        // Scores normally stay within -50...50; widen only if a day goes beyond
-        let maxAbs = points.map { abs($0.score) }.max() ?? 0
-        let bound = max(50.0, (maxAbs / 25).rounded(.up) * 25)
+    private func metricButton(_ metric: ReportMetric) -> some View {
+        Button(action: {
+            selectedMetric = metric
+        }) {
+            HStack {
+                Text(metric.name)
+                if selectedMetric == metric {
+                    Image(systemName: "checkmark")
+                }
+            }
+        }
+    }
+
+    /// Y axis: Vibe is centred on zero; counts start at zero and have four whole steps.
+    private func yAxis(for values: [Double]) -> (domain: ClosedRange<Double>, ticks: [Double]) {
+        if selectedMetric.isVibe {
+            // Scores normally stay within -50...50; widen only if a day goes beyond
+            let maxAbs = values.map { abs($0) }.max() ?? 0
+            let bound = max(50.0, (maxAbs / 25).rounded(.up) * 25)
+            return (-bound...bound, [-bound, -bound / 2, 0, bound / 2, bound])
+        }
+        let step = max(1.0, ((values.max() ?? 0) / 4).rounded(.up))
+        // A little room above the top step, so a day at the maximum does not touch the balloon
+        return (0...(step * 4.2), (0...4).map { Double($0) * step })
+    }
+
+    private func pointColor(_ point: ChartPoint) -> Color {
+        selectedMetric.isVibe && point.value < 0 ? .accentCoral : .accentTeal
+    }
+
+    private func trendChart(points: [ChartPoint], previous: [ChartPoint], selected: ChartPoint?) -> some View {
+        let start = periodStarts.current
+        let end = Calendar.current.date(byAdding: .day, value: selectedPeriod.days, to: start) ?? start
+        let axis = yAxis(for: (points + previous).map(\.value))
         let labelStride = selectedPeriod.days <= 7 ? 1 : (selectedPeriod.days <= 30 ? 7 : 14)
+        // A date label starts at its tick, so one close to the right edge would be cut off
+        let lastLabelDay = Calendar.current.date(byAdding: .day, value: -(selectedPeriod.days / 7), to: end) ?? end
+        // Smaller dots when the days are close together
+        let dotSize: CGFloat = selectedPeriod.days <= 7 ? 36 : (selectedPeriod.days <= 30 ? 18 : 6)
+        let previousColor = Color.white.opacity(0.4)
 
         return Chart {
-            RuleMark(y: .value("基準", 0))
-                .foregroundStyle(Color.white.opacity(0.25))
-                .lineStyle(StrokeStyle(lineWidth: 1))
+            if selectedMetric.isVibe {
+                RuleMark(y: .value("基準", 0))
+                    .foregroundStyle(Color.white.opacity(0.25))
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+            }
 
             if let selected {
                 RuleMark(x: .value("選択", selected.midday))
@@ -300,19 +455,47 @@ struct DailyReportView: View {
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [3, 3]))
             }
 
-            ForEach(points) { point in
-                BarMark(
-                    x: .value("日付", point.day, unit: .day),
-                    y: .value("気分", point.score)
+            // The period before: dashed, under the selected period. The dots keep a lone day visible.
+            ForEach(previous) { point in
+                LineMark(
+                    x: .value("日付", point.midday),
+                    y: .value(selectedMetric.name, point.value),
+                    series: .value("期間", "previous")
                 )
-                .foregroundStyle(point.score >= 0 ? Color.accentTeal : Color.accentCoral)
-                .opacity(point.id == selected?.id ? 1.0 : 0.45)
+                .foregroundStyle(previousColor)
+                .lineStyle(StrokeStyle(lineWidth: 1.5, dash: [4, 4]))
+            }
+            ForEach(previous) { point in
+                PointMark(
+                    x: .value("日付", point.midday),
+                    y: .value(selectedMetric.name, point.value)
+                )
+                .foregroundStyle(previousColor)
+                .symbolSize(dotSize * 0.4)
+            }
+
+            ForEach(points) { point in
+                LineMark(
+                    x: .value("日付", point.midday),
+                    y: .value(selectedMetric.name, point.value),
+                    series: .value("期間", "current")
+                )
+                .foregroundStyle(Color.accentTeal)
+                .lineStyle(StrokeStyle(lineWidth: 2))
+            }
+            ForEach(points) { point in
+                PointMark(
+                    x: .value("日付", point.midday),
+                    y: .value(selectedMetric.name, point.value)
+                )
+                .foregroundStyle(pointColor(point))
+                .symbolSize(point.id == selected?.id ? 80 : dotSize)
             }
         }
         .chartXScale(domain: start...end)
-        .chartYScale(domain: -bound...bound)
+        .chartYScale(domain: axis.domain)
         .chartYAxis {
-            AxisMarks(position: .trailing, values: [-bound, -bound / 2, 0, bound / 2, bound]) { _ in
+            AxisMarks(position: .trailing, values: axis.ticks) { _ in
                 AxisGridLine()
                     .foregroundStyle(Color.white.opacity(0.10))
                 AxisValueLabel()
@@ -320,9 +503,11 @@ struct DailyReportView: View {
             }
         }
         .chartXAxis {
-            AxisMarks(values: .stride(by: .day, count: labelStride)) { _ in
-                AxisValueLabel(format: .dateTime.month(.defaultDigits).day(), centered: labelStride == 1)
-                    .foregroundStyle(Color(white: 0.56))
+            AxisMarks(values: .stride(by: .day, count: labelStride)) { value in
+                if labelStride == 1 || (value.as(Date.self).map { $0 <= lastLabelDay } ?? true) {
+                    AxisValueLabel(format: .dateTime.month(.defaultDigits).day(), centered: labelStride == 1)
+                        .foregroundStyle(Color(white: 0.56))
+                }
             }
         }
         .chartOverlay { proxy in
@@ -343,7 +528,7 @@ struct DailyReportView: View {
                                 selectedChartDate = nearest?.id
                             }
 
-                        // Tail of the balloon, pointing at the selected bar
+                        // Tail of the balloon, pointing at the selected day
                         if let selected, let x = proxy.position(forX: selected.midday) {
                             BalloonTail()
                                 .fill(Color.darkElevated)
@@ -358,10 +543,41 @@ struct DailyReportView: View {
         .frame(height: 190)
     }
 
+    private func chartLegend(showsPrevious: Bool) -> some View {
+        HStack(spacing: 16) {
+            legendItem(selectedPeriod.rawValue, color: .accentTeal, dash: [])
+            if showsPrevious {
+                legendItem("その前の\(selectedPeriod.days)日間", color: Color.white.opacity(0.4), dash: [4, 3])
+            }
+        }
+    }
+
+    private func legendItem(_ label: String, color: Color, dash: [CGFloat]) -> some View {
+        HStack(spacing: 6) {
+            LegendLine()
+                .stroke(color, style: StrokeStyle(lineWidth: 2, dash: dash))
+                .frame(width: 20, height: 2)
+            Text(label)
+                .font(.caption2)
+                .foregroundColor(Color(white: 0.56))
+        }
+    }
+
+    private struct LegendLine: Shape {
+        func path(in rect: CGRect) -> Path {
+            var path = Path()
+            path.move(to: CGPoint(x: rect.minX, y: rect.midY))
+            path.addLine(to: CGPoint(x: rect.maxX, y: rect.midY))
+            return path
+        }
+    }
+
     /// Digest of the selected day. Tapping it opens the detail view.
     private func digestBalloon(_ point: ChartPoint) -> some View {
-        Button(action: {
-            openDetail(point.summary)
+        let insights = dailySummaries.first { $0.date == point.id }?.insights ?? ""
+
+        return Button(action: {
+            openDetail(point.id)
         }) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
@@ -370,10 +586,17 @@ struct DailyReportView: View {
                         .fontWeight(.semibold)
                         .foregroundColor(.white)
 
-                    Text(String(format: "%.1f", point.score))
-                        .font(.subheadline)
-                        .fontWeight(.bold)
-                        .foregroundColor(vibeScoreColor(point.score))
+                    if selectedMetric.isVibe {
+                        Text(String(format: "%.1f", point.value))
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(vibeScoreColor(point.value))
+                    } else {
+                        Text("\(selectedMetric.name) \(Int(point.value))回")
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(.white)
+                    }
 
                     Spacer()
 
@@ -386,7 +609,14 @@ struct DailyReportView: View {
                     .foregroundColor(.accentTeal)
                 }
 
-                Text(point.summary.insights?.isEmpty == false ? point.summary.insights ?? "" : "この日の要約はまだありません")
+                // A count only means something next to how much was recorded that day
+                if !selectedMetric.isVibe, let day = eventDays[point.id] {
+                    Text("録音 \(day.recordings)回・合計 \(DailyDetailView.durationText(day.audioSeconds))")
+                        .font(.caption2)
+                        .foregroundColor(Color(white: 0.56))
+                }
+
+                Text(insights.isEmpty ? "この日の要約はまだありません" : insights)
                     .font(.caption)
                     .foregroundColor(Color(white: 0.70))
                     .lineLimit(3, reservesSpace: true)
@@ -413,8 +643,8 @@ struct DailyReportView: View {
         }
     }
 
-    private func openDetail(_ summary: DashboardSummary) {
-        openDay = OpenDay(localDate: summary.date)
+    private func openDetail(_ localDate: String) {
+        openDay = OpenDay(localDate: localDate)
     }
 
     // MARK: - Daily Summary List
@@ -474,7 +704,7 @@ struct DailyReportView: View {
             }
 
             Button(action: {
-                openDetail(summary)
+                openDetail(summary.date)
             }) {
                 HStack {
                     Text("詳細を見る")

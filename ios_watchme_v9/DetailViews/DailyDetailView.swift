@@ -135,7 +135,7 @@ struct DailyDetailView: View {
     private var recordingLine: String {
         let total = spots.compactMap { duration(of: $0) }.reduce(0, +)
         let count = "録音 \(spots.count)回"
-        return total > 0 ? "\(count)・合計 \(durationText(total))" : count
+        return total > 0 ? "\(count)・合計 \(Self.durationText(total))" : count
     }
 
     // MARK: - Summary
@@ -402,7 +402,7 @@ struct DailyDetailView: View {
                         .font(.system(size: 15, weight: .semibold, design: .monospaced))
                         .foregroundColor(.white)
                     if let length = duration(of: spot) {
-                        Text(durationText(length))
+                        Text(Self.durationText(length))
                             .font(.system(size: 12))
                             .foregroundColor(Color(white: 0.55))
                     }
@@ -478,7 +478,8 @@ struct DailyDetailView: View {
         return (object["duration_seconds"] as? NSNumber)?.doubleValue
     }
 
-    private func durationText(_ seconds: Double) -> String {
+    /// Also used by the report's chart (Reports/DailyReportView.swift).
+    static func durationText(_ seconds: Double) -> String {
         let minutes = Int((seconds / 60).rounded())
         if minutes >= 60 { return "\(minutes / 60)時間\(minutes % 60)分" }
         return minutes > 0 ? "\(minutes)分" : "\(Int(seconds))秒"
