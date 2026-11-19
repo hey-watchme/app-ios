@@ -46,6 +46,7 @@ struct DailyReportView: View {
         var id: String { localDate }
     }
     @State private var openDay: OpenDay?
+    @State private var showSaved = false
 
     // Day selected in the chart (local_date). Falls back to the latest day with data.
     @State private var selectedChartDate: String?
@@ -69,10 +70,15 @@ struct DailyReportView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
-                // Period selector
-                periodSelector
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
+                // Period selector, and the saved recordings (not bound to the period)
+                HStack(spacing: 10) {
+                    periodSelector
+                    if let deviceId = deviceManager.selectedDeviceID, SavedRecordings.canSave(deviceId: deviceId) {
+                        savedButton
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
 
                 // Period display (e.g., "2025年11月24日 〜 11月30日")
                 periodDisplayText
@@ -105,6 +111,13 @@ struct DailyReportView: View {
         .sheet(item: $openDay) { day in
             if let deviceId = deviceManager.selectedDeviceID {
                 DailyDetailView(deviceId: deviceId, localDate: day.localDate)
+                    .environmentObject(deviceManager)
+                    .environmentObject(dataManager)
+            }
+        }
+        .sheet(isPresented: $showSaved) {
+            if let deviceId = deviceManager.selectedDeviceID {
+                SavedRecordingsView(deviceId: deviceId)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
             }
@@ -265,6 +278,32 @@ struct DailyReportView: View {
             )
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private var savedButton: some View {
+        Button(action: {
+            showSaved = true
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: "bookmark.fill")
+                    .font(.caption)
+                Text("保存した録音")
+                    .font(.subheadline)
+                    .fontWeight(.medium)
+            }
+            .foregroundColor(.accentTeal)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.darkCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
+        }
+        .fixedSize()
     }
 
     // MARK: - Period Display Text

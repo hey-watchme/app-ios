@@ -17,6 +17,9 @@ struct SpotDetailView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var rawSectionsLoadedFull: Set<String> = []
+    /// Whether the user saved this recording (spot_bookmarks); nil until known or when it cannot be saved.
+    @State private var isSaved: Bool?
+    @State private var isSaving = false
     #if DEBUG
     @StateObject private var previewPlayer = RecordingPreviewPlayer()
     #endif
@@ -119,6 +122,18 @@ struct SpotDetailView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if let isSaved {
+                        Button {
+                            Task { await toggleSaved(isSaved) }
+                        } label: {
+                            Label(isSaved ? "保存済み" : "保存", systemImage: isSaved ? "bookmark.fill" : "bookmark")
+                                .labelStyle(.titleAndIcon)
+                        }
+                        .foregroundColor(.accentTeal)
+                        .disabled(isSaving)
+                    }
+                }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("Close") {
                         dismiss()
@@ -128,6 +143,32 @@ struct SpotDetailView: View {
             }
         }
         .preferredColorScheme(.dark)
+        .task(id: spotData.recordedAt) { await loadSaved() }
+    }
+
+    // MARK: - Saved (bookmark)
+
+    private func loadSaved() async {
+        guard let recordedAt = spotData.recordedAt, SavedRecordings.canSave(deviceId: deviceId) else { return }
+        isSaved = try? await SavedRecordings.isSaved(deviceId: deviceId, recordedAt: recordedAt)
+    }
+
+    private func toggleSaved(_ saved: Bool) async {
+        guard let recordedAt = spotData.recordedAt else { return }
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            if saved {
+                try await SavedRecordings.remove(deviceId: deviceId, recordedAt: recordedAt)
+            } else {
+                try await SavedRecordings.save(deviceId: deviceId, recordedAt: recordedAt)
+            }
+            isSaved = !saved
+            HapticManager.shared.impact(style: .light)
+        } catch {
+            print("❌ [SpotDetail] Saving failed: \(error)")
+            ToastManager.shared.showError(title: "保存できませんでした", subtitle: error.localizedDescription)
+        }
     }
 
     // MARK: - View Components
