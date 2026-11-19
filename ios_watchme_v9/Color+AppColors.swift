@@ -24,7 +24,6 @@ extension Color {
 
     // MARK: - Ambient Glow & Redesign Specific Colors
     static let auraTealGlow = Color.accentTeal.opacity(0.15)
-    static let stressAmberGlow = Color.accentTealMuted.opacity(0.15)
     static let neutralGlow = Color(white: 0.5).opacity(0.1)
 
     // MARK: - Chart Colors

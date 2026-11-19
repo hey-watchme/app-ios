@@ -48,17 +48,6 @@ struct MetricsHorizonView: View {
             icon: "person.2.wave.2"
         ))
         
-        // 3. Stress 
-        let stressVal = vibeScore.map { max(10, min(90, 50 - $0 * 0.4)) } ?? 30.0
-        items.append(HorizonMetric(
-            title: "Stress",
-            value: String(format: "%.0f", stressVal),
-            caption: stressVal < 40 ? "LOW" : "ELEVATED",
-            progress: stressVal / 100.0,
-            color: stressVal < 40 ? .accentTeal : .accentTealMuted,
-            icon: "heart.text.square"
-        ))
-        
         return items
     }
     

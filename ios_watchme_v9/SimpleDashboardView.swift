@@ -176,20 +176,6 @@ struct SimpleDashboardView: View {
                                 .padding(.horizontal, 20)
                                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
-                            // 4. Vitals Range Cards
-                            let stressValue = dashboardSummary?.averageVibe.map { max(10, min(90, 50 - Double($0) * 0.4)) } ?? 42.0
-                            VitalsRangeCard(
-                                title: "Stress Levels",
-                                value: stressValue,
-                                maxValue: 100,
-                                label: stressValue < 40 ? "LOW" : "ELEVATED",
-                                optimalRange: (0.0, 0.4), // 0-40 is optimal
-                                color: stressValue < 40 ? .accentTeal : .accentTealMuted,
-                                icon: "heart.text.square"
-                            )
-                            .padding(.horizontal, 20)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
-
                             // 5. Activity Comparison
                             DailyActivityOverviewCard(
                                 analysisCount: timeBlocks.count,
