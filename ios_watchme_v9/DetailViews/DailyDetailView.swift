@@ -80,11 +80,13 @@ struct DailyDetailView: View {
                         }
                     }
                 }
+                .frame(maxWidth: .infinity)
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
                 .padding(.bottom, 40)
             }
-            .background(Color.darkBase)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color.darkBase.ignoresSafeArea())
             .navigationTitle(dateTitle)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.darkBase, for: .navigationBar)
@@ -96,6 +98,8 @@ struct DailyDetailView: View {
                 }
             }
         }
+        // The sheet's own background is the system's (white in light mode); keep it dark.
+        .presentationBackground(Color.darkBase)
         .sheet(item: $selectedSpot) { spot in
             SpotDetailView(deviceId: deviceId, spotData: spot)
                 .environmentObject(dataManager)

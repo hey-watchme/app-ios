@@ -31,8 +31,13 @@ struct DailyReportView: View {
     @State private var dailySummaries: [DashboardSummary] = []
     @State private var isLoading = false
 
-    @State private var showDailyDetailSheet = false
-    @State private var selectedDailyDate: String = ""
+    /// The day whose detail sheet is open. The sheet takes the date from here, so it never
+    /// opens with a stale one (sheet(isPresented:) could, on the first open).
+    private struct OpenDay: Identifiable {
+        let localDate: String
+        var id: String { localDate }
+    }
+    @State private var openDay: OpenDay?
 
     // Bar selected in the chart (local_date). Falls back to the latest day with data.
     @State private var selectedChartDate: String?
@@ -90,9 +95,9 @@ struct DailyReportView: View {
             }
         }
         .background(Color.darkBase)
-        .sheet(isPresented: $showDailyDetailSheet) {
+        .sheet(item: $openDay) { day in
             if let deviceId = deviceManager.selectedDeviceID {
-                DailyDetailView(deviceId: deviceId, localDate: selectedDailyDate)
+                DailyDetailView(deviceId: deviceId, localDate: day.localDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
             }
@@ -409,8 +414,7 @@ struct DailyReportView: View {
     }
 
     private func openDetail(_ summary: DashboardSummary) {
-        selectedDailyDate = summary.date
-        showDailyDetailSheet = true
+        openDay = OpenDay(localDate: summary.date)
     }
 
     // MARK: - Daily Summary List
