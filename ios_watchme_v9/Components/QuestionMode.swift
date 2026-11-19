@@ -189,7 +189,6 @@ struct QuestionModeView: View {
                             .font(.system(size: 12).monospacedDigit())
                             .foregroundColor(Color(white: 0.56))
                         Spacer()
-                        #if DEBUG
                         if let key = question.context?.audio_key, let start = question.context?.start_sec {
                             Button {
                                 Task { await player.toggle(audioKey: key, at: start) }
@@ -204,7 +203,6 @@ struct QuestionModeView: View {
                             }
                             .disabled(player.isLoading)
                         }
-                        #endif
                     }
                 }
                 .padding(12)
@@ -406,8 +404,8 @@ struct QuestionModeView: View {
 // MARK: - Snippet player
 
 /// Plays a few seconds around the moment a question is about, through a short-lived URL from
-/// GET /audio (the API checks the token and the device link). Used in development builds, like
-/// the recording player of the detail view.
+/// GET /audio (the API checks the token and the device link). In every build: without hearing
+/// the moment, a question often cannot be answered (owner's decision, 2026-11-20).
 @MainActor
 final class QuestionSnippetPlayer: ObservableObject {
     @Published var isPlaying = false
