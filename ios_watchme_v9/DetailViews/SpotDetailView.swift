@@ -28,6 +28,11 @@ struct SpotDetailView: View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 16) {
+                    // What the analysis could not settle, for the family to answer (hidden when none are open)
+                    if let recordedAt = spotData.recordedAt {
+                        QuestionsEntry(deviceId: spotData.deviceId, recordedAt: recordedAt, place: .recording)
+                    }
+
                     // How far the analysis has got (hidden for old recordings without stage rows)
                     if !spotData.stages.isEmpty {
                         StageProgressRow(stages: spotData.stages)
