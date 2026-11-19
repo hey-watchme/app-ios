@@ -123,11 +123,15 @@ struct SpotEventsCard: View {
     @State private var events: [Event] = []
     @State private var loaded = false
 
-    static let typeOrder = ["reprimand", "praise", "laughter", "crying", "conflict", "mishap"]
+    static let typeOrder = ["reprimand", "praise", "laughter", "crying", "conflict", "mishap",
+                            "cough", "sneeze", "throat_clearing"]
     static let typeNames = [
         "reprimand": "叱責", "praise": "褒める", "laughter": "笑い",
         "crying": "泣く", "conflict": "口論", "mishap": "落とす・こぼす",
+        "cough": "咳", "sneeze": "くしゃみ", "throat_clearing": "咳払い",
     ]
+    // The strength of a reprimand or conflict; from events-v3 it comes from the measured voice.
+    static let intensityNames = ["mild": "（穏やか）", "strong": "（強め）", "severe": "（非常に強い）"]
     static let roleNames = ["subject": "本人", "adult": "大人", "other_child": "ほかの子ども", "unknown": "不明"]
     static let activityNames = [
         "meal": "食事", "homework_study": "宿題・勉強", "play": "遊び", "getting_ready": "身支度",
@@ -171,7 +175,7 @@ struct SpotEventsCard: View {
                         }
                     }
 
-                    Text("決まった6種類だけを数えています。30秒以内に続いた同じ種類は1回。根拠の弱いもの（薄い表示）は回数に入れていません。")
+                    Text("決まった種類だけを数えています。30秒以内に続いた同じ種類は1回。根拠の弱いもの（薄い表示）は回数に入れていません。")
                         .font(.system(size: 11))
                         .foregroundColor(Color(white: 0.4))
                         .fixedSize(horizontal: false, vertical: true)
@@ -190,7 +194,7 @@ struct SpotEventsCard: View {
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color(white: 0.55))
                 Text((Self.typeNames[event.event_type] ?? event.event_type)
-                     + (event.intensity == "strong" ? "（強め）" : event.intensity == "mild" ? "（穏やか）" : ""))
+                     + (Self.intensityNames[event.intensity ?? ""] ?? ""))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
                 Text(whoText(event))
