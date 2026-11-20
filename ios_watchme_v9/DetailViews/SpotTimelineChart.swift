@@ -2,38 +2,20 @@
 //  SpotTimelineChart.swift
 //  ios_watchme_v9
 //
-//  The course of one recording, left to right: the counted events per stretch of time,
-//  and under it the measured voice of every utterance (profile_result.metrics.voice,
-//  platform backend/common/metrics/voice.py). A trial (2026-11-20): the three styles of
-//  the event chart are there to compare, and the grouping of event types is provisional.
+//  One recording as a picture, left to right: an emoji where each event happened, warm
+//  ones above the middle line and hard ones below it, and behind them the measured voice
+//  of every utterance (profile_result.metrics.voice, platform backend/common/metrics/voice.py)
+//  as a band around the line. Tapping an emoji opens a balloon with what was said.
+//  A trial (2026-11-20): which events go where, and the emoji, are provisional.
 //
 
 import SwiftUI
 import Charts
 
-// MARK: - What the charts draw
+// MARK: - What the picture draws
 
-/// Event types drawn as one line. The colour belongs to the group, in every recording.
-struct TimelineSeries: Identifiable {
-    let id: String
-    let name: String
-    let types: [String]
-    let color: Color
-
-    static let all = [
-        TimelineSeries(id: "trouble", name: "叱責・口論", types: ["reprimand", "conflict"], color: .accentCoral),
-        TimelineSeries(id: "praise", name: "褒める", types: ["praise"], color: .accentTeal),
-        TimelineSeries(id: "laughter", name: "笑い", types: ["laughter"],
-                       color: Color(red: 0.95, green: 0.79, blue: 0.30)),
-        TimelineSeries(id: "crying", name: "泣く", types: ["crying"],
-                       color: Color(red: 0.35, green: 0.66, blue: 1.0)),
-        TimelineSeries(id: "body", name: "咳など", types: ReportEvents.bodyTypes, color: Color(white: 0.6)),
-    ]
-
-    static func of(_ type: String) -> TimelineSeries? {
-        all.first { $0.types.contains(type) }
-    }
-}
+/// Heights of the rows of small words along the bottom of the picture.
+private let timelineWordRows = [-4.0, -4.45, -4.9]
 
 struct TimelineEvent: Identifiable {
     let id: Int
@@ -41,12 +23,37 @@ struct TimelineEvent: Identifiable {
     let start: Double
     let end: Double
     let intensity: String?
+
+    /// The emoji of an event with feeling in it; nil for the ones written as a small word.
+    var emoji: String? {
+        ["reprimand": "😠", "conflict": "💢", "crying": "😢", "laughter": "😄", "praise": "👏"][type]
+    }
+
+    /// The word for an event without an emoji (body sounds, a mishap).
+    var word: String {
+        type == "mishap" ? "落とす" : (SpotEventsCard.typeNames[type] ?? type)
+    }
+
+    /// Height in the picture: above zero is warm, below is hard. A reprimand or a conflict
+    /// goes further down the stronger it was; the other kinds have no measured strength.
+    /// Events without an emoji are words along the bottom (the chart picks their row).
+    var height: Double {
+        switch type {
+        case "praise": return 2.5
+        case "laughter": return 1.5
+        case "crying": return -1.5
+        case "reprimand", "conflict":
+            return intensity == "severe" ? -3 : (intensity == "strong" ? -2 : -1)
+        default: return timelineWordRows[0]
+        }
+    }
 }
 
 /// One measured utterance, against the same speaker's typical voice in this recording.
 struct VoicePoint: Identifiable {
     let id: Int
-    let time: Double
+    let start: Double
+    let end: Double
     /// 1, 2 (raised) or 3 (shouting), as graded by the measure stage.
     let level: Int
     /// Loudness as a multiple of the speaker's typical loudness.
@@ -71,74 +78,147 @@ struct VoicePoint: Identifiable {
             if let own = number(u["pitch_st"]), let usual = number(base["pitch_st"]) { pitchUp = own - usual }
             var strain: Double?
             if let own = number(u["tension"]), let usual = number(base["tension"]) { strain = usual - own }
-            return VoicePoint(id: index, time: (start + end) / 2, level: Int(number(u["level"]) ?? 1),
+            return VoicePoint(id: index, start: start, end: end, level: Int(number(u["level"]) ?? 1),
                               louder: number(u["louder"]), pitchUp: pitchUp, strain: strain)
         }
     }
 }
 
-/// The time axis both charts share: the recording cut into equal stretches.
-struct TimelineScale {
-    /// Seconds per stretch.
-    let bin: Double
-    let binCount: Int
+/// Which measurement of the voice the band behind the events shows.
+enum VoiceMeasure: String, CaseIterable, Identifiable {
+    case strain = "張り"
+    case loudness = "大きさ"
+    case pitch = "高さ"
+    var id: String { rawValue }
 
-    init(duration: Double) {
-        bin = duration <= 180 ? 15 : (duration <= 600 ? 60 : (duration <= 1800 ? 120 : 300))
-        binCount = max(Int((duration / bin).rounded(.up)), 1)
-    }
-
-    var domain: ClosedRange<Double> { 0...(Double(binCount) * bin) }
-
-    func binIndex(of time: Double) -> Int {
-        min(max(Int(time / bin), 0), binCount - 1)
-    }
-
-    func range(of index: Int) -> ClosedRange<Double> {
-        (Double(index) * bin)...(Double(index + 1) * bin)
-    }
-
-    var ticks: [Double] {
-        let step = [15.0, 30, 60, 120, 300, 600, 900, 1800].first { domain.upperBound / $0 <= 6 } ?? 3600
-        return Array(stride(from: 0, through: domain.upperBound, by: step))
-    }
-
-    /// Elapsed time from the start of the recording.
-    static func label(_ seconds: Double) -> String {
-        let total = Int(seconds)
-        if total % 60 == 0 { return "\(total / 60)分" }
-        return total < 60 ? "\(total)秒" : String(format: "%d:%02d", total / 60, total % 60)
-    }
-}
-
-// MARK: - Shared chart parts
-
-private let timelineAxisLabelWidth: CGFloat = 52
-
-private struct SelectedBinMark: ChartContent {
-    let scale: TimelineScale
-    let selectedBin: Int?
-
-    var body: some ChartContent {
-        if let selectedBin {
-            let range = scale.range(of: selectedBin)
-            RectangleMark(xStart: .value("開始", range.lowerBound), xEnd: .value("終了", range.upperBound))
-                .foregroundStyle(Color.white.opacity(0.08))
+    func value(_ point: VoicePoint) -> Double? {
+        switch self {
+        case .strain: return point.strain
+        case .loudness: return point.louder.map { $0 - 1 }  // above the typical loudness
+        case .pitch: return point.pitchUp
         }
     }
 }
 
-private extension View {
-    /// The shared time axis, and a tap that selects the stretch under the finger.
-    func timelineAxis(_ scale: TimelineScale, selectedBin: Binding<Int?>) -> some View {
-        self
-            .chartXScale(domain: scale.domain)
+// MARK: - The picture
+
+struct SpotTimelineChart<Balloon: View>: View {
+    /// Counted events only (low-confidence ones left out).
+    let events: [TimelineEvent]
+    let voice: [VoicePoint]
+    let measure: VoiceMeasure
+    /// Length of the recording in seconds.
+    let duration: Double
+    @Binding var selectedId: Int?
+    /// What the balloon under the picture says about the selected event.
+    @ViewBuilder let balloon: (TimelineEvent) -> Balloon
+
+    /// Where the selected event is, across the picture (for the balloon's tail).
+    @State private var selectedX: CGFloat?
+
+    private static var yDomain: ClosedRange<Double> { -5.25...3.4 }
+    /// How far from the middle line the voice band reaches at most.
+    private static var bandReach: Double { 1.6 }
+
+    private var xDomain: ClosedRange<Double> {
+        // Room at both ends, so that an emoji at the very start or end is not cut off
+        let margin = max(duration, 1) * 0.04
+        return -margin...(max(duration, 1) + margin)
+    }
+
+    private var ticks: [Double] {
+        let step = [5.0, 15, 30, 60, 120, 300, 600, 900, 1800].first { duration / $0 <= 6 } ?? 3600
+        return Array(stride(from: 0, through: duration, by: step))
+    }
+
+    /// Elapsed time from the start of the recording.
+    private func tickLabel(_ seconds: Double) -> String {
+        let total = Int(seconds)
+        if total % 60 == 0 { return "\(total / 60)分" }
+        return total < 60 ? "\(total)秒" : String(format: "%d:%02d", total / 60, total % 60)
+    }
+
+    /// The value a full-height bar of the band stands for: near the top of this recording's
+    /// values, so that one extreme utterance does not flatten the rest.
+    private var bandReference: Double {
+        let values = voice.compactMap { measure.value($0) }.filter { $0 > 0 }.sorted()
+        guard !values.isEmpty else { return 1 }
+        return max(values[Int(Double(values.count - 1) * 0.95)], 0.001)
+    }
+
+    /// Where each event is drawn. A word that would run into the word before it drops a row.
+    private var heights: [Int: Double] {
+        let span = xDomain.upperBound - xDomain.lowerBound
+        var rowEnds = [Double](repeating: -.infinity, count: timelineWordRows.count)
+        var heights: [Int: Double] = [:]
+        for event in events.sorted(by: { $0.start < $1.start }) {
+            guard event.emoji == nil else {
+                heights[event.id] = event.height
+                continue
+            }
+            // About 3.5% of the width per character at this size, centred on the event
+            let half = span * 0.035 * Double(event.word.count) / 2
+            let row = rowEnds.firstIndex { $0 <= event.start - half } ?? rowEnds.indices.min { rowEnds[$0] < rowEnds[$1] } ?? 0
+            rowEnds[row] = event.start + half
+            heights[event.id] = timelineWordRows[row]
+        }
+        return heights
+    }
+
+    var body: some View {
+        let reference = bandReference
+        let heights = heights
+        let minimumWidth = (xDomain.upperBound - xDomain.lowerBound) / 160
+        let selected = events.first { $0.id == selectedId }
+
+        VStack(alignment: .leading, spacing: 0) {
+            Chart {
+                // The voice: every utterance a bar around the middle line, taller the further
+                // it was above the speaker's typical voice. Nothing where nobody spoke.
+                ForEach(voice) { point in
+                    let share = min(max((measure.value(point) ?? 0) / reference, 0), 1)
+                    let reach = 0.12 + Self.bandReach * share
+                    RectangleMark(
+                        xStart: .value("開始", point.start),
+                        xEnd: .value("終了", max(point.end, point.start + minimumWidth)),
+                        yStart: .value("下", -reach),
+                        yEnd: .value("上", reach)
+                    )
+                    .foregroundStyle(Color.white.opacity(point.level >= 2 ? 0.22 : 0.10))
+                    .cornerRadius(2)
+                }
+
+                RuleMark(y: .value("中央", 0.0))
+                    .foregroundStyle(Color.white.opacity(0.25))
+                    .lineStyle(StrokeStyle(lineWidth: 1))
+
+                ForEach(events) { event in
+                    // How long it went on
+                    if event.emoji != nil, event.end - event.start > minimumWidth {
+                        RuleMark(
+                            xStart: .value("開始", event.start),
+                            xEnd: .value("終了", event.end),
+                            y: .value("位置", event.height - 0.5)
+                        )
+                        .foregroundStyle((event.height > 0 ? Color.accentTeal : Color.accentCoral).opacity(0.7))
+                        .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
+                    }
+
+                    PointMark(x: .value("時間", event.start), y: .value("位置", heights[event.id] ?? event.height))
+                        .symbol {
+                            stamp(event, isSelected: event.id == selectedId)
+                        }
+                }
+            }
+            .chartXScale(domain: xDomain)
+            .chartYScale(domain: Self.yDomain)
+            .chartYAxis(.hidden)
             .chartXAxis {
-                AxisMarks(values: scale.ticks) { value in
+                AxisMarks(values: ticks) { value in
                     AxisGridLine().foregroundStyle(Color.white.opacity(0.06))
                     AxisValueLabel {
                         if let seconds = value.as(Double.self) {
-                            Text(TimelineScale.label(seconds))
+                            Text(tickLabel(seconds))
                                 .font(.system(size: 10))
                                 .foregroundColor(Color(white: 0.56))
                         }
@@ -151,252 +231,70 @@ private extension View {
                         .fill(Color.clear)
                         .contentShape(Rectangle())
                         .onTapGesture { location in
-                            guard let anchor = proxy.plotFrame,
-                                  let time: Double = proxy.value(atX: location.x - geometry[anchor].minX) else { return }
-                            let bin = scale.binIndex(of: time)
-                            selectedBin.wrappedValue = selectedBin.wrappedValue == bin ? nil : bin
+                            guard let anchor = proxy.plotFrame else { return }
+                            select(at: location, plot: geometry[anchor], proxy: proxy)
                         }
                 }
             }
-    }
-}
+            .frame(height: 250)
 
-private func timelineAxisLabel(_ text: String) -> some View {
-    Text(text)
-        .font(.system(size: 10))
-        .foregroundColor(Color(white: 0.56))
-        .frame(width: timelineAxisLabelWidth, alignment: .leading)
-}
-
-// MARK: - Events over the recording
-
-struct SpotTimelineChart: View {
-    enum Style: String, CaseIterable, Identifiable {
-        case line = "折れ線"
-        case bar = "棒"
-        case lanes = "帯"
-        var id: String { rawValue }
-    }
-
-    /// Counted events only (low-confidence ones left out).
-    let events: [TimelineEvent]
-    let scale: TimelineScale
-    let style: Style
-    @Binding var selectedBin: Int?
-
-    private struct BinCount: Identifiable {
-        let series: TimelineSeries
-        let bin: Int
-        let count: Int
-        /// Counts of the groups drawn under this one in the same stretch (where its bar starts).
-        let below: Int
-        var id: String { "\(series.id)-\(bin)" }
-    }
-
-    /// The groups that occurred in this recording, in their fixed order.
-    var series: [TimelineSeries] {
-        TimelineSeries.all.filter { group in events.contains { group.types.contains($0.type) } }
-    }
-
-    private var counts: [BinCount] {
-        var stacked = [Int](repeating: 0, count: scale.binCount)
-        return series.flatMap { group in
-            (0..<scale.binCount).map { bin in
-                let count = events.filter {
-                    group.types.contains($0.type) && scale.binIndex(of: $0.start) == bin
-                }.count
-                defer { stacked[bin] += count }
-                return BinCount(series: group, bin: bin, count: count, below: stacked[bin])
+            if let selected {
+                VStack(alignment: .leading, spacing: 0) {
+                    BalloonTailUp()
+                        .fill(Color.darkElevated)
+                        .frame(width: 14, height: 8)
+                        .offset(x: (selectedX ?? 20) - 7)
+                    balloon(selected)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(12)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.darkElevated))
+                }
+                .padding(.top, 4)
             }
         }
     }
 
-    var body: some View {
-        let counts = counts
-        VStack(alignment: .leading, spacing: 10) {
-            Group {
-                if style == .lanes {
-                    lanesChart
-                } else {
-                    countChart(counts)
-                }
-            }
-            .timelineAxis(scale, selectedBin: $selectedBin)
-            .frame(height: 150)
-
-            HStack(spacing: 12) {
-                ForEach(series) { group in
-                    HStack(spacing: 5) {
-                        Circle().fill(group.color).frame(width: 8, height: 8)
-                        Text(group.name)
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(white: 0.7))
-                    }
-                }
-            }
+    @ViewBuilder
+    private func stamp(_ event: TimelineEvent, isSelected: Bool) -> some View {
+        if let emoji = event.emoji {
+            Text(emoji)
+                .font(.system(size: 22))
+                .background(Circle().fill(Color.white.opacity(isSelected ? 0.25 : 0)).padding(-5))
+        } else {
+            Text(event.word)
+                .font(.system(size: 9, weight: isSelected ? .bold : .regular))
+                .foregroundColor(isSelected ? .white : Color(white: 0.6))
         }
     }
 
-    private func countChart(_ counts: [BinCount]) -> some View {
-        // The tallest point: a single line's stretch, or a whole stack of bars
-        let tallest: Int = style == .line
-            ? (counts.map(\.count).max() ?? 0)
-            : (counts.map { $0.below + $0.count }.max() ?? 0)
-        let top = max(tallest, 2)
-        let step = max(1, Int((Double(top) / 3).rounded(.up)))
-        let gap = scale.bin * 0.12
-
-        return Chart {
-            SelectedBinMark(scale: scale, selectedBin: selectedBin)
-
-            if style == .line {
-                ForEach(counts) { item in
-                    LineMark(
-                        x: .value("時間", scale.range(of: item.bin).lowerBound + scale.bin / 2),
-                        y: .value("回数", item.count),
-                        series: .value("種類", item.series.name)
-                    )
-                    .foregroundStyle(item.series.color)
-                    .lineStyle(StrokeStyle(lineWidth: 2, lineJoin: .round))
-                }
-                ForEach(counts.filter { $0.count > 0 }) { item in
-                    PointMark(
-                        x: .value("時間", scale.range(of: item.bin).lowerBound + scale.bin / 2),
-                        y: .value("回数", item.count)
-                    )
-                    .foregroundStyle(item.series.color)
-                    .symbolSize(36)
-                }
-            } else {
-                ForEach(counts.filter { $0.count > 0 }) { item in
-                    RectangleMark(
-                        xStart: .value("開始", scale.range(of: item.bin).lowerBound + gap),
-                        xEnd: .value("終了", scale.range(of: item.bin).upperBound - gap),
-                        yStart: .value("下", item.below),
-                        yEnd: .value("回数", item.below + item.count)
-                    )
-                    .foregroundStyle(item.series.color)
-                    .cornerRadius(2)
-                }
+    /// Select the event drawn nearest to the tap; a tap away from every event closes the balloon.
+    private func select(at location: CGPoint, plot: CGRect, proxy: ChartProxy) {
+        let heights = heights
+        var nearest: (event: TimelineEvent, distance: CGFloat, x: CGFloat)?
+        for event in events {
+            guard let x = proxy.position(forX: event.start), let y = proxy.position(forY: heights[event.id] ?? event.height) else { continue }
+            let distance = hypot(plot.minX + x - location.x, plot.minY + y - location.y)
+            if distance < (nearest?.distance ?? 32) {
+                nearest = (event, distance, plot.minX + x)
             }
         }
-        .chartYScale(domain: 0...top)
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: Array(stride(from: 0, through: top, by: step))) { value in
-                AxisGridLine().foregroundStyle(Color.white.opacity(0.10))
-                AxisValueLabel {
-                    timelineAxisLabel(value.as(Int.self).map { "\($0)回" } ?? "")
-                }
-            }
-        }
-    }
-
-    /// Each event where it happened and for how long, one row per group.
-    private var lanesChart: some View {
-        // A one-second event would be too thin to see
-        let minimumWidth = scale.domain.upperBound / 100
-        // Rows by number, top to bottom, so that the axis takes the same width as in the other charts
-        let names = series.map(\.name)
-        let rows = Dictionary(uniqueKeysWithValues: series.enumerated().map { ($1.id, Double(names.count - 1 - $0)) })
-
-        return Chart {
-            SelectedBinMark(scale: scale, selectedBin: selectedBin)
-
-            ForEach(events) { event in
-                if let group = TimelineSeries.of(event.type), let row = rows[group.id] {
-                    RectangleMark(
-                        xStart: .value("開始", event.start),
-                        xEnd: .value("終了", max(event.end, event.start + minimumWidth)),
-                        yStart: .value("下", row - 0.22),
-                        yEnd: .value("上", row + 0.22)
-                    )
-                    .foregroundStyle(group.color.opacity(event.intensity == "mild" ? 0.55 : 1))
-                    .cornerRadius(2)
-                }
-            }
-        }
-        .chartYScale(domain: -0.5...(Double(names.count) - 0.5))
-        .chartYAxis {
-            AxisMarks(position: .trailing, values: names.indices.map(Double.init)) { value in
-                AxisGridLine().foregroundStyle(Color.white.opacity(0.10))
-                AxisValueLabel {
-                    timelineAxisLabel(value.as(Double.self).map { names[names.count - 1 - Int($0)] } ?? "")
-                }
-            }
+        // Tapping the open one again closes it
+        if let nearest, nearest.event.id != selectedId {
+            selectedId = nearest.event.id
+            selectedX = nearest.x
+        } else {
+            selectedId = nil
         }
     }
 }
 
-// MARK: - The voice over the recording
-
-struct SpotVoiceChart: View {
-    enum Measure: String, CaseIterable, Identifiable {
-        case loudness = "大きさ"
-        case pitch = "高さ"
-        case strain = "張り"
-        var id: String { rawValue }
-
-        var caption: String {
-            switch self {
-            case .loudness: return "発話ごとの声の大きさ。その人の、この録音でのふだんの何倍か。"
-            case .pitch: return "発話ごとの声の高さ。その人の、この録音でのふだんより何半音高いか。"
-            case .strain: return "発話ごとの声の張り。その人の、この録音でのふだんより張っているほど上。"
-            }
-        }
-    }
-
-    let points: [VoicePoint]
-    let scale: TimelineScale
-    let measure: Measure
-    @Binding var selectedBin: Int?
-
-    private func value(_ point: VoicePoint) -> Double? {
-        switch measure {
-        case .loudness: return point.louder
-        case .pitch: return point.pitchUp
-        case .strain: return point.strain
-        }
-    }
-
-    private func axisText(_ value: Double) -> String {
-        measure == .loudness ? String(format: "%g倍", value) : String(format: "%+g", value)
-    }
-
-    var body: some View {
-        // Raised voices are drawn last, on top of the rest
-        let ordered = points.sorted { $0.level < $1.level }
-
-        VStack(alignment: .leading, spacing: 8) {
-            Chart {
-                SelectedBinMark(scale: scale, selectedBin: selectedBin)
-
-                RuleMark(y: .value("ふだん", measure == .loudness ? 1.0 : 0.0))
-                    .foregroundStyle(Color.white.opacity(0.25))
-                    .lineStyle(StrokeStyle(lineWidth: 1))
-
-                ForEach(ordered) { point in
-                    if let value = value(point) {
-                        PointMark(x: .value("時間", point.time), y: .value(measure.rawValue, value))
-                            .foregroundStyle(point.level >= 2 ? Color.accentCoral : Color.white.opacity(0.3))
-                            .symbolSize(point.level >= 3 ? 60 : (point.level == 2 ? 30 : 10))
-                    }
-                }
-            }
-            .chartYAxis {
-                AxisMarks(position: .trailing, values: .automatic(desiredCount: 3)) { value in
-                    AxisGridLine().foregroundStyle(Color.white.opacity(0.10))
-                    AxisValueLabel {
-                        timelineAxisLabel(value.as(Double.self).map(axisText) ?? "")
-                    }
-                }
-            }
-            .timelineAxis(scale, selectedBin: $selectedBin)
-            .frame(height: 110)
-
-            Text(measure.caption + "赤い点は、声が強まったと測定された発話（大きいほど強い）。マイクとの距離でも変わります。")
-                .font(.system(size: 11))
-                .foregroundColor(Color(white: 0.4))
-                .fixedSize(horizontal: false, vertical: true)
-        }
+private struct BalloonTailUp: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }

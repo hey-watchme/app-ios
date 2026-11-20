@@ -125,10 +125,9 @@ struct SpotEventsCard: View {
     @State private var run: Run?
     @State private var events: [Event] = []
     @State private var loaded = false
-    @State private var chartStyle = SpotTimelineChart.Style.line
-    @State private var voiceMeasure = SpotVoiceChart.Measure.loudness
-    /// The stretch of the recording picked on a chart; the list below shows only its events.
-    @State private var selectedBin: Int?
+    @State private var voiceMeasure = VoiceMeasure.strain
+    /// The event picked on the timeline (its seq); the balloon under the picture shows it.
+    @State private var selectedSeq: Int?
 
     static let typeOrder = ["reprimand", "praise", "laughter", "crying", "conflict", "mishap",
                             "cough", "sneeze", "throat_clearing"]
@@ -178,24 +177,7 @@ struct SpotEventsCard: View {
                             .foregroundColor(Color(white: 0.5))
                     } else {
                         VStack(alignment: .leading, spacing: 10) {
-                            if let selectedBin {
-                                let range = scale(run).range(of: selectedBin)
-                                HStack {
-                                    Text("\(clockTime(range.lowerBound))〜\(clockTime(range.upperBound)) の出来事")
-                                        .font(.system(size: 12, weight: .semibold))
-                                        .foregroundColor(Color(white: 0.85))
-                                    Spacer()
-                                    Button("すべて表示") { self.selectedBin = nil }
-                                        .font(.system(size: 12))
-                                        .foregroundColor(.accentTeal)
-                                }
-                                if shownEvents(run).isEmpty {
-                                    Text("この時間帯に、数える対象の出来事はありません")
-                                        .font(.system(size: 12))
-                                        .foregroundColor(Color(white: 0.5))
-                                }
-                            }
-                            ForEach(shownEvents(run)) { event in
+                            ForEach(events) { event in
                                 eventRow(event)
                             }
                         }
@@ -214,49 +196,40 @@ struct SpotEventsCard: View {
 
     // MARK: Timeline (trial, 2026-11-20)
 
-    private var voicePoints: [VoicePoint] { VoicePoint.parse(metricsRaw: metricsRaw) }
-
-    private func scale(_ run: Run) -> TimelineScale {
-        TimelineScale(duration: run.audio_seconds
-                      ?? max(events.map(\.end_sec).max() ?? 0, voicePoints.map(\.time).max() ?? 0))
-    }
-
-    private func shownEvents(_ run: Run) -> [Event] {
-        guard let selectedBin else { return events }
-        let scale = scale(run)
-        return events.filter { scale.binIndex(of: $0.start_sec) == selectedBin }
-    }
-
-    /// The events and the voice along the recording. Tapping a stretch narrows the list below to it.
+    /// The recording as a picture: the events as emoji along the time, the voice behind them.
     @ViewBuilder
     private func timeline(_ run: Run) -> some View {
         let counted = events.filter { $0.confidence != "low" }.map {
             TimelineEvent(id: $0.seq, type: $0.event_type, start: $0.start_sec, end: $0.end_sec, intensity: $0.intensity)
         }
-        let voice = voicePoints
-        let scale = scale(run)
+        let voice = VoicePoint.parse(metricsRaw: metricsRaw)
+        let duration = run.audio_seconds ?? max(events.map(\.end_sec).max() ?? 0, voice.map(\.end).max() ?? 0)
 
-        if !counted.isEmpty {
-            Picker("グラフの形", selection: $chartStyle) {
-                ForEach(SpotTimelineChart.Style.allCases) { Text($0.rawValue).tag($0) }
-            }
-            .pickerStyle(.segmented)
-
-            SpotTimelineChart(events: counted, scale: scale, style: chartStyle, selectedBin: $selectedBin)
-        }
-
-        if !voice.isEmpty {
-            HStack {
-                Text("声")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(Color(white: 0.45))
-                Picker("声の測定", selection: $voiceMeasure) {
-                    ForEach(SpotVoiceChart.Measure.allCases) { Text($0.rawValue).tag($0) }
+        if !counted.isEmpty || !voice.isEmpty {
+            SpotTimelineChart(events: counted, voice: voice, measure: voiceMeasure, duration: duration,
+                              selectedId: $selectedSeq) { picked in
+                if let event = events.first(where: { $0.seq == picked.id }) {
+                    eventRow(event)
                 }
-                .pickerStyle(.segmented)
             }
 
-            SpotVoiceChart(points: voice, scale: scale, measure: voiceMeasure, selectedBin: $selectedBin)
+            if !voice.isEmpty {
+                HStack {
+                    Text("後ろの帯: 声の")
+                        .font(.system(size: 11))
+                        .foregroundColor(Color(white: 0.45))
+                    Picker("声の測定", selection: $voiceMeasure) {
+                        ForEach(VoiceMeasure.allCases) { Text($0.rawValue).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                }
+            }
+
+            Text("中央の線より上はあたたかい出来事、下はきつい出来事。叱責と口論は、声が強いほど下。"
+                 + (voice.isEmpty ? "" : "後ろの帯は発話ごとの声で、その人のこの録音でのふだんより強いほど太い。"))
+                .font(.system(size: 11))
+                .foregroundColor(Color(white: 0.4))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
