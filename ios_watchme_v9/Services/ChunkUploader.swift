@@ -6,8 +6,12 @@
 //
 //  - Every chunk is tracked in UploadJournal (on disk). A file is deleted only after
 //    S3 answered 200 to the PUT.
-//  - The PUT goes through a background URLSession, so it continues when the app is
-//    suspended or killed, and the OS waits for connectivity on its own.
+//  - While the app is sure to be running (in the foreground, recording, or in the
+//    short background time after either), the app sends each chunk itself, at once.
+//    Only what is still unsent when the app is about to be suspended is handed to a
+//    background URLSession. iOS treats a transfer handed over from the background as
+//    discretionary and may hold it for hours (no Wi-Fi or no charger), which is what
+//    left a locked 56-minute recording unsent for 4.5 hours on 2026-11-20.
 //  - Each attempt first asks the server for a presigned URL (POST /upload/presign);
 //    the pipeline starts when the object lands in S3, nothing else is needed from here.
 //  - Failures back off (10 s, 20 s, ... up to 10 min) and are retried forever, except
@@ -44,6 +48,42 @@ final class ChunkUploader: NSObject, ObservableObject {
     private let pathMonitor = NWPathMonitor()
     private var periodicTimer: Timer?
 
+    /// Uploads the app is sending itself (chunk id -> the transfer).
+    private var directTasks: [String: Task<Void, Never>] = [:]
+    /// Background transfers cancelled because the app took the chunk over; their
+    /// cancellation is not a failure.
+    private var takenOver = Set<String>()
+    /// Background time asked for to finish sending after recording stopped or the app left the screen.
+    private var finishingTask: UIBackgroundTaskIdentifier = .invalid
+    private var kicking = false
+    private var kickAgain = false
+
+    /// Set by RecordingStore. While recording, the audio background mode keeps the app running.
+    var isRecording = false {
+        didSet {
+            guard isRecording != oldValue else { return }
+            if isRecording {
+                kick()
+            } else {
+                keepRunningUntilSent()
+            }
+        }
+    }
+
+    /// True while the app is sure to keep running, so it can send chunks itself.
+    private var canSendDirectly: Bool {
+        UIApplication.shared.applicationState != .background || isRecording || finishingTask != .invalid
+    }
+
+    /// Transfers the app sends itself. They work in the background as long as the app runs.
+    private lazy var directSession: URLSession = {
+        let config = URLSessionConfiguration.default
+        config.waitsForConnectivity = true         // a dead spot waits instead of failing at once
+        config.timeoutIntervalForRequest = 60
+        config.timeoutIntervalForResource = 10 * 60
+        return URLSession(configuration: config)
+    }()
+
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.background(withIdentifier: Self.backgroundSessionIdentifier)
         config.isDiscretionary = false
@@ -76,9 +116,14 @@ final class ChunkUploader: NSObject, ObservableObject {
 
         NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in
+                self?.endFinishingTask()   // in the foreground the app runs anyway
                 await self?.reconcile()
                 self?.kick()
             }
+        }
+
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in
+            Task { @MainActor in self?.keepRunningUntilSent() }
         }
 
         Task {
@@ -156,7 +201,8 @@ final class ChunkUploader: NSObject, ObservableObject {
 
         // 2. "uploading" without a live task: the attempt is gone, try again.
         let liveIds = Set(await session.allTasks.compactMap { $0.taskDescription })
-        for record in await journal.records(in: .uploading) where !liveIds.contains(record.id) && !inFlight.contains(record.id) {
+        for record in await journal.records(in: .uploading)
+        where !liveIds.contains(record.id) && !inFlight.contains(record.id) && directTasks[record.id] == nil {
             await journal.update(id: record.id) { $0.state = .recorded; $0.nextRetryAt = nil }
         }
 
@@ -244,22 +290,63 @@ final class ChunkUploader: NSObject, ObservableObject {
     }
 
     private func kickAsync() async {
+        // One pass at a time; a kick during a pass runs one more pass after it
+        guard !kicking else { kickAgain = true; return }
+        kicking = true
+        defer { kicking = false }
+        repeat {
+            kickAgain = false
+            await kickOnce()
+        } while kickAgain
+    }
+
+    private func kickOnce() async {
+        let direct = canSendDirectly
+        if direct {
+            await takeOverBackgroundUploads()
+        }
+
         let now = Date()
         let uploading = await journal.records(in: .uploading).count
-        var slots = maxConcurrentUploads - uploading - inFlight.count
+        let slots = maxConcurrentUploads - uploading - inFlight.count
         guard slots > 0 else { return }
 
         let waiting = await journal.records(in: .recorded)
             .filter { ($0.nextRetryAt ?? .distantPast) <= now && !inFlight.contains($0.id) }
             .sorted { $0.recordedAt < $1.recordedAt }
-        for record in waiting.prefix(slots) {
-            slots -= 1
+            .prefix(slots)
+        for record in waiting {
             inFlight.insert(record.id)
-            Task { await self.beginUpload(record) }
+        }
+        // Wait for the presigns, so that a hand-over finishes before the app is suspended
+        await withTaskGroup(of: Void.self) { group in
+            for record in waiting {
+                group.addTask { await self.beginUpload(record, direct: direct) }
+            }
         }
     }
 
-    private func beginUpload(_ record: ChunkRecord) async {
+    /// A transfer handed to iOS may sit there for hours. While the app can send itself,
+    /// it cancels those and sends the chunks again. S3 keeps one copy per key, and the
+    /// server counts a chunk once however often it arrives.
+    private func takeOverBackgroundUploads() async {
+        let stuck = await journal.records(in: .uploading)
+            .filter { directTasks[$0.id] == nil && !inFlight.contains($0.id) }
+        guard !stuck.isEmpty else { return }
+        let ids = Set(stuck.map(\.id))
+        for task in await session.allTasks {
+            if let id = task.taskDescription, ids.contains(id) {
+                takenOver.insert(id)
+                task.cancel()
+            }
+        }
+        for id in ids {
+            await journal.update(id: id) { $0.state = .recorded; $0.nextRetryAt = nil }
+        }
+        print("🔁 [Uploader] took over \(ids.count) transfer(s) waiting in the background session")
+    }
+
+    private func beginUpload(_ record: ChunkRecord, direct: Bool) async {
         defer { inFlight.remove(record.id) }
         guard record.fileExists, record.fileSize > 0 else {
             await journal.remove(id: record.id)
@@ -274,15 +361,20 @@ final class ChunkUploader: NSObject, ObservableObject {
             for (name, value) in presigned.headers {
                 request.setValue(value, forHTTPHeaderField: name)
             }
-            let task = session.uploadTask(with: request, fromFile: record.fileURL)
-            task.taskDescription = record.id
             await journal.update(id: record.id) {
                 $0.state = .uploading
                 $0.s3Key = presigned.key
                 $0.attempts += 1
             }
-            task.resume()
-            print("📤 [Uploader] PUT started: \(record.fileName) -> \(presigned.key)")
+            // The mode may have changed while presigning (the app went to the background)
+            if direct && canSendDirectly {
+                sendDirectly(record, request: request)
+            } else {
+                let task = session.uploadTask(with: request, fromFile: record.fileURL)
+                task.taskDescription = record.id
+                task.resume()
+            }
+            print("📤 [Uploader] PUT started (\(direct ? "direct" : "background")): \(record.fileName) -> \(presigned.key)")
         } catch let error as PresignError where error.isPermanent {
             await fail(record.id, message: error.localizedDescription, permanent: true)
         } catch {
@@ -360,6 +452,110 @@ final class ChunkUploader: NSObject, ObservableObject {
         return Presigned(url: url, key: key, headers: headers)
     }
 
+    private func sendDirectly(_ record: ChunkRecord, request: URLRequest) {
+        let id = record.id
+        let file = record.fileURL
+        directTasks[id] = Task { @MainActor in
+            defer {
+                self.directTasks[id] = nil
+                self.endFinishingTaskIfIdle()
+            }
+            do {
+                let (_, response) = try await self.directSession.upload(for: request, fromFile: file)
+                guard !Task.isCancelled else { return }   // handed over meanwhile
+                await self.finished(id, status: (response as? HTTPURLResponse)?.statusCode, error: nil)
+            } catch {
+                guard !Task.isCancelled else { return }
+                await self.finished(id, status: nil, error: error)
+            }
+        }
+    }
+
+    /// The end of one PUT, sent directly or through the background session.
+    private func finished(_ id: String, status: Int?, error: Error?) async {
+        if error == nil, let status, (200...299).contains(status) {
+            await succeed(id)
+        } else if let error {
+            await fail(id, message: error.localizedDescription, permanent: false)
+            kick()
+        } else {
+            // 403 is usually an expired presigned URL: a fresh one is one retry away.
+            let message = status == 403 ? "送信の許可が切れたので取り直します" : "S3 が受け取りませんでした（\(status ?? 0)）"
+            await fail(id, message: message, permanent: false)
+            if status == 403 {
+                await journal.update(id: id) { $0.nextRetryAt = nil }
+            }
+            kick()
+        }
+    }
+
+    // MARK: - Background time to finish sending
+
+    /// Recording stopped or the app left the screen: ask iOS for time to send what is left
+    /// directly, and hand whatever is still unsent to the background session before it runs out.
+    private func keepRunningUntilSent() {
+        guard UIApplication.shared.applicationState == .background, !isRecording, finishingTask == .invalid else { return }
+        finishingTask = UIApplication.shared.beginBackgroundTask(withName: "finish-uploads") { [weak self] in
+            // Last resort, called on the main thread: whatever is unsent is resent from the journal later
+            MainActor.assumeIsolated { self?.handOver(expiring: true) }
+        }
+        guard finishingTask != .invalid else { kick(); return }
+        kick()
+        Task { @MainActor in
+            // iOS gives about 30 seconds; hand over with time to spare
+            try? await Task.sleep(for: .seconds(20))
+            self.handOver(expiring: false)
+        }
+        endFinishingTaskIfIdle()
+    }
+
+    /// Stop sending directly. Unless time is up, the unsent chunks go to the background session.
+    private func handOver(expiring: Bool) {
+        let id = finishingTask
+        guard id != .invalid else { return }
+        finishingTask = .invalid
+        guard UIApplication.shared.applicationState == .background, !isRecording else {
+            UIApplication.shared.endBackgroundTask(id)   // the app runs anyway
+            return
+        }
+        let cancelled = Array(directTasks.keys)
+        directTasks.values.forEach { $0.cancel() }
+        directTasks.removeAll()
+        if expiring {
+            // No time for more: the journal still says "uploading", and reconcile() resends on the next launch
+            UIApplication.shared.endBackgroundTask(id)
+            return
+        }
+        Task { @MainActor in
+            for chunk in cancelled {
+                await self.journal.update(id: chunk) { $0.state = .recorded; $0.nextRetryAt = nil }
+            }
+            // A pass already running would only queue another one: let it end first
+            while self.kicking { try? await Task.sleep(for: .milliseconds(200)) }
+            await self.kickAsync()   // canSendDirectly is false now: this hands the rest to iOS
+            await self.refresh()
+            UIApplication.shared.endBackgroundTask(id)
+        }
+    }
+
+    private func endFinishingTaskIfIdle() {
+        guard finishingTask != .invalid else { return }
+        Task { @MainActor in
+            guard self.finishingTask != .invalid, self.directTasks.isEmpty, self.inFlight.isEmpty else { return }
+            // A chunk still being closed counts too: it is about to be sent
+            let unsent = await self.journal.all().filter { $0.state != .blocked }
+            guard unsent.isEmpty else { return }
+            self.endFinishingTask()
+        }
+    }
+
+    private func endFinishingTask() {
+        guard finishingTask != .invalid else { return }
+        let id = finishingTask
+        finishingTask = .invalid
+        UIApplication.shared.endBackgroundTask(id)
+    }
+
     /// Record a failed attempt: back off (or park as blocked) and tell the UI the first time.
     private func fail(_ id: String, message: String, permanent: Bool) async {
         guard let record = await journal.update(id: id, { record in
@@ -407,20 +603,9 @@ extension ChunkUploader: URLSessionTaskDelegate, URLSessionDelegate {
         let status = (task.response as? HTTPURLResponse)?.statusCode
         Task { @MainActor in
             guard let id else { return }
-            if error == nil, let status, (200...299).contains(status) {
-                await self.succeed(id)
-            } else if let error {
-                await self.fail(id, message: error.localizedDescription, permanent: false)
-                self.kick()
-            } else {
-                // 403 is usually an expired presigned URL: a fresh one is one retry away.
-                let message = status == 403 ? "送信の許可が切れたので取り直します" : "S3 が受け取りませんでした（\(status ?? 0)）"
-                await self.fail(id, message: message, permanent: false)
-                if status == 403 {
-                    await self.journal.update(id: id) { $0.nextRetryAt = nil }
-                }
-                self.kick()
-            }
+            // Cancelled because the app sends it itself now: not a failure
+            if self.takenOver.remove(id) != nil, error != nil { return }
+            await self.finished(id, status: status, error: error)
         }
     }
 

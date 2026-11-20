@@ -139,6 +139,7 @@ final class RecordingStore: ObservableObject {
             try audioService.configureAudioSession()
             let sessionId = try audioService.startSession(deviceId: deviceId, timezone: deviceManager.selectedDeviceTimezone)
             state.isRecording = true
+            uploader.isRecording = true
             state.isInterrupted = false
             state.recordingStartTime = Date()
             state.recordingDuration = 0
@@ -235,6 +236,7 @@ final class RecordingStore: ObservableObject {
     private func handleSessionEnded(_ reason: RecordingEndReason) {
         lastSessionId = state.currentSessionId
         state.isRecording = false
+        uploader.isRecording = false
         state.isInterrupted = false
         state.currentSessionId = nil
         stopRecordingTimer()
