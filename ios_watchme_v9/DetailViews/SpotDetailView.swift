@@ -70,7 +70,8 @@ struct SpotDetailView: View {
 
                     // Countable events (reprimand, praise, ...)
                     if let recordedAt = spotData.recordedAt {
-                        SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime)
+                        SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime,
+                                       metricsRaw: spotData.metricsRaw)
                     }
 
                     // Behavior

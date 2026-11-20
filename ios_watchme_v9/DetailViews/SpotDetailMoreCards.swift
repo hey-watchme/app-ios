@@ -98,6 +98,8 @@ struct SpotEventsCard: View {
     let deviceId: String
     let recordedAt: String
     let localTime: String?
+    /// profile_result.metrics as JSON; the voice chart reads its per-utterance measurements.
+    var metricsRaw: String? = nil
 
     private struct Run: Decodable {
         let activity: String?
@@ -123,6 +125,10 @@ struct SpotEventsCard: View {
     @State private var run: Run?
     @State private var events: [Event] = []
     @State private var loaded = false
+    @State private var chartStyle = SpotTimelineChart.Style.line
+    @State private var voiceMeasure = SpotVoiceChart.Measure.loudness
+    /// The stretch of the recording picked on a chart; the list below shows only its events.
+    @State private var selectedBin: Int?
 
     static let typeOrder = ["reprimand", "praise", "laughter", "crying", "conflict", "mishap",
                             "cough", "sneeze", "throat_clearing"]
@@ -145,6 +151,8 @@ struct SpotEventsCard: View {
             if let run {
                 VStack(alignment: .leading, spacing: 12) {
                     DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事")
+
+                    timeline(run)
 
                     // Counts (low-confidence events are not counted)
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 8) {
@@ -170,7 +178,24 @@ struct SpotEventsCard: View {
                             .foregroundColor(Color(white: 0.5))
                     } else {
                         VStack(alignment: .leading, spacing: 10) {
-                            ForEach(events) { event in
+                            if let selectedBin {
+                                let range = scale(run).range(of: selectedBin)
+                                HStack {
+                                    Text("\(clockTime(range.lowerBound))〜\(clockTime(range.upperBound)) の出来事")
+                                        .font(.system(size: 12, weight: .semibold))
+                                        .foregroundColor(Color(white: 0.85))
+                                    Spacer()
+                                    Button("すべて表示") { self.selectedBin = nil }
+                                        .font(.system(size: 12))
+                                        .foregroundColor(.accentTeal)
+                                }
+                                if shownEvents(run).isEmpty {
+                                    Text("この時間帯に、数える対象の出来事はありません")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(Color(white: 0.5))
+                                }
+                            }
+                            ForEach(shownEvents(run)) { event in
                                 eventRow(event)
                             }
                         }
@@ -185,6 +210,54 @@ struct SpotEventsCard: View {
             }
         }
         .task(id: recordedAt) { await load() }
+    }
+
+    // MARK: Timeline (trial, 2026-11-20)
+
+    private var voicePoints: [VoicePoint] { VoicePoint.parse(metricsRaw: metricsRaw) }
+
+    private func scale(_ run: Run) -> TimelineScale {
+        TimelineScale(duration: run.audio_seconds
+                      ?? max(events.map(\.end_sec).max() ?? 0, voicePoints.map(\.time).max() ?? 0))
+    }
+
+    private func shownEvents(_ run: Run) -> [Event] {
+        guard let selectedBin else { return events }
+        let scale = scale(run)
+        return events.filter { scale.binIndex(of: $0.start_sec) == selectedBin }
+    }
+
+    /// The events and the voice along the recording. Tapping a stretch narrows the list below to it.
+    @ViewBuilder
+    private func timeline(_ run: Run) -> some View {
+        let counted = events.filter { $0.confidence != "low" }.map {
+            TimelineEvent(id: $0.seq, type: $0.event_type, start: $0.start_sec, end: $0.end_sec, intensity: $0.intensity)
+        }
+        let voice = voicePoints
+        let scale = scale(run)
+
+        if !counted.isEmpty {
+            Picker("グラフの形", selection: $chartStyle) {
+                ForEach(SpotTimelineChart.Style.allCases) { Text($0.rawValue).tag($0) }
+            }
+            .pickerStyle(.segmented)
+
+            SpotTimelineChart(events: counted, scale: scale, style: chartStyle, selectedBin: $selectedBin)
+        }
+
+        if !voice.isEmpty {
+            HStack {
+                Text("声")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundColor(Color(white: 0.45))
+                Picker("声の測定", selection: $voiceMeasure) {
+                    ForEach(SpotVoiceChart.Measure.allCases) { Text($0.rawValue).tag($0) }
+                }
+                .pickerStyle(.segmented)
+            }
+
+            SpotVoiceChart(points: voice, scale: scale, measure: voiceMeasure, selectedBin: $selectedBin)
+        }
     }
 
     private func eventRow(_ event: Event) -> some View {
