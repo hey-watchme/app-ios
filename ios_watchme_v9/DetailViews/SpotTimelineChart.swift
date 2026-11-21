@@ -14,6 +14,10 @@ import Charts
 
 // MARK: - What the picture draws
 
+/// How far an emoji sits from the middle line: at least this, and up to this much more.
+private let timelineMinReach = 0.7
+private let timelineReachSpan = 2.5
+
 /// Heights of the rows of small words along the bottom of the picture.
 private let timelineWordRows = [-4.0, -4.45, -4.9]
 
@@ -34,18 +38,30 @@ struct TimelineEvent: Identifiable {
         type == "mishap" ? "落とす" : (SpotEventsCard.typeNames[type] ?? type)
     }
 
-    /// Height in the picture: above zero is warm, below is hard. A reprimand or a conflict
-    /// goes further down the stronger it was; the other kinds have no measured strength.
-    /// Events without an emoji are words along the bottom (the chart picks their row).
-    var height: Double {
+    /// +1 for warm events (drawn above the middle line), -1 for hard ones, nil for the words.
+    var direction: Double? {
         switch type {
-        case "praise": return 2.5
-        case "laughter": return 1.5
-        case "crying": return -1.5
-        case "reprimand", "conflict":
-            return intensity == "severe" ? -3 : (intensity == "strong" ? -2 : -1)
-        default: return timelineWordRows[0]
+        case "praise", "laughter": return 1
+        case "reprimand", "conflict", "crying": return -1
+        default: return nil
         }
+    }
+
+    /// How strong it was, 0...1, when no voice was measured: the graded strength of a
+    /// reprimand or conflict, the middle for the rest.
+    var gradedStrength: Double {
+        switch intensity {
+        case "severe": return 1
+        case "strong": return 0.6
+        case "mild": return 0.2
+        default: return 0.5
+        }
+    }
+
+    /// Height of an event with no voice to go by; the chart uses the measured voice when it has it.
+    var height: Double {
+        guard let direction else { return timelineWordRows[0] }
+        return direction * (timelineMinReach + timelineReachSpan * gradedStrength)
     }
 }
 
@@ -118,7 +134,7 @@ struct SpotTimelineChart<Balloon: View>: View {
 
     private static var yDomain: ClosedRange<Double> { -5.25...3.4 }
     /// How far from the middle line the voice band reaches at most.
-    private static var bandReach: Double { 1.6 }
+    private static var bandReach: Double { 2.4 }
 
     private var xDomain: ClosedRange<Double> {
         // Room at both ends, so that an emoji at the very start or end is not cut off
@@ -143,7 +159,7 @@ struct SpotTimelineChart<Balloon: View>: View {
     private var bandReference: Double {
         let values = voice.compactMap { measure.value($0) }.filter { $0 > 0 }.sorted()
         guard !values.isEmpty else { return 1 }
-        return max(values[Int(Double(values.count - 1) * 0.95)], 0.001)
+        return max(values[Int(Double(values.count - 1) * 0.9)], 0.001)
     }
 
     private struct WaveStep: Identifiable {
@@ -178,14 +194,26 @@ struct SpotTimelineChart<Balloon: View>: View {
         }
     }
 
-    /// Where each event is drawn. A word that would run into the word before it drops a row.
+    /// How strong the voice was around an event, 0...1 against this recording's strongest voices.
+    private func voiceStrength(_ event: TimelineEvent, reference: Double) -> Double? {
+        let around = voice.filter { $0.end >= event.start - 1 && $0.start <= event.end + 1 }
+            .compactMap { measure.value($0) }
+        guard let strongest = around.max() else { return nil }
+        return min(max(strongest / reference, 0), 1)
+    }
+
+    /// Where each event is drawn. An emoji sits above or below the middle line by its kind,
+    /// and further out the stronger the voice around it was, so the picture spreads over the
+    /// whole height. A word that would run into the word before it drops a row.
     private var heights: [Int: Double] {
+        let reference = bandReference
         let span = xDomain.upperBound - xDomain.lowerBound
         var rowEnds = [Double](repeating: -.infinity, count: timelineWordRows.count)
         var heights: [Int: Double] = [:]
         for event in events.sorted(by: { $0.start < $1.start }) {
-            guard event.emoji == nil else {
-                heights[event.id] = event.height
+            if let direction = event.direction {
+                let strength = voiceStrength(event, reference: reference) ?? event.gradedStrength
+                heights[event.id] = direction * (timelineMinReach + timelineReachSpan * strength)
                 continue
             }
             // About 3.5% of the width per character at this size, centred on the event
@@ -214,10 +242,7 @@ struct SpotTimelineChart<Balloon: View>: View {
                         yEnd: .value("上", step.reach)
                     )
                     .interpolationMethod(.catmullRom)
-                    .foregroundStyle(
-                        LinearGradient(colors: [Color.white.opacity(0.07), Color.white.opacity(0.22), Color.white.opacity(0.07)],
-                                       startPoint: .top, endPoint: .bottom)
-                    )
+                    .foregroundStyle(Color.white.opacity(0.12))
                 }
 
                 RuleMark(y: .value("中央", 0.0))
@@ -226,13 +251,13 @@ struct SpotTimelineChart<Balloon: View>: View {
 
                 ForEach(events) { event in
                     // How long it went on
-                    if event.emoji != nil, event.end - event.start > minimumWidth {
+                    if let direction = event.direction, event.end - event.start > minimumWidth {
                         RuleMark(
                             xStart: .value("開始", event.start),
                             xEnd: .value("終了", event.end),
-                            y: .value("位置", event.height - 0.5)
+                            y: .value("位置", (heights[event.id] ?? event.height) - 0.5)
                         )
-                        .foregroundStyle((event.height > 0 ? Color.accentTeal : Color.accentCoral).opacity(0.7))
+                        .foregroundStyle((direction > 0 ? Color.accentTeal : Color.accentCoral).opacity(0.7))
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
                     }
                 }
@@ -282,20 +307,28 @@ struct SpotTimelineChart<Balloon: View>: View {
                 }
             }
             .frame(height: 250)
-
-            if let selected {
-                VStack(alignment: .leading, spacing: 0) {
-                    BalloonTailUp()
-                        .fill(Color.darkElevated)
-                        .frame(width: 14, height: 8)
-                        .offset(x: (selectedX ?? 20) - 7)
-                    balloon(selected)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.darkElevated))
+            // The balloon opens above the picture, where it is quiet, and over what is above
+            // it, so the picture does not move under the finger
+            .overlay(alignment: .top) {
+                if let selected {
+                    VStack(alignment: .leading, spacing: 0) {
+                        balloon(selected)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(12)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(Color.darkElevated))
+                            .shadow(color: .black.opacity(0.4), radius: 8, y: 2)
+                        BalloonTailDown()
+                            .fill(Color.darkElevated)
+                            .frame(width: 14, height: 8)
+                            .offset(x: (selectedX ?? 20) - 7)
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                    // A frame with no height at the top edge: the balloon grows upward out of
+                    // it, so it sits above the picture and its tail ends at the picture's top
+                    .frame(maxWidth: .infinity, maxHeight: 0, alignment: .bottom)
                 }
-                .padding(.top, 4)
             }
+            .zIndex(1)
         }
     }
 
@@ -333,12 +366,12 @@ struct SpotTimelineChart<Balloon: View>: View {
     }
 }
 
-private struct BalloonTailUp: Shape {
+private struct BalloonTailDown: Shape {
     func path(in rect: CGRect) -> Path {
         var path = Path()
-        path.move(to: CGPoint(x: rect.minX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY))
-        path.addLine(to: CGPoint(x: rect.midX, y: rect.minY))
+        path.move(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.midX, y: rect.maxY))
         path.closeSubpath()
         return path
     }
