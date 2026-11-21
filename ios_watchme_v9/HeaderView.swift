@@ -214,8 +214,8 @@ struct HeaderView: View {
         Button(action: {
             showMyPage = true
         }) {
-            Image(systemName: "person.crop.circle")
-                .font(.system(size: 19, weight: .semibold))
+            Image(systemName: "gearshape")
+                .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(.white.opacity(0.95))
                 .frame(width: 36, height: 36)
                 .background(
@@ -224,6 +224,7 @@ struct HeaderView: View {
                 )
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("設定")
     }
 
     private var notificationButton: some View {

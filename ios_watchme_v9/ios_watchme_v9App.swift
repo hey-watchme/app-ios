@@ -83,6 +83,8 @@ struct MainAppView: View {
     @EnvironmentObject var toastManager: ToastManager
     @EnvironmentObject var recordingStore: RecordingStore
     @State private var showLogin = false
+    /// The start-up status row fades in once the logo screen is up.
+    @State private var loadingStatusShown = false
     @State private var showOnboarding = false
     /// Signed-out visitors who finished the onboarding go straight to sample mode on later launches.
     @AppStorage("sample_mode_entered") private var sampleModeEntered = false
@@ -373,23 +375,27 @@ struct MainAppView: View {
                 .frame(width: 200, height: 70)
                 .shadow(color: Color.white.opacity(0.16), radius: 10, x: 0, y: 4)
 
-            VStack(spacing: 10) {
+            // The status sits well below the logo and does not take part in centring it, so the logo
+            // stays where the launch screen put it. It fades in instead of popping up.
+            HStack(spacing: 8) {
                 ProgressView()
                     .progressViewStyle(CircularProgressViewStyle())
-                    .scaleEffect(1.2)
-                    .tint(Color.white.opacity(0.85))
-
+                    .scaleEffect(0.8)
+                    .tint(Color.white.opacity(0.7))
                 Text("認証チェック中...")
                     .font(.caption)
-                    .foregroundColor(Color.white.opacity(0.70))
+                    .foregroundColor(Color.white.opacity(0.7))
             }
-            .padding(.top, 120)
+            .offset(y: 110)
+            .opacity(loadingStatusShown ? 1 : 0)
+            .animation(.easeIn(duration: 0.4), value: loadingStatusShown)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         // Center on the whole screen like the launch screen, so the logo does not jump.
         .ignoresSafeArea()
         .onAppear {
             print("⏱️ [VIEW] ロゴ画面表示: \(Date().timeIntervalSince(viewStartTime))秒")
+            loadingStatusShown = true
         }
     }
 

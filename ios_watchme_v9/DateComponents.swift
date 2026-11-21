@@ -132,7 +132,7 @@ struct LargeDateSection: View {
                     VStack(spacing: 0) {
                         // 実際の日付と曜日、カレンダーアイコンを表示
                         HStack(spacing: 8) {
-                            Text("\(DateFormatter.largeDateFormatter(timezone: timezone).string(from: selectedDate)) (\(DateFormatter.shortDayOfWeekFormatter(timezone: timezone).string(from: selectedDate)))")
+                            Text(getMonthDayWithWeekdayString(from: selectedDate))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(Color.safeColor("BehaviorTextPrimary"))
                             
@@ -169,11 +169,12 @@ struct LargeDateSection: View {
                             
                             Spacer()
                             
-                            // 翌日ボタン (今日の場合は無効)
+                            // The next day does not exist yet: the arrow is there, greyed out, so the row stays balanced
                             Image(systemName: "chevron.right")
                                 .font(.system(size: 16, weight: .semibold))
-                                .foregroundColor(Color.safeColor("BorderLight").opacity(0.3))
+                                .foregroundColor(Color(white: 0.3))
                                 .frame(width: 44, height: 44)
+                                .accessibilityHidden(true)
                         }
                     }
                 } else {
@@ -228,7 +229,7 @@ struct LargeDateSection: View {
                             }) {
                                 Image(systemName: "chevron.right")
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundColor(canGoToNextDay ? Color.safeColor("BehaviorTextPrimary") : Color.safeColor("BorderLight").opacity(0.3))
+                                    .foregroundColor(canGoToNextDay ? Color.safeColor("BehaviorTextPrimary") : Color(white: 0.3))
                                     .frame(width: 44, height: 44)
                             }
                             .disabled(!canGoToNextDay)
