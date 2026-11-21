@@ -7,62 +7,59 @@
 
 import SwiftUI
 
+/// What the home shows while the day loads, laid out like the day itself (DayContentView):
+/// the score gauge and the day's summary, then the recordings, each with its picture.
 struct SkeletonView: View {
-    @State private var isAnimating = false
-
     var body: some View {
-        VStack(spacing: 20) {
-            // Metrics bar skeleton
-            HStack(spacing: 8) {
-                ForEach(0..<4, id: \.self) { _ in
-                    SkeletonRectangle(height: 56, width: 120)
-                        .cornerRadius(22)
+        VStack(spacing: 16) {
+            // The score gauge and the day's summary
+            VStack(spacing: 14) {
+                SkeletonArc()
+                    .frame(width: 280, height: 140)
+                    .padding(.top, 40)
+                SkeletonRectangle(height: 26, width: 180)
+                    .padding(.top, 12)
+                SkeletonRectangle(height: 10, width: 140)
+                VStack(spacing: 8) {
+                    SkeletonRectangle(height: 12, width: nil)
+                    SkeletonRectangle(height: 12, width: nil)
+                    SkeletonRectangle(height: 12, width: 200)
                 }
+                .padding(.horizontal, 30)
+                .padding(.top, 4)
             }
-            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
 
-            // Vibe card skeleton
-            VStack(alignment: .leading, spacing: 12) {
-                SkeletonRectangle(height: 20, width: 80)
-                SkeletonRectangle(height: 140, width: nil)
-                HStack(spacing: 8) {
-                    SkeletonRectangle(height: 10, width: 50)
-                    SkeletonRectangle(height: 10, width: 50)
-                    SkeletonRectangle(height: 10, width: 50)
-                }
-            }
-            .padding(20)
-            .background(Color.darkCard)
-            .cornerRadius(20)
-            .padding(.horizontal, 20)
-
-            // Spot analysis skeleton
-            VStack(alignment: .leading, spacing: 16) {
-                SkeletonRectangle(height: 20, width: 100)
-
-                ForEach(0..<3, id: \.self) { _ in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            SkeletonRectangle(height: 12, width: 50)
-                            Spacer()
-                            SkeletonRectangle(height: 12, width: 36)
-                        }
-                        SkeletonRectangle(height: 10, width: nil)
-                        SkeletonRectangle(height: 10, width: 180)
+            // The recordings, each with its picture
+            ForEach(0..<2, id: \.self) { _ in
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        SkeletonRectangle(height: 16, width: 110)
+                        SkeletonRectangle(height: 16, width: 36)
+                        Spacer()
+                        SkeletonRectangle(height: 12, width: 44)
                     }
-                    .padding(16)
-                    .background(Color.darkCard)
-                    .cornerRadius(16)
+                    SkeletonRectangle(height: 200, width: nil)
+                    SkeletonRectangle(height: 11, width: nil)
+                    SkeletonRectangle(height: 11, width: 220)
                 }
+                .detailCard()
             }
-            .padding(.horizontal, 20)
-
-            Spacer()
         }
-        .onAppear {
-            withAnimation(Animation.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
-                isAnimating = true
+        .padding(.horizontal, 20)
+    }
+}
+
+/// The outline of the score gauge: a half ring.
+private struct SkeletonArc: View {
+    var body: some View {
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            Path { path in
+                path.addArc(center: CGPoint(x: width / 2, y: geometry.size.height),
+                            radius: width / 2 - 10, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
             }
+            .stroke(Color.white.opacity(0.06), style: StrokeStyle(lineWidth: 16, lineCap: .round))
         }
     }
 }

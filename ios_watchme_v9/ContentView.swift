@@ -7,6 +7,7 @@
 
 import SwiftUI
 import UIKit
+import Supabase
 
 struct ContentView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
@@ -32,6 +33,11 @@ struct ContentView: View {
     // range filled in onAppear made the first frame jump).
     @State private var dateRange: [String]
     @State private var isLoadingMoreDates = false
+    /// The day the home opened on by itself (the newest day with a recording). While the
+    /// person stays on it, coming back to the app moves on to a newer one.
+    @State private var autoSelectedDate: String?
+    /// The day of a recording made in this session, which may not have reached the server yet.
+    @State private var recordedHereDate: String?
 
     // 初期ロード日数（起動時のパフォーマンス最適化）
     private let initialDaysToLoad = 7
@@ -226,9 +232,20 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.willEnterForegroundNotification)) { _ in
             syncDateRangeWithToday()
+            Task { await showNewestRecordedDay() }
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             syncDateRangeWithToday()
+            Task { await showNewestRecordedDay() }
+        }
+        .onChange(of: recordingStore.state.isRecording) { wasRecording, isRecording in
+            // A recording just stopped: show today, where its progress and result appear
+            guard wasRecording, !isRecording else { return }
+            syncDateRangeWithToday()
+            let today = LocalDate.today(timezone: deviceManager.selectedDeviceTimezone)
+            selectedLocalDate = today
+            autoSelectedDate = today
+            recordedHereDate = today
         }
         .onChange(of: recordingStore.state.errorMessage) { oldValue, newValue in
             // 録音エラーをToastで表示（エラーメッセージ統一）
@@ -299,6 +316,8 @@ struct ContentView: View {
 
         dateRange = dates.isEmpty ? [today] : dates
         selectedLocalDate = today
+        autoSelectedDate = today
+        Task { await showNewestRecordedDay() }
 
         print("📅 日付範囲初期化: \(dateRange.count)日分（\(dateRange.first ?? today) 〜 \(today)）")
     }
@@ -334,9 +353,39 @@ struct ContentView: View {
 
         if wasViewingLatestDate {
             selectedLocalDate = today
+            // Still the day picked by the app; showNewestRecordedDay may move it back
+            if autoSelectedDate == lastDate { autoSelectedDate = today }
         }
 
         print("📅 日付範囲を再同期: \(lastDate) → \(today)")
+    }
+
+    /// The home opens on the newest day that has a recording, not on today: someone who
+    /// records at dinner would otherwise see an empty today until the next dinner
+    /// (platform docs/product/screens.md "ホーム"). Today when nothing was recorded yet.
+    /// Only moves while the person is still on the day it picked last time.
+    private func showNewestRecordedDay() async {
+        guard let deviceId = deviceManager.selectedDeviceID else { return }
+        struct Row: Decodable { let local_date: String? }
+        let rows: [Row] = (try? await SupabaseClientManager.shared.client
+            .from("spot_results")
+            .select("local_date")
+            .eq("device_id", value: deviceId)
+            .not("local_date", operator: .is, value: "null")
+            .order("local_date", ascending: false)
+            .limit(1)
+            .execute()
+            .value) ?? []
+        let today = LocalDate.today(timezone: deviceManager.selectedDeviceTimezone)
+        let newest = min(max(rows.first?.local_date ?? today, recordedHereDate ?? ""), today)
+        await MainActor.run {
+            guard deviceManager.selectedDeviceID == deviceId,
+                  selectedLocalDate == autoSelectedDate || autoSelectedDate == nil,
+                  newest != selectedLocalDate else { return }
+            ensureDateRangeIncludes(newest)
+            selectedLocalDate = newest
+            autoSelectedDate = newest
+        }
     }
 
     /// 端に到達したら追加データを読み込む
