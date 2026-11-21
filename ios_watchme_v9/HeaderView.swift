@@ -74,6 +74,7 @@ struct HeaderView: View {
             // 通知画面
             NotificationView()
                 .environmentObject(userAccountManager)
+                .environmentObject(deviceManager)
                 .environmentObject(dataManager)
                 .onDisappear {
                     // 通知画面を閉じたら未読数を更新

@@ -95,7 +95,6 @@ enum ActivitySeen {
 struct ActivityBannerView: View {
     let banner: ActivityBanner
     let onTap: () -> Void
-    let onShowLog: () -> Void
 
     var body: some View {
         HStack(spacing: 12) {
@@ -124,15 +123,6 @@ struct ActivityBannerView: View {
             }
             .buttonStyle(.plain)
             .disabled(!isTappable)
-
-            Button(action: onShowLog) {
-                Image(systemName: "list.bullet")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(white: 0.5))
-                    .frame(width: 28, height: 28)
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel("処理の記録")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)

@@ -15,6 +15,14 @@ struct NotificationView: View {
     @State private var notifications: [Notification] = []
     @State private var isLoading = true
     @State private var errorMessage: String?
+    @State private var tab: Tab
+    @State private var selectedSpot: DashboardTimeBlock?
+
+    enum Tab { case announcements, processing }
+
+    init(initialTab: Tab = .announcements) {
+        _tab = State(initialValue: initialTab)
+    }
     
     var body: some View {
         NavigationView {
@@ -22,7 +30,18 @@ struct NotificationView: View {
                 Color.darkBase.ignoresSafeArea()
                 
                 VStack(spacing: 0) {
-                    if isLoading {
+                    // Two tabs: messages from us, and what the analysis did (platform docs/product/screens.md "通知")
+                    Picker("", selection: $tab) {
+                        Text("お知らせ").tag(Tab.announcements)
+                        Text("処理の記録").tag(Tab.processing)
+                    }
+                    .pickerStyle(.segmented)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 10)
+
+                    if tab == .processing {
+                        ProcessingLogTab(onTapRecording: { selectedSpot = $0 })
+                    } else if isLoading {
                     // ローディング表示
                     VStack(spacing: 16) {
                         ProgressView()
@@ -108,7 +127,7 @@ struct NotificationView: View {
                     }
                 }
                 
-                if !notifications.isEmpty {
+                if tab == .announcements && !notifications.isEmpty {
                     ToolbarItem(placement: .navigationBarTrailing) {
                         Button("すべて既読") {
                             Task {
@@ -120,6 +139,10 @@ struct NotificationView: View {
                     }
                 }
             }
+        }
+        .sheet(item: $selectedSpot) { spot in
+            SpotDetailView(deviceId: spot.deviceId, spotData: spot)
+                .environmentObject(dataManager)
         }
         .task {
             await loadNotifications()
@@ -179,6 +202,71 @@ struct NotificationView: View {
         } catch {
             print("❌ Failed to mark all notifications as read: \(error)")
         }
+    }
+}
+
+// MARK: - Processing log
+
+/// The "処理の記録" tab: what the analysis did for the recordings of the last week, newest
+/// first, one section per recording (ActivityLogView). Pressing a recording opens its result.
+struct ProcessingLogTab: View {
+    let onTapRecording: (DashboardTimeBlock) -> Void
+
+    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var dataManager: SupabaseDataManager
+    @State private var blocks: [DashboardTimeBlock] = []
+    @State private var isLoading = true
+
+    private static let days = 7
+
+    var body: some View {
+        Group {
+            if isLoading {
+                ProgressView()
+                    .tint(.accentTeal)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                // An empty viewing date: every recording is named with its date (11/21 19:59 の録音)
+                ActivityLogView(blocks: blocks, timezone: timezone, viewingDate: "", onTapRecording: onTapRecording)
+            }
+        }
+        .task(id: deviceManager.selectedDeviceID) { await load() }
+    }
+
+    private var timezone: TimeZone {
+        deviceManager.selectedDeviceID.map { deviceManager.getTimezone(for: $0) } ?? .current
+    }
+
+    /// The recordings received in the last week, oldest first (ActivityLogView lists them newest first).
+    private func load() async {
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            blocks = []
+            isLoading = false
+            return
+        }
+        struct Row: Decodable { let local_date: String? }
+        let since = ISO8601DateFormatter().string(from: Date().addingTimeInterval(-Double(Self.days) * 86400))
+        let rows: [Row] = (try? await SupabaseClientManager.shared.client
+            .from("spot_results")
+            .select("local_date")
+            .eq("device_id", value: deviceId)
+            .gte("created_at", value: since)
+            .execute()
+            .value) ?? []
+        let dates = Set(rows.compactMap(\.local_date))
+        let timezone = timezone
+        let fetched = await withTaskGroup(of: [DashboardTimeBlock].self) { group in
+            for date in dates {
+                group.addTask { await dataManager.fetchDashboardTimeBlocks(deviceId: deviceId, localDate: date, timezone: timezone) }
+            }
+            var all: [DashboardTimeBlock] = []
+            for await dayBlocks in group { all += dayBlocks }
+            return all
+        }
+        blocks = fetched
+            .filter { (SpotStage.parse($0.createdAt) ?? .distantPast) >= Date().addingTimeInterval(-Double(Self.days) * 86400) }
+            .sorted { ($0.createdAt ?? "") < ($1.createdAt ?? "") }
+        isLoading = false
     }
 }
 

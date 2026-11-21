@@ -105,7 +105,6 @@ struct SimpleDashboardView: View {
     @State private var showBehaviorSheet = false
     @State private var showEmotionSheet = false
     @State private var selectedSpotForDetail: DashboardTimeBlock?
-    @State private var showActivityLog = false
     /// Finished results the person has looked at (the activity card does not repeat them).
     @State private var activitySeen = ActivitySeen.load()
     private let floatingHeaderContentInset: CGFloat = 40
@@ -161,8 +160,7 @@ struct SimpleDashboardView: View {
                             if let banner = activityBanner {
                                 ActivityBannerView(
                                     banner: banner,
-                                    onTap: { openActivity(banner) },
-                                    onShowLog: { showActivityLog = true }
+                                    onTap: { openActivity(banner) }
                                 )
                                 .padding(.horizontal, 20)
                                 .transition(.opacity)
@@ -396,29 +394,6 @@ struct SimpleDashboardView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             refreshCurrentDayIfNeeded(reason: "significantTimeChange")
-        }
-        .sheet(isPresented: $showActivityLog) {
-            NavigationView {
-                ActivityLogView(blocks: otherDayBlocks + timeBlocks, timezone: currentTimezone, viewingDate: localDate) { block in
-                    showActivityLog = false
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) {
-                        selectedSpotForDetail = block
-                    }
-                }
-                .navigationBarTitleDisplayMode(.inline)
-                .navigationTitle("アクティビティログ")
-                .toolbarBackground(Color.darkBase, for: .navigationBar)
-                .toolbarBackground(.visible, for: .navigationBar)
-                .toolbarColorScheme(.dark, for: .navigationBar)
-                .tint(.white)
-                .toolbar {
-                    ToolbarItem(placement: .navigationBarTrailing) {
-                        CloseButton {
-                            showActivityLog = false
-                        }
-                    }
-                }
-            }
         }
         .sheet(isPresented: $showBehaviorSheet) {
             NavigationView {

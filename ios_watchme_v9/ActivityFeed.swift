@@ -2,9 +2,9 @@
 //  ActivityFeed.swift
 //  ios_watchme_v9
 //
-//  The activity area at the top of the dashboard: one small card per analysis event
-//  (a recording arriving, each stage running or finishing), so the user can see results
-//  arriving one by one. Built from spot_stages, which the dashboard already receives in real time.
+//  What the analysis did, one row per event (a recording's analysis as a whole, each stage
+//  running or finishing), built from spot_stages. Shown in the notifications' "処理の記録" tab;
+//  the home shows only the one activity card (HomeCards.swift).
 //
 
 import SwiftUI
@@ -49,7 +49,8 @@ enum ActivityFeed {
         var items = [ActivityItem(
             id: "\(block.id)_recording",
             recordingID: block.id,
-            title: "録音を送信",
+            // The recording's analysis as a whole (it was called "録音を送信", but it shows the analysis)
+            title: "録音の分析",
             status: recordingStatus,
             detail: recordingDetail,
             date: SpotStage.parse(block.createdAt)
@@ -124,7 +125,7 @@ enum ActivityFeed {
     }
 }
 
-// MARK: - Status icon (shared by the strip and the log)
+// MARK: - Status icon
 
 struct ActivityStatusIcon: View {
     let status: String
@@ -143,80 +144,6 @@ struct ActivityStatusIcon: View {
     }
 }
 
-// MARK: - Strip (top of the dashboard)
-
-struct ActivityStripView: View {
-    let items: [ActivityItem]
-    let timezone: TimeZone
-    var limit: Int = 10
-    let onTapItem: (ActivityItem) -> Void
-    let onShowLog: () -> Void
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(items.prefix(limit)) { item in
-                    card(item)
-                        .onTapGesture { onTapItem(item) }
-                        .transition(.asymmetric(insertion: .scale(scale: 0.9).combined(with: .opacity), removal: .opacity))
-                }
-                logButton
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 8)
-            .animation(.spring(response: 0.4, dampingFraction: 0.85), value: items)
-        }
-    }
-
-    private func card(_ item: ActivityItem) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 6) {
-                ActivityStatusIcon(status: item.status)
-                Text(item.title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-            }
-            Text(item.detail)
-                .font(.system(size: 11))
-                .foregroundColor(item.status == "failed" ? .accentCoral : Color(white: 0.6))
-                .lineLimit(2)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-            Text(ActivityFeed.timeText(item.date, timezone: timezone))
-                .font(.system(size: 10, weight: .medium, design: .monospaced))
-                .foregroundColor(Color(white: 0.4))
-        }
-        .padding(12)
-        .frame(width: 148, height: 96, alignment: .topLeading)
-        .background(cardBackground(highlighted: item.status == "running"))
-        .contentShape(Rectangle())
-    }
-
-    private var logButton: some View {
-        Button(action: onShowLog) {
-            VStack(spacing: 6) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(.system(size: 16))
-                Text("アクティビティログ")
-                    .font(.system(size: 11, weight: .medium))
-            }
-            .foregroundColor(.accentTeal)
-            .frame(width: 112, height: 96)
-            .background(cardBackground(highlighted: false))
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private func cardBackground(highlighted: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 16)
-            .fill(Color.darkCard)
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(highlighted ? Color.accentTeal.opacity(0.5) : Color.white.opacity(0.1), lineWidth: 1)
-            )
-    }
-}
-
 // MARK: - Log (every event of the day, grouped by recording)
 
 struct ActivityLogView: View {
@@ -229,7 +156,7 @@ struct ActivityLogView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if blocks.isEmpty {
-                    Text("この日のアクティビティはありません")
+                    Text("この1週間の処理の記録はありません")
                         .font(.system(size: 13))
                         .foregroundColor(Color(white: 0.45))
                         .frame(maxWidth: .infinity)
