@@ -156,7 +156,7 @@ struct AccountSettingsView: View {
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("閉じる") {
+                    CloseButton {
                         dismiss()
                     }
                     .foregroundColor(.primary)

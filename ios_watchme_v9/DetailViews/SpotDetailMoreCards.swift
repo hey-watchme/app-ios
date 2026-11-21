@@ -44,6 +44,23 @@ struct DetailCardHeader: View {
     }
 }
 
+/// The button that closes a sheet: an ×, the same in every language (screen reader: 閉じる).
+struct CloseButton: View {
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "xmark")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(Color.white.opacity(0.85))
+                .frame(width: 30, height: 30)
+                .background(Circle().fill(Color.white.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("閉じる")
+    }
+}
+
 /// An (i) that shows how to read a card or a chart in a small balloon.
 struct InfoButton: View {
     let text: String

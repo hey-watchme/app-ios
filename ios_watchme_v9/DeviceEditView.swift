@@ -173,7 +173,7 @@ struct DeviceEditView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("閉じる") {
+                    CloseButton {
                         isPresented = false
                     }
                 }

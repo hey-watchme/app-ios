@@ -51,7 +51,7 @@ struct NotificationPlaceholderView: View {
             .navigationBarTitleDisplayMode(.large)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("閉じる") {
+                    CloseButton {
                         dismiss()
                     }
                 }

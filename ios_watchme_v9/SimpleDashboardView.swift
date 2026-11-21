@@ -142,13 +142,7 @@ struct SimpleDashboardView: View {
 
     @ViewBuilder
     private var recordingsSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("この日の録音")
-                .font(.system(size: 13, weight: .bold))
-                .foregroundColor(Color(white: 0.5))
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.top, 8)
-
+        VStack(alignment: .leading, spacing: 16) {
             if timeBlocks.isEmpty {
                 Text("この日の録音はまだありません。下の録音ボタンから録ると、ここに録音の流れが出ます")
                     .font(.system(size: 13))
@@ -460,8 +454,8 @@ struct SimpleDashboardView: View {
                     .toolbarColorScheme(.dark, for: .navigationBar)
                     .tint(.white)
                     .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("閉じる") {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            CloseButton {
                                 showVibeSheet = false
                             }
                         }
@@ -483,8 +477,8 @@ struct SimpleDashboardView: View {
                 .toolbarColorScheme(.dark, for: .navigationBar)
                 .tint(.white)
                 .toolbar {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button("閉じる") {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        CloseButton {
                             showActivityLog = false
                         }
                     }
@@ -499,8 +493,8 @@ struct SimpleDashboardView: View {
                     .navigationBarTitleDisplayMode(.large)
                     .navigationTitle("行動グラフ")
                     .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("閉じる") {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            CloseButton {
                                 showBehaviorSheet = false
                             }
                         }
@@ -515,8 +509,8 @@ struct SimpleDashboardView: View {
                     .navigationBarTitleDisplayMode(.large)
                     .navigationTitle("感情グラフ")
                     .toolbar {
-                        ToolbarItem(placement: .navigationBarLeading) {
-                            Button("閉じる") {
+                        ToolbarItem(placement: .navigationBarTrailing) {
+                            CloseButton {
                                 showEmotionSheet = false
                             }
                         }

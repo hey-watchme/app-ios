@@ -201,12 +201,31 @@ struct HomeRecordingCard: View {
     let onOpen: () -> Void
     @StateObject private var events = SpotEventsStore()
 
+    /// When the recording ran, e.g. 19:59 – 20:45: the start, plus its length when known.
+    private var timeRange: String {
+        guard let raw = block.recordingRaw, let data = raw.data(using: .utf8),
+              let recording = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let seconds = (recording["duration_seconds"] as? NSNumber)?.doubleValue, seconds > 0,
+              let localTime = block.localTime else { return block.displayTime }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        for format in ["yyyy-MM-dd'T'HH:mm:ss.SSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss"] {
+            formatter.dateFormat = format
+            if let start = formatter.date(from: localTime) {
+                formatter.dateFormat = "H:mm"
+                return "\(formatter.string(from: start)) – \(formatter.string(from: start.addingTimeInterval(seconds)))"
+            }
+        }
+        return block.displayTime
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 4) {
                 Button(action: onOpen) {
                     HStack(spacing: 8) {
-                        Text("\(block.displayTime) の録音")
+                        Text(timeRange)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white)
                         if let score = block.vibeScore {

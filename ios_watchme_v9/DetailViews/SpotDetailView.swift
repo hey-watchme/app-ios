@@ -108,7 +108,7 @@ struct SpotDetailView: View {
                     }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Close") {
+                    CloseButton {
                         dismiss()
                     }
                     .foregroundColor(.accentTeal)

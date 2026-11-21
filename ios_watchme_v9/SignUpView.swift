@@ -319,7 +319,7 @@ struct SignUpView: View {
                             .navigationBarTitleDisplayMode(.inline)
                             .toolbar {
                                 ToolbarItem(placement: .confirmationAction) {
-                                    Button("閉じる") { showResearchDetails = false }
+                                    CloseButton { showResearchDetails = false }
                                 }
                             }
                         }

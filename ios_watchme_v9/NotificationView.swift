@@ -103,7 +103,7 @@ struct NotificationView: View {
             .tint(.white)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("閉じる") {
+                    CloseButton {
                         dismiss()
                     }
                 }

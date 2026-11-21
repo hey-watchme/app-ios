@@ -988,7 +988,7 @@ struct InfoSheet: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("閉じる") {
+                    CloseButton {
                         dismiss()
                     }
                 }

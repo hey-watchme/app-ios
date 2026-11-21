@@ -242,7 +242,7 @@ struct ResearchConsentRow: View {
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbar {
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("閉じる") { showDetails = false }
+                        CloseButton { showDetails = false }
                     }
                 }
             }
