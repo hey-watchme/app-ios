@@ -44,18 +44,17 @@ struct SpotDetailView: View {
                         stageProgressCard
                     }
 
-                    // 1. At a glance: the score and the summary
+                    // 1. At a glance: the score, the picture of the recording (emoji along the
+                    // time, over the voice), then the summary in words
                     if let vibeScore = spotData.vibeScore {
                         vibeScoreCard(vibeScore)
                     }
-                    if let summary = spotData.summary {
-                        contentCard(title: "Summary", content: summary, icon: "text.alignleft")
-                    }
-
-                    // 2. The picture: the events along the recording, over the voice
                     if let recordedAt = spotData.recordedAt {
                         SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime,
                                        metricsRaw: spotData.metricsRaw, store: eventsStore, part: .picture)
+                    }
+                    if let summary = spotData.summary {
+                        contentCard(title: "Summary", content: summary, icon: "text.alignleft")
                     }
 
                     // 3. In detail: every event with its play button, then the written analysis

@@ -180,6 +180,8 @@ struct SpotEventsCard: View {
     var metricsRaw: String? = nil
     @ObservedObject var store: SpotEventsStore
     let part: Part
+    /// Inside another card (the home screen): no header, no card of its own, no switch for the wave.
+    var embedded = false
 
     private typealias Run = SpotEventsStore.Run
     private typealias Event = SpotEventsStore.Event
@@ -239,11 +241,17 @@ struct SpotEventsCard: View {
 
     @ViewBuilder
     private func pictureCard(_ run: Run) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            DetailCardHeader(icon: "waveform.path.ecg", title: "TIMELINE", badge: "録音の流れ")
-            timeline(run)
+        if embedded {
+            VStack(alignment: .leading, spacing: 12) {
+                timeline(run)
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 12) {
+                DetailCardHeader(icon: "waveform.path.ecg", title: "TIMELINE", badge: "録音の流れ")
+                timeline(run)
+            }
+            .detailCard()
         }
-        .detailCard()
     }
 
     private func listCard(_ run: Run) -> some View {
@@ -307,7 +315,7 @@ struct SpotEventsCard: View {
                 }
             }
 
-            if !voice.isEmpty {
+            if !voice.isEmpty && !embedded {
                 HStack {
                     Text("後ろの帯: 声の")
                         .font(.system(size: 11))

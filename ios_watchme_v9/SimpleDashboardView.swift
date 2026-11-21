@@ -32,6 +32,7 @@ struct SimpleDashboardView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var userAccountManager: UserAccountManager
+    @EnvironmentObject var recordingStore: RecordingStore
 
     init(localDate: String, selectedLocalDate: Binding<String>) {
         self.localDate = localDate
@@ -106,7 +107,58 @@ struct SimpleDashboardView: View {
     @State private var showEmotionSheet = false
     @State private var selectedSpotForDetail: DashboardTimeBlock?
     @State private var showActivityLog = false
+    /// Finished results the person has looked at (the activity card does not repeat them).
+    @State private var activitySeen = ActivitySeen.load()
     private let floatingHeaderContentInset: CGFloat = 40
+
+    // MARK: - Activity card and recordings (docs/product/screens.md「ホーム」)
+
+    private var activityBanner: ActivityBanner? {
+        let unsent = recordingStore.state.isRecording ? 0 : recordingStore.state.pending.filter { $0.state != .blocked }.count
+        return ActivityBanner.current(blocks: timeBlocks + otherDayBlocks, unsentChunks: unsent,
+                                      viewingDate: localDate, seen: activitySeen)
+    }
+
+    private func openActivity(_ banner: ActivityBanner) {
+        if let key = banner.seenKey {
+            ActivitySeen.add(key)
+            activitySeen.insert(key)
+        }
+        switch banner {
+        case .analysing(let id, _, _), .recordingDone(let id, _):
+            selectedSpotForDetail = (timeBlocks + otherDayBlocks).first { $0.id == id }
+        case .dayUpdated:
+            showVibeSheet = true
+        case .sending:
+            break
+        }
+    }
+
+    @ViewBuilder
+    private var recordingsSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("この日の録音")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(Color(white: 0.5))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.top, 8)
+
+            if timeBlocks.isEmpty {
+                Text("この日の録音はまだありません。下の録音ボタンから録ると、ここに録音の流れが出ます")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(white: 0.5))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .detailCard()
+            } else {
+                ForEach(timeBlocks.reversed()) { block in
+                    HomeRecordingCard(block: block) {
+                        selectedSpotForDetail = block
+                    }
+                }
+            }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -132,29 +184,19 @@ struct SimpleDashboardView: View {
                         if isLoading {
                             SkeletonView()
                         } else {
-                            // 1. Activity (analysis events as they arrive); the metric pills hold the place until there are any
-                            let activityItems = ActivityFeed.items(from: timeBlocks + otherDayBlocks, viewingDate: localDate)
-                            if activityItems.isEmpty {
-                                MetricsHorizonView(
-                                    vibeScore: dashboardSummary?.averageVibe.map { Double($0) },
-                                    activityCount: timeBlocks.count
+                            // 1. Activity: one slim card that follows the latest recording through sending
+                            // and analysis, then says it is done until looked at (docs/product/screens.md)
+                            if let banner = activityBanner {
+                                ActivityBannerView(
+                                    banner: banner,
+                                    onTap: { openActivity(banner) },
+                                    onShowLog: { showActivityLog = true }
                                 )
-                                .transition(.opacity)
-                            } else {
-                                ActivityStripView(
-                                    items: activityItems,
-                                    timezone: currentTimezone,
-                                    onTapItem: { item in
-                                        selectedSpotForDetail = (timeBlocks + otherDayBlocks).first { $0.id == item.recordingID }
-                                    },
-                                    onShowLog: {
-                                        showActivityLog = true
-                                    }
-                                )
+                                .padding(.horizontal, 20)
                                 .transition(.opacity)
                             }
-                            
-                            // 2. Main Hero Gauge
+
+                            // 2. The day's score and summary
                             ModernHeroGaugeView(dashboardSummary: dashboardSummary)
                                 .padding(.horizontal, 20)
                                 .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -162,38 +204,13 @@ struct SimpleDashboardView: View {
                                     showVibeSheet = true
                                 }
 
-                            // Latest recording, filling in as its analysis runs
-                            if let latest = timeBlocks.last {
-                                LatestSpotCard(timeBlock: latest) {
-                                    selectedSpotForDetail = latest
-                                }
-                                .padding(.horizontal, 20)
-                                .transition(.opacity)
-                            }
-
                             // Questions the analysis could not settle (hidden when none are open)
                             QuestionsEntry(deviceId: deviceManager.selectedDeviceID, place: .dashboard)
                                 .padding(.horizontal, 20)
 
-                            // 3. Vibe Timeline (under hero)
-                            vibeGraphCard
+                            // 3. The day's recordings, newest first, each with its picture
+                            recordingsSection
                                 .padding(.horizontal, 20)
-                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-
-                            // 5. Activity Comparison
-                            DailyActivityOverviewCard(
-                                analysisCount: timeBlocks.count,
-                                targetCount: 24
-                            )
-                            .padding(.horizontal, 20)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
-
-                            // Highlights
-                            if showHighlightSection {
-                                highlightSection
-                                    .padding(.horizontal, 20)
-                                    .transition(.opacity.combined(with: .move(edge: .top)))
-                            }
 
                             Spacer(minLength: 100)
                         }
