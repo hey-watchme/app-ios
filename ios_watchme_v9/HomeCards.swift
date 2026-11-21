@@ -203,30 +203,34 @@ struct HomeRecordingCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: onOpen) {
-                HStack(spacing: 8) {
-                    Text("\(block.displayTime) の録音")
-                        .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.white)
-                    if let score = block.vibeScore {
-                        Text(String(format: "%@%.0f", score >= 0 ? "+" : "", score))
-                            .font(.system(size: 12, weight: .bold, design: .rounded))
-                            .foregroundColor(Color.vibeScoreColor(for: score))
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.vibeScoreColor(for: score).opacity(0.15)))
+            HStack(spacing: 4) {
+                Button(action: onOpen) {
+                    HStack(spacing: 8) {
+                        Text("\(block.displayTime) の録音")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                        if let score = block.vibeScore {
+                            Text(String(format: "%@%.0f", score >= 0 ? "+" : "", score))
+                                .font(.system(size: 12, weight: .bold, design: .rounded))
+                                .foregroundColor(Color.vibeScoreColor(for: score))
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(Color.vibeScoreColor(for: score).opacity(0.15)))
+                        }
+                        Spacer()
+                        Text("詳しく")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(white: 0.5))
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(white: 0.5))
                     }
-                    Spacer()
-                    Text("詳しく")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(white: 0.5))
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(Color(white: 0.5))
+                    .contentShape(Rectangle())
                 }
-                .contentShape(Rectangle())
+                .buttonStyle(.plain)
+                // Outside the header's button, so that it shows the explanation and does not open the recording
+                InfoButton(text: SpotEventsCard.timelineInfo)
             }
-            .buttonStyle(.plain)
 
             if block.stages.isInProgress {
                 HStack(spacing: 8) {

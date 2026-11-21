@@ -16,6 +16,8 @@ struct DetailCardHeader: View {
     let icon: String
     let title: String
     var badge: String? = nil
+    /// How to read the card, behind an (i) at the right. Cards stay plain; whoever wants it asks.
+    var info: String? = nil
 
     var body: some View {
         HStack(spacing: 8) {
@@ -35,6 +37,39 @@ struct DetailCardHeader: View {
                     .background(Capsule().fill(Color.accentTeal.opacity(0.15)))
             }
             Spacer()
+            if let info {
+                InfoButton(text: info)
+            }
+        }
+    }
+}
+
+/// An (i) that shows how to read a card or a chart in a small balloon.
+struct InfoButton: View {
+    let text: String
+    @State private var shown = false
+
+    var body: some View {
+        Button {
+            shown = true
+        } label: {
+            Image(systemName: "info.circle")
+                .font(.system(size: 14))
+                .foregroundColor(Color(white: 0.5))
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("見方")
+        .popover(isPresented: $shown) {
+            Text(text)
+                .font(.system(size: 13))
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 260, alignment: .leading)
+                .padding(14)
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground(Color.darkElevated)
         }
     }
 }
@@ -247,7 +282,8 @@ struct SpotEventsCard: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                DetailCardHeader(icon: "waveform.path.ecg", title: "TIMELINE", badge: "録音の流れ")
+                DetailCardHeader(icon: "waveform.path.ecg", title: "TIMELINE", badge: "録音の流れ",
+                             info: Self.timelineInfo)
                 timeline(run)
             }
             .detailCard()
@@ -256,7 +292,7 @@ struct SpotEventsCard: View {
 
     private func listCard(_ run: Run) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事")
+            DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事", info: Self.eventsInfo)
 
             // Counts (low-confidence events are not counted)
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 8) {
@@ -287,11 +323,6 @@ struct SpotEventsCard: View {
                     }
                 }
             }
-
-            Text("決まった種類だけを数えています。30秒以内に続いた同じ種類は1回。根拠の弱いもの（薄い表示）は回数に入れていません。")
-                .font(.system(size: 11))
-                .foregroundColor(Color(white: 0.4))
-                .fixedSize(horizontal: false, vertical: true)
         }
         .detailCard()
     }
@@ -327,13 +358,17 @@ struct SpotEventsCard: View {
                 }
             }
 
-            Text("中央の線より上はあたたかい出来事、下はきつい出来事。叱責と口論は、声が強いほど下。"
-                 + (voice.isEmpty ? "" : "後ろの帯は発話ごとの声で、その人のこの録音でのふだんより強いほど太い。"))
-                .font(.system(size: 11))
-                .foregroundColor(Color(white: 0.4))
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
+
+    /// How to read the picture (behind the (i) of the card).
+    static let timelineInfo = """
+        横は録音の時間です。中央の線より上はあたたかい出来事（笑う・褒める）、下はきつい出来事（叱責・口論・泣く）。        線から離れているほど、その前後の声が強かった場面です。
+        後ろの波は話していた声の強さで、その人のこの録音でのふだんより強いほど膨らみます。誰も話していないところは平らです。
+        絵文字を押すと、そのときの言葉と再生ボタンが出ます。
+        """
+
+    static let eventsInfo = "決まった種類だけを数えています。30秒以内に続いた同じ種類は1回です。根拠の弱いもの（薄い表示）は回数に入れていません。"
 
     private func eventRow(_ event: Event) -> some View {
         let weak = event.confidence == "low"
