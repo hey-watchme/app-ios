@@ -146,6 +146,38 @@ struct SpotTimelineChart<Balloon: View>: View {
         return max(values[Int(Double(values.count - 1) * 0.95)], 0.001)
     }
 
+    private struct WaveStep: Identifiable {
+        let time: Double
+        let reach: Double
+        var id: Double { time }
+    }
+
+    /// The utterances gathered into about 120 steps along the recording: each step takes its
+    /// strongest voice, then neighbours are averaged so the outline reads as one wave.
+    private func wave(reference: Double) -> [WaveStep] {
+        guard !voice.isEmpty, duration > 0 else { return [] }
+        let count = max(min(Int(duration / 2), 120), 2)   // a step is at least 2 seconds
+        let width = duration / Double(count)
+        var strongest = [Double](repeating: 0, count: count)
+        for point in voice {
+            let share = min(max((measure.value(point) ?? 0) / reference, 0), 1)
+            // An utterance counts in every step it spans
+            let first = min(max(Int(point.start / width), 0), count - 1)
+            let last = min(max(Int(point.end / width), first), count - 1)
+            for index in first...last {
+                // Speech that is not above the usual still shows a little, so talk is visible
+                strongest[index] = max(strongest[index], 0.08 + 0.92 * share)
+            }
+        }
+        let smoothed = strongest.indices.map { index -> Double in
+            let before = strongest[max(index - 1, 0)], after = strongest[min(index + 1, count - 1)]
+            return (before + 2 * strongest[index] + after) / 4
+        }
+        return smoothed.enumerated().map { index, value in
+            WaveStep(time: (Double(index) + 0.5) * width, reach: Self.bandReach * value)
+        }
+    }
+
     /// Where each event is drawn. A word that would run into the word before it drops a row.
     private var heights: [Int: Double] {
         let span = xDomain.upperBound - xDomain.lowerBound
@@ -173,19 +205,19 @@ struct SpotTimelineChart<Balloon: View>: View {
 
         VStack(alignment: .leading, spacing: 0) {
             Chart {
-                // The voice: every utterance a bar around the middle line, taller the further
-                // it was above the speaker's typical voice. Nothing where nobody spoke.
-                ForEach(voice) { point in
-                    let share = min(max((measure.value(point) ?? 0) / reference, 0), 1)
-                    let reach = 0.12 + Self.bandReach * share
-                    RectangleMark(
-                        xStart: .value("開始", point.start),
-                        xEnd: .value("終了", max(point.end, point.start + minimumWidth)),
-                        yStart: .value("下", -reach),
-                        yEnd: .value("上", reach)
+                // The voice as one smooth wave around the middle line, wider where voices were
+                // further above the speaker's typical voice. Flat where nobody spoke.
+                ForEach(wave(reference: reference)) { step in
+                    AreaMark(
+                        x: .value("時間", step.time),
+                        yStart: .value("下", -step.reach),
+                        yEnd: .value("上", step.reach)
                     )
-                    .foregroundStyle(Color.white.opacity(point.level >= 2 ? 0.22 : 0.10))
-                    .cornerRadius(2)
+                    .interpolationMethod(.catmullRom)
+                    .foregroundStyle(
+                        LinearGradient(colors: [Color.white.opacity(0.07), Color.white.opacity(0.22), Color.white.opacity(0.07)],
+                                       startPoint: .top, endPoint: .bottom)
+                    )
                 }
 
                 RuleMark(y: .value("中央", 0.0))
@@ -203,11 +235,6 @@ struct SpotTimelineChart<Balloon: View>: View {
                         .foregroundStyle((event.height > 0 ? Color.accentTeal : Color.accentCoral).opacity(0.7))
                         .lineStyle(StrokeStyle(lineWidth: 3, lineCap: .round))
                     }
-
-                    PointMark(x: .value("時間", event.start), y: .value("位置", heights[event.id] ?? event.height))
-                        .symbol {
-                            stamp(event, isSelected: event.id == selectedId)
-                        }
                 }
             }
             .chartXScale(domain: xDomain)
@@ -227,13 +254,31 @@ struct SpotTimelineChart<Balloon: View>: View {
             }
             .chartOverlay { proxy in
                 GeometryReader { geometry in
-                    Rectangle()
-                        .fill(Color.clear)
-                        .contentShape(Rectangle())
-                        .onTapGesture { location in
-                            guard let anchor = proxy.plotFrame else { return }
-                            select(at: location, plot: geometry[anchor], proxy: proxy)
+                    ZStack(alignment: .topLeading) {
+                        Rectangle()
+                            .fill(Color.clear)
+                            .contentShape(Rectangle())
+                            .onTapGesture { location in
+                                guard let anchor = proxy.plotFrame else { return }
+                                select(at: location, plot: geometry[anchor], proxy: proxy)
+                            }
+
+                        // The stamps are drawn over the chart, not as chart symbols: a symbol
+                        // is cut to its small frame, which showed half of each emoji on a phone.
+                        // In time order, so a later event lies on top of an earlier one.
+                        if let anchor = proxy.plotFrame {
+                            let plot = geometry[anchor]
+                            ForEach(events.sorted { $0.start < $1.start }) { event in
+                                if let x = proxy.position(forX: event.start),
+                                   let y = proxy.position(forY: heights[event.id] ?? event.height) {
+                                    stamp(event, isSelected: event.id == selectedId)
+                                        .fixedSize()
+                                        .position(x: plot.minX + x, y: plot.minY + y)
+                                        .allowsHitTesting(false)
+                                }
+                            }
                         }
+                    }
                 }
             }
             .frame(height: 250)
