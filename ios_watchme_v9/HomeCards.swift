@@ -305,6 +305,7 @@ struct HomeEventRankingCard: View {
 
     @State private var entries: [Entry] = []
     @State private var recordings = 0
+    @State private var showsAll = false
 
     private static let shown = 5
 
@@ -324,8 +325,20 @@ struct HomeEventRankingCard: View {
                     }
 
                     let top = entries.first?.count ?? 1
-                    ForEach(Array(entries.prefix(Self.shown).enumerated()), id: \.element.id) { index, entry in
+                    ForEach(Array(entries.prefix(showsAll ? entries.count : Self.shown).enumerated()), id: \.element.id) { index, entry in
                         row(rank: index + 1, entry: entry, top: top)
+                    }
+                    // The rest of what was counted, on demand
+                    if entries.count > Self.shown {
+                        Button(action: { showsAll.toggle() }) {
+                            HStack(spacing: 4) {
+                                Text(showsAll ? "上位だけにする" : "すべて見る（\(entries.count)種類）")
+                                Image(systemName: showsAll ? "chevron.up" : "chevron.down")
+                            }
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundColor(.accentTeal)
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
                 .detailCard()

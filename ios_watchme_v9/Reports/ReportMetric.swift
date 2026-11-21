@@ -62,6 +62,13 @@ enum ReportEvents {
     /// Body sounds are counted from this extractor version on; earlier versions never looked for them.
     static let bodyTypesSince = "events-v3"
 
+    /// A length of audio in words: 42分, 1時間5分, 30秒.
+    static func durationText(_ seconds: Double) -> String {
+        let minutes = Int((seconds / 60).rounded())
+        if minutes >= 60 { return "\(minutes / 60)時間\(minutes % 60)分" }
+        return minutes > 0 ? "\(minutes)分" : "\(Int(seconds))秒"
+    }
+
     /// The runs added up per local date. A recording analysed by more than one extractor
     /// version counts once, by its newest version (as the detail screens do).
     static func days(from runs: [ReportEventRun]) -> [String: ReportDayCounts] {

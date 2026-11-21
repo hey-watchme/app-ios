@@ -102,7 +102,6 @@ struct SimpleDashboardView: View {
     @State private var lastHandledPushTimestamp: Date?
 
     // モーダル表示管理
-    @State private var showVibeSheet = false
     @State private var showBehaviorSheet = false
     @State private var showEmotionSheet = false
     @State private var selectedSpotForDetail: DashboardTimeBlock?
@@ -127,36 +126,9 @@ struct SimpleDashboardView: View {
         switch banner {
         case .analysing(let id, _, _), .recordingDone(let id, _):
             selectedSpotForDetail = (timeBlocks + otherDayBlocks).first { $0.id == id }
-        case .dayUpdated:
-            showVibeSheet = true
-        case .sending:
+        case .dayUpdated, .sending:
+            // The day's analysis is this screen
             break
-        }
-    }
-
-    /// Changes when a recording of the day finishes its events, so the ranking is read again.
-    private var rankingRefreshKey: String {
-        let done = timeBlocks.filter { $0.stages.contains { $0.stage == "events" && $0.status == "completed" } }.count
-        return "\(timeBlocks.count)-\(done)"
-    }
-
-    @ViewBuilder
-    private var recordingsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if timeBlocks.isEmpty {
-                Text("この日の録音はまだありません。下の録音ボタンから録ると、ここに録音の流れが出ます")
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(white: 0.5))
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .detailCard()
-            } else {
-                ForEach(timeBlocks.reversed()) { block in
-                    HomeRecordingCard(block: block) {
-                        selectedSpotForDetail = block
-                    }
-                }
-            }
         }
     }
 
@@ -196,31 +168,15 @@ struct SimpleDashboardView: View {
                                 .transition(.opacity)
                             }
 
-                            // 2. The day's score and summary
-                            ModernHeroGaugeView(dashboardSummary: dashboardSummary)
-                                .padding(.horizontal, 20)
-                                .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                                .onTapGesture {
-                                    showVibeSheet = true
-                                }
-
-                            // Questions the analysis could not settle (hidden when none are open)
-                            QuestionsEntry(deviceId: deviceManager.selectedDeviceID, place: .dashboard)
-                                .padding(.horizontal, 20)
-
-                            // 3. The day's recordings, newest first, each with its picture
-                            recordingsSection
-                                .padding(.horizontal, 20)
-
-                            // 4. A few moments of the day, with the words as said
-                            HomeDigestCard(blocks: timeBlocks)
-                                .padding(.horizontal, 20)
-
-                            // 5. What happened most across the day's recordings
-                            if let deviceId = deviceManager.selectedDeviceID {
-                                HomeEventRankingCard(deviceId: deviceId, localDate: localDate, refreshKey: rankingRefreshKey)
-                                    .padding(.horizontal, 20)
+                            // 2. The day itself: the same content the report opens (DayContentView)
+                            DayContentView(deviceId: deviceManager.selectedDeviceID, localDate: localDate,
+                                           summary: dashboardSummary, blocks: timeBlocks,
+                                           onOpenSpot: { selectedSpotForDetail = $0 }) {
+                                // Questions the analysis could not settle (hidden when none are open)
+                                QuestionsEntry(deviceId: deviceManager.selectedDeviceID, place: .dashboard)
                             }
+                            .padding(.horizontal, 20)
+                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
 
                             Spacer(minLength: 100)
                         }
@@ -440,27 +396,6 @@ struct SimpleDashboardView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             refreshCurrentDayIfNeeded(reason: "significantTimeChange")
-        }
-        .sheet(isPresented: $showVibeSheet) {
-            NavigationView {
-                AnalysisListView(timeBlocks: timeBlocks, selectedDate: displayDate)
-                    .environmentObject(deviceManager)
-                    .environmentObject(dataManager)
-                    .environmentObject(userAccountManager)
-                    .navigationBarTitleDisplayMode(.inline)
-                    .navigationTitle("分析結果の一覧")
-                    .toolbarBackground(Color.darkBase, for: .navigationBar)
-                    .toolbarBackground(.visible, for: .navigationBar)
-                    .toolbarColorScheme(.dark, for: .navigationBar)
-                    .tint(.white)
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            CloseButton {
-                                showVibeSheet = false
-                            }
-                        }
-                    }
-            }
         }
         .sheet(isPresented: $showActivityLog) {
             NavigationView {
@@ -690,21 +625,6 @@ struct SimpleDashboardView: View {
     }
 
     // Highlight section (conversation-focused, no fallback)
-    private var highlightSection: some View {
-        // Use @State variable (already filtered and sorted)
-        SpotAnalysisListSection(
-            title: "ハイライト",
-            spotResults: highlightBlocks,
-            showMoreButton: true,
-            onTapSpot: { block in
-                selectedSpotForDetail = block
-            },
-            onTapShowMore: {
-                showVibeSheet = true
-            }
-        )
-    }
-    
     private var behaviorGraphCard: some View {
         UnifiedCard(
             title: "行動",
@@ -1168,203 +1088,6 @@ struct SpotAnalysisCard: View {
         if n.contains("anger") || n.contains("sad") || n.contains("怒り") || n.contains("悲しみ") || n.contains("ネガティブ") { return Color.safeColor("ErrorColor") }
         if n.contains("stress") || n.contains("fear") { return Color.safeColor("WarningColor") }
         return Color.accentTeal
-    }
-}
-
-// MARK: - Analysis List View
-
-struct AnalysisListView: View {
-    let timeBlocks: [DashboardTimeBlock]
-    let selectedDate: Date
-    @EnvironmentObject var deviceManager: DeviceManager
-    @EnvironmentObject var dataManager: SupabaseDataManager
-
-    @State private var selectedSpotForDetail: DashboardTimeBlock?
-    @State private var filterType: AnalysisFilterType = .all
-    @State private var sortOrder: AnalysisSortOrder = .newest
-
-    // Phase 2: フィルタ・ソート結果を@State変数で明示的に管理
-    @State private var filteredAndSortedBlocks: [DashboardTimeBlock] = []
-
-    // Filter types
-    enum AnalysisFilterType: String, CaseIterable {
-        case all = "すべての分析"
-        case withConversation = "会話あり"
-    }
-
-    // Sort order
-    enum AnalysisSortOrder: String, CaseIterable {
-        case newest = "最新の分析"
-        case oldest = "最も古い分析"
-    }
-
-    // Phase 2: フィルタリングとソートロジック（明示的な更新）
-    private func updateFilteredAndSortedData() {
-        var blocks = timeBlocks
-
-        // Apply filter
-        if filterType == .withConversation {
-            blocks = blocks.filter { block in
-                guard let rating = block.rating else {
-                    // rating が nil の場合は除外（古いデータ）
-                    return false
-                }
-                return rating > 0
-            }
-        }
-
-        // Apply sort
-        if sortOrder == .newest {
-            blocks = blocks.reversed() // newest first
-        }
-        // For .oldest, keep original order (oldest first)
-
-        filteredAndSortedBlocks = blocks
-    }
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                filterControls
-                listContent
-                Spacer(minLength: 50)
-            }
-        }
-        .background(Color.darkBase)
-        .sheet(item: $selectedSpotForDetail) { spot in
-            if let deviceId = deviceManager.selectedDeviceID {
-                SpotDetailView(deviceId: deviceId, spotData: spot)
-                    .environmentObject(dataManager)
-            }
-        }
-        .onAppear {
-            updateFilteredAndSortedData()
-        }
-        .onChange(of: timeBlocks) { oldValue, newValue in
-            updateFilteredAndSortedData()
-        }
-        .onChange(of: filterType) { oldValue, newValue in
-            updateFilteredAndSortedData()
-        }
-        .onChange(of: sortOrder) { oldValue, newValue in
-            updateFilteredAndSortedData()
-        }
-    }
-
-    @ViewBuilder
-    private var filterControls: some View {
-        if !timeBlocks.isEmpty {
-            VStack(spacing: 12) {
-                HStack(spacing: 16) {
-                    Menu {
-                        ForEach(AnalysisFilterType.allCases, id: \.self) { type in
-                            Button(action: {
-                                filterType = type
-                            }) {
-                                HStack {
-                                    Text(type.rawValue)
-                                    if filterType == type {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "line.3.horizontal.decrease.circle")
-                                .font(.system(size: 13))
-                            Text(filterType.rawValue)
-                                .font(.system(size: 13))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.darkCard)
-                        .cornerRadius(10)
-                    }
-
-                    Menu {
-                        ForEach(AnalysisSortOrder.allCases, id: \.self) { order in
-                            Button(action: {
-                                sortOrder = order
-                            }) {
-                                HStack {
-                                    Text(order.rawValue)
-                                    if sortOrder == order {
-                                        Image(systemName: "checkmark")
-                                    }
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: "arrow.up.arrow.down.circle")
-                                .font(.system(size: 13))
-                            Text(sortOrder.rawValue)
-                                .font(.system(size: 13))
-                            Image(systemName: "chevron.down")
-                                .font(.system(size: 10))
-                        }
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color.darkCard)
-                        .cornerRadius(10)
-                    }
-
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-
-                HStack {
-                    Text("\(filteredAndSortedBlocks.count) results")
-                        .font(.system(size: 13))
-                        .foregroundStyle(Color(white: 0.45))
-                    Spacer()
-                }
-                .padding(.horizontal, 20)
-            }
-            .padding(.top, 20)
-        }
-    }
-
-    @ViewBuilder
-    private var listContent: some View {
-        if timeBlocks.isEmpty {
-            Group {
-                if deviceManager.selectedDeviceID == nil {
-                    DeviceNotSelectedView(graphType: .vibe)
-                } else {
-                    GraphEmptyStateView(graphType: .vibe)
-                }
-            }
-            .padding(.horizontal)
-        } else if filteredAndSortedBlocks.isEmpty {
-            VStack(spacing: 12) {
-                Image(systemName: "tray")
-                    .font(.system(size: 40))
-                    .foregroundStyle(Color(white: 0.25))
-                Text("No matching results")
-                    .font(.system(size: 13))
-                    .foregroundStyle(Color(white: 0.36))
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 60)
-        } else {
-            VStack(spacing: 20) {
-                ForEach(filteredAndSortedBlocks, id: \.localTime) { block in
-                    SpotAnalysisCard(
-                        timeBlock: block,
-                        onTapDetail: {
-                            selectedSpotForDetail = block
-                        }
-                    )
-                }
-            }
-            .padding(.horizontal, 20)
-        }
     }
 }
 

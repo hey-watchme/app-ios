@@ -54,9 +54,8 @@ struct DailyReportView: View {
     }
     @State private var isLoading = false
 
-    /// The day whose detail sheet is open. The sheet takes the date from here, so it never
-    /// opens with a stale one (sheet(isPresented:) could, on the first open).
-    private struct OpenDay: Identifiable {
+    /// The day pushed onto the app's navigation stack (ios_watchme_v9App mainTabView).
+    private struct OpenDay: Identifiable, Hashable {
         let localDate: String
         var id: String { localDate }
     }
@@ -123,9 +122,9 @@ struct DailyReportView: View {
             }
         }
         .background(Color.darkBase)
-        .sheet(item: $openDay) { day in
+        .navigationDestination(item: $openDay) { day in
             if let deviceId = deviceManager.selectedDeviceID {
-                DailyDetailView(deviceId: deviceId, localDate: day.localDate)
+                DayScreen(deviceId: deviceId, localDate: day.localDate)
                     .environmentObject(deviceManager)
                     .environmentObject(dataManager)
             }
@@ -742,7 +741,7 @@ struct DailyReportView: View {
 
                 // A count only means something next to how much was recorded that day
                 if !selectedMetric.isVibe, let day = eventDays[point.id] {
-                    Text("録音 \(day.recordings)回・合計 \(DailyDetailView.durationText(day.audioSeconds))")
+                    Text("録音 \(day.recordings)回・合計 \(ReportEvents.durationText(day.audioSeconds))")
                         .font(.caption2)
                         .foregroundColor(Color(white: 0.56))
                 }
