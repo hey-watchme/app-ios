@@ -93,15 +93,11 @@ private func seconds(_ value: Any?) -> String? {
 
 // MARK: - Events (叱責・褒める・笑い …)
 
-/// Countable events of one recording (spot_event_runs / spot_events, platform docs/events.md).
-struct SpotEventsCard: View {
-    let deviceId: String
-    let recordedAt: String
-    let localTime: String?
-    /// profile_result.metrics as JSON; the voice chart reads its per-utterance measurements.
-    var metricsRaw: String? = nil
-
-    private struct Run: Decodable {
+/// The counted events of one recording, read once and shown in two places of the detail
+/// screen: the picture at the top and the list under 詳しく (platform docs/product/screens.md).
+@MainActor
+final class SpotEventsStore: ObservableObject {
+    struct Run: Decodable {
         let activity: String?
         let audio_seconds: Double?
         let counts: [String: Int]?
@@ -109,7 +105,7 @@ struct SpotEventsCard: View {
         let llm_model: String?
     }
 
-    private struct Event: Decodable, Identifiable {
+    struct Event: Decodable, Identifiable {
         let seq: Int
         let event_type: String
         let start_sec: Double
@@ -122,10 +118,75 @@ struct SpotEventsCard: View {
         var id: Int { seq }
     }
 
-    @State private var run: Run?
-    @State private var events: [Event] = []
+    @Published private(set) var run: Run?
+    @Published private(set) var events: [Event] = []
     /// Why the events could not be read; shown with a retry instead of hiding the card.
-    @State private var loadError: String?
+    @Published private(set) var loadError: String?
+    private var loading = false
+
+    func load(deviceId: String, recordedAt: String) async {
+        guard run == nil, !loading else { return }
+        loading = true
+        defer { loading = false }
+        let client = SupabaseClientManager.shared.client
+        do {
+            let runs: [Run] = try await client
+                .from("spot_event_runs")
+                .select("activity, audio_seconds, counts, extractor_version, llm_model")
+                .eq("device_id", value: deviceId)
+                .eq("recorded_at", value: recordedAt)
+                .order("extractor_version", ascending: false)
+                .limit(1)
+                .execute()
+                .value
+            guard let latest = runs.first else {
+                print("ℹ️ [Events] no events run for \(recordedAt)")
+                return
+            }
+            let rows: [Event] = try await client
+                .from("spot_events")
+                .select("seq, event_type, start_sec, end_sec, actor, target, intensity, evidence, confidence")
+                .eq("device_id", value: deviceId)
+                .eq("recorded_at", value: recordedAt)
+                .eq("extractor_version", value: latest.extractor_version)
+                .order("seq", ascending: true)
+                .execute()
+                .value
+            run = latest
+            events = rows
+            loadError = nil
+            print("✅ [Events] \(recordedAt): \(rows.count) events")
+        } catch {
+            // Leaving the screen cancels the request: not an error, it loads again next time
+            guard !Task.isCancelled else { return }
+            print("❌ [Events] could not load \(recordedAt): \(error)")
+            loadError = error.localizedDescription
+        }
+    }
+}
+
+/// One part of the events of a recording: the picture (emoji along the time, over the voice)
+/// or the list (counts and every event with its play button).
+struct SpotEventsCard: View {
+    enum Part {
+        case picture
+        case list
+    }
+
+    let deviceId: String
+    let recordedAt: String
+    let localTime: String?
+    /// profile_result.metrics as JSON; the voice chart reads its per-utterance measurements.
+    var metricsRaw: String? = nil
+    @ObservedObject var store: SpotEventsStore
+    let part: Part
+
+    private typealias Run = SpotEventsStore.Run
+    private typealias Event = SpotEventsStore.Event
+
+    private var run: Run? { store.run }
+    private var events: [Event] { store.events }
+
     @State private var voiceMeasure = VoiceMeasure.strain
     /// The event picked on the timeline (its seq); the balloon under the picture shows it.
     @State private var selectedSeq: Int?
@@ -151,48 +212,13 @@ struct SpotEventsCard: View {
         // ran and the card stayed empty for good (found 2026-11-21).
         VStack(spacing: 0) {
             if let run {
-                VStack(alignment: .leading, spacing: 12) {
-                    DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事")
-
-                    timeline(run)
-
-                    // Counts (low-confidence events are not counted)
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 8) {
-                        ForEach(Self.typeOrder, id: \.self) { type in
-                            HStack(spacing: 6) {
-                                Text(Self.typeNames[type] ?? type)
-                                    .font(.system(size: 12))
-                                    .foregroundColor(Color(white: 0.6))
-                                Text("\(run.counts?[type] ?? 0)")
-                                    .font(.system(size: 15, weight: .bold, design: .rounded))
-                                    .foregroundColor((run.counts?[type] ?? 0) > 0 ? .white : Color(white: 0.35))
-                            }
-                        }
-                    }
-
-                    if let activity = run.activity {
-                        detailRow("推定した活動", Self.activityNames[activity] ?? activity)
-                    }
-
-                    if events.isEmpty {
-                        Text("この録音では、数える対象の出来事はありませんでした")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.5))
-                    } else {
-                        VStack(alignment: .leading, spacing: 10) {
-                            ForEach(events) { event in
-                                eventRow(event)
-                            }
-                        }
-                    }
-
-                    Text("決まった種類だけを数えています。30秒以内に続いた同じ種類は1回。根拠の弱いもの（薄い表示）は回数に入れていません。")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(white: 0.4))
-                        .fixedSize(horizontal: false, vertical: true)
+                switch part {
+                case .picture:
+                    pictureCard(run)
+                case .list:
+                    listCard(run)
                 }
-                .detailCard()
-            } else if let loadError {
+            } else if let loadError = store.loadError, part == .picture {
                 VStack(alignment: .leading, spacing: 10) {
                     DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事")
                     Text("出来事を読み込めませんでした（\(loadError)）")
@@ -200,7 +226,7 @@ struct SpotEventsCard: View {
                         .foregroundColor(Color(white: 0.6))
                         .fixedSize(horizontal: false, vertical: true)
                     Button("もう一度読み込む") {
-                        Task { await load() }
+                        Task { await store.load(deviceId: deviceId, recordedAt: recordedAt) }
                     }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.accentTeal)
@@ -208,7 +234,58 @@ struct SpotEventsCard: View {
                 .detailCard()
             }
         }
-        .task(id: recordedAt) { await load() }
+        .task(id: recordedAt) { await store.load(deviceId: deviceId, recordedAt: recordedAt) }
+    }
+
+    @ViewBuilder
+    private func pictureCard(_ run: Run) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DetailCardHeader(icon: "waveform.path.ecg", title: "TIMELINE", badge: "録音の流れ")
+            timeline(run)
+        }
+        .detailCard()
+    }
+
+    private func listCard(_ run: Run) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事")
+
+            // Counts (low-confidence events are not counted)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), alignment: .leading), count: 3), spacing: 8) {
+                ForEach(Self.typeOrder, id: \.self) { type in
+                    HStack(spacing: 6) {
+                        Text(Self.typeNames[type] ?? type)
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(white: 0.6))
+                        Text("\(run.counts?[type] ?? 0)")
+                            .font(.system(size: 15, weight: .bold, design: .rounded))
+                            .foregroundColor((run.counts?[type] ?? 0) > 0 ? .white : Color(white: 0.35))
+                    }
+                }
+            }
+
+            if let activity = run.activity {
+                detailRow("推定した活動", Self.activityNames[activity] ?? activity)
+            }
+
+            if events.isEmpty {
+                Text("この録音では、数える対象の出来事はありませんでした")
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.5))
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    ForEach(events) { event in
+                        eventRow(event)
+                    }
+                }
+            }
+
+            Text("決まった種類だけを数えています。30秒以内に続いた同じ種類は1回。根拠の弱いもの（薄い表示）は回数に入れていません。")
+                .font(.system(size: 11))
+                .foregroundColor(Color(white: 0.4))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .detailCard()
     }
 
     // MARK: Timeline (trial, 2026-11-20)
@@ -305,44 +382,6 @@ struct SpotEventsCard: View {
             }
         }
         return String(format: "%.0f秒", offset)
-    }
-
-    private func load() async {
-        guard run == nil else { return }
-        let client = SupabaseClientManager.shared.client
-        do {
-            let runs: [Run] = try await client
-                .from("spot_event_runs")
-                .select("activity, audio_seconds, counts, extractor_version, llm_model")
-                .eq("device_id", value: deviceId)
-                .eq("recorded_at", value: recordedAt)
-                .order("extractor_version", ascending: false)
-                .limit(1)
-                .execute()
-                .value
-            guard let latest = runs.first else {
-                print("ℹ️ [Events] no events run for \(recordedAt)")
-                return
-            }
-            let rows: [Event] = try await client
-                .from("spot_events")
-                .select("seq, event_type, start_sec, end_sec, actor, target, intensity, evidence, confidence")
-                .eq("device_id", value: deviceId)
-                .eq("recorded_at", value: recordedAt)
-                .eq("extractor_version", value: latest.extractor_version)
-                .order("seq", ascending: true)
-                .execute()
-                .value
-            run = latest
-            events = rows
-            loadError = nil
-            print("✅ [Events] \(recordedAt): \(rows.count) events")
-        } catch {
-            // Leaving the screen cancels the request: not an error, it loads again next time
-            guard !Task.isCancelled else { return }
-            print("❌ [Events] could not load \(recordedAt): \(error)")
-            loadError = error.localizedDescription
-        }
     }
 }
 

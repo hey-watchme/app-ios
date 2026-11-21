@@ -17,6 +17,9 @@ struct SpotDetailView: View {
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var rawSectionsLoadedFull: Set<String> = []
+    @StateObject private var eventsStore = SpotEventsStore()
+    /// The data section is folded until asked for.
+    @State private var showsData = false
     /// Whether the user saved this recording (spot_bookmarks); nil until known or when it cannot be saved.
     @State private var isSaved: Bool?
     @State private var isSaving = false
@@ -36,86 +39,51 @@ struct SpotDetailView: View {
                         QuestionsEntry(deviceId: spotData.deviceId, recordedAt: recordedAt, place: .recording)
                     }
 
-                    // How far the analysis has got (hidden for old recordings without stage rows)
-                    if !spotData.stages.isEmpty {
-                        StageProgressRow(stages: spotData.stages)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                            .padding(14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color.darkCard)
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
-                            )
+                    // While the analysis is still running, how far it has got
+                    if spotData.stages.isInProgress {
+                        stageProgressCard
                     }
 
-                    // Vibe Score
+                    // 1. At a glance: the score and the summary
                     if let vibeScore = spotData.vibeScore {
                         vibeScoreCard(vibeScore)
                     }
-
-                    // Scene Mapping
-                    if let sm = spotData.sceneMapping {
-                        sceneMappingCard(sm)
-                    }
-
-                    // Summary
                     if let summary = spotData.summary {
                         contentCard(title: "Summary", content: summary, icon: "text.alignleft")
                     }
 
-                    // Analysis
+                    // 2. The picture: the events along the recording, over the voice
+                    if let recordedAt = spotData.recordedAt {
+                        SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime,
+                                       metricsRaw: spotData.metricsRaw, store: eventsStore, part: .picture)
+                    }
+
+                    // 3. In detail: every event with its play button, then the written analysis
+                    sectionHeader("詳しく")
+
+                    if let recordedAt = spotData.recordedAt {
+                        SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime,
+                                       metricsRaw: spotData.metricsRaw, store: eventsStore, part: .list)
+                    }
+
+                    if let sm = spotData.sceneMapping {
+                        sceneMappingCard(sm)
+                    }
+
                     if let analysis = spotData.analysis, !analysis.isEmpty {
                         contentCard(title: "Analysis", content: analysis, icon: "brain.head.profile")
                     }
 
-                    // Countable events (reprimand, praise, ...)
-                    if let recordedAt = spotData.recordedAt {
-                        SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime,
-                                       metricsRaw: spotData.metricsRaw)
-                    }
-
-                    // Behavior
                     if let behavior = spotData.behavior {
                         contentCard(title: "Behavior", content: behavior, icon: "figure.walk")
                     }
 
-                    // Emotion
                     if let emotion = spotData.emotion, !emotion.isEmpty {
                         contentCard(title: "Emotion", content: emotion, icon: "face.smiling")
                     }
 
-                    // Fixed conversation measurements
-                    if !speakerMetrics.isEmpty {
-                        metricsCard
-                    }
-
-                    // The rest of the measurements
-                    SpotMeasurementDetailsCard(metricsRaw: spotData.metricsRaw, speakerRoles: speakerRoles)
-
-                    // What the multimodal model heard
-                    SpotListenerCard(sceneRaw: spotData.sceneDescriptionRaw)
-
-                    // Vocal emotion labels (emotion2vec, experimental)
-                    if !vocalEmotionSpeakers.isEmpty {
-                        vocalEmotionCard
-                    }
-
-                    // Sounds detected by the fixed classifier
-                    if !soundSummaries.isEmpty {
-                        soundsCard
-                    }
-
-                    // Length, chunk, models used
-                    SpotRecordingInfoCard(
-                        recordingRaw: spotData.recordingRaw,
-                        transcript: transcriptObject,
-                        sceneRaw: spotData.sceneDescriptionRaw,
-                        llmModel: spotData.llmModel,
-                        recordedAt: spotData.recordedAt
-                    )
-
-                    // Raw data
-                    rawAnalysisSection
+                    // 4. The data: measurements and raw results, folded away at the bottom
+                    dataSection
 
                     Spacer()
                         .frame(height: 40)
@@ -174,6 +142,86 @@ struct SpotDetailView: View {
         } catch {
             print("❌ [SpotDetail] Saving failed: \(error)")
             ToastManager.shared.showError(title: "保存できませんでした", subtitle: error.localizedDescription)
+        }
+    }
+
+    // MARK: - Sections
+
+    private func sectionHeader(_ title: String) -> some View {
+        Text(title)
+            .font(.system(size: 13, weight: .bold))
+            .foregroundColor(Color(white: 0.5))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 12)
+    }
+
+    private var stageProgressCard: some View {
+        StageProgressRow(stages: spotData.stages)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.darkCard)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.1), lineWidth: 1))
+            )
+    }
+
+    /// Measurements, the listener's notes, recording information and the raw results.
+    /// Folded: they are there for whoever wants to check, not for reading every time.
+    private var dataSection: some View {
+        VStack(spacing: 16) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showsData.toggle() }
+            } label: {
+                HStack {
+                    Text("データ")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(Color(white: 0.5))
+                    Text("測定値・文字起こし・生データ")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(white: 0.4))
+                    Spacer()
+                    Image(systemName: showsData ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(Color(white: 0.5))
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 12)
+
+            if showsData {
+                // How the analysis went, once it is finished
+                if !spotData.stages.isEmpty && !spotData.stages.isInProgress {
+                    stageProgressCard
+                }
+
+                if !speakerMetrics.isEmpty {
+                    metricsCard
+                }
+
+                SpotMeasurementDetailsCard(metricsRaw: spotData.metricsRaw, speakerRoles: speakerRoles)
+
+                SpotListenerCard(sceneRaw: spotData.sceneDescriptionRaw)
+
+                if !vocalEmotionSpeakers.isEmpty {
+                    vocalEmotionCard
+                }
+
+                if !soundSummaries.isEmpty {
+                    soundsCard
+                }
+
+                SpotRecordingInfoCard(
+                    recordingRaw: spotData.recordingRaw,
+                    transcript: transcriptObject,
+                    sceneRaw: spotData.sceneDescriptionRaw,
+                    llmModel: spotData.llmModel,
+                    recordedAt: spotData.recordedAt
+                )
+
+                rawAnalysisSection
+            }
         }
     }
 
