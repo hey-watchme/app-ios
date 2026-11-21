@@ -37,6 +37,7 @@ struct DailyReportView: View {
     @State private var dailySummaries: [DashboardSummary] = []      // the selected period
     @State private var previousSummaries: [DashboardSummary] = []   // the period before it
     @State private var eventDays: [String: ReportDayCounts] = [:]   // local_date -> counted events, both periods
+    @State private var stripDays: [String: DayStripData] = [:]      // local_date -> the day's picture, selected period
     /// The counted events behind the balloon's number: the selected day and metric, in time order.
     @State private var balloonEvents: [BalloonEvent] = []
     @State private var balloonEventsKey = ""
@@ -102,7 +103,7 @@ struct DailyReportView: View {
                     ProgressView()
                         .tint(Color.accentTeal)
                         .padding()
-                } else if dailySummaries.isEmpty {
+                } else if dailySummaries.isEmpty && stripDays.isEmpty {
                     Text("この期間のデータがありません")
                         .font(.subheadline)
                         .foregroundColor(Color(white: 0.56))
@@ -112,8 +113,8 @@ struct DailyReportView: View {
                     graphSection
                         .padding(.horizontal, 20)
 
-                    // Daily summary list
-                    dailySummaryList
+                    // One panel per day
+                    dayPanels
                         .padding(.horizontal, 20)
                 }
 
@@ -190,8 +191,10 @@ struct DailyReportView: View {
             endDate: today
         )
         async let runsTask = fetchEventRuns(deviceId: deviceId, from: starts.previous, to: today)
+        async let stripsTask = fetchStrips(deviceId: deviceId, from: starts.current, to: today)
         let fetched = await summariesTask
         let runs = await runsTask
+        let strips = await stripsTask
         let results = fetched.filter { $0.date >= startString }
 
         #if DEBUG
@@ -216,6 +219,7 @@ struct DailyReportView: View {
         dailySummaries = results
         previousSummaries = fetched.filter { $0.date < startString }
         eventDays = ReportEvents.days(from: runs)
+        stripDays = strips
         selectedChartDate = nil
         isLoading = false
     }
@@ -249,6 +253,81 @@ struct DailyReportView: View {
             return []
         }
         return rows
+    }
+
+    /// Each day's picture for the panels: the recordings whose events were looked for (newest
+    /// extractor version of each), and their warm and hard events, low-confidence ones left out.
+    /// Read in pages, like the runs, so a long period is not cut short.
+    private func fetchStrips(deviceId: String, from: Date, to: Date) async -> [String: DayStripData] {
+        struct Run: Decodable { let local_date: String; let recorded_at: String; let extractor_version: String; let audio_seconds: Double? }
+        struct Spot: Decodable { let recorded_at: String; let local_time: String? }
+        struct Row: Decodable {
+            let recorded_at: String
+            let extractor_version: String
+            let seq: Int
+            let event_type: String
+            let start_sec: Double
+            let intensity: String?
+        }
+        let client = SupabaseClientManager.shared.client
+        let fromDate = Self.dayFormatter.string(from: from)
+        let toDate = Self.dayFormatter.string(from: to)
+        let pageSize = 1000
+
+        func pages<T: Decodable>(_ table: String, _ columns: String, filter: (PostgrestFilterBuilder) -> PostgrestFilterBuilder) async throws -> [T] {
+            var rows: [T] = []
+            while true {
+                let response: PostgrestResponse<[T]> = try await filter(client.from(table)
+                    .select(columns, count: .exact)
+                    .eq("device_id", value: deviceId)
+                    .gte("local_date", value: fromDate)
+                    .lte("local_date", value: toDate))
+                    .order("recorded_at", ascending: true)
+                    .range(from: rows.count, to: rows.count + pageSize - 1)
+                    .execute()
+                rows += response.value
+                if response.value.isEmpty { break }
+                if let total = response.count, rows.count >= total { break }
+            }
+            return rows
+        }
+
+        do {
+            async let runsTask: [Run] = pages("spot_event_runs", "local_date, recorded_at, extractor_version, audio_seconds") { $0 }
+            async let spotsTask: [Spot] = pages("spot_results", "recorded_at, local_time") { $0 }
+            async let rowsTask: [Row] = pages("spot_events", "recorded_at, extractor_version, seq, event_type, start_sec, intensity") {
+                $0.in("event_type", values: Array(DayStrip.emoji.keys)).neq("confidence", value: "low")
+            }
+            let (runs, spots, rows) = try await (runsTask, spotsTask, rowsTask)
+
+            var newest: [String: Run] = [:]
+            for run in runs where (newest[run.recorded_at]?.extractor_version ?? "") < run.extractor_version {
+                newest[run.recorded_at] = run
+            }
+            let clocks = Dictionary(spots.compactMap { spot in
+                spot.local_time.flatMap(Self.localStart).map { (spot.recorded_at, Self.clockFormatter.string(from: $0)) }
+            }, uniquingKeysWith: { first, _ in first })
+
+            var days: [String: DayStripData] = [:]
+            for run in newest.values.sorted(by: { $0.recorded_at < $1.recorded_at }) {
+                days[run.local_date, default: DayStripData()].recordings.append(
+                    .init(recordedAt: run.recorded_at, clock: clocks[run.recorded_at], seconds: run.audio_seconds ?? 0))
+            }
+            for row in rows where newest[row.recorded_at]?.extractor_version == row.extractor_version {
+                guard let date = newest[row.recorded_at]?.local_date else { continue }
+                days[date]?.events.append(.init(id: "\(row.recorded_at)-\(row.seq)", recordedAt: row.recorded_at,
+                                                start: row.start_sec, type: row.event_type, intensity: row.intensity))
+            }
+            // In time order, so a later event is drawn over an earlier one
+            return days.mapValues { day in
+                var day = day
+                day.events.sort { ($0.recordedAt, $0.start) < ($1.recordedAt, $1.start) }
+                return day
+            }
+        } catch {
+            print("❌ [DailyReport] Failed to fetch the days' pictures: \(error)")
+            return [:]
+        }
     }
 
     // MARK: - Period Selector (Dropdown Menu Style)
@@ -837,12 +916,20 @@ struct DailyReportView: View {
         openDay = OpenDay(localDate: localDate)
     }
 
-    // MARK: - Daily Summary List
+    // MARK: - Day Panels
 
-    private var dailySummaryList: some View {
-        VStack(alignment: .leading, spacing: 16) {
+    /// Days of the selected period that have a summary or a picture, oldest first.
+    private var panelDates: [String] {
+        let start = Self.dayFormatter.string(from: periodStarts.current)
+        return Set(dailySummaries.map(\.date) + stripDays.keys.filter { $0 >= start }).sorted()
+    }
+
+    /// One panel per day: the date and Vibe, and the day's picture as a thin strip.
+    /// Pressing a panel opens the day, and from there its recordings.
+    private var dayPanels: some View {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("日次サマリー")
+                Text("日ごと")
                     .font(.title3)
                     .fontWeight(.semibold)
                     .foregroundColor(.white)
@@ -861,60 +948,61 @@ struct DailyReportView: View {
                     .foregroundColor(.accentTeal)
                 }
             }
+            .padding(.bottom, 6)
 
-            // dailySummaries is ascending by date (as fetched)
-            ForEach(sortNewestFirst ? dailySummaries.reversed() : dailySummaries, id: \.date) { summary in
-                dailySummaryRow(summary: summary)
+            ForEach(sortNewestFirst ? panelDates.reversed() : panelDates, id: \.self) { date in
+                dayPanel(date)
             }
         }
     }
 
-    private func dailySummaryRow(summary: DashboardSummary) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(formatDate(summary.date))
-                    .font(.headline)
-                    .foregroundColor(.white)
+    private func dayPanel(_ date: String) -> some View {
+        let vibe = dailySummaries.first { $0.date == date }?.averageVibe
 
-                Spacer()
+        return Button(action: {
+            openDetail(date)
+        }) {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(formatDate(date))
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.white)
 
-                if let vibe = summary.averageVibe {
-                    Text(String(format: "%.1f", Double(vibe)))
-                        .font(.title3)
-                        .fontWeight(.bold)
-                        .foregroundColor(vibeScoreColor(Double(vibe)))
-                }
-            }
+                    Spacer()
 
-            if let insights = summary.insights, !insights.isEmpty {
-                Text(insights)
-                    .font(.subheadline)
-                    .foregroundColor(Color(white: 0.56))
-                    .lineLimit(2)
-            }
-
-            Button(action: {
-                openDetail(summary.date)
-            }) {
-                HStack {
-                    Text("詳細を見る")
-                        .font(.caption)
-                        .fontWeight(.medium)
+                    if let vibe {
+                        Text(String(format: "%.1f", Double(vibe)))
+                            .font(.subheadline)
+                            .fontWeight(.bold)
+                            .foregroundColor(vibeScoreColor(Double(vibe)))
+                    }
                     Image(systemName: "chevron.right")
-                        .font(.caption)
+                        .font(.caption2)
+                        .foregroundColor(Color(white: 0.4))
                 }
-                .foregroundColor(.accentTeal)
+
+                if let strip = stripDays[date], !strip.recordings.isEmpty {
+                    DayStrip(data: strip)
+                } else {
+                    Text("出来事は数えていません")
+                        .font(.caption2)
+                        .foregroundColor(Color(white: 0.45))
+                        .padding(.vertical, 4)
+                }
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.darkCard)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+            )
         }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.darkCard)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
-        )
+        .buttonStyle(.plain)
     }
 
     // MARK: - Helpers
