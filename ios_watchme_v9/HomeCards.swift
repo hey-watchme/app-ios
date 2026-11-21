@@ -20,13 +20,13 @@ enum ActivityBanner: Equatable {
     /// A recording's analysis finished and has not been looked at yet.
     case recordingDone(recordingID: String, name: String)
     /// The day's analysis was updated from a recording and has not been looked at yet.
-    case dayUpdated(recordingID: String, label: String)
+    case dayUpdated(recordingID: String, label: String, name: String)
 
     /// The key remembered once the person has looked at it.
     var seenKey: String? {
         switch self {
         case .recordingDone(let id, _): return "\(id)#recording"
-        case .dayUpdated(let id, _): return "\(id)#day"
+        case .dayUpdated(let id, _, _): return "\(id)#day"
         default: return nil
         }
     }
@@ -64,7 +64,8 @@ enum ActivityBanner: Equatable {
             return recordingDone
         }
         if latest.stages.contains(where: { $0.stage == "day_so_far" && $0.status == "completed" }) {
-            let dayUpdated = ActivityBanner.dayUpdated(recordingID: latest.id, label: SpotStage.dayAnalysisLabel(for: latest.date))
+            let dayUpdated = ActivityBanner.dayUpdated(recordingID: latest.id, label: SpotStage.dayAnalysisLabel(for: latest.date),
+                                                       name: ActivityFeed.recordingName(latest, viewingDate: viewingDate) + "から")
             if let key = dayUpdated.seenKey, !seen.contains(key) {
                 return dayUpdated
             }
@@ -155,21 +156,23 @@ struct ActivityBannerView: View {
         }
     }
 
+    /// What happened, in a word or two.
     private var title: String {
         switch banner {
-        case .sending(let left): return "録音を送信中（残り\(left)件）"
-        case .analysing(_, let name, _): return "\(name)を分析中"
-        case .recordingDone(_, let name): return "\(name)の分析が完了しました"
-        case .dayUpdated(_, let label): return "\(label)を更新しました"
+        case .sending: return "送信中"
+        case .analysing: return "分析中"
+        case .recordingDone: return "分析完了"
+        case .dayUpdated(_, let label, _): return "\(label)を更新"
         }
     }
 
+    /// Which recording, then the detail.
     private var subtitle: String {
         switch banner {
-        case .sending: return "届き次第、分析が始まります"
-        case .analysing(_, _, let stage): return "\(stage)…"
-        case .recordingDone: return "押すと結果を見られます"
-        case .dayUpdated: return "押すとこの日の分析を見られます"
+        case .sending(let left): return "録音データ・残り\(left)件"
+        case .analysing(_, let name, let stage): return "\(name)・\(stage)"
+        case .recordingDone(_, let name): return name
+        case .dayUpdated(_, _, let name): return name
         }
     }
 
