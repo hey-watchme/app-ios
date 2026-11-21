@@ -368,3 +368,119 @@ struct HomeEventRankingCard: View {
         }
     }
 }
+
+// MARK: - The day's exchanges
+
+/// A few moments of the day, with the words as said: picked by the listener for each recording
+/// (profile_result.scene.highlights, checked against the transcript) and balanced here across
+/// warm, tense and heated ones when the day has them. A hard day shows hard moments.
+struct HomeDigestCard: View {
+    let blocks: [DashboardTimeBlock]
+
+    struct Moment: Identifiable {
+        let block: DashboardTimeBlock
+        let start: Double
+        let end: Double
+        let who: String
+        let quote: String
+        let tone: String
+        var id: String { "\(block.id)-\(start)" }
+    }
+
+    private static let shown = 3
+
+    /// One of each tone first (heated, tense, warm), then the rest by time.
+    static func pick(from blocks: [DashboardTimeBlock]) -> [Moment] {
+        let all = blocks.flatMap(moments).sorted { ($0.block.localTime ?? "", $0.start) < ($1.block.localTime ?? "", $1.start) }
+        var picked: [Moment] = []
+        for tone in ["heated", "tense", "warm"] {
+            if let first = all.first(where: { $0.tone == tone }) { picked.append(first) }
+        }
+        for moment in all where picked.count < shown && !picked.contains(where: { $0.id == moment.id }) {
+            picked.append(moment)
+        }
+        return Array(picked.prefix(shown)).sorted { ($0.block.localTime ?? "", $0.start) < ($1.block.localTime ?? "", $1.start) }
+    }
+
+    private static func moments(of block: DashboardTimeBlock) -> [Moment] {
+        guard let raw = block.sceneDescriptionRaw, let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let highlights = object["highlights"] as? [[String: Any]] else { return [] }
+        return highlights.compactMap { h in
+            guard let start = (h["start_sec"] as? NSNumber)?.doubleValue,
+                  let quote = h["quote"] as? String, !quote.isEmpty else { return nil }
+            return Moment(block: block, start: start, end: (h["end_sec"] as? NSNumber)?.doubleValue ?? start + 3,
+                          who: h["who"] as? String ?? "", quote: quote, tone: h["tone"] as? String ?? "neutral")
+        }
+    }
+
+    var body: some View {
+        let moments = Self.pick(from: blocks)
+        if !moments.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                Text("この日のやりとり")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(.white)
+
+                ForEach(moments) { moment in
+                    row(moment)
+                }
+            }
+            .detailCard()
+        }
+    }
+
+    private func row(_ moment: Moment) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(color(moment.tone))
+                .frame(width: 3)
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 8) {
+                    Text(clock(moment))
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color(white: 0.55))
+                    Text(moment.who)
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(white: 0.6))
+                        .lineLimit(1)
+                }
+                Text("「\(moment.quote)」")
+                    .font(.system(size: 14))
+                    .foregroundColor(.white)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            Spacer(minLength: 4)
+            if let recordedAt = moment.block.recordedAt, SavedRecordings.canSave(deviceId: moment.block.deviceId) {
+                EventPlayButton(id: "digest-\(moment.id)", deviceId: moment.block.deviceId, recordedAt: recordedAt,
+                                start: moment.start, end: moment.end)
+            }
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func color(_ tone: String) -> Color {
+        switch tone {
+        case "warm": return .accentTeal
+        case "tense": return Color(red: 0.95, green: 0.65, blue: 0.3)
+        case "heated": return .accentCoral
+        default: return Color(white: 0.45)
+        }
+    }
+
+    /// The clock time of a moment: the recording's local start plus the offset.
+    private func clock(_ moment: Moment) -> String {
+        guard let localTime = moment.block.localTime else { return "" }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        for format in ["yyyy-MM-dd'T'HH:mm:ss.SSS", "yyyy-MM-dd'T'HH:mm:ss", "yyyy-MM-dd HH:mm:ss"] {
+            formatter.dateFormat = format
+            if let start = formatter.date(from: localTime) {
+                formatter.dateFormat = "HH:mm"
+                return formatter.string(from: start.addingTimeInterval(moment.start))
+            }
+        }
+        return ""
+    }
+}

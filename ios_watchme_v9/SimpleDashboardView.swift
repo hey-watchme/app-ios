@@ -218,7 +218,11 @@ struct SimpleDashboardView: View {
                             recordingsSection
                                 .padding(.horizontal, 20)
 
-                            // 4. What happened most across the day's recordings
+                            // 4. A few moments of the day, with the words as said
+                            HomeDigestCard(blocks: timeBlocks)
+                                .padding(.horizontal, 20)
+
+                            // 5. What happened most across the day's recordings
                             if let deviceId = deviceManager.selectedDeviceID {
                                 HomeEventRankingCard(deviceId: deviceId, localDate: localDate, refreshKey: rankingRefreshKey)
                                     .padding(.horizontal, 20)
