@@ -124,7 +124,8 @@ struct SpotEventsCard: View {
 
     @State private var run: Run?
     @State private var events: [Event] = []
-    @State private var loaded = false
+    /// Why the events could not be read; shown with a retry instead of hiding the card.
+    @State private var loadError: String?
     @State private var voiceMeasure = VoiceMeasure.strain
     /// The event picked on the timeline (its seq); the balloon under the picture shows it.
     @State private var selectedSeq: Int?
@@ -146,7 +147,9 @@ struct SpotEventsCard: View {
     ]
 
     var body: some View {
-        Group {
+        // A VStack, not a Group: an empty Group is not placed at all, so its .task never
+        // ran and the card stayed empty for good (found 2026-11-21).
+        VStack(spacing: 0) {
             if let run {
                 VStack(alignment: .leading, spacing: 12) {
                     DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事")
@@ -187,6 +190,20 @@ struct SpotEventsCard: View {
                         .font(.system(size: 11))
                         .foregroundColor(Color(white: 0.4))
                         .fixedSize(horizontal: false, vertical: true)
+                }
+                .detailCard()
+            } else if let loadError {
+                VStack(alignment: .leading, spacing: 10) {
+                    DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事")
+                    Text("出来事を読み込めませんでした（\(loadError)）")
+                        .font(.system(size: 12))
+                        .foregroundColor(Color(white: 0.6))
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("もう一度読み込む") {
+                        Task { await load() }
+                    }
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.accentTeal)
                 }
                 .detailCard()
             }
@@ -291,30 +308,41 @@ struct SpotEventsCard: View {
     }
 
     private func load() async {
-        guard !loaded else { return }
-        loaded = true
+        guard run == nil else { return }
         let client = SupabaseClientManager.shared.client
-        let runs: [Run] = (try? await client
-            .from("spot_event_runs")
-            .select("activity, audio_seconds, counts, extractor_version, llm_model")
-            .eq("device_id", value: deviceId)
-            .eq("recorded_at", value: recordedAt)
-            .order("extractor_version", ascending: false)
-            .limit(1)
-            .execute()
-            .value) ?? []
-        guard let latest = runs.first else { return }
-        let rows: [Event] = (try? await client
-            .from("spot_events")
-            .select("seq, event_type, start_sec, end_sec, actor, target, intensity, evidence, confidence")
-            .eq("device_id", value: deviceId)
-            .eq("recorded_at", value: recordedAt)
-            .eq("extractor_version", value: latest.extractor_version)
-            .order("seq", ascending: true)
-            .execute()
-            .value) ?? []
-        run = latest
-        events = rows
+        do {
+            let runs: [Run] = try await client
+                .from("spot_event_runs")
+                .select("activity, audio_seconds, counts, extractor_version, llm_model")
+                .eq("device_id", value: deviceId)
+                .eq("recorded_at", value: recordedAt)
+                .order("extractor_version", ascending: false)
+                .limit(1)
+                .execute()
+                .value
+            guard let latest = runs.first else {
+                print("ℹ️ [Events] no events run for \(recordedAt)")
+                return
+            }
+            let rows: [Event] = try await client
+                .from("spot_events")
+                .select("seq, event_type, start_sec, end_sec, actor, target, intensity, evidence, confidence")
+                .eq("device_id", value: deviceId)
+                .eq("recorded_at", value: recordedAt)
+                .eq("extractor_version", value: latest.extractor_version)
+                .order("seq", ascending: true)
+                .execute()
+                .value
+            run = latest
+            events = rows
+            loadError = nil
+            print("✅ [Events] \(recordedAt): \(rows.count) events")
+        } catch {
+            // Leaving the screen cancels the request: not an error, it loads again next time
+            guard !Task.isCancelled else { return }
+            print("❌ [Events] could not load \(recordedAt): \(error)")
+            loadError = error.localizedDescription
+        }
     }
 }
 
