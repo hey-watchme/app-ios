@@ -134,6 +134,12 @@ struct SimpleDashboardView: View {
         }
     }
 
+    /// Changes when a recording of the day finishes its events, so the ranking is read again.
+    private var rankingRefreshKey: String {
+        let done = timeBlocks.filter { $0.stages.contains { $0.stage == "events" && $0.status == "completed" } }.count
+        return "\(timeBlocks.count)-\(done)"
+    }
+
     @ViewBuilder
     private var recordingsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -211,6 +217,12 @@ struct SimpleDashboardView: View {
                             // 3. The day's recordings, newest first, each with its picture
                             recordingsSection
                                 .padding(.horizontal, 20)
+
+                            // 4. What happened most across the day's recordings
+                            if let deviceId = deviceManager.selectedDeviceID {
+                                HomeEventRankingCard(deviceId: deviceId, localDate: localDate, refreshKey: rankingRefreshKey)
+                                    .padding(.horizontal, 20)
+                            }
 
                             Spacer(minLength: 100)
                         }

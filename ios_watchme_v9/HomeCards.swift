@@ -256,3 +256,115 @@ struct HomeRecordingCard: View {
         .detailCard()
     }
 }
+
+// MARK: - The day's events, most frequent first
+
+/// What happened most across all the day's recordings: laughter at the top is a good day,
+/// reprimands at the top a hard one. Counts as counted (low-confidence events left out);
+/// a recording analysed more than once counts by its newest version.
+struct HomeEventRankingCard: View {
+    let deviceId: String
+    let localDate: String
+    /// Changes when a recording of the day finishes its analysis, so the counts are read again.
+    let refreshKey: String
+
+    private struct Run: Decodable {
+        let recorded_at: String
+        let extractor_version: String
+        let counts: [String: Int]?
+    }
+
+    private struct Entry: Identifiable {
+        let type: String
+        let count: Int
+        var id: String { type }
+    }
+
+    @State private var entries: [Entry] = []
+    @State private var recordings = 0
+
+    private static let shown = 5
+
+    var body: some View {
+        // A VStack so that .task runs even while there is nothing to show
+        VStack(spacing: 0) {
+            if !entries.isEmpty {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack {
+                        Text("この日の出来事")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                        Spacer()
+                        Text("\(recordings)件の録音から")
+                            .font(.system(size: 12))
+                            .foregroundColor(Color(white: 0.5))
+                    }
+
+                    let top = entries.first?.count ?? 1
+                    ForEach(Array(entries.prefix(Self.shown).enumerated()), id: \.element.id) { index, entry in
+                        row(rank: index + 1, entry: entry, top: top)
+                    }
+                }
+                .detailCard()
+            }
+        }
+        .task(id: "\(deviceId)-\(localDate)-\(refreshKey)") { await load() }
+    }
+
+    private func row(rank: Int, entry: Entry, top: Int) -> some View {
+        let sample = TimelineEvent(id: 0, type: entry.type, start: 0, end: 0, intensity: nil)
+        let color: Color = sample.direction.map { $0 > 0 ? .accentTeal : .accentCoral } ?? Color(white: 0.55)
+        return HStack(spacing: 10) {
+            Text("\(rank)")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundColor(Color(white: 0.5))
+                .frame(width: 16)
+            Text(sample.emoji ?? "・")
+                .font(.system(size: 20))
+                .frame(width: 26)
+            Text(SpotEventsCard.typeNames[entry.type] ?? entry.type)
+                .font(.system(size: 14))
+                .foregroundColor(.white)
+                .frame(width: 86, alignment: .leading)
+            GeometryReader { geo in
+                RoundedRectangle(cornerRadius: 3)
+                    .fill(color.opacity(0.7))
+                    .frame(width: max(geo.size.width * CGFloat(entry.count) / CGFloat(max(top, 1)), 6), height: 8)
+                    .frame(maxHeight: .infinity, alignment: .center)
+            }
+            .frame(height: 20)
+            Text("\(entry.count)回")
+                .font(.system(size: 14, weight: .semibold, design: .rounded))
+                .foregroundColor(.white)
+                .frame(width: 40, alignment: .trailing)
+        }
+    }
+
+    private func load() async {
+        do {
+            let runs: [Run] = try await SupabaseClientManager.shared.client
+                .from("spot_event_runs")
+                .select("recorded_at, extractor_version, counts")
+                .eq("device_id", value: deviceId)
+                .eq("local_date", value: localDate)
+                .execute()
+                .value
+            var newest: [String: Run] = [:]
+            for run in runs where (newest[run.recorded_at]?.extractor_version ?? "") < run.extractor_version {
+                newest[run.recorded_at] = run
+            }
+            var totals: [String: Int] = [:]
+            for run in newest.values {
+                for (type, count) in run.counts ?? [:] where count > 0 {
+                    totals[type, default: 0] += count
+                }
+            }
+            recordings = newest.count
+            entries = totals.map { Entry(type: $0.key, count: $0.value) }
+                .sorted { $0.count != $1.count ? $0.count > $1.count : $0.type < $1.type }
+        } catch {
+            guard !Task.isCancelled else { return }
+            print("❌ [Ranking] could not load \(localDate): \(error)")
+        }
+    }
+}
