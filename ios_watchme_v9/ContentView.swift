@@ -38,6 +38,8 @@ struct ContentView: View {
     @State private var autoSelectedDate: String?
     /// The day of a recording made in this session, which may not have reached the server yet.
     @State private var recordedHereDate: String?
+    /// False until the day to open on is known; the pager waits rather than show today first.
+    @State private var startDayKnown: Bool
 
     // 初期ロード日数（起動時のパフォーマンス最適化）
     private let initialDaysToLoad = 7
@@ -47,9 +49,30 @@ struct ContentView: View {
     init(showRecordingSheet: Binding<Bool>) {
         _showRecordingSheet = showRecordingSheet
         let today = LocalDate.today(timezone: TimeZone.current)
-        let dates = LocalDate.trailingDays(endingAt: today, count: 7, timezone: TimeZone.current)
+        let deviceId = UserDefaults.standard.string(forKey: "watchme_selected_device_id")
+        let start = deviceId.flatMap(Self.rememberedNewestDay).map { min($0, today) } ?? today
+        var dates = LocalDate.trailingDays(endingAt: today, count: 7, timezone: TimeZone.current)
+        // The pager must hold the day it opens on, even an older one
+        while let first = dates.first, start < first,
+              let before = LocalDate.addingDays(-1, to: first, timezone: TimeZone.current) {
+            dates.insert(before, at: 0)
+        }
         _dateRange = State(initialValue: dates.isEmpty ? [today] : dates)
-        _selectedLocalDate = State(initialValue: today)
+        _selectedLocalDate = State(initialValue: start)
+        _autoSelectedDate = State(initialValue: start)
+        _startDayKnown = State(initialValue: deviceId.flatMap(Self.rememberedNewestDay) != nil)
+    }
+
+    // MARK: - The day the home opens on
+
+    /// The newest day with a recording, as last read from the server, per device. The home
+    /// opens straight on it, so it does not first draw today and then move.
+    private static func rememberedNewestDay(deviceId: String) -> String? {
+        UserDefaults.standard.string(forKey: "home_newest_recorded_day_\(deviceId)")
+    }
+
+    private static func rememberNewestDay(_ localDate: String, deviceId: String) {
+        UserDefaults.standard.set(localDate, forKey: "home_newest_recorded_day_\(deviceId)")
     }
     
     var body: some View {
@@ -71,6 +94,15 @@ struct ContentView: View {
                             .foregroundColor(Color(white: 0.56))
                     }
                     Spacer()
+
+                case .available where !startDayKnown:
+                    // The first time on this device: wait for the newest day rather than show today first
+                    ScrollView {
+                        SkeletonView()
+                            // Where the day starts under the date header (SimpleDashboardView)
+                            .padding(.top, 145)
+                    }
+                    .scrollDisabled(true)
 
                 case .available:
                     // 常にダッシュボードを表示
@@ -246,6 +278,9 @@ struct ContentView: View {
             selectedLocalDate = today
             autoSelectedDate = today
             recordedHereDate = today
+            if let deviceId = deviceManager.selectedDeviceID {
+                Self.rememberNewestDay(today, deviceId: deviceId)
+            }
         }
         .onChange(of: recordingStore.state.errorMessage) { oldValue, newValue in
             // 録音エラーをToastで表示（エラーメッセージ統一）
@@ -315,8 +350,12 @@ struct ContentView: View {
         let dates = LocalDate.trailingDays(endingAt: today, count: initialDaysToLoad, timezone: timezone)
 
         dateRange = dates.isEmpty ? [today] : dates
-        selectedLocalDate = today
-        autoSelectedDate = today
+        let remembered = deviceManager.selectedDeviceID.flatMap(Self.rememberedNewestDay).map { min($0, today) }
+        startDayKnown = remembered != nil
+        let start = remembered ?? today
+        ensureDateRangeIncludes(start)
+        selectedLocalDate = start
+        autoSelectedDate = start
         Task { await showNewestRecordedDay() }
 
         print("📅 日付範囲初期化: \(dateRange.count)日分（\(dateRange.first ?? today) 〜 \(today)）")
@@ -365,22 +404,35 @@ struct ContentView: View {
     /// (platform docs/product/screens.md "ホーム"). Today when nothing was recorded yet.
     /// Only moves while the person is still on the day it picked last time.
     private func showNewestRecordedDay() async {
-        guard let deviceId = deviceManager.selectedDeviceID else { return }
+        guard let deviceId = deviceManager.selectedDeviceID else {
+            startDayKnown = true
+            return
+        }
         struct Row: Decodable { let local_date: String? }
-        let rows: [Row] = (try? await SupabaseClientManager.shared.client
-            .from("spot_results")
-            .select("local_date")
-            .eq("device_id", value: deviceId)
-            .not("local_date", operator: .is, value: "null")
-            .order("local_date", ascending: false)
-            .limit(1)
-            .execute()
-            .value) ?? []
+        let rows: [Row]
+        do {
+            rows = try await SupabaseClientManager.shared.client
+                .from("spot_results")
+                .select("local_date")
+                .eq("device_id", value: deviceId)
+                .not("local_date", operator: .is, value: "null")
+                .order("local_date", ascending: false)
+                .limit(1)
+                .execute()
+                .value
+        } catch {
+            // Keep the day it opened on; show the pager rather than wait
+            print("❌ [Home] could not read the newest day: \(error)")
+            await MainActor.run { startDayKnown = true }
+            return
+        }
         let today = LocalDate.today(timezone: deviceManager.selectedDeviceTimezone)
         let newest = min(max(rows.first?.local_date ?? today, recordedHereDate ?? ""), today)
         await MainActor.run {
-            guard deviceManager.selectedDeviceID == deviceId,
-                  selectedLocalDate == autoSelectedDate || autoSelectedDate == nil,
+            guard deviceManager.selectedDeviceID == deviceId else { return }
+            Self.rememberNewestDay(newest, deviceId: deviceId)
+            defer { startDayKnown = true }
+            guard selectedLocalDate == autoSelectedDate || autoSelectedDate == nil,
                   newest != selectedLocalDate else { return }
             ensureDateRangeIncludes(newest)
             selectedLocalDate = newest
