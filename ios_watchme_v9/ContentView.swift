@@ -23,7 +23,6 @@ struct ContentView: View {
     @State private var showLogoutConfirmation = false
     @Binding var showRecordingSheet: Bool
     @State private var showQRScanner = false
-    @State private var showDeviceRegistrationConfirm = false
     @State private var showMyPage = false  // マイページ表示制御
 
     // 録音機能は新しいRecordingStoreが内部で管理
@@ -89,7 +88,7 @@ struct ContentView: View {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             .scaleEffect(1.5)
-                        Text("デバイス情報を取得中...")
+                        Text("読み込み中...")
                             .font(.caption)
                             .foregroundColor(Color(white: 0.56))
                     }
@@ -222,14 +221,6 @@ struct ContentView: View {
         } message: {
             Text("本当にログアウトしますか？")
         }
-        .alert("デバイスを連携", isPresented: $showDeviceRegistrationConfirm) {
-            Button("キャンセル", role: .cancel) { }
-            Button("連携", role: .none) {
-                handleRegisterCurrentDevice()
-            }
-        } message: {
-            Text("このデバイスのマイクを使って音声情報を分析します。")
-        }
         .sheet(isPresented: $showMyPage) {
             UserInfoView(userAccountManager: userAccountManager)
                 .environmentObject(deviceManager)
@@ -290,34 +281,6 @@ struct ContentView: View {
             }
         }
     }
-
-    // MARK: - このデバイスを登録する処理
-    private func handleRegisterCurrentDevice() {
-        guard let userId = userAccountManager.effectiveUserId else {
-            print("❌ ユーザー情報の取得に失敗しました")
-            toastManager.showError(title: "連携に失敗しました", subtitle: "ユーザー情報を取得できません")
-            return
-        }
-
-        Task {
-            do {
-                // DeviceManagerのregisterDeviceメソッドを呼び出す（完了まで待機）
-                let _ = try await deviceManager.registerDevice(userId: userId)
-
-                // デバイスリストを再読み込み
-                await deviceManager.loadDevices(for: userId)
-
-                print("✅ デバイス登録成功")
-            } catch {
-                print("❌ デバイス登録エラー: \(error)")
-                toastManager.showError(
-                    title: "デバイス連携に失敗しました",
-                    subtitle: error.localizedDescription
-                )
-            }
-        }
-    }
-
 
     // MARK: - QRコードスキャン処理
     private func handleQRCodeScanned(_ code: String) async {

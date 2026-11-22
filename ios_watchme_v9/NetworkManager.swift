@@ -201,7 +201,7 @@ class NetworkManager: ObservableObject {
                 }
             } else {
                 print("❌ デバイス登録が完了していません。アップロードを中断します。")
-                let errorMsg = "デバイス登録が必要です"
+                let errorMsg = "分析対象が選ばれていません"
                 recording.markAsUploadFailed(error: errorMsg)
                 
                 // 一時ファイルを削除

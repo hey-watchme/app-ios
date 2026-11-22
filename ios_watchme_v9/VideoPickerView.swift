@@ -67,8 +67,8 @@ struct VideoPickerView: View {
         guard deviceManager.selectedDeviceID != nil else {
             await MainActor.run {
                 ToastManager.shared.showError(
-                    title: "デバイス連携が必要です",
-                    subtitle: "デバイスを連携してください"
+                    title: "分析対象が選ばれていません",
+                    subtitle: "分析対象を選ぶか、追加してください"
                 )
             }
             return

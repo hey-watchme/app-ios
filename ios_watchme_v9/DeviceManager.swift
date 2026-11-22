@@ -873,11 +873,11 @@ enum DeviceRegistrationError: Error {
     var localizedDescription: String {
         switch self {
         case .noDeviceReturned:
-            return "デバイス情報の取得に失敗しました"
+            return "分析対象の読み込みに失敗しました"
         case .supabaseNotAvailable:
             return "Supabaseライブラリが利用できません"
         case .registrationFailed:
-            return "デバイス登録処理に失敗しました"
+            return "分析対象の登録に失敗しました"
         }
     }
 }
@@ -892,7 +892,7 @@ enum DeviceManagerError: Error, LocalizedError {
         case .notAuthenticated:
             return "認証が必要です"
         case .fetchFailed(let message):
-            return "デバイス取得エラー: \(message)"
+            return "分析対象の読み込みエラー: \(message)"
         }
     }
 }

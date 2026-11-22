@@ -123,11 +123,11 @@ final class RecordingStore: ObservableObject {
             return
         }
         guard let deviceId = deviceManager.selectedDeviceID else {
-            presentError("デバイスが選択されていません")
+            presentError("分析対象が選ばれていません")
             return
         }
         guard !deviceManager.isDemoDeviceSelected else {
-            presentError("サンプルには録音できません。自分のデバイスを選んでください")
+            presentError("サンプルには録音できません。ご自分の分析対象を選んでください")
             return
         }
         guard await requestMicrophonePermissionIfNeeded() else {
@@ -163,10 +163,10 @@ final class RecordingStore: ObservableObject {
     /// recorded, journal them and send them like a live recording. No length limit.
     func importFile(at url: URL, originalDates: AudioImporter.FileDates?) async throws {
         guard let deviceId = deviceManager.selectedDeviceID else {
-            throw AudioImportError.readFailed("デバイスが選択されていません")
+            throw AudioImportError.readFailed("分析対象が選ばれていません")
         }
         guard !deviceManager.isDemoDeviceSelected else {
-            throw AudioImportError.readFailed("サンプルには取り込めません。自分のデバイスを選んでください")
+            throw AudioImportError.readFailed("サンプルには取り込めません。ご自分の分析対象を選んでください")
         }
         var shown = -1
         let result = try await AudioImporter.importFile(

@@ -285,7 +285,7 @@ struct MainAppView: View {
         }
         if deviceManager.isDemoDeviceSelected {
             guard let own = deviceManager.ownRecordingDevice else {
-                toastManager.showError(title: "録音できません", subtitle: "サンプルには録音できません。録音に使うデバイスがありません")
+                toastManager.showError(title: "録音できません", subtitle: "サンプルには録音できません。先に分析対象を追加してください")
                 return
             }
             deviceManager.selectDevice(own.device_id)
