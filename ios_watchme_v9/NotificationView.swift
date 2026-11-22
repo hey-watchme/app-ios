@@ -121,14 +121,15 @@ struct NotificationView: View {
             .toolbarColorScheme(.dark, for: .navigationBar)
             .tint(.white)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                // The close button is always at the top right (platform docs/product/screens.md)
+                ToolbarItem(placement: .navigationBarTrailing) {
                     CloseButton {
                         dismiss()
                     }
                 }
                 
                 if tab == .announcements && !notifications.isEmpty {
-                    ToolbarItem(placement: .navigationBarTrailing) {
+                    ToolbarItem(placement: .navigationBarLeading) {
                         Button("すべて既読") {
                             Task {
                                 await markAllAsRead()

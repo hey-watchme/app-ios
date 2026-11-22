@@ -172,7 +172,7 @@ struct DeviceEditView: View {
             .navigationTitle("デバイス詳細")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
+                ToolbarItem(placement: .navigationBarTrailing) {
                     CloseButton {
                         isPresented = false
                     }

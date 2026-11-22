@@ -156,9 +156,7 @@ struct QuestionModeView: View {
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
                     .foregroundColor(Color(white: 0.56))
             }
-            Button("閉じる") { Task { await finish() } }
-                .font(.system(size: 14))
-                .foregroundColor(Color(white: 0.56))
+            CloseButton { Task { await finish() } }
         }
     }
 

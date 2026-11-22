@@ -31,7 +31,8 @@ enum ActivityFeed {
 
     /// Events of one recording: the recording itself, then each stage that has started.
     static func items(for block: DashboardTimeBlock, viewingDate: String? = nil) -> [ActivityItem] {
-        let stages = block.stages.map(\.effective)
+        // Only the stages the pipeline runs today (removed ones still have rows on old recordings)
+        let stages = block.stages.map(\.effective).filter { SpotStage.order.contains($0.stage) }
         let name = recordingName(block, viewingDate: viewingDate)
         let recordingStatus: String
         let recordingDetail: String
@@ -99,7 +100,7 @@ enum ActivityFeed {
             }
         case "day_so_far":
             if let count = number(payload["processed_count"]) { return "\(Int(count))件の録音から更新" }
-        case "measure", "emotion":
+        case "measure":
             if case .bool(false)? = payload["available"] { return "測定できる声がありません" }
         default:
             break

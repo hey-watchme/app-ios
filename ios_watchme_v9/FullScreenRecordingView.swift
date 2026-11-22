@@ -138,12 +138,8 @@ struct FullScreenRecordingView: View {
             VStack {
                 HStack {
                     Spacer()
-                    Button(action: { dismiss() }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 24, weight: .medium))
-                            .foregroundColor(.white)
-                            .padding()
-                    }
+                    CloseButton { dismiss() }
+                        .padding(16)
                 }
                 Spacer()
             }

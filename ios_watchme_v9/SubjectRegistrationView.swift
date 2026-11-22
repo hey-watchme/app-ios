@@ -135,12 +135,19 @@ struct SubjectRegistrationView: View {
             )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button(isViewOnly ? "閉じる" : "キャンセル") {
-                        if formHasChanges {
-                            showingDiscardAlert = true
-                        } else {
-                            dismiss()
+                if isViewOnly {
+                    // Nothing to save: the usual close button at the top right
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        CloseButton { dismiss() }
+                    }
+                } else {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button("キャンセル") {
+                            if formHasChanges {
+                                showingDiscardAlert = true
+                            } else {
+                                dismiss()
+                            }
                         }
                     }
                 }

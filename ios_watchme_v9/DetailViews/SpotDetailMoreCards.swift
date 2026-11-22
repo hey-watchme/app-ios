@@ -50,11 +50,12 @@ struct CloseButton: View {
 
     var body: some View {
         Button(action: action) {
+            // .primary: white on the dark screens, dark on the few that are still light
             Image(systemName: "xmark")
                 .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color.white.opacity(0.85))
+                .foregroundColor(Color.primary.opacity(0.85))
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(Color.white.opacity(0.12)))
+                .background(Circle().fill(Color.primary.opacity(0.12)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("閉じる")

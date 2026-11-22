@@ -22,19 +22,18 @@ struct SpotStage: Codable, Equatable, Identifiable {
         case updatedAt = "updated_at"
     }
 
-    /// Stages in the order their results usually arrive, as shown on the card.
-    /// Sound events run alongside measure and scene and usually finish after them (platform
-    /// infra/envs/stg/pipeline.tf). Vocal emotion ("emotion") was removed on 2026-11-12;
-    /// older recordings still have its row, which is not shown.
-    static let order = ["transcribe", "measure", "scene", "sound_events", "events", "profile", "day_so_far"]
+    /// The stages of today's pipeline, in the order they run (platform infra/envs/stg/pipeline.tf:
+    /// transcribe -> measure -> listen -> profile -> persist -> day so far; the listener writes
+    /// both "scene" and "events"). Only these are shown. Removed stages still have rows on older
+    /// recordings and are left out: vocal emotion ("emotion", 2026-11-12) and the sound event
+    /// detector ("sound_events", 2026-11-19, which the server still marks as skipped).
+    static let order = ["transcribe", "measure", "scene", "events", "profile", "day_so_far"]
 
     static let labels: [String: String] = [
         "transcribe": "文字起こし",
-        "sound_events": "周りの音",
         "measure": "会話の指標",
         "scene": "場面",
         "events": "出来事",
-        "emotion": "声の表情",
         "profile": "分析",
         "day_so_far": "1日の分析",
     ]
@@ -57,11 +56,9 @@ struct SpotStage: Codable, Equatable, Identifiable {
     /// instead of showing a spinner forever.
     static let runningLimit: TimeInterval = 20 * 60
     static let queuedLimit: TimeInterval = 60 * 60
-    /// Heavy stages wait in a work queue and may legitimately sit there for hours when many
-    /// chunks arrive at once. These match the pipeline's task timeouts (platform infra/envs/stg/queues.tf).
-    static let queuedLimitByStage: [String: TimeInterval] = [
-        "sound_events": 3 * 60 * 60,
-    ]
+    /// Stages that wait in a work queue and may legitimately sit there longer (platform
+    /// infra/envs/stg/queues.tf). None since the sound event detector was removed.
+    static let queuedLimitByStage: [String: TimeInterval] = [:]
 
     /// Status as the app should show it, with stale queued/running rows turned into failed.
     var effective: SpotStage {
@@ -81,16 +78,19 @@ struct SpotStage: Codable, Equatable, Identifiable {
 }
 
 extension Array where Element == SpotStage {
-    /// True while any stage is still queued or running (stale ones count as failed).
+    /// True while any current stage is still queued or running (stale ones count as failed).
     var isInProgress: Bool {
-        contains { let e = $0.effective; return e.status == "queued" || e.status == "running" }
+        contains { stage in
+            let e = stage.effective
+            return SpotStage.order.contains(e.stage) && (e.status == "queued" || e.status == "running")
+        }
     }
 
     /// Stages in pipeline order (stale ones shown as failed). A stage with no row yet is
     /// shown as queued only while others are still moving; once the rest has finished it
     /// can never come, so it is shown as skipped.
     var ordered: [SpotStage] {
-        let current = map(\.effective)
+        let current = map(\.effective).filter { SpotStage.order.contains($0.stage) }
         let moving = current.contains { $0.status == "queued" || $0.status == "running" }
         return SpotStage.order.map { name in
             current.first { $0.stage == name }
