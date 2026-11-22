@@ -425,6 +425,8 @@ final class ChunkUploader: NSObject, ObservableObject {
             "subject_id": record.subjectId,
             "recorded_at": formatter.string(from: record.recordedAt),
             "content_type": record.fileName.hasSuffix(".m4a") ? "audio/mp4" : "audio/wav",
+            "device_id": ThisDevice.id,
+            "device_model": ThisDevice.model,
         ]
         if let sessionId = record.sessionId {
             body["session_id"] = sessionId
