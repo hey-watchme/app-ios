@@ -5,7 +5,7 @@
 //  Records one session as a series of 5-minute WAV chunks (16 kHz, 16-bit, mono).
 //  Recording never stops at a chunk boundary: the next recorder is prepared first,
 //  then the current one is stopped and the next started (a gap of milliseconds).
-//  A session ends when the person stops it, at 60 minutes, when an interruption
+//  A session ends when the person stops it, at 45 minutes, when an interruption
 //  cannot be resumed, or when writing fails. Every event is published so the
 //  store can journal each chunk the moment it starts. See platform/docs/long-recording.md.
 //
@@ -18,14 +18,16 @@ import Combine
 
 enum RecordingEndReason {
     case stopped          // the person stopped
-    case limitReached     // 60 minutes
+    case limitReached     // maxSessionSeconds (45 minutes)
     case interrupted      // a call / Siri took the microphone and recording could not resume
     case failed(Error)    // writing failed (disk full, audio system reset, ...)
 }
 
 final class AudioRecorderService: NSObject {
     static let chunkSeconds: TimeInterval = 300
-    static let maxSessionSeconds: TimeInterval = 3600
+    /// 45 minutes since 2026-11-23: the server transcribes a session in one Lambda call (at most
+    /// 15 minutes), and Gemini took 13 minutes for 52 minutes of audio (platform HANDOFF).
+    static let maxSessionSeconds: TimeInterval = 45 * 60
     /// Enough for a whole session (about 115 MB) with room to spare.
     static let minimumFreeBytes: Int64 = 200 * 1024 * 1024
 
@@ -330,7 +332,7 @@ enum RecordingError: LocalizedError {
         case .recordingFailed:
             return "録音に失敗しました"
         case .notEnoughSpace(let free):
-            return "空き容量が足りません（残り \(free / 1_048_576) MB。60分の録音には約 200 MB 必要です）"
+            return "空き容量が足りません（残り \(free / 1_048_576) MB。\(Int(AudioRecorderService.maxSessionSeconds / 60))分の録音には約 200 MB 必要です）"
         }
     }
 }

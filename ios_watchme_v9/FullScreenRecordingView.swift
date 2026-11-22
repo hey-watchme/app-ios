@@ -253,7 +253,7 @@ struct FullScreenRecordingView: View {
 
     /// While recording, only "sending" now and then: the 5-minute pieces are the machine's business.
     private var sessionProgressText: String {
-        let limit = "最長\(RecordingStore.maxMinutes)分"
+        let limit = "\(RecordingStore.maxMinutes)分で自動的に終了します"
         guard let sessionId = store.state.currentSessionId else { return limit }
         let sending = store.state.pending.contains { $0.sessionId == sessionId }
         return sending ? "録音データを送信中・\(limit)" : limit

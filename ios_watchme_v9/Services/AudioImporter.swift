@@ -26,6 +26,7 @@ enum AudioImportError: LocalizedError {
     case notEnoughSpace(needed: Int64, free: Int64)
     case readFailed(String)
     case empty
+    case tooLong(seconds: Double)
 
     var errorDescription: String? {
         switch self {
@@ -37,6 +38,8 @@ enum AudioImportError: LocalizedError {
             return "音声を読み込めませんでした: \(message)"
         case .empty:
             return "音声がほとんど入っていませんでした"
+        case .tooLong(let seconds):
+            return "取り込めるのは\(Int(AudioRecorderService.maxSessionSeconds / 60))分までの音声です（このファイルは\(Int(seconds / 60))分）"
         }
     }
 }
@@ -99,6 +102,8 @@ enum AudioImporter {
         guard !tracks.isEmpty else { throw AudioImportError.noAudioTrack }
         let duration = try await asset.load(.duration).seconds
         guard duration.isFinite, duration >= 1 else { throw AudioImportError.empty }
+        // The same limit as a recording session: the server transcribes one session in one call
+        guard duration <= AudioRecorderService.maxSessionSeconds + 1 else { throw AudioImportError.tooLong(seconds: duration) }
 
         try ensureFreeSpace(forSeconds: duration)
         let (startedAt, source) = await recordingStart(of: asset, dates: originalDates ?? FileDates.of(url), duration: duration)
