@@ -175,6 +175,8 @@ final class SpotEventsStore: ObservableObject {
     @Published private(set) var events: [Event] = []
     /// Why the events could not be read; shown with a retry instead of hiding the card.
     @Published private(set) var loadError: String?
+    /// Loaded, and this recording has no events run (its events stage failed or never ran).
+    @Published private(set) var noRun = false
     private var loading = false
 
     func load(deviceId: String, recordedAt: String) async {
@@ -194,6 +196,7 @@ final class SpotEventsStore: ObservableObject {
                 .value
             guard let latest = runs.first else {
                 print("ℹ️ [Events] no events run for \(recordedAt)")
+                noRun = true
                 return
             }
             let rows: [Event] = try await client
@@ -273,7 +276,7 @@ struct SpotEventsCard: View {
                 case .list:
                     listCard(run)
                 }
-            } else if embedded && part == .picture && store.loadError == nil {
+            } else if embedded && part == .picture && store.loadError == nil && !store.noRun {
                 // Loading: the empty picture, so the card does not jump when it arrives
                 PendingPicture()
             } else if let loadError = store.loadError, part == .picture {

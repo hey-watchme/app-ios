@@ -39,8 +39,9 @@ struct SpotDetailView: View {
                         QuestionsEntry(deviceId: spotData.deviceId, recordedAt: recordedAt, place: .recording)
                     }
 
-                    // While the analysis is still running, how far it has got
-                    if spotData.stages.isInProgress {
+                    // While the analysis is still running, how far it has got; once finished,
+                    // which stages failed (otherwise the screen is just empty)
+                    if spotData.stages.isInProgress || spotData.stages.hasFailed {
                         stageProgressCard
                     }
 

@@ -86,6 +86,14 @@ extension Array where Element == SpotStage {
         }
     }
 
+    /// True when the analysis has finished and a current stage failed (stale ones count as failed).
+    var hasFailed: Bool {
+        !isInProgress && contains { stage in
+            let e = stage.effective
+            return SpotStage.order.contains(e.stage) && e.status == "failed"
+        }
+    }
+
     /// Stages in pipeline order (stale ones shown as failed). A stage with no row yet is
     /// shown as queued only while others are still moving; once the rest has finished it
     /// can never come, so it is shown as skipped.

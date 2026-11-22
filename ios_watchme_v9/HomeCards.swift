@@ -19,13 +19,15 @@ enum ActivityBanner: Equatable {
     case analysing(recordingID: String, name: String, stage: String)
     /// A recording's analysis finished and has not been looked at yet.
     case recordingDone(recordingID: String, name: String)
+    /// A recording's analysis finished with a stage that failed, not looked at yet.
+    case recordingFailed(recordingID: String, name: String)
     /// The day's analysis was updated from a recording and has not been looked at yet.
     case dayUpdated(recordingID: String, label: String, name: String)
 
     /// The key remembered once the person has looked at it.
     var seenKey: String? {
         switch self {
-        case .recordingDone(let id, _): return "\(id)#recording"
+        case .recordingDone(let id, _), .recordingFailed(let id, _): return "\(id)#recording"
         case .dayUpdated(let id, _, _): return "\(id)#day"
         default: return nil
         }
@@ -59,7 +61,10 @@ enum ActivityBanner: Equatable {
         let finished = latest.stages.compactMap { SpotStage.parse($0.updatedAt) }.max()
         guard let finished, Date().timeIntervalSince(finished) < freshFor else { return nil }
 
-        let recordingDone = ActivityBanner.recordingDone(recordingID: latest.id, name: ActivityFeed.recordingName(latest, viewingDate: viewingDate))
+        let name = ActivityFeed.recordingName(latest, viewingDate: viewingDate)
+        let recordingDone: ActivityBanner = latest.stages.hasFailed
+            ? .recordingFailed(recordingID: latest.id, name: name)
+            : .recordingDone(recordingID: latest.id, name: name)
         if let key = recordingDone.seenKey, !seen.contains(key) {
             return recordingDone
         }
@@ -143,6 +148,10 @@ struct ActivityBannerView: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 18))
                 .foregroundColor(.accentTeal)
+        case .recordingFailed:
+            Image(systemName: "exclamationmark.triangle.fill")
+                .font(.system(size: 16))
+                .foregroundColor(.accentCoral)
         }
     }
 
@@ -152,6 +161,7 @@ struct ActivityBannerView: View {
         case .sending: return "送信中"
         case .analysing: return "分析中"
         case .recordingDone: return "分析完了"
+        case .recordingFailed: return "分析の一部ができませんでした"
         case .dayUpdated(_, let label, _): return "\(label)を更新"
         }
     }
@@ -161,7 +171,7 @@ struct ActivityBannerView: View {
         switch banner {
         case .sending(let left): return "録音データ・残り\(left)件"
         case .analysing(_, let name, let stage): return "\(name)・\(stage)"
-        case .recordingDone(_, let name): return name
+        case .recordingDone(_, let name), .recordingFailed(_, let name): return name
         case .dayUpdated(_, _, let name): return name
         }
     }
@@ -176,6 +186,7 @@ struct ActivityBannerView: View {
     private var borderColor: Color {
         switch banner {
         case .recordingDone, .dayUpdated: return Color.accentTeal.opacity(0.4)
+        case .recordingFailed: return Color.accentCoral.opacity(0.4)
         default: return Color.white.opacity(0.1)
         }
     }
@@ -251,7 +262,10 @@ struct HomeRecordingCard: View {
             if block.stages.isInProgress {
                 PendingPicture()
                     .transition(.opacity)
-            } else if let recordedAt = block.recordedAt {
+            } else if block.stages.hasFailed {
+                StageProgressRow(stages: block.stages)
+            }
+            if !block.stages.isInProgress, let recordedAt = block.recordedAt {
                 SpotEventsCard(deviceId: block.deviceId, recordedAt: recordedAt, localTime: block.localTime,
                                metricsRaw: block.metricsRaw, store: events, part: .picture, embedded: true)
                     .transition(.opacity)

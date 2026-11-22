@@ -123,7 +123,7 @@ struct SimpleDashboardView: View {
             activitySeen.insert(key)
         }
         switch banner {
-        case .analysing(let id, _, _), .recordingDone(let id, _):
+        case .analysing(let id, _, _), .recordingDone(let id, _), .recordingFailed(let id, _):
             selectedSpotForDetail = (timeBlocks + otherDayBlocks).first { $0.id == id }
         case .dayUpdated, .sending:
             // The day's analysis is this screen
