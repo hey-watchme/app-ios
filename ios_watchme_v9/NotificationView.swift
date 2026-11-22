@@ -33,7 +33,7 @@ struct NotificationView: View {
                     // Two tabs: messages from us, and what the analysis did (platform docs/product/screens.md "通知")
                     Picker("", selection: $tab) {
                         Text("お知らせ").tag(Tab.announcements)
-                        Text("処理の記録").tag(Tab.processing)
+                        Text("分析ログ").tag(Tab.processing)
                     }
                     .pickerStyle(.segmented)
                     .padding(.horizontal, 20)
@@ -144,6 +144,9 @@ struct NotificationView: View {
             SpotDetailView(deviceId: spot.deviceId, spotData: spot)
                 .environmentObject(dataManager)
         }
+        // The app is dark throughout; in the light scheme the segmented control drew its
+        // unselected labels black on the dark background
+        .preferredColorScheme(.dark)
         .task {
             await loadNotifications()
         }
@@ -207,7 +210,7 @@ struct NotificationView: View {
 
 // MARK: - Processing log
 
-/// The "処理の記録" tab: what the analysis did for the recordings of the last week, newest
+/// The "分析ログ" tab: what the analysis did for the recordings of the last week, newest
 /// first, one section per recording (ActivityLogView). Pressing a recording opens its result.
 struct ProcessingLogTab: View {
     let onTapRecording: (DashboardTimeBlock) -> Void

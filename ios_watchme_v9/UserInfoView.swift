@@ -19,7 +19,7 @@ struct UserInfoView: View {
     
     var body: some View {
         ZStack {
-            Color(.systemGroupedBackground).ignoresSafeArea()
+            Color.darkBase.ignoresSafeArea()
             
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -29,11 +29,13 @@ struct UserInfoView: View {
                     VStack(spacing: 0) {
                         // バナー画像とアカウント設定ボタン
                         ZStack(alignment: .topTrailing) {
-                            Image("DefaultBanner")
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(height: 180)
-                                .clipped()
+                            // A plain gradient for now; an image may come later (2026-11-22)
+                            LinearGradient(
+                                colors: [Color.accentTeal.opacity(0.45), Color.accentTeal.opacity(0.12), Color.darkBase],
+                                startPoint: .topLeading,
+                                endPoint: .bottom
+                            )
+                            .frame(height: 180)
                             
                             // アカウント設定ボタンをキービジュアル内の右上に配置
                             Button(action: {
@@ -44,17 +46,10 @@ struct UserInfoView: View {
                                     .fontWeight(.medium)
                                     .padding(.horizontal, 16)
                                     .padding(.vertical, 8)
-                                    .background(Color(.systemBackground))
+                                    .background(Color.darkCard.opacity(0.9))
                                     .overlay(
                                         RoundedRectangle(cornerRadius: 20)
-                                            .stroke(
-                                                LinearGradient(
-                                                    colors: [Color.black.opacity(0.10), Color.black.opacity(0.03)],
-                                                    startPoint: .topLeading,
-                                                    endPoint: .bottomTrailing
-                                                ),
-                                                lineWidth: 1
-                                            )
+                                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
                                     )
                                     .cornerRadius(20)
                                     .foregroundColor(.primary)
@@ -104,7 +99,7 @@ struct UserInfoView: View {
                             .padding(.bottom, 20)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
-                        .background(Color(.systemBackground))
+                        .background(Color.darkBase)
                     }
                     
                     // アバターを最前面に配置（権限に応じて編集可否が変わる）
@@ -126,7 +121,7 @@ struct UserInfoView: View {
                                 AvatarView(userId: nil, size: 100, avatarUrl: nil)
                                     .overlay(
                                         Circle()
-                                            .stroke(Color(.systemBackground), lineWidth: 4)
+                                            .stroke(Color.darkBase, lineWidth: 4)
                                     )
                                 // カメラアイコンは表示しない
                             }
@@ -291,7 +286,7 @@ struct UserInfoView: View {
                 .environmentObject(ToastManager.shared)
                 .preferredColorScheme(.dark)
         }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
     }
     
 }

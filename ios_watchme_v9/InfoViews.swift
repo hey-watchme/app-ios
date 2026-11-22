@@ -25,20 +25,12 @@ struct InfoSection<Content: View>: View {
                 content
             }
             .padding()
-            .background(Color(.systemBackground))
+            .background(Color.darkCard)
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.black.opacity(0.10), Color.black.opacity(0.03)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
     }
 }
@@ -137,20 +129,12 @@ struct InfoListSection<Content: View>: View {
             VStack(spacing: 0) {
                 content
             }
-            .background(Color(.systemBackground))
+            .background(Color.darkCard)
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.black.opacity(0.10), Color.black.opacity(0.03)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
+                    .stroke(Color.white.opacity(0.1), lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.08), radius: 6, x: 0, y: 2)
         }
     }
 }
@@ -188,8 +172,9 @@ struct InfoListRow: View {
             .padding(.vertical, 12)
 
             if showDivider {
-                Divider()
-                    .background(Color(.separator))
+                Rectangle()
+                    .fill(Color.white.opacity(0.08))
+                    .frame(height: 1)
             }
         }
     }

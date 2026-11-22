@@ -3,7 +3,7 @@
 //  ios_watchme_v9
 //
 //  What the analysis did, one row per event (a recording's analysis as a whole, each stage
-//  running or finishing), built from spot_stages. Shown in the notifications' "処理の記録" tab;
+//  running or finishing), built from spot_stages. Shown in the notifications' "分析ログ" tab;
 //  the home shows only the one activity card (HomeCards.swift).
 //
 
@@ -156,7 +156,7 @@ struct ActivityLogView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 if blocks.isEmpty {
-                    Text("この1週間の処理の記録はありません")
+                    Text("この1週間の分析ログはありません")
                         .font(.system(size: 13))
                         .foregroundColor(Color(white: 0.45))
                         .frame(maxWidth: .infinity)

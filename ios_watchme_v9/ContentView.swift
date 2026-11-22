@@ -234,7 +234,7 @@ struct ContentView: View {
             UserInfoView(userAccountManager: userAccountManager)
                 .environmentObject(deviceManager)
                 .environmentObject(dataManager)
-                .preferredColorScheme(.light)
+                .preferredColorScheme(.dark)
         }
         .task {
             // Research consent: apply the sign-up choice, or ask once (not for guests).
