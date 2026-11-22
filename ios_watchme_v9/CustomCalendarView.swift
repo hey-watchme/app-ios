@@ -2,314 +2,178 @@
 //  CustomCalendarView.swift
 //  ios_watchme_v9
 //
-//  カスタムカレンダービュー - 気分の絵文字表示機能付き
+//  The calendar the home's date header opens: pick a day; the days with a recording carry a
+//  dot. No score in the cells: a number next to the date was read as part of it (2026-11-22).
 //
 
 import SwiftUI
+import Supabase
 
-// MARK: - 月間の気分データ
-struct MonthlyVibeData {
-    let date: Date
-    let averageScore: Double?
-    
-    var emoji: String? {
-        guard let score = averageScore else { return nil }
-        // DailyVibeReportの共通絵文字ロジックを使用
-        return DailyVibeReport.getEmotionEmoji(for: score)
-    }
-}
-
-// MARK: - カスタムカレンダービュー
 struct CustomCalendarView: View {
     @Binding var selectedDate: Date
     @Binding var isPresented: Bool
     @EnvironmentObject var deviceManager: DeviceManager
-    @EnvironmentObject var dataManager: SupabaseDataManager
-    
-    @State private var displayMonth: Date = Date()
-    @State private var monthlyVibeData: [Date: MonthlyVibeData] = [:]
-    @State private var isLoadingData = false
-    
-    private var calendar: Calendar {
-        deviceManager.deviceCalendar
-    }
-    
-    private var timezone: TimeZone {
-        deviceManager.selectedDeviceTimezone
-    }
-    
-    // 月の最初の日
+
+    @State private var displayMonth = Date()
+    /// local_date (yyyy-MM-dd) of the shown month's days that have a recording
+    @State private var recordedDays: Set<String> = []
+
+    private var calendar: Calendar { deviceManager.deviceCalendar }
+    private var timezone: TimeZone { deviceManager.selectedDeviceTimezone }
+
     private var monthStart: Date {
         calendar.dateInterval(of: .month, for: displayMonth)?.start ?? displayMonth
     }
-    
-    // 月の日数
-    private var daysInMonth: Int {
-        calendar.range(of: .day, in: .month, for: displayMonth)?.count ?? 30
+
+    private var isCurrentMonth: Bool {
+        calendar.isDate(displayMonth, equalTo: Date(), toGranularity: .month)
     }
-    
-    // 月の最初の日の曜日（0=日曜日）
-    private var firstWeekday: Int {
-        (calendar.component(.weekday, from: monthStart) - 1)
-    }
-    
-    // カレンダーグリッドの日付配列
-    private var calendarDays: [Date?] {
-        var days: [Date?] = []
-        
-        // 月初めの空白
-        for _ in 0..<firstWeekday {
-            days.append(nil)
-        }
-        
-        // 月の日付
-        for day in 1...daysInMonth {
-            if let date = calendar.date(byAdding: .day, value: day - 1, to: monthStart) {
-                days.append(date)
-            }
-        }
-        
-        // 最後の週を埋める空白
-        while days.count % 7 != 0 {
-            days.append(nil)
-        }
-        
+
+    /// The month as weeks of seven, nil for the blanks before the 1st and after the last day.
+    private var cells: [Date?] {
+        let leading = (calendar.component(.weekday, from: monthStart) - calendar.firstWeekday + 7) % 7
+        let count = calendar.range(of: .day, in: .month, for: monthStart)?.count ?? 30
+        var days: [Date?] = Array(repeating: nil, count: leading)
+        days += (0..<count).map { calendar.date(byAdding: .day, value: $0, to: monthStart) }
+        while days.count % 7 != 0 { days.append(nil) }
         return days
     }
-    
+
+    private var weekdaySymbols: [String] {
+        let symbols = ["日", "月", "火", "水", "木", "金", "土"]
+        let first = calendar.firstWeekday - 1
+        return Array(symbols[first...] + symbols[..<first])
+    }
+
     var body: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                // 月選択ヘッダー
-                HStack {
-                    Button(action: previousMonth) {
-                        Image(systemName: "chevron.left")
-                            .font(.title2)
-                            .foregroundColor(.accentTeal)
-                    }
-                    
-                    Spacer()
-                    
-                    Text(monthYearString)
-                        .font(.title2)
-                        .fontWeight(.semibold)
-                    
-                    Spacer()
-                    
-                    Button(action: nextMonth) {
-                        Image(systemName: "chevron.right")
-                            .font(.title2)
-                            .foregroundColor(.accentTeal)
+        VStack(spacing: 16) {
+            header
+
+            HStack(spacing: 0) {
+                ForEach(weekdaySymbols, id: \.self) { symbol in
+                    Text(symbol)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(Color(white: 0.45))
+                        .frame(maxWidth: .infinity)
+                }
+            }
+
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 0), count: 7), spacing: 6) {
+                ForEach(Array(cells.enumerated()), id: \.offset) { _, date in
+                    if let date {
+                        dayCell(date)
+                    } else {
+                        Color.clear.frame(height: 44)
                     }
                 }
-                .padding()
-                
-                // 曜日ヘッダー
-                HStack {
-                    ForEach(weekdaySymbols, id: \.self) { symbol in
-                        Text(symbol)
-                            .font(.caption)
-                            .fontWeight(.medium)
-                            .foregroundColor(.secondary)
-                            .frame(maxWidth: .infinity)
-                    }
-                }
-                .padding(.horizontal)
-                
-                // カレンダーグリッド
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible()), count: 7), spacing: 8) {
-                    ForEach(Array(calendarDays.enumerated()), id: \.offset) { _, date in
-                        if let date = date {
-                            CalendarDayCell(
-                                date: date,
-                                isSelected: isSameDay(date, selectedDate),
-                                isToday: calendar.isDateInToday(date),
-                                vibeEmoji: getVibeEmoji(for: date),
-                                action: {
-                                    selectedDate = date
-                                    // 少し遅延してからシートを閉じる
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                                        isPresented = false
-                                    }
-                                }
-                            )
-                        } else {
-                            Color.clear
-                                .frame(height: 60)
-                        }
-                    }
-                }
-                .padding()
-                
+            }
+
+            HStack(spacing: 6) {
+                Circle().fill(Color.accentTeal).frame(width: 5, height: 5)
+                Text("録音がある日")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(white: 0.5))
                 Spacer()
-                
-                if isLoadingData {
-                    ProgressView("データを読み込み中...")
-                        .padding()
-                }
             }
-            .navigationTitle("日付を選択")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("キャンセル") {
-                        isPresented = false
-                    }
-                }
-                
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("今日") {
-                        selectedDate = Date()
-                        displayMonth = Date()
-                        Task {
-                            await loadMonthlyData()
-                        }
-                    }
-                }
-            }
+
+            Spacer(minLength: 0)
         }
-        .task {
-            displayMonth = selectedDate
-            await loadMonthlyData()
-        }
-        .onChange(of: displayMonth) { _, _ in
-            Task {
-                await loadMonthlyData()
-            }
+        .padding(.horizontal, 20)
+        .padding(.top, 20)
+        .presentationDetents([.medium])
+        .presentationDragIndicator(.visible)
+        .presentationBackground(Color.darkBase)
+        .preferredColorScheme(.dark)
+        .task(id: displayMonth) { await loadRecordedDays() }
+        .onAppear { displayMonth = selectedDate }
+    }
+
+    // MARK: Parts
+
+    private var header: some View {
+        HStack(spacing: 4) {
+            monthArrow("chevron.left", enabled: true) { moveMonth(-1) }
+            Text(monthTitle)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(.white)
+                .monospacedDigit()
+                .frame(minWidth: 120)
+            monthArrow("chevron.right", enabled: !isCurrentMonth) { moveMonth(1) }
+            Spacer()
+            CloseButton { isPresented = false }
         }
     }
-    
-    // MARK: - Helper Methods
-    
-    private var monthYearString: String {
+
+    private func monthArrow(_ symbol: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(enabled ? .white : Color(white: 0.25))
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    private func dayCell(_ date: Date) -> some View {
+        let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
+        let isToday = calendar.isDateInToday(date)
+        let isFuture = date > Date()
+        let hasRecording = recordedDays.contains(LocalDate.string(from: date, timezone: timezone))
+
+        return Button {
+            selectedDate = date
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { isPresented = false }
+        } label: {
+            VStack(spacing: 3) {
+                Text("\(calendar.component(.day, from: date))")
+                    .font(.system(size: 16, weight: isSelected || isToday ? .bold : .regular))
+                    .monospacedDigit()
+                    .foregroundColor(isSelected ? .darkBase : isFuture ? Color(white: 0.25) : isToday ? .accentTeal : .white)
+                    .frame(width: 34, height: 34)
+                    .background(Circle().fill(isSelected ? Color.accentTeal : Color.clear))
+                Circle()
+                    .fill(Color.accentTeal)
+                    .frame(width: 5, height: 5)
+                    .opacity(hasRecording ? 1 : 0)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(isFuture)
+    }
+
+    // MARK: Data
+
+    private var monthTitle: String {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年M月"
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.timeZone = timezone
         return formatter.string(from: displayMonth)
     }
-    
-    private var weekdaySymbols: [String] {
-        ["日", "月", "火", "水", "木", "金", "土"]
-    }
-    
-    private func isSameDay(_ date1: Date, _ date2: Date) -> Bool {
-        calendar.isDate(date1, inSameDayAs: date2)
-    }
-    
-    private func previousMonth() {
-        if let newMonth = calendar.date(byAdding: .month, value: -1, to: displayMonth) {
-            displayMonth = newMonth
-        }
-    }
-    
-    private func nextMonth() {
-        if let newMonth = calendar.date(byAdding: .month, value: 1, to: displayMonth) {
-            displayMonth = newMonth
-        }
-    }
-    
-    private func getVibeEmoji(for date: Date) -> String? {
-        // 日付の正規化（時刻を00:00:00にする）
-        let normalizedDate = calendar.startOfDay(for: date)
-        return monthlyVibeData[normalizedDate]?.emoji
-    }
-    
-    private func loadMonthlyData() async {
-        guard let deviceId = deviceManager.selectedDeviceID else { return }
-        
-        isLoadingData = true
-        defer { isLoadingData = false }
-        
-        // 月間のデータを取得
-        let vibeData = await dataManager.fetchMonthlyVibeScores(
-            deviceId: deviceId,
-            month: displayMonth,
-            timezone: timezone
-        )
-        
-        // データを辞書形式に変換
-        var dataDict: [Date: MonthlyVibeData] = [:]
-        for data in vibeData {
-            let normalizedDate = calendar.startOfDay(for: data.date)
-            dataDict[normalizedDate] = data
-        }
-        
-        await MainActor.run {
-            self.monthlyVibeData = dataDict
-        }
-    }
-}
 
-// MARK: - カレンダー日付セル
-struct CalendarDayCell: View {
-    let date: Date
-    let isSelected: Bool
-    let isToday: Bool
-    let vibeEmoji: String?
-    let action: () -> Void
-    
-    private var dayNumber: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "d"
-        return formatter.string(from: date)
-    }
-    
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 2) {
-                Text(dayNumber)
-                    .font(.system(size: 16, weight: isToday ? .bold : .medium))
-                    .foregroundColor(textColor)
-                
-                if let emoji = vibeEmoji {
-                    Text(emoji)
-                        .font(.system(size: 16))
-                }
-            }
-            .frame(maxWidth: .infinity, minHeight: 60)
-            .background(backgroundColor)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(borderColor, lineWidth: borderWidth)
-            )
-            .cornerRadius(8)
+    private func moveMonth(_ by: Int) {
+        if let month = calendar.date(byAdding: .month, value: by, to: displayMonth) {
+            displayMonth = month
         }
     }
-    
-    private var textColor: Color {
-        if isSelected {
-            return .white
-        } else if isToday {
-            return .accentTeal
-        } else {
-            return .primary
-        }
-    }
-    
-    private var backgroundColor: Color {
-        if isSelected {
-            return Color.safeColor("AppAccentColor")
-        } else {
-            return Color.clear
-        }
-    }
-    
-    private var borderColor: Color {
-        if isToday && !isSelected {
-            return .accentTeal
-        } else if isSelected {
-            return Color.clear
-        } else {
-            return Color.gray.opacity(0.2)
-        }
-    }
-    
-    private var borderWidth: CGFloat {
-        if isToday && !isSelected {
-            return 2
-        } else {
-            return 1
-        }
+
+    private func loadRecordedDays() async {
+        guard let deviceId = deviceManager.selectedDeviceID,
+              let interval = calendar.dateInterval(of: .month, for: displayMonth),
+              let last = calendar.date(byAdding: .day, value: -1, to: interval.end) else { return }
+        struct Row: Decodable { let local_date: String? }
+        let rows: [Row] = (try? await SupabaseClientManager.shared.client
+            .from("spot_results")
+            .select("local_date")
+            .eq("device_id", value: deviceId)
+            .gte("local_date", value: LocalDate.string(from: interval.start, timezone: timezone))
+            .lte("local_date", value: LocalDate.string(from: last, timezone: timezone))
+            .execute()
+            .value) ?? []
+        recordedDays = Set(rows.compactMap(\.local_date))
     }
 }

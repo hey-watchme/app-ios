@@ -430,6 +430,7 @@ struct SpotDetailView: View {
                     .foregroundColor(Color(white: 0.45))
                     .tracking(0.8)
                 Spacer()
+                InfoButton(text: "文字起こしの時刻から計算。応答がマイナスなら、相手の話の途中で話し始めた。声の値は、その人だけが話している区間で測り、マイクや距離で変わる")
             }
 
             VStack(alignment: .leading, spacing: 12) {
@@ -473,9 +474,6 @@ struct SpotDetailView: View {
                 }
             }
 
-            Text("文字起こしの時刻から計算。応答がマイナスなら、相手の話の途中で話し始めた。声の値は、その人だけが話している区間で測り、マイクや距離で変わる")
-                .font(.system(size: 11))
-                .foregroundColor(Color(white: 0.4))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -548,6 +546,7 @@ struct SpotDetailView: View {
                     .padding(.vertical, 2)
                     .background(Capsule().fill(Color.accentCoral.opacity(0.15)))
                 Spacer()
+                InfoButton(text: "声だけから推定したラベル（発話ごとの平均）。文字起こしの内容は見ていない。分析の文章には使っていない")
             }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -574,9 +573,6 @@ struct SpotDetailView: View {
                 }
             }
 
-            Text("声だけから推定したラベル（発話ごとの平均）。文字起こしの内容は見ていない。分析の文章には使っていない")
-                .font(.system(size: 11))
-                .foregroundColor(Color(white: 0.4))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -643,6 +639,7 @@ struct SpotDetailView: View {
                     .foregroundColor(Color(white: 0.45))
                     .tracking(0.8)
                 Spacer()
+                InfoButton(text: "音の分類器による検出（最大スコア・時間帯）。似た音を取り違えることがあります")
             }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -675,9 +672,6 @@ struct SpotDetailView: View {
                 }
             }
 
-            Text("音の分類器による検出（最大スコア・時間帯）。似た音を取り違えることがあります")
-                .font(.system(size: 11))
-                .foregroundColor(Color(white: 0.4))
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)

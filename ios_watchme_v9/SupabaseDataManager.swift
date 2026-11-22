@@ -70,56 +70,6 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Public Methods
     
-    /// 月間の気分スコアを取得（カレンダー表示用）
-    func fetchMonthlyVibeScores(deviceId: String, month: Date, timezone: TimeZone? = nil) async -> [MonthlyVibeData] {
-        let tz = timezone ?? TimeZone.current
-        
-        // 月の開始日と終了日を計算
-        var calendar = Calendar.current
-        calendar.timeZone = tz
-        
-        guard let monthInterval = calendar.dateInterval(of: .month, for: month) else {
-            print("❌ 月の期間を計算できませんでした")
-            return []
-        }
-        
-        let startDate = monthInterval.start
-        let endDate = calendar.date(byAdding: .day, value: -1, to: monthInterval.end) ?? monthInterval.end
-        
-        // 日付フォーマッター
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyy-MM-dd"
-        formatter.timeZone = tz
-        
-        let startDateString = formatter.string(from: startDate)
-        let endDateString = formatter.string(from: endDate)
-        
-        print("📅 月間データ取得: \(startDateString) 〜 \(endDateString)")
-        
-        // Supabaseから月間データを取得（daily_resultsテーブルを使用）
-        do {
-            let dashboardReports: [DashboardSummary] = try await supabase
-                .from("daily_results")
-                .select()
-                .eq("device_id", value: deviceId)
-                .gte("local_date", value: startDateString)
-                .lte("local_date", value: endDateString)
-                .execute()
-                .value
-
-            print("✅ \(dashboardReports.count)件の気分データを取得")
-
-            // MonthlyVibeData形式に変換
-            return dashboardReports.compactMap { report -> MonthlyVibeData? in
-                guard let date = formatter.date(from: report.date) else { return nil }
-                return MonthlyVibeData(date: date, averageScore: report.averageVibe.map { Double($0) })
-            }
-        } catch {
-            print("❌ 月間データ取得エラー: \(error)")
-            return []
-        }
-    }
-    
     /// ユーザーIDから関連するデバイスIDを取得
     func fetchDeviceId(for userId: String) async -> String? {
         guard let url = URL(string: "\(supabaseURL)/rest/v1/devices") else {

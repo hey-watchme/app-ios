@@ -458,7 +458,8 @@ struct SpotListenerCard: View {
     var body: some View {
         if let object = parseJSON(sceneRaw), let scene = object["scene"] as? [String: Any] {
             VStack(alignment: .leading, spacing: 12) {
-                DetailCardHeader(icon: "ear", title: "LISTENER", badge: (object["run"] as? [String: Any])?["model"] as? String)
+                DetailCardHeader(icon: "ear", title: "LISTENER", badge: (object["run"] as? [String: Any])?["model"] as? String,
+                                 info: "音声を直接聞いた AI の説明です。聞こえていない音を挙げることがあるため、出来事の回数には使っていません。")
 
                 VStack(alignment: .leading, spacing: 8) {
                     if let setting = scene["setting"] as? String, !setting.isEmpty {
@@ -504,10 +505,6 @@ struct SpotListenerCard: View {
                     }
                 }
 
-                Text("音声を直接聞いた AI の説明です。聞こえていない音を挙げることがあるため、出来事の回数には使っていません。")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(white: 0.4))
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .detailCard()
         }
@@ -538,7 +535,8 @@ struct SpotMeasurementDetailsCard: View {
             let acoustic = (metrics["acoustic"] as? [String: Any])?["speakers"] as? [String: [String: Any]] ?? [:]
 
             VStack(alignment: .leading, spacing: 12) {
-                DetailCardHeader(icon: "ruler", title: "MEASUREMENTS", badge: conversation["metric_version"] as? String)
+                DetailCardHeader(icon: "ruler", title: "MEASUREMENTS", badge: conversation["metric_version"] as? String,
+                                 info: "CONVERSATION に出していない残りの測定値です。割り込みは、相手が話している途中で話し始めた回数。")
 
                 HStack(spacing: 14) {
                     smallValue("長さ", seconds(whole["duration_seconds"]))
@@ -586,10 +584,6 @@ struct SpotMeasurementDetailsCard: View {
                     }
                 }
 
-                Text("CONVERSATION に出していない残りの測定値です。割り込みは、相手が話している途中で話し始めた回数。")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(white: 0.4))
-                    .fixedSize(horizontal: false, vertical: true)
             }
             .detailCard()
         }

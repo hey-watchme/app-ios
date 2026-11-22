@@ -162,7 +162,6 @@ struct LargeDateSection: View {
         .sheet(isPresented: $showDatePicker) {
             CustomCalendarView(selectedDate: $selectedDate, isPresented: $showDatePicker)
                 .environmentObject(deviceManager)
-                .environmentObject(dataManager)
         }
     }
 }
@@ -249,7 +248,6 @@ struct StickyDateHeader: View {
         .sheet(isPresented: $showDatePicker) {
             CustomCalendarView(selectedDate: $selectedDate, isPresented: $showDatePicker)
                 .environmentObject(deviceManager)
-                .environmentObject(dataManager)
         }
     }
 }
