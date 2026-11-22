@@ -42,6 +42,8 @@ struct ModernHeroGaugeView: View {
         else { return "Needs Care" }
     }
     
+    /// The day's summary as the analysis wrote it. Nothing made up when it has none: the
+    /// fixed English lines that used to stand in were not based on any measurement.
     private var insightText: String {
         if let text = dashboardSummary?.insights, !text.isEmpty {
             return text
@@ -52,13 +54,9 @@ struct ModernHeroGaugeView: View {
             }
             return "Record a moment at home with the button below. The day's Vibe and what happened will appear here."
         }
-        if vibeScore > 20 {
-            return "Your psychological state is remarkably positive today. Keep engaging in the activities that bring you this clarity."
-        } else {
-            return "It looks like today has some challenging moments. Remember to take a step back and breathe when needed."
-        }
+        return ""
     }
-    
+
     var body: some View {
         ZStack {
             // Ambient glow background based on score
@@ -127,6 +125,7 @@ struct ModernHeroGaugeView: View {
                             .tracking(0.5)
                     }
 
+                    if !insightText.isEmpty {
                     Text(insightText)
                         .font(.system(size: 15, weight: .regular))
                         .foregroundColor(Color(white: 0.7))
@@ -135,6 +134,7 @@ struct ModernHeroGaugeView: View {
                         .padding(.horizontal, 30)
                         .contentTransition(.opacity)
                         .animation(.easeInOut(duration: 0.5), value: insightText)
+                    }
                 }
                 
             }

@@ -301,10 +301,19 @@ struct QuestionModeView: View {
                     actionButton("はい", fill: .accentTeal, text: .darkBase) { fling(yes: true) }
                 }
             }
-            Button("スキップ") { answer("skip") }
-                .font(.system(size: 14))
-                .foregroundColor(Color(white: 0.56))
-                .padding(6)
+            HStack {
+                // A wrong tap is easy to make; nothing is sent until the end, so going back is free
+                if index > 0 {
+                    Button { back() } label: {
+                        Label("戻る", systemImage: "chevron.left")
+                    }
+                }
+                Spacer()
+                Button("スキップ") { answer("skip") }
+            }
+            .font(.system(size: 14))
+            .foregroundColor(Color(white: 0.56))
+            .padding(6)
         }
     }
 
@@ -327,7 +336,16 @@ struct QuestionModeView: View {
         answers[question.question_id] = key
         drag = .zero
         withAnimation(.easeInOut(duration: 0.2)) { index += 1 }
-        if done { Task { await send() } }
+    }
+
+    /// The question before this one again, with its answer cleared.
+    private func back() {
+        guard index > 0 else { return }
+        player.stop()
+        drag = .zero
+        sendError = nil
+        withAnimation(.easeInOut(duration: 0.2)) { index -= 1 }
+        answers[questions[index].question_id] = nil
     }
 
     // MARK: Summary
@@ -353,14 +371,17 @@ struct QuestionModeView: View {
                 Button("もう一度送る") { Task { await send() } }
                     .foregroundColor(.accentTeal)
             } else if answeredCount > 0 {
-                Text("答えをもとに、件数と分析の文章を作り直します。1 分ほどで反映されます。音声は聞き直しません。")
+                Text("閉じると答えを送ります。答えをもとに、件数と分析の文章を作り直します。1 分ほどで反映されます。音声は聞き直しません。")
                     .font(.system(size: 13))
                     .foregroundColor(Color(white: 0.56))
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer()
-            actionButton("閉じる", fill: .accentTeal, text: .darkBase) { dismiss() }
-                .disabled(sending)
+            HStack(spacing: 10) {
+                actionButton("戻る", fill: .darkElevated, text: .white) { back() }
+                actionButton("閉じる", fill: .accentTeal, text: .darkBase) { Task { await finish() } }
+            }
+            .disabled(sending)
         }
     }
 
@@ -392,10 +413,15 @@ struct QuestionModeView: View {
         }
     }
 
-    /// Closing in the middle sends what was answered so far.
+    /// Closing sends what was answered so far (in the middle too). If sending fails, the
+    /// screen stays so the error and "もう一度送る" can be seen.
     private func finish() async {
-        if !done, !answers.isEmpty {
+        if !answers.isEmpty {
             await send()
+            if sendError != nil {
+                if !done { withAnimation { index = questions.count } }
+                return
+            }
         }
         dismiss()
     }
