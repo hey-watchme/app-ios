@@ -89,7 +89,12 @@ final class SubjectManager: ObservableObject {
             let subjects = try await fetchSubjects(userId: userId)
             await MainActor.run {
                 state = .available(subjects)
-                if selectedSubjectID == nil || !subjects.contains(where: { $0.subjectId == selectedSubjectID }) {
+                // The sample shown in sample mode (signed out) is never saved; after signing in
+                // it must not stay selected. A choice the user made while signed in is saved.
+                let saved = UserDefaults.standard.string(forKey: selectedSubjectIDKey)
+                let carriedOverSample = selectedSubjectID == Self.sampleSubjectID && saved != Self.sampleSubjectID
+                if selectedSubjectID == nil || carriedOverSample
+                    || !subjects.contains(where: { $0.subjectId == selectedSubjectID }) {
                     selectedSubjectID = defaultSelection(from: subjects)
                 }
             }
