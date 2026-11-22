@@ -16,7 +16,6 @@ struct LoginView: View {
     @EnvironmentObject var deviceManager: DeviceManager
     @State private var email: String = ""
     @State private var password: String = ""
-    @State private var showPassword: Bool = false
     @State private var showValidationErrors: Bool = false
     @State private var isProcessing: Bool = false
     @Environment(\.dismiss) private var dismiss
@@ -58,82 +57,29 @@ struct LoginView: View {
                 Spacer()
 
                 // ログインフォーム
-                VStack(spacing: 16) {
-                    // Sign in with Apple
-                    AppleSignInButton(label: .signIn)
+                VStack(spacing: 14) {
+                    AppleSignInButton(purpose: .signIn)
 
-                    // Googleログインボタン（メイン）
-                    Button(action: {
+                    AppFormButton(title: "Google でログイン", systemImage: "globe", style: .dark, isLoading: isProcessing) {
                         focusedField = nil
                         signInWithGoogle()
-                    }) {
-                        HStack(spacing: 10) {
-                            if isProcessing {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .black))
-                                    .scaleEffect(0.8)
-                            } else {
-                                Image(systemName: "globe")
-                            }
-
-                            Text("Google でログイン")
-                                .fontWeight(.semibold)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 52)
-                        .background(Color.white)
-                        .foregroundColor(Color.black.opacity(0.88))
-                        .cornerRadius(14)
-                        .shadow(color: Color.white.opacity(0.10), radius: 8, x: 0, y: 4)
                     }
                     .disabled(userAccountManager.isLoading || isProcessing)
 
-                    // 区切り
-                    HStack {
-                        Rectangle()
-                            .frame(height: 1)
-                            .foregroundColor(.secondary.opacity(0.24))
-                        Text("またはメールアドレス・パスワード")
-                            .font(.caption)
-                            .foregroundColor(Color(white: 0.56))
-                            .padding(.horizontal, 8)
-                        Rectangle()
-                            .frame(height: 1)
-                            .foregroundColor(.secondary.opacity(0.24))
-                    }
-                    .padding(.vertical, 4)
+                    AppFormSectionTitle(text: "またはメールアドレスでログイン")
+                        .padding(.top, 6)
 
                     // メールアドレス入力
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("メールアドレス")
-                            .font(.caption)
-                            .foregroundColor(Color(white: 0.60))
+                        AppFieldLabel(text: "メールアドレス")
 
-                        HStack(spacing: 10) {
-                            Image(systemName: "envelope")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.accentTeal.opacity(0.85))
-
-                            TextField("メールアドレスを入力", text: $email)
-                                .textFieldStyle(.plain)
-                                .keyboardType(.emailAddress)
-                                .textContentType(.emailAddress)
-                                .autocapitalization(.none)
-                                .autocorrectionDisabled()
-                                .foregroundColor(.brightText)
-                                .focused($focusedField, equals: .email)
-                                .onSubmit {
-                                    focusedField = .password
-                                }
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(height: 52)
-                        .background(Color.darkSurface.opacity(0.95))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(focusedField == .email ? Color.accentTeal.opacity(0.9) : Color.white.opacity(0.12), lineWidth: focusedField == .email ? 1.6 : 1)
-                        )
-                        .cornerRadius(14)
+                        AppTextField("メールアドレスを入力", text: $email, icon: "envelope",
+                                     focus: $focusedField, field: .email)
+                            .keyboardType(.emailAddress)
+                            .textContentType(.emailAddress)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .onSubmit { focusedField = .password }
 
                         if showValidationErrors && email.isEmpty {
                             Text("メールアドレスを入力してください")
@@ -148,54 +94,15 @@ struct LoginView: View {
 
                     // パスワード入力
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("パスワード")
-                            .font(.caption)
-                            .foregroundColor(Color(white: 0.60))
+                        AppFieldLabel(text: "パスワード")
 
-                        HStack(spacing: 10) {
-                            Image(systemName: "lock")
-                                .font(.system(size: 14, weight: .medium))
-                                .foregroundColor(.accentTeal.opacity(0.85))
-
-                            Group {
-                                if showPassword {
-                                    TextField("パスワードを入力", text: $password)
-                                        .textFieldStyle(.plain)
-                                        .foregroundColor(.brightText)
-                                        .focused($focusedField, equals: .password)
-                                        .onSubmit {
-                                            focusedField = nil
-                                            handleLogin()
-                                        }
-                                } else {
-                                    SecureField("パスワードを入力", text: $password)
-                                        .textFieldStyle(.plain)
-                                        .textContentType(.password)
-                                        .foregroundColor(.brightText)
-                                        .focused($focusedField, equals: .password)
-                                        .onSubmit {
-                                            focusedField = nil
-                                            handleLogin()
-                                        }
-                                }
+                        AppTextField("パスワードを入力", text: $password, icon: "lock", isSecure: true,
+                                     focus: $focusedField, field: .password)
+                            .textContentType(.password)
+                            .onSubmit {
+                                focusedField = nil
+                                handleLogin()
                             }
-
-                            Button(action: {
-                                showPassword.toggle()
-                            }) {
-                                Image(systemName: showPassword ? "eye.slash" : "eye")
-                                    .font(.system(size: 14, weight: .medium))
-                                    .foregroundColor(Color(white: 0.72))
-                            }
-                        }
-                        .padding(.horizontal, 16)
-                        .frame(height: 52)
-                        .background(Color.darkSurface.opacity(0.95))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 14)
-                                .stroke(focusedField == .password ? Color.accentTeal.opacity(0.9) : Color.white.opacity(0.12), lineWidth: focusedField == .password ? 1.6 : 1)
-                        )
-                        .cornerRadius(14)
 
                         if showValidationErrors && password.isEmpty {
                             Text("パスワードを入力してください")
@@ -204,29 +111,13 @@ struct LoginView: View {
                         }
                     }
 
-                    // ログインボタン
-                    Button(action: {
+                    AppFormButton(title: "メールアドレスでログイン", style: .accent,
+                                  isLoading: userAccountManager.isLoading) {
                         focusedField = nil
                         handleLogin()
-                    }) {
-                        HStack {
-                            if userAccountManager.isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            }
-
-                            Text("メールアドレスでログイン")
-                                .fontWeight(.semibold)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 50)
-                        .background(Color.accentTeal)
-                        .foregroundColor(.white)
-                        .cornerRadius(14)
-                        .shadow(color: Color.accentTeal.opacity(0.26), radius: 10, x: 0, y: 5)
                     }
                     .disabled(userAccountManager.isLoading)
+                    .padding(.top, 4)
 
                     // エラーメッセージ
                     if let errorMessage = userAccountManager.authError {

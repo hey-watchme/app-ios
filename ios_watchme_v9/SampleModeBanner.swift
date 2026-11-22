@@ -2,16 +2,15 @@
 //  SampleModeBanner.swift
 //  ios_watchme_v9
 //
-//  Banner above the footer while the demo device is shown. Signed-out visitors
+//  Banner above the footer while the sample is shown. Signed-out visitors
 //  (sample mode) get a "使い始める" button that opens the sign-up sheet; signed-in
-//  users who still have the sample linked can go back to their own device.
+//  users who opened the sample can go back to their own record.
 //
 
 import SwiftUI
 
 struct SampleModeBanner: View {
     let isGuest: Bool
-    let subjectName: String?
     let onPrimary: () -> Void
 
     var body: some View {
@@ -23,16 +22,14 @@ struct SampleModeBanner: View {
                 .background(Circle().fill(Color.accentTeal.opacity(0.14)))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text(isGuest ? "ゲストモード・サンプルを表示中" : "これはサンプルデバイスです")
+                Text("サンプルを表示中")
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
-                Text(detail)
+                    .fixedSize(horizontal: false, vertical: true)
+                Text("分析結果は架空の人物です")
                     .font(.system(size: 12))
                     .foregroundColor(Color.white.opacity(0.66))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             Spacer(minLength: 4)
@@ -62,17 +59,12 @@ struct SampleModeBanner: View {
         .shadow(color: Color.black.opacity(0.22), radius: 18, x: 0, y: 8)
         .accessibilityElement(children: .combine)
     }
-
-    private var detail: String {
-        let name = (subjectName?.isEmpty == false) ? "\(subjectName!)さん" : "架空の子ども"
-        return "\(name)（架空）の記録です"
-    }
 }
 
 #Preview {
     ZStack(alignment: .bottom) {
         Color.darkBase.ignoresSafeArea()
-        SampleModeBanner(isGuest: true, subjectName: "田中みなと", onPrimary: {})
+        SampleModeBanner(isGuest: true, onPrimary: {})
             .padding(16)
     }
 }

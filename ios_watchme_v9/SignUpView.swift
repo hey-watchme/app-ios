@@ -13,8 +13,6 @@ struct SignUpView: View {
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var passwordConfirm: String = ""
-    @State private var showPassword: Bool = false
-    @State private var showPasswordConfirm: Bool = false
     @State private var agreeToTerms: Bool = false
     @State private var subscribeNewsletter: Bool = true
     @State private var agreeResearch: Bool = false  // opt-in: never pre-checked
@@ -44,14 +42,14 @@ struct SignUpView: View {
                 // アプリロゴ・タイトル
                 VStack(spacing: 15) {
                     // PNGロゴを表示
-                    Image("WatchMeLogo")
+                    Image("WatchMeLogoWhite")
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 180, height: 63)
 
                     Text("アカウント登録")
-                        .font(.title2)
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(Color(white: 0.64))
                 }
                 .padding(.top, 40)
 
@@ -59,18 +57,13 @@ struct SignUpView: View {
                 VStack(spacing: 16) {
                     // 表示名入力
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("表示名")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        AppFieldLabel(text: "表示名")
 
-                        TextField("お名前を入力", text: $displayName)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        AppTextField("お名前を入力", text: $displayName, icon: "person",
+                                     focus: $focusedField, field: .displayName)
                             .textContentType(.name)
                             .autocorrectionDisabled()
-                            .focused($focusedField, equals: .displayName)
-                            .onSubmit {
-                                focusedField = .email
-                            }
+                            .onSubmit { focusedField = .email }
 
                         if showValidationErrors && displayName.isEmpty {
                             Text("表示名を入力してください")
@@ -85,20 +78,15 @@ struct SignUpView: View {
 
                     // メールアドレス入力
                     VStack(alignment: .leading, spacing: 8) {
-                        Text("メールアドレス")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
+                        AppFieldLabel(text: "メールアドレス")
 
-                        TextField("メールアドレスを入力", text: $email)
-                            .textFieldStyle(RoundedBorderTextFieldStyle())
+                        AppTextField("メールアドレスを入力", text: $email, icon: "envelope",
+                                     focus: $focusedField, field: .email)
                             .keyboardType(.emailAddress)
                             .textContentType(.emailAddress)
-                            .autocapitalization(.none)
+                            .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                            .focused($focusedField, equals: .email)
-                            .onSubmit {
-                                focusedField = .password
-                            }
+                            .onSubmit { focusedField = .password }
 
                         if showValidationErrors && email.isEmpty {
                             Text("メールアドレスを入力してください")
@@ -113,40 +101,12 @@ struct SignUpView: View {
 
                     // パスワード入力
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("パスワード")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        AppFieldLabel(text: "パスワード")
 
-                            Spacer()
-
-                            Button(action: {
-                                showPassword.toggle()
-                            }) {
-                                Image(systemName: showPassword ? "eye.slash" : "eye")
-                                    .font(.caption)
-                                    .foregroundColor(Color.primary)
-                            }
-                        }
-
-                        Group {
-                            if showPassword {
-                                TextField("8文字以上の英数字", text: $password)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .focused($focusedField, equals: .password)
-                                    .onSubmit {
-                                        focusedField = .passwordConfirm
-                                    }
-                            } else {
-                                SecureField("8文字以上の英数字", text: $password)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .textContentType(.newPassword)
-                                    .focused($focusedField, equals: .password)
-                                    .onSubmit {
-                                        focusedField = .passwordConfirm
-                                    }
-                            }
-                        }
+                        AppTextField("8文字以上の英数字", text: $password, icon: "lock", isSecure: true,
+                                     focus: $focusedField, field: .password)
+                            .textContentType(.newPassword)
+                            .onSubmit { focusedField = .passwordConfirm }
 
                         if showValidationErrors && password.isEmpty {
                             Text("パスワードを入力してください")
@@ -159,46 +119,18 @@ struct SignUpView: View {
                         } else {
                             Text("8文字以上、英数字を含む")
                                 .font(.caption2)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(AppForm.labelColor)
                         }
                     }
 
                     // パスワード確認入力
                     VStack(alignment: .leading, spacing: 8) {
-                        HStack {
-                            Text("パスワード確認")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
+                        AppFieldLabel(text: "パスワード確認")
 
-                            Spacer()
-
-                            Button(action: {
-                                showPasswordConfirm.toggle()
-                            }) {
-                                Image(systemName: showPasswordConfirm ? "eye.slash" : "eye")
-                                    .font(.caption)
-                                    .foregroundColor(Color.primary)
-                            }
-                        }
-
-                        Group {
-                            if showPasswordConfirm {
-                                TextField("パスワードを再入力", text: $passwordConfirm)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .focused($focusedField, equals: .passwordConfirm)
-                                    .onSubmit {
-                                        focusedField = nil
-                                    }
-                            } else {
-                                SecureField("パスワードを再入力", text: $passwordConfirm)
-                                    .textFieldStyle(RoundedBorderTextFieldStyle())
-                                    .textContentType(.newPassword)
-                                    .focused($focusedField, equals: .passwordConfirm)
-                                    .onSubmit {
-                                        focusedField = nil
-                                    }
-                            }
-                        }
+                        AppTextField("パスワードを再入力", text: $passwordConfirm, icon: "lock", isSecure: true,
+                                     focus: $focusedField, field: .passwordConfirm)
+                            .textContentType(.newPassword)
+                            .onSubmit { focusedField = nil }
 
                         if showValidationErrors && password != passwordConfirm {
                             Text("パスワードが一致しません")
@@ -213,7 +145,7 @@ struct SignUpView: View {
                             agreeToTerms.toggle()
                         }) {
                             Image(systemName: agreeToTerms ? "checkmark.square.fill" : "square")
-                                .foregroundColor(agreeToTerms ? Color.primary : Color.secondary)
+                                .foregroundColor(agreeToTerms ? Color.accentTeal : AppForm.labelColor)
                                 .font(.title3)
                         }
 
@@ -226,13 +158,13 @@ struct SignUpView: View {
                                 }) {
                                     Text("利用規約")
                                         .font(.caption)
-                                        .foregroundColor(Color.primary)
+                                        .foregroundColor(Color.accentTeal)
                                         .underline()
                                 }
 
                                 Text("と")
                                     .font(.caption)
-                                    .foregroundColor(.primary)
+                                    .foregroundColor(.brightText)
 
                                 Button(action: {
                                     if let url = URL(string: "https://hey-watch.me/privacy") {
@@ -241,14 +173,14 @@ struct SignUpView: View {
                                 }) {
                                     Text("プライバシーポリシー")
                                         .font(.caption)
-                                        .foregroundColor(Color.primary)
+                                        .foregroundColor(Color.accentTeal)
                                         .underline()
                                 }
                             }
 
                             Text("に同意します")
                                 .font(.caption)
-                                .foregroundColor(.primary)
+                                .foregroundColor(.brightText)
                         }
 
                         Spacer()
@@ -269,13 +201,13 @@ struct SignUpView: View {
                             subscribeNewsletter.toggle()
                         }) {
                             Image(systemName: subscribeNewsletter ? "checkmark.square.fill" : "square")
-                                .foregroundColor(subscribeNewsletter ? Color.primary : Color.secondary)
+                                .foregroundColor(subscribeNewsletter ? Color.accentTeal : AppForm.labelColor)
                                 .font(.title3)
                         }
 
                         Text("新機能やアップデート情報を受け取る（任意）")
                             .font(.caption)
-                            .foregroundColor(.primary)
+                            .foregroundColor(.brightText)
 
                         Spacer()
                     }
@@ -287,21 +219,21 @@ struct SignUpView: View {
                             agreeResearch.toggle()
                         }) {
                             Image(systemName: agreeResearch ? "checkmark.square.fill" : "square")
-                                .foregroundColor(agreeResearch ? Color.primary : Color.secondary)
+                                .foregroundColor(agreeResearch ? Color.accentTeal : AppForm.labelColor)
                                 .font(.title3)
                         }
 
                         VStack(alignment: .leading, spacing: 4) {
                             Text("研究に協力する（任意）：録音した音声を、分析の精度を確かめ改善するために保管することに同意します。あとからマイページで変更できます。")
                                 .font(.caption)
-                                .foregroundColor(.primary)
+                                .foregroundColor(.brightText)
                                 .fixedSize(horizontal: false, vertical: true)
                             Button(action: {
                                 showResearchDetails = true
                             }) {
                                 Text("詳しく見る")
                                     .font(.caption)
-                                    .foregroundColor(Color.primary)
+                                    .foregroundColor(Color.accentTeal)
                                     .underline()
                             }
                         }
@@ -335,7 +267,8 @@ struct SignUpView: View {
                     }
 
                     // 登録ボタン
-                    Button(action: {
+                    AppFormButton(title: userAccountManager.isLoading ? "登録中..." : "アカウントを作成",
+                                  style: .accent, isLoading: userAccountManager.isLoading) {
                         updateValidationState()
                         if isFormValidState {
                             showValidationErrors = false
@@ -345,40 +278,24 @@ struct SignUpView: View {
                         } else {
                             showValidationErrors = true
                         }
-                    }) {
-                        HStack {
-                            if userAccountManager.isLoading {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                    .scaleEffect(0.8)
-                            }
-
-                            Text(userAccountManager.isLoading ? "登録中..." : "アカウントを作成")
-                                .fontWeight(.semibold)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 44)
-                        .background(Color.primary)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
                     }
                     .disabled(userAccountManager.isLoading)
                     .padding(.top, 8)
                 }
-                .padding(.horizontal, 40)
+                .padding(.horizontal, 28)
 
                 // ログインリンク
                 HStack(spacing: 4) {
                     Text("すでにアカウントをお持ちですか？")
                         .font(.footnote)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppForm.labelColor)
 
                     Button(action: {
                         showLogin = true
                     }) {
                         Text("ログイン")
                             .font(.footnote)
-                            .foregroundColor(Color.primary)
+                            .foregroundColor(Color.accentTeal)
                     }
                 }
                 .padding(.top, 20)
@@ -387,6 +304,7 @@ struct SignUpView: View {
             }
             .frame(maxWidth: .infinity)
         }
+        .background(Color.darkBase.ignoresSafeArea())
         .fullScreenCover(isPresented: $showSuccessView) {
             SignUpSuccessView(userEmail: email)
                 .onDisappear {

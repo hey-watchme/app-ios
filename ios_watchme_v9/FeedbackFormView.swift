@@ -81,27 +81,8 @@ struct FeedbackFormView: View {
                                 .fontWeight(.semibold)
                                 .foregroundColor(.secondary)
 
-                            ZStack(alignment: .topLeading) {
-                                if messageBody.isEmpty {
-                                    Text("詳細をご記入ください...")
-                                        .foregroundColor(.secondary)
-                                        .padding(.horizontal, 4)
-                                        .padding(.vertical, 8)
-                                }
-
-                                TextEditor(text: $messageBody)
-                                    .frame(minHeight: 150)
-                                    .foregroundColor(.primary)
-                                    .scrollContentBackground(.hidden)
-                                    .background(Color.clear)
-                            }
-                            .padding(8)
-                            .background(Color(.systemBackground))
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 8)
-                                    .stroke(Color(.separator), lineWidth: 1)
-                            )
-                            .cornerRadius(8)
+                            AppTextField("詳細をご記入ください...", text: $messageBody, axis: .vertical)
+                                .lineLimit(6...12)
                         }
                         .padding(.horizontal)
 

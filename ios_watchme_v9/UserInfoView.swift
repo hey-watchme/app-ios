@@ -70,7 +70,7 @@ struct UserInfoView: View {
                                     
                                     // 名前（判定ロジックと表示を一致させる）
                                     if userAccountManager.currentUser == nil {
-                                        Text("ゲスト（ログインしていません）")
+                                        Text("サンプルモード（ログインしていません）")
                                             .font(.title2)
                                             .fontWeight(.bold)
                                             .foregroundColor(.primary)

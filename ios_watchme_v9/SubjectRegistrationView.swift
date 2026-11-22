@@ -299,8 +299,7 @@ struct SubjectRegistrationView: View {
                         Spacer()
                     }
                     
-                    TextField("例：田中太郎", text: $name)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    AppTextField("例：田中太郎", text: $name)
                         .disabled(isViewOnly)
                 }
                 
@@ -311,8 +310,7 @@ struct SubjectRegistrationView: View {
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity, alignment: .leading)
                     
-                    TextField("例：25", text: $age)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    AppTextField("例：25", text: $age)
                         .keyboardType(.numberPad)
                         .disabled(isViewOnly)
                 }
@@ -428,8 +426,7 @@ struct SubjectRegistrationView: View {
                         .fontWeight(.medium)
                         .frame(maxWidth: .infinity, alignment: .leading)
 
-                    TextField("例：横浜市", text: $city)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                    AppTextField("例：横浜市", text: $city)
                         .disabled(isViewOnly)
                 }
             }
@@ -448,8 +445,7 @@ struct SubjectRegistrationView: View {
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                TextField("例：趣味はランニング、朝型の生活リズム", text: $notes, axis: .vertical)
-                    .textFieldStyle(RoundedBorderTextFieldStyle())
+                AppTextField("例：趣味はランニング、朝型の生活リズム", text: $notes, axis: .vertical)
                     .lineLimit(3...6)
                     .disabled(isViewOnly)
             }

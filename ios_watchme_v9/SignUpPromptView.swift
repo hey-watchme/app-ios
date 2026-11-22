@@ -21,8 +21,8 @@ struct SignUpPromptView: View {
     @State private var showLogin = false
 
     private var message: String {
-        if let action {
-            return "いまはサンプルを表示しています。\(action)には、アカウントの登録が必要です。"
+        if action != nil {
+            return "アカウント登録して、会話の分析を始めましょう。"
         }
         return "アカウントを登録すると、ご家族の録音を分析して記録できます。"
     }
@@ -43,36 +43,12 @@ struct SignUpPromptView: View {
             .padding(.horizontal, 24)
 
             VStack(spacing: 12) {
-                AppleSignInButton(label: .signUp, height: 50, cornerRadius: 12)
+                AppleSignInButton(purpose: .signUp)
 
-                Button(action: signInWithGoogle) {
-                    HStack {
-                        Image(systemName: "globe")
-                        Text("Google で登録")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.darkElevated)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
-                    )
-                }
+                AppFormButton(title: "Google で登録", systemImage: "globe", style: .dark, action: signInWithGoogle)
 
-                Button(action: { showSignUp = true }) {
-                    HStack {
-                        Image(systemName: "envelope.fill")
-                        Text("メールアドレスで登録")
-                            .fontWeight(.semibold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 50)
-                    .background(Color.safeColor("AppAccentColor"))
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
+                AppFormButton(title: "メールアドレスで登録", systemImage: "envelope.fill", style: .accent) {
+                    showSignUp = true
                 }
             }
             .padding(.horizontal, 24)

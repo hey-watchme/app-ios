@@ -88,6 +88,9 @@ struct MainAppView: View {
     @State private var showOnboarding = false
     /// Signed-out visitors who finished the onboarding go straight to sample mode on later launches.
     @AppStorage("sample_mode_entered") private var sampleModeEntered = false
+    /// Shown over the sample when a visitor arrives from the onboarding: they choose to look
+    /// at the sample or to sign up, so the sample never appears without explanation.
+    @State private var showSampleIntro = false
     @State private var showRecordingSheet = false
     @State private var aiConsentGranted = false
     @State private var showFirstLaunchGuide = false
@@ -201,7 +204,6 @@ struct MainAppView: View {
                     if showSampleBanner {
                         SampleModeBanner(
                             isGuest: isGuest,
-                            subjectName: deviceManager.selectedSubject?.name,
                             onPrimary: handleSampleBannerAction
                         )
                         .transition(.move(edge: .bottom).combined(with: .opacity))
@@ -224,6 +226,20 @@ struct MainAppView: View {
                 .padding(.horizontal, 16)
                 .padding(.bottom, 8)
                 .animation(.easeInOut(duration: 0.25), value: showSampleBanner)
+            }
+            .overlay {
+                if showSampleIntro && isGuest {
+                    SampleModeIntroView(
+                        onView: {
+                            withAnimation(.easeInOut(duration: 0.2)) { showSampleIntro = false }
+                        },
+                        onStart: {
+                            showSampleIntro = false
+                            userAccountManager.promptSignUp()
+                        }
+                    )
+                    .transition(.opacity)
+                }
             }
             .ignoresSafeArea(.keyboard, edges: .bottom)
             .sheet(item: $userAccountManager.signUpPrompt) { prompt in
@@ -362,6 +378,7 @@ struct MainAppView: View {
         selectedTab = .home
         sampleModeEntered = true
         showOnboarding = false
+        showSampleIntro = true
     }
 
     private var loadingView: some View {
