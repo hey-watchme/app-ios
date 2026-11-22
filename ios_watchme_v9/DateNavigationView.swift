@@ -10,11 +10,11 @@ import SwiftUI
 struct DateNavigationView: View {
     @Binding var selectedDate: Date
     @Binding var showDatePicker: Bool
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     
     /// デバイスのタイムゾーンを考慮したCalendar
     private var calendar: Calendar {
-        deviceManager.deviceCalendar
+        subjectManager.subjectCalendar
     }
     
     /// デバイスのタイムゾーンを考慮したDateFormatter
@@ -22,7 +22,7 @@ struct DateNavigationView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年MM月dd日"
         formatter.locale = Locale(identifier: "ja_JP")
-        formatter.timeZone = deviceManager.selectedDeviceTimezone
+        formatter.timeZone = subjectManager.selectedTimezone
         return formatter
     }
     

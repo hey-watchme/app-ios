@@ -13,7 +13,7 @@ import SwiftUI
 import Supabase
 
 struct DayContentView<Slot: View>: View {
-    let deviceId: String?
+    let subjectId: String?
     let localDate: String
     let summary: DashboardSummary?
     let blocks: [DashboardTimeBlock]
@@ -50,18 +50,18 @@ struct DayContentView<Slot: View>: View {
 
             // In detail: the words as said, what happened most, who to whom
             HomeDigestCard(blocks: blocks)
-            if let deviceId {
-                HomeEventRankingCard(deviceId: deviceId, localDate: localDate, refreshKey: refreshKey)
-                HomeWhoToWhomCard(deviceId: deviceId, localDate: localDate, refreshKey: refreshKey)
+            if let subjectId {
+                HomeEventRankingCard(subjectId: subjectId, localDate: localDate, refreshKey: refreshKey)
+                HomeWhoToWhomCard(subjectId: subjectId, localDate: localDate, refreshKey: refreshKey)
             }
         }
     }
 }
 
 extension DayContentView where Slot == EmptyView {
-    init(deviceId: String?, localDate: String, summary: DashboardSummary?, blocks: [DashboardTimeBlock],
+    init(subjectId: String?, localDate: String, summary: DashboardSummary?, blocks: [DashboardTimeBlock],
          onOpenSpot: @escaping (DashboardTimeBlock) -> Void) {
-        self.init(deviceId: deviceId, localDate: localDate, summary: summary, blocks: blocks,
+        self.init(subjectId: subjectId, localDate: localDate, summary: summary, blocks: blocks,
                   onOpenSpot: onOpenSpot, afterScore: { EmptyView() })
     }
 }
@@ -72,7 +72,7 @@ extension DayContentView where Slot == EmptyView {
 /// first. Counts only, no judgement. Low-confidence events are left out; a recording
 /// analysed more than once counts by its newest version.
 struct HomeWhoToWhomCard: View {
-    let deviceId: String
+    let subjectId: String
     let localDate: String
     let refreshKey: String
 
@@ -126,7 +126,7 @@ struct HomeWhoToWhomCard: View {
                 .detailCard()
             }
         }
-        .task(id: "\(deviceId)-\(localDate)-\(refreshKey)") { await load() }
+        .task(id: "\(subjectId)-\(localDate)-\(refreshKey)") { await load() }
     }
 
     private func load() async {
@@ -134,11 +134,11 @@ struct HomeWhoToWhomCard: View {
         do {
             async let runsTask: [Run] = client.from("spot_event_runs")
                 .select("recorded_at, extractor_version")
-                .eq("device_id", value: deviceId).eq("local_date", value: localDate)
+                .eq("subject_id", value: subjectId).eq("local_date", value: localDate)
                 .execute().value
             async let rowsTask: [Row] = client.from("spot_events")
                 .select("recorded_at, extractor_version, event_type, actor, target")
-                .eq("device_id", value: deviceId).eq("local_date", value: localDate)
+                .eq("subject_id", value: subjectId).eq("local_date", value: localDate)
                 .in("event_type", values: ["reprimand", "conflict", "praise"])
                 .neq("confidence", value: "low")
                 .execute().value
@@ -167,11 +167,11 @@ struct HomeWhoToWhomCard: View {
 /// The day's analysis pushed onto the app's navigation stack (from the report's day panels).
 /// Going back returns to where it was opened from.
 struct DayScreen: View {
-    let deviceId: String
+    let subjectId: String
     let localDate: String  // yyyy-MM-dd
 
     @EnvironmentObject var dataManager: SupabaseDataManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
 
     @State private var summary: DashboardSummary?
     @State private var blocks: [DashboardTimeBlock] = []
@@ -185,7 +185,7 @@ struct DayScreen: View {
                     .tint(.accentTeal)
                     .padding(.top, 60)
             } else {
-                DayContentView(deviceId: deviceId, localDate: localDate, summary: summary, blocks: blocks) {
+                DayContentView(subjectId: subjectId, localDate: localDate, summary: summary, blocks: blocks) {
                     selectedSpot = $0
                 }
                 .padding(.horizontal, 20)
@@ -201,10 +201,10 @@ struct DayScreen: View {
         .toolbarBackground(.visible, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .sheet(item: $selectedSpot) { spot in
-            SpotDetailView(deviceId: deviceId, spotData: spot)
+            SpotDetailView(subjectId: subjectId, spotData: spot)
                 .environmentObject(dataManager)
         }
-        .task(id: "\(deviceId)-\(localDate)") { await load() }
+        .task(id: "\(subjectId)-\(localDate)") { await load() }
     }
 
     private var dateTitle: String {
@@ -220,9 +220,9 @@ struct DayScreen: View {
 
     private func load() async {
         isLoading = true
-        let timezone = deviceManager.getTimezone(for: deviceId)
-        async let summaryTask = dataManager.fetchDailyResults(deviceId: deviceId, localDate: localDate, timezone: timezone)
-        async let blocksTask = dataManager.fetchDashboardTimeBlocks(deviceId: deviceId, localDate: localDate, timezone: timezone)
+        let timezone = subjectManager.getTimezone(for: subjectId)
+        async let summaryTask = dataManager.fetchDailyResults(subjectId: subjectId, localDate: localDate, timezone: timezone)
+        async let blocksTask = dataManager.fetchDashboardTimeBlocks(subjectId: subjectId, localDate: localDate, timezone: timezone)
         summary = await summaryTask
         blocks = await blocksTask
         isLoading = false

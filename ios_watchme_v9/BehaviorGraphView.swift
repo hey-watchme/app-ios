@@ -9,7 +9,7 @@ import SwiftUI
 
 struct BehaviorGraphView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
 
     // 独自にデータを管理（完全分離型）
@@ -124,8 +124,8 @@ struct BehaviorGraphView: View {
                     } else {
                         // エンプティステート表示（共通コンポーネント使用）
                         Group {
-                            if deviceManager.selectedDeviceID == nil {
-                                DeviceNotSelectedView(graphType: .behavior)
+                            if subjectManager.selectedSubjectID == nil {
+                                SubjectNotSelectedView(graphType: .behavior)
                             } else {
                                 GraphEmptyStateView(graphType: .behavior)
                             }
@@ -151,7 +151,7 @@ struct BehaviorGraphView: View {
 
     // データ取得メソッド
     private func loadBehaviorData() async {
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             print("❌ [BehaviorGraphView] No device selected")
             isLoading = false
             return
@@ -160,9 +160,9 @@ struct BehaviorGraphView: View {
         isLoading = true
         defer { isLoading = false }
 
-        let timezone = deviceManager.getTimezone(for: deviceId)
+        let timezone = subjectManager.getTimezone(for: subjectId)
         let result = await dataManager.fetchAllReports(
-            deviceId: deviceId,
+            subjectId: subjectId,
             date: selectedDate,
             timezone: timezone
         )

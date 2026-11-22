@@ -13,7 +13,7 @@ struct SignUpPromptView: View {
     let action: String?
 
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var toastManager: ToastManager
     @Environment(\.dismiss) private var dismiss
 
@@ -76,7 +76,7 @@ struct SignUpPromptView: View {
             LoginView(onStartNew: nil)
                 .environmentObject(userAccountManager)
                 .environmentObject(toastManager)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
         }
         .onChange(of: userAccountManager.authState) { _, newValue in
             if newValue.isAuthenticated {
@@ -92,7 +92,7 @@ struct SignUpPromptView: View {
 
 #Preview {
     SignUpPromptView(action: "録音する")
-        .environmentObject(UserAccountManager(deviceManager: DeviceManager()))
-        .environmentObject(DeviceManager())
+        .environmentObject(UserAccountManager(subjectManager: SubjectManager()))
+        .environmentObject(SubjectManager())
         .environmentObject(ToastManager.shared)
 }

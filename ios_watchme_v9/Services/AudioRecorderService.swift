@@ -39,7 +39,7 @@ final class AudioRecorderService: NSObject {
 
     private struct ActiveSession {
         let id: String
-        let deviceId: String
+        let subjectId: String
         let timezone: TimeZone
         let startedAt: Date
         var nextSequence = 0
@@ -111,11 +111,11 @@ final class AudioRecorderService: NSObject {
     }
 
     /// Start a session. Returns its id. Throws when nothing was recorded.
-    func startSession(deviceId: String, timezone: TimeZone) throws -> String {
+    func startSession(subjectId: String, timezone: TimeZone) throws -> String {
         guard session == nil else { throw RecordingError.alreadyRecording }
         try ensureFreeSpace()
 
-        let newSession = ActiveSession(id: UUID().uuidString, deviceId: deviceId, timezone: timezone, startedAt: Date())
+        let newSession = ActiveSession(id: UUID().uuidString, subjectId: subjectId, timezone: timezone, startedAt: Date())
         session = newSession
         do {
             try startChunk()
@@ -172,7 +172,7 @@ final class AudioRecorderService: NSObject {
         closing[ObjectIdentifier(next)] = chunk
 
         chunkStarted.send(ChunkRecord(
-            id: chunk.id, fileName: fileName, deviceId: active.deviceId, recordedAt: now,
+            id: chunk.id, fileName: fileName, subjectId: active.subjectId, recordedAt: now,
             sessionId: active.id, sequence: chunk.sequence, durationSeconds: nil, state: .recording,
             sessionStartedAt: active.firstChunkAt
         ))

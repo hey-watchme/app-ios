@@ -88,8 +88,8 @@ class UserAccountManager: ObservableObject {
     /// Set when a signed-out visitor tries something that needs an account; the main view shows the sign-up sheet.
     @Published var signUpPrompt: SignUpPrompt? = nil
     
-    // DeviceManagerへの参照
-    private let deviceManager: DeviceManager
+    // SubjectManagerへの参照
+    private let subjectManager: SubjectManager
     
     // Supabase設定
     private let supabaseURL = "https://qvtlwotzuzbavrzqhyvt.supabase.co"
@@ -99,12 +99,12 @@ class UserAccountManager: ObservableObject {
     private var refreshTimer: Timer?
     private let tokenRefreshInterval: TimeInterval = 45 * 60 // 45分（1時間のトークンに対して15分前にリフレッシュ）
     
-    init(deviceManager: DeviceManager) {
+    init(subjectManager: SubjectManager) {
         let startTime = Date()
         print("⏱️ [UAM-INIT] UserAccountManager初期化開始")
 
-        self.deviceManager = deviceManager
-        print("⏱️ [UAM-INIT] deviceManager設定完了: \(Date().timeIntervalSince(startTime))秒")
+        self.subjectManager = subjectManager
+        print("⏱️ [UAM-INIT] subjectManager設定完了: \(Date().timeIntervalSince(startTime))秒")
 
         // アプリがフォアグラウンドに戻った時の処理を設定
         setupNotificationObservers()
@@ -282,7 +282,7 @@ class UserAccountManager: ObservableObject {
                     self.initializeGuestMode()
                 }
                 // Load the sample before leaving the logo screen, so the dashboard is laid out once.
-                await self.deviceManager.loadSampleForGuest()
+                await self.subjectManager.loadSampleForGuest()
                 print("⏱️ [AUTH-CHECK] ゲストモード初期化完了: \(Date().timeIntervalSince(guestStart))秒")
                 await MainActor.run {
                     self.isCheckingAuthStatus = false  // 認証確認完了
@@ -293,7 +293,7 @@ class UserAccountManager: ObservableObject {
     }
 
     // MARK: - Sample mode (not signed in)
-    /// Not signed in: no account is created. The demo device is read with the anon key
+    /// Not signed in: no account is created. The sample is read with the anon key
     /// (platform supabase/migrations/20261117000000_sample_mode_read.sql).
     func initializeGuestMode() {
         Task { @MainActor in
@@ -434,9 +434,9 @@ class UserAccountManager: ObservableObject {
                 UserDefaults.standard.removeObject(forKey: "guest_id")
                 self.guestId = nil
 
-                // ✅ DeviceManagerの状態を明示的にリセット
-                self.deviceManager.resetState()
-                print("🔄 DeviceManager状態リセット完了")
+                // ✅ SubjectManagerの状態を明示的にリセット
+                self.subjectManager.resetState()
+                print("🔄 SubjectManager状態リセット完了")
 
                 // トークンリフレッシュタイマーを開始
                 self.startTokenRefreshTimer()
@@ -897,14 +897,14 @@ class UserAccountManager: ObservableObject {
             self.isAuthenticated = false
             self.authState = .unauthenticated
             self.authError = nil
-            self.deviceManager.clearState()
+            self.subjectManager.clearState()
 
             // 未認証モードからのログアウト操作時は、初期画面へ戻す
             if !wasAuthenticated {
                 self.shouldResetToWelcome = true
             }
         }
-        await deviceManager.loadSampleForGuest()
+        await subjectManager.loadSampleForGuest()
 
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
@@ -941,14 +941,14 @@ class UserAccountManager: ObservableObject {
 
             print("👋 ローカル認証データクリア完了: authState = unauthenticated")
 
-            // DeviceManagerの状態もクリア
-            self.deviceManager.clearState()
+            // SubjectManagerの状態もクリア
+            self.subjectManager.clearState()
 
             // トークンリフレッシュタイマーを停止
             self.refreshTimer?.invalidate()
             self.refreshTimer = nil
         }
-        await deviceManager.loadSampleForGuest()
+        await subjectManager.loadSampleForGuest()
 
         // 保存された認証情報を削除
         UserDefaults.standard.removeObject(forKey: "supabase_user")
@@ -1019,29 +1019,25 @@ class UserAccountManager: ObservableObject {
                 await requestAPNsRegistration()
             }
 
-            // デバイス一覧を読み込み
-            await deviceManager.loadDevices(for: userId)
+            // The user's subjects
+            await subjectManager.loadSubjects(for: userId)
 
-            // デバイスが0件の場合は自動登録
-            if !deviceManager.hasRealDevices {
-                print("📱 デバイスが0件のため、自動登録を実行")
+            // A new account gets one unnamed subject (名称未設定) to record to.
+            if !subjectManager.hasOwnSubjects {
                 do {
-                    let _ = try await deviceManager.registerDevice(userId: userId)
-                    // 再度デバイス一覧を読み込み
-                    await deviceManager.loadDevices(for: userId)
+                    try await subjectManager.createSubject()
+                    await subjectManager.loadSubjects(for: userId)
                 } catch {
-                    print("❌ デバイス自動登録に失敗: \(error)")
+                    print("❌ Failed to create the first subject: \(error)")
                 }
-            } else {
-                print("✅ 既存デバイスあり（\(deviceManager.devices.count)件）")
             }
         } else {
             print("⚠️ プロファイル取得に失敗 - デバイス初期化をスキップしてフォールバックに移行")
 
             // プロファイル未取得でもUIが無限ローディングにならないようにフォールバック
             await MainActor.run {
-                self.deviceManager.clearState()
-                self.deviceManager.state = .available([])
+                self.subjectManager.clearState()
+                self.subjectManager.state = .available([])
             }
             UserDefaults.standard.removeObject(forKey: "current_user_id")
         }

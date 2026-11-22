@@ -12,7 +12,7 @@ import AVFoundation
 
 struct VideoPickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var recordingStore: RecordingStore
 
@@ -63,8 +63,8 @@ struct VideoPickerView: View {
             return
         }
 
-        // Device check
-        guard deviceManager.selectedDeviceID != nil else {
+        // Subject check
+        guard subjectManager.selectedSubjectID != nil else {
             await MainActor.run {
                 ToastManager.shared.showError(
                     title: "分析対象が選ばれていません",

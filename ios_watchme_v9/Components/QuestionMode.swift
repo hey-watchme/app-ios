@@ -18,7 +18,7 @@ struct QuestionsEntry: View {
         case recording, dashboard, profile(name: String?)
     }
 
-    let deviceId: String?
+    let subjectId: String?
     var recordedAt: String? = nil
     var scope: String? = nil
     let place: Place
@@ -42,7 +42,7 @@ struct QuestionsEntry: View {
                 .transition(.opacity)
             }
         }
-        .task(id: "\(deviceId ?? "")|\(recordedAt ?? "")|\(scope ?? "")") { await load() }
+        .task(id: "\(subjectId ?? "")|\(recordedAt ?? "")|\(scope ?? "")") { await load() }
         .fullScreenCover(isPresented: $showMode, onDismiss: { Task { await load() } }) {
             QuestionModeView(questions: questions)
         }
@@ -96,8 +96,8 @@ struct QuestionsEntry: View {
     }
 
     private func load() async {
-        guard let deviceId else { questions = []; return }
-        let found = await QuestionService.open(deviceId: deviceId, recordedAt: recordedAt, scope: scope)
+        guard let subjectId else { questions = []; return }
+        let found = await QuestionService.open(subjectId: subjectId, recordedAt: recordedAt, scope: scope)
         withAnimation(.easeInOut(duration: 0.25)) { questions = found }
     }
 }
@@ -428,7 +428,7 @@ struct QuestionModeView: View {
 // MARK: - Snippet player
 
 /// Plays a few seconds around the moment a question is about, through a short-lived URL from
-/// GET /audio (the API checks the token and the device link). In every build: without hearing
+/// GET /audio (the API checks the token and the subject membership). In every build: without hearing
 /// the moment, a question often cannot be answered (owner's decision, 2026-11-20).
 @MainActor
 final class QuestionSnippetPlayer: ObservableObject {

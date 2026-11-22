@@ -12,7 +12,7 @@ struct AccountSettingsView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @State private var showLogoutConfirmation = false
     @State private var isLoggingOut = false
     @State private var showAboutApp = false
@@ -263,7 +263,7 @@ struct AccountSettingsView: View {
 
         do {
             // NetworkManagerを必要な時にだけ作成（軽量化）
-            let networkManager = NetworkManager(userAccountManager: userAccountManager, deviceManager: deviceManager)
+            let networkManager = NetworkManager(userAccountManager: userAccountManager, subjectManager: subjectManager)
 
             // Apple accounts: ask Apple once more so the server can revoke the app's tokens.
             var appleCode: String?
@@ -301,10 +301,10 @@ struct AccountSettingsView: View {
 }
 
 #Preview {
-    let deviceManager = DeviceManager()
-    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
+    let subjectManager = SubjectManager()
+    let userAccountManager = UserAccountManager(subjectManager: subjectManager)
 
     return AccountSettingsView()
         .environmentObject(userAccountManager)
-        .environmentObject(deviceManager)
+        .environmentObject(subjectManager)
 }

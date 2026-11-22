@@ -23,7 +23,7 @@ struct ChunkRecord: Codable, Identifiable, Equatable {
 
     let id: String
     let fileName: String          // YYYY-MM-DD/HH-mm-ss.wav under Documents
-    let deviceId: String          // the device the chunk was recorded for (not the one selected later)
+    let subjectId: String         // the subject the chunk was recorded for (not the one selected later)
     let recordedAt: Date          // start of this chunk, UTC instant
     let sessionId: String?        // nil for stand-alone recordings and imported files
     let sequence: Int?            // chunk index within the session
@@ -40,6 +40,13 @@ struct ChunkRecord: Codable, Identifiable, Equatable {
     var isFinal: Bool?
     /// Session chunks: the start of chunk 0, which keys the session's one result.
     var sessionStartedAt: Date?
+
+    // subjectId is stored under its old name, so chunks journaled before 2026-11-23 still load.
+    enum CodingKeys: String, CodingKey {
+        case id, fileName, recordedAt, sessionId, sequence, durationSeconds, state, attempts, lastError
+        case nextRetryAt, s3Key, recovered, isFinal, sessionStartedAt
+        case subjectId = "deviceId"
+    }
 
     var fileURL: URL {
         UploadJournal.documentsDirectory.appendingPathComponent(fileName)

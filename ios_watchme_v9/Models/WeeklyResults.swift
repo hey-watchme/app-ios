@@ -9,9 +9,9 @@ import Foundation
 
 // MARK: - Weekly Results Model
 struct WeeklyResults: Codable, Identifiable {
-    var id: String { "\(deviceId)_\(weekStartDate)" }
+    var id: String { "\(subjectId)_\(weekStartDate)" }
 
-    let deviceId: String
+    let subjectId: String
     let weekStartDate: String  // YYYY-MM-DD (Monday)
     let summary: String?  // Week summary in Japanese
     let memorableEvents: [MemorableEvent]?  // Top 5 memorable events
@@ -21,7 +21,7 @@ struct WeeklyResults: Codable, Identifiable {
     let createdAt: String?  // Keep as String to avoid date parsing issues
 
     enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
+        case subjectId = "subject_id"
         case weekStartDate = "week_start_date"
         case summary
         case memorableEvents = "memorable_events"

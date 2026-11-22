@@ -45,7 +45,7 @@ final class RecordingStore: ObservableObject {
 
     private let audioService: AudioRecorderService
     private let uploader: ChunkUploader
-    private let deviceManager: DeviceManager
+    private let subjectManager: SubjectManager
     private let userAccountManager: UserAccountManager
 
     private var cancellables = Set<AnyCancellable>()
@@ -56,16 +56,16 @@ final class RecordingStore: ObservableObject {
 
     init(
         audioService: AudioRecorderService? = nil,
-        deviceManager: DeviceManager,
+        subjectManager: SubjectManager,
         userAccountManager: UserAccountManager
     ) {
         self.audioService = audioService ?? AudioRecorderService()
         self.uploader = ChunkUploader.shared
-        self.deviceManager = deviceManager
+        self.subjectManager = subjectManager
         self.userAccountManager = userAccountManager
 
         setupBindings()
-        uploader.defaultDeviceId = { [weak deviceManager] in deviceManager?.selectedDeviceID }
+        uploader.defaultSubjectId = { [weak subjectManager] in subjectManager?.selectedSubjectID }
         uploader.start()
     }
 
@@ -122,11 +122,11 @@ final class RecordingStore: ObservableObject {
             presentError("録音には会員登録が必要です")
             return
         }
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             presentError("分析対象が選ばれていません")
             return
         }
-        guard !deviceManager.isDemoDeviceSelected else {
+        guard !subjectManager.isSampleSelected else {
             presentError("サンプルには録音できません。ご自分の分析対象を選んでください")
             return
         }
@@ -137,7 +137,7 @@ final class RecordingStore: ObservableObject {
 
         do {
             try audioService.configureAudioSession()
-            let sessionId = try audioService.startSession(deviceId: deviceId, timezone: deviceManager.selectedDeviceTimezone)
+            let sessionId = try audioService.startSession(subjectId: subjectId, timezone: subjectManager.selectedTimezone)
             state.isRecording = true
             uploader.isRecording = true
             state.isInterrupted = false
@@ -162,15 +162,15 @@ final class RecordingStore: ObservableObject {
     /// Import an audio or video file: cut it into 5-minute chunks stamped with when it was
     /// recorded, journal them and send them like a live recording. No length limit.
     func importFile(at url: URL, originalDates: AudioImporter.FileDates?) async throws {
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             throw AudioImportError.readFailed("分析対象が選ばれていません")
         }
-        guard !deviceManager.isDemoDeviceSelected else {
+        guard !subjectManager.isSampleSelected else {
             throw AudioImportError.readFailed("サンプルには取り込めません。ご自分の分析対象を選んでください")
         }
         var shown = -1
         let result = try await AudioImporter.importFile(
-            at: url, originalDates: originalDates, deviceId: deviceId, timezone: deviceManager.selectedDeviceTimezone
+            at: url, originalDates: originalDates, subjectId: subjectId, timezone: subjectManager.selectedTimezone
         ) { progress in
             let percent = Int(progress * 100)
             guard percent != shown else { return }
@@ -181,7 +181,7 @@ final class RecordingStore: ObservableObject {
         importSessions[result.sessionId] = result.chunkCount
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
-        formatter.timeZone = deviceManager.selectedDeviceTimezone
+        formatter.timeZone = subjectManager.selectedTimezone
         formatter.dateFormat = "M/d HH:mm"
         let minutes = Int((result.durationSeconds / 60).rounded())
         ToastManager.shared.announce(

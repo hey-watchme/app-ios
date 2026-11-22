@@ -13,34 +13,34 @@ import Supabase
 enum SavedRecordings {
     private struct Row: Codable {
         let user_id: String?
-        let device_id: String
+        let subject_id: String
         let recorded_at: String
     }
 
     private static var client: SupabaseClient { SupabaseClientManager.shared.client }
 
     /// The sample device is read-only; recordings on it cannot be saved.
-    static func canSave(deviceId: String) -> Bool {
-        deviceId != DeviceManager.sampleDeviceID
+    static func canSave(subjectId: String) -> Bool {
+        subjectId != SubjectManager.sampleSubjectID
     }
 
     /// recorded_at of the device's saved recordings, newest recording first.
-    static func recordedAts(deviceId: String) async throws -> [String] {
+    static func recordedAts(subjectId: String) async throws -> [String] {
         let rows: [Row] = try await client
             .from("spot_bookmarks")
-            .select("device_id, recorded_at")
-            .eq("device_id", value: deviceId)
+            .select("subject_id, recorded_at")
+            .eq("subject_id", value: subjectId)
             .order("recorded_at", ascending: false)
             .execute()
             .value
         return rows.map(\.recorded_at)
     }
 
-    static func isSaved(deviceId: String, recordedAt: String) async throws -> Bool {
+    static func isSaved(subjectId: String, recordedAt: String) async throws -> Bool {
         let rows: [Row] = try await client
             .from("spot_bookmarks")
-            .select("device_id, recorded_at")
-            .eq("device_id", value: deviceId)
+            .select("subject_id, recorded_at")
+            .eq("subject_id", value: subjectId)
             .eq("recorded_at", value: recordedAt)
             .limit(1)
             .execute()
@@ -48,22 +48,22 @@ enum SavedRecordings {
         return !rows.isEmpty
     }
 
-    static func save(deviceId: String, recordedAt: String) async throws {
+    static func save(subjectId: String, recordedAt: String) async throws {
         guard let userId = try? await client.auth.session.user.id.uuidString.lowercased() else {
             throw SavedRecordingsError.notSignedIn
         }
         try await client
             .from("spot_bookmarks")
-            .upsert(Row(user_id: userId, device_id: deviceId, recorded_at: recordedAt),
-                    onConflict: "user_id,device_id,recorded_at", ignoreDuplicates: true)
+            .upsert(Row(user_id: userId, subject_id: subjectId, recorded_at: recordedAt),
+                    onConflict: "user_id,subject_id,recorded_at", ignoreDuplicates: true)
             .execute()
     }
 
-    static func remove(deviceId: String, recordedAt: String) async throws {
+    static func remove(subjectId: String, recordedAt: String) async throws {
         try await client
             .from("spot_bookmarks")
             .delete()
-            .eq("device_id", value: deviceId)
+            .eq("subject_id", value: subjectId)
             .eq("recorded_at", value: recordedAt)
             .execute()
     }

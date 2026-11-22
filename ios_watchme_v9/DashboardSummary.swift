@@ -22,7 +22,7 @@ struct VibeScoreDataPoint: Codable, Equatable {
 // MARK: - Dashboard Summary Data Model
 // daily_resultsテーブルの構造に対応したデータモデル
 struct DashboardSummary: Codable {
-    let deviceId: UUID
+    let subjectId: UUID
     let date: String  // local_dateをdateとしてマッピング（既存コードとの互換性のため）
     // JSONB型は様々な形式を取る可能性があるため、デコードを試みるがエラーは無視
     let processedCount: Int?
@@ -37,7 +37,7 @@ struct DashboardSummary: Codable {
 
     // CodingKeysでSnake caseとCamel caseを変換
     enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
+        case subjectId = "subject_id"
         case date = "local_date"  // daily_resultsのlocal_dateカラムをdateにマッピング
         case processedCount = "processed_count"
         case lastTimeBlock = "last_time_block"
@@ -51,8 +51,8 @@ struct DashboardSummary: Codable {
     }
     
     // Manual initializer for creating placeholder data
-    init(deviceId: UUID, date: String, processedCount: Int?, lastTimeBlock: String?, createdAt: String?, updatedAt: String?, averageVibe: Float?, vibeScores: [VibeScoreDataPoint]?, analysisResult: AnalysisResult?, insights: String?, burstEvents: [BurstEvent]?) {
-        self.deviceId = deviceId
+    init(subjectId: UUID, date: String, processedCount: Int?, lastTimeBlock: String?, createdAt: String?, updatedAt: String?, averageVibe: Float?, vibeScores: [VibeScoreDataPoint]?, analysisResult: AnalysisResult?, insights: String?, burstEvents: [BurstEvent]?) {
+        self.subjectId = subjectId
         self.date = date
         self.processedCount = processedCount
         self.lastTimeBlock = lastTimeBlock
@@ -69,7 +69,7 @@ struct DashboardSummary: Codable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        deviceId = try container.decode(UUID.self, forKey: .deviceId)
+        subjectId = try container.decode(UUID.self, forKey: .subjectId)
         date = try container.decode(String.self, forKey: .date)
         processedCount = try container.decodeIfPresent(Int.self, forKey: .processedCount)
         lastTimeBlock = try container.decodeIfPresent(String.self, forKey: .lastTimeBlock)

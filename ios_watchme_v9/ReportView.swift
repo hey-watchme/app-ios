@@ -10,7 +10,7 @@ import SwiftUI
 
 struct ReportView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
 
     // MARK: - Tab selection (hidden for now)
@@ -45,7 +45,7 @@ struct ReportView: View {
 
                 // Daily Tab Only (for now)
                 DailyReportView()
-                    .environmentObject(deviceManager)
+                    .environmentObject(subjectManager)
                     .environmentObject(dataManager)
             }
         }
@@ -57,17 +57,17 @@ struct ReportView: View {
 //
 // TabView(selection: $selectedTab) {
 //     DailyReportView()
-//         .environmentObject(deviceManager)
+//         .environmentObject(subjectManager)
 //         .environmentObject(dataManager)
 //         .tag(0)
 //
 //     WeeklyReportView()
-//         .environmentObject(deviceManager)
+//         .environmentObject(subjectManager)
 //         .environmentObject(dataManager)
 //         .tag(1)
 //
 //     MonthlyReportView()
-//         .environmentObject(deviceManager)
+//         .environmentObject(subjectManager)
 //         .environmentObject(dataManager)
 //         .tag(2)
 // }

@@ -51,14 +51,14 @@ struct EmotionTimePoint: Codable {
 
 // MARK: - Emotion Report Model
 struct EmotionReport: Codable {
-    let deviceId: String
+    let subjectId: String
     let date: String
     let emotionGraph: [EmotionTimePoint]
     let filePath: String?
     let createdAt: String
     
     enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
+        case subjectId = "subject_id"
         case date
         case emotionGraph = "emotion_graph"
         case filePath = "file_path"

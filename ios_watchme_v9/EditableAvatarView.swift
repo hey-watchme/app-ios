@@ -20,7 +20,7 @@ struct EditableAvatarView: View {
     var onUploaded: ((URL) -> Void)? = nil
 
     @EnvironmentObject private var userAccountManager: UserAccountManager
-    @EnvironmentObject private var deviceManager: DeviceManager
+    @EnvironmentObject private var subjectManager: SubjectManager
     @EnvironmentObject private var dataManager: SupabaseDataManager
 
     @StateObject private var viewModel: AvatarUploadViewModel
@@ -118,7 +118,7 @@ struct EditableAvatarView: View {
     @MainActor
     private func applyLocally(_ url: URL) {
         guard type == .subject, let subjectId = entityId else { return }
-        deviceManager.applySubjectAvatar(subjectId: subjectId, avatarUrl: url.absoluteString)
+        subjectManager.applySubjectAvatar(subjectId: subjectId, avatarUrl: url.absoluteString)
     }
 
     /// Reload whatever the other screens read the avatar from (confirms the
@@ -129,7 +129,7 @@ struct EditableAvatarView: View {
         case .user:
             await userAccountManager.fetchUserProfile(userId: userId)
         case .subject:
-            await deviceManager.loadDevices(for: userId)
+            await subjectManager.loadSubjects(for: userId)
         }
     }
 }

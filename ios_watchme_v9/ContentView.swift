@@ -11,7 +11,7 @@ import Supabase
 
 struct ContentView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var recordingStore: RecordingStore
     @EnvironmentObject var toastManager: ToastManager
@@ -22,7 +22,6 @@ struct ContentView: View {
     @State private var selectedLocalDate: String = ""
     @State private var showLogoutConfirmation = false
     @Binding var showRecordingSheet: Bool
-    @State private var showQRScanner = false
     @State private var showMyPage = false  // マイページ表示制御
 
     // 録音機能は新しいRecordingStoreが内部で管理
@@ -48,8 +47,8 @@ struct ContentView: View {
     init(showRecordingSheet: Binding<Bool>) {
         _showRecordingSheet = showRecordingSheet
         let today = LocalDate.today(timezone: TimeZone.current)
-        let deviceId = UserDefaults.standard.string(forKey: "watchme_selected_device_id")
-        let start = deviceId.flatMap(Self.rememberedNewestDay).map { min($0, today) } ?? today
+        let subjectId = UserDefaults.standard.string(forKey: "watchme_selected_device_id")
+        let start = subjectId.flatMap(Self.rememberedNewestDay).map { min($0, today) } ?? today
         var dates = LocalDate.trailingDays(endingAt: today, count: 7, timezone: TimeZone.current)
         // The pager must hold the day it opens on, even an older one
         while let first = dates.first, start < first,
@@ -59,19 +58,19 @@ struct ContentView: View {
         _dateRange = State(initialValue: dates.isEmpty ? [today] : dates)
         _selectedLocalDate = State(initialValue: start)
         _autoSelectedDate = State(initialValue: start)
-        _startDayKnown = State(initialValue: deviceId.flatMap(Self.rememberedNewestDay) != nil)
+        _startDayKnown = State(initialValue: subjectId.flatMap(Self.rememberedNewestDay) != nil)
     }
 
     // MARK: - The day the home opens on
 
-    /// The newest day with a recording, as last read from the server, per device. The home
+    /// The newest day with a recording, as last read from the server, per subject. The home
     /// opens straight on it, so it does not first draw today and then move.
-    private static func rememberedNewestDay(deviceId: String) -> String? {
-        UserDefaults.standard.string(forKey: "home_newest_recorded_day_\(deviceId)")
+    private static func rememberedNewestDay(subjectId: String) -> String? {
+        UserDefaults.standard.string(forKey: "home_newest_recorded_day_\(subjectId)")
     }
 
-    private static func rememberNewestDay(_ localDate: String, deviceId: String) {
-        UserDefaults.standard.set(localDate, forKey: "home_newest_recorded_day_\(deviceId)")
+    private static func rememberNewestDay(_ localDate: String, subjectId: String) {
+        UserDefaults.standard.set(localDate, forKey: "home_newest_recorded_day_\(subjectId)")
     }
     
     var body: some View {
@@ -80,7 +79,7 @@ struct ContentView: View {
             
             VStack(spacing: 0) {
                 // ✅ 権限ベース設計: 状態チェックロジック更新
-                switch deviceManager.state {
+                switch subjectManager.state {
                 case .idle, .loading:
                     // ロード中または初期状態はスピナーを表示
                     Spacer()
@@ -146,8 +145,8 @@ struct ContentView: View {
 
                         // 実デバイス未連携時のガイドオーバーレイは廃止
                     }
-                    .id(deviceManager.selectedDeviceID) // デバイスIDで再構築を制御
-                    .onChange(of: deviceManager.selectedDeviceID) { oldValue, newValue in
+                    .id(subjectManager.selectedSubjectID) // デバイスIDで再構築を制御
+                    .onChange(of: subjectManager.selectedSubjectID) { oldValue, newValue in
                         if oldValue != newValue && newValue != nil {
                             // デバイスが変更されたら日付範囲をリセット
                             initializeDateRange()
@@ -175,9 +174,9 @@ struct ContentView: View {
                             Task {
                                 // ✅ CLAUDE.md: public.usersのuser_idを使用
                                 if let userId = userAccountManager.effectiveUserId {
-                                    await deviceManager.loadDevices(for: userId)
+                                    await subjectManager.loadSubjects(for: userId)
                                 } else {
-                                    await deviceManager.loadSampleForGuest()
+                                    await subjectManager.loadSampleForGuest()
                                 }
                             }
                         }) {
@@ -204,13 +203,6 @@ struct ContentView: View {
                 .zIndex(10)
             }
         }
-        .sheet(isPresented: $showQRScanner) {
-            QRCodeScannerView(isPresented: $showQRScanner) { scannedCode in
-                Task {
-                    await handleQRCodeScanned(scannedCode)
-                }
-            }
-        }
         .alert("ログアウト確認", isPresented: $showLogoutConfirmation) {
             Button("キャンセル", role: .cancel) { }
             Button("ログアウト", role: .destructive) {
@@ -223,7 +215,7 @@ struct ContentView: View {
         }
         .sheet(isPresented: $showMyPage) {
             UserInfoView(userAccountManager: userAccountManager)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
                 .environmentObject(dataManager)
                 .preferredColorScheme(.dark)
         }
@@ -265,12 +257,12 @@ struct ContentView: View {
             // A recording just stopped: show today, where its progress and result appear
             guard wasRecording, !isRecording else { return }
             syncDateRangeWithToday()
-            let today = LocalDate.today(timezone: deviceManager.selectedDeviceTimezone)
+            let today = LocalDate.today(timezone: subjectManager.selectedTimezone)
             selectedLocalDate = today
             autoSelectedDate = today
             recordedHereDate = today
-            if let deviceId = deviceManager.selectedDeviceID {
-                Self.rememberNewestDay(today, deviceId: deviceId)
+            if let subjectId = subjectManager.selectedSubjectID {
+                Self.rememberNewestDay(today, subjectId: subjectId)
             }
         }
         .onChange(of: recordingStore.state.errorMessage) { oldValue, newValue in
@@ -282,38 +274,16 @@ struct ContentView: View {
         }
     }
 
-    // MARK: - QRコードスキャン処理
-    private func handleQRCodeScanned(_ code: String) async {
-        // 既に追加済みかチェック
-        if deviceManager.devices.contains(where: { $0.device_id == code }) {
-            print("⚠️ このデバイスは既に追加されています")
-            return
-        }
-
-        // デバイスを追加
-        do {
-            // ✅ CLAUDE.md: public.usersのuser_idを使用
-            if let userId = userAccountManager.effectiveUserId {
-                try await deviceManager.addDeviceByQRCode(code, for: userId)
-                print("✅ デバイスを追加しました: \(code)")
-            } else {
-                print("❌ ユーザー情報の取得に失敗しました")
-            }
-        } catch {
-            print("❌ デバイスの追加に失敗しました: \(error.localizedDescription)")
-        }
-    }
-
     // MARK: - 日付範囲管理（無限スクロール対応）
 
     /// 日付範囲の初期化（起動時・デバイス変更時）
     private func initializeDateRange() {
-        let timezone = deviceManager.selectedDeviceTimezone
+        let timezone = subjectManager.selectedTimezone
         let today = LocalDate.today(timezone: timezone)
         let dates = LocalDate.trailingDays(endingAt: today, count: initialDaysToLoad, timezone: timezone)
 
         dateRange = dates.isEmpty ? [today] : dates
-        let remembered = deviceManager.selectedDeviceID.flatMap(Self.rememberedNewestDay).map { min($0, today) }
+        let remembered = subjectManager.selectedSubjectID.flatMap(Self.rememberedNewestDay).map { min($0, today) }
         startDayKnown = remembered != nil
         let start = remembered ?? today
         ensureDateRangeIncludes(start)
@@ -326,7 +296,7 @@ struct ContentView: View {
 
     /// フォアグラウンド復帰や日付変更時に、現在日の範囲を再同期する
     private func syncDateRangeWithToday() {
-        let timezone = deviceManager.selectedDeviceTimezone
+        let timezone = subjectManager.selectedTimezone
         let today = LocalDate.today(timezone: timezone)
 
         guard let lastDate = dateRange.last else {
@@ -367,7 +337,7 @@ struct ContentView: View {
     /// (platform docs/product/screens.md "ホーム"). Today when nothing was recorded yet.
     /// Only moves while the person is still on the day it picked last time.
     private func showNewestRecordedDay() async {
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             startDayKnown = true
             return
         }
@@ -377,7 +347,7 @@ struct ContentView: View {
             rows = try await SupabaseClientManager.shared.client
                 .from("spot_results")
                 .select("local_date")
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .not("local_date", operator: .is, value: "null")
                 .order("local_date", ascending: false)
                 .limit(1)
@@ -389,11 +359,11 @@ struct ContentView: View {
             await MainActor.run { startDayKnown = true }
             return
         }
-        let today = LocalDate.today(timezone: deviceManager.selectedDeviceTimezone)
+        let today = LocalDate.today(timezone: subjectManager.selectedTimezone)
         let newest = min(max(rows.first?.local_date ?? today, recordedHereDate ?? ""), today)
         await MainActor.run {
-            guard deviceManager.selectedDeviceID == deviceId else { return }
-            Self.rememberNewestDay(newest, deviceId: deviceId)
+            guard subjectManager.selectedSubjectID == subjectId else { return }
+            Self.rememberNewestDay(newest, subjectId: subjectId)
             defer { startDayKnown = true }
             guard selectedLocalDate == autoSelectedDate || autoSelectedDate == nil,
                   newest != selectedLocalDate else { return }
@@ -436,7 +406,7 @@ struct ContentView: View {
             try? await Task.sleep(nanoseconds: 300_000_000) // 0.3秒
 
             // 追加日数分の日付を生成
-            let timezone = deviceManager.selectedDeviceTimezone
+            let timezone = subjectManager.selectedTimezone
             var newDates: [String] = []
             for i in 1...additionalDaysToLoad {
                 if let pastDate = LocalDate.addingDays(-i, to: currentFirstDate, timezone: timezone) {
@@ -463,7 +433,7 @@ struct ContentView: View {
             return
         }
 
-        let timezone = deviceManager.selectedDeviceTimezone
+        let timezone = subjectManager.selectedTimezone
 
         if let firstDate = dateRange.first, localDate < firstDate {
             var datesToInsert: [String] = []

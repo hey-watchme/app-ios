@@ -11,7 +11,7 @@ import SwiftUI
 // MARK: - Daily Vibe Report Data Model
 // Legacy data model - no longer actively used
 struct DailyVibeReport: Codable {
-    let deviceId: String
+    let subjectId: String
     let date: String
     let vibeScores: [Double?]?  // 配列形式に変更（48要素の配列）
     let averageScore: Double
@@ -25,7 +25,7 @@ struct DailyVibeReport: Codable {
     
     // CodingKeysでSnake caseとCamel caseを変換
     enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
+        case subjectId = "subject_id"
         case date
         case vibeScores = "vibe_scores"
         case averageScore = "average_score"

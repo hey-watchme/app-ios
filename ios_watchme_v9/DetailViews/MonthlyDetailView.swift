@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MonthlyDetailView: View {
-    let deviceId: String
+    let subjectId: String
     let monthStartDate: String
 
     @Environment(\.dismiss) var dismiss
@@ -39,10 +39,10 @@ struct MonthlyDetailView: View {
                         // Debug info
                         VStack(alignment: .leading, spacing: 8) {
                             HStack {
-                                Text("Device ID:")
+                                Text("Subject ID:")
                                     .fontWeight(.medium)
                                 Spacer()
-                                Text(deviceId)
+                                Text(subjectId)
                                     .font(.caption)
                                     .foregroundColor(Color(white: 0.56))
                             }

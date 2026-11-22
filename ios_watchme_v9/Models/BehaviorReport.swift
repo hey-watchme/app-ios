@@ -108,13 +108,13 @@ struct TimeBlock: Codable, Identifiable {
 
 // MARK: - Behavior Report Model
 struct BehaviorReport: Codable {
-    let deviceId: String
+    let subjectId: String
     let date: String
     let summaryRanking: [BehaviorEvent]
     let timeBlocks: [String: [BehaviorEvent]?]
 
     enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
+        case subjectId = "subject_id"
         case date
         case summaryRanking = "summary_ranking"
         case timeBlocks = "time_blocks"

@@ -23,17 +23,17 @@ final class RealtimeWatcher: ObservableObject {
 
     private let tables = ["spot_stages", "spot_results", "daily_results"]
 
-    func watch(deviceId: String) async {
-        guard watchingDeviceId != deviceId else { return }
+    func watch(subjectId: String) async {
+        guard watchingDeviceId != subjectId else { return }
         await stop()
 
         let client = SupabaseClientManager.shared.client
-        let channel = client.channel("watchme-device-\(deviceId)")
+        let channel = client.channel("watchme-device-\(subjectId)")
         let streams = tables.map { table in
-            channel.postgresChange(AnyAction.self, schema: "public", table: table, filter: "device_id=eq.\(deviceId)")
+            channel.postgresChange(AnyAction.self, schema: "public", table: table, filter: "subject_id=eq.\(subjectId)")
         }
         self.channel = channel
-        watchingDeviceId = deviceId
+        watchingDeviceId = subjectId
 
         for stream in streams {
             listeners.append(Task { [weak self] in
@@ -44,7 +44,7 @@ final class RealtimeWatcher: ObservableObject {
         }
         await channel.subscribe()
         #if DEBUG
-        print("📡 [Realtime] watching \(tables) for device \(deviceId)")
+        print("📡 [Realtime] watching \(tables) for device \(subjectId)")
         #endif
     }
 

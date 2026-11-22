@@ -11,10 +11,10 @@ import SwiftUI
 struct DatePickerSheet: View {
     @Binding var selectedDate: Date
     @Binding var isPresented: Bool
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     
     private var calendar: Calendar {
-        deviceManager.deviceCalendar
+        subjectManager.subjectCalendar
     }
     
     var body: some View {
@@ -80,16 +80,16 @@ extension DateFormatter {
 // MARK: - 大きい日付セクション（スクロール可能なコンテンツ）
 struct LargeDateSection: View {
     @Binding var selectedDate: Date
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showDatePicker = false
     
     private var calendar: Calendar {
-        deviceManager.deviceCalendar
+        subjectManager.subjectCalendar
     }
     
     private var timezone: TimeZone {
-        deviceManager.selectedDeviceTimezone
+        subjectManager.selectedTimezone
     }
     
     private var canGoToNextDay: Bool {
@@ -161,7 +161,7 @@ struct LargeDateSection: View {
         .background(Color.darkBase)
         .sheet(isPresented: $showDatePicker) {
             CustomCalendarView(selectedDate: $selectedDate, isPresented: $showDatePicker)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
         }
     }
 }
@@ -175,19 +175,19 @@ struct StickyDateHeader: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "M月d日(E)"
         formatter.locale = Locale(identifier: "ja_JP")
-        formatter.timeZone = deviceManager.selectedDeviceTimezone
+        formatter.timeZone = subjectManager.selectedTimezone
         return formatter.string(from: selectedDate)
     }
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showDatePicker = false
     
     private var calendar: Calendar {
-        deviceManager.deviceCalendar
+        subjectManager.subjectCalendar
     }
     
     private var timezone: TimeZone {
-        deviceManager.selectedDeviceTimezone
+        subjectManager.selectedTimezone
     }
     
     private var canGoToNextDay: Bool {
@@ -247,7 +247,7 @@ struct StickyDateHeader: View {
         .background(Color.darkBase)
         .sheet(isPresented: $showDatePicker) {
             CustomCalendarView(selectedDate: $selectedDate, isPresented: $showDatePicker)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
         }
     }
 }

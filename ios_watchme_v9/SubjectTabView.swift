@@ -3,15 +3,15 @@
 //  ios_watchme_v9
 //
 //  分析対象 - opened from the subject name at the top left. The selected subject's
-//  profile and the device it records with, the other subjects to switch to, adding one,
-//  and (low-key) every linked device. platform docs/product/subjects-and-devices.md
+//  profile, the other subjects to switch to, and adding one.
+//  platform docs/product/accounts-subjects-devices.md
 //
 
 import SwiftUI
 
 struct SubjectTabView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var recordingStore: RecordingStore
     @Environment(\.dismiss) private var dismiss
@@ -23,13 +23,12 @@ struct SubjectTabView: View {
     @State private var isUpdatingType = false
     @State private var subjectInitialValues: SubjectRegistrationView.InitialValues? = nil
     @State private var showAddSubject = false
-    @State private var editingDevice: Device? = nil
     @State private var showRecordingSwitchAlert = false
 
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                if let subject = deviceManager.selectedSubject {
+                if let subject = subjectManager.selectedSubject {
                     profileSection(subject)
                 } else {
                     unnamedSection
@@ -51,25 +50,13 @@ struct SubjectTabView: View {
         .tint(.white)
         .sheet(isPresented: $showAddSubject) {
             SubjectRegistrationView(
-                deviceID: "",
+                subjectID: "",
                 isPresented: $showAddSubject,
                 editingSubject: nil,
-                createsContainer: true
+                createsSubject: true
             )
             .environmentObject(dataManager)
-            .environmentObject(deviceManager)
-            .environmentObject(userAccountManager)
-        }
-        .sheet(item: Binding(
-            get: { editingDevice.map { IdentifiedDevice(device: $0) } },
-            set: { editingDevice = $0?.device }
-        )) { item in
-            DeviceEditView(
-                device: item.device,
-                isPresented: Binding(get: { editingDevice != nil }, set: { if !$0 { editingDevice = nil } })
-            )
-            .environmentObject(deviceManager)
-            .environmentObject(dataManager)
+            .environmentObject(subjectManager)
             .environmentObject(userAccountManager)
         }
         .alert("録音中です", isPresented: $showRecordingSwitchAlert) {
@@ -78,15 +65,15 @@ struct SubjectTabView: View {
             Text("録音を止めてから、分析対象を切り替えてください。")
         }
         .sheet(isPresented: $showSubjectEdit) {
-            if let deviceId = deviceManager.selectedDeviceID {
+            if let subjectId = subjectManager.selectedSubjectID {
                 SubjectRegistrationView(
-                    deviceID: deviceId,
+                    subjectID: subjectId,
                     isPresented: $showSubjectEdit,
-                    editingSubject: deviceManager.selectedSubject,
+                    editingSubject: subjectManager.selectedSubject,
                     initialValues: subjectInitialValues
                 )
                 .environmentObject(dataManager)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
                 .environmentObject(userAccountManager)
             }
         }
@@ -169,9 +156,7 @@ struct SubjectTabView: View {
                                     entityId: subject.subjectId,
                                     avatarUrl: subject.avatarUrl,
                                     size: 60,
-                                    isEditable: deviceManager.devices
-                                        .first(where: { $0.device_id == deviceManager.selectedDeviceID })?
-                                        .canEditSubject ?? false,
+                                    isEditable: canEditSelectedSubject,
                                     ringColor: .clear
                                 )
 
@@ -261,7 +246,7 @@ struct SubjectTabView: View {
                             }
 
                             // Questions about the person, from the analyses (hidden when none are open)
-                            QuestionsEntry(deviceId: deviceManager.selectedDeviceID, scope: "person",
+                            QuestionsEntry(subjectId: subjectManager.selectedSubjectID, scope: "person",
                                            place: .profile(name: subject.name))
                         }
                         .padding(20)
@@ -323,33 +308,19 @@ struct SubjectTabView: View {
                 }
     }
 
-    // MARK: - Device, other subjects, adding
+    // MARK: - Other subjects, adding
 
-    private var selectedDevice: Device? {
-        deviceManager.devices.first { $0.device_id == deviceManager.selectedDeviceID }
-    }
-
-    private var otherSubjects: [Device] {
-        deviceManager.devices.filter { $0.device_id != deviceManager.selectedDeviceID }
+    private var otherSubjects: [SubjectEntry] {
+        subjectManager.subjects.filter { $0.subjectId != subjectManager.selectedSubjectID }
     }
 
     private var managementSections: some View {
         VStack(alignment: .leading, spacing: 28) {
-            if let device = selectedDevice {
-                section("録音に使うデバイス") {
-                    Button { editingDevice = device } label: {
-                        row(icon: deviceIcon(device), title: deviceLabel(device),
-                            detail: String(device.device_id.prefix(8)))
-                    }
-                    .buttonStyle(.plain)
-                }
-            }
-
             section("ほかの分析対象") {
                 VStack(spacing: 0) {
-                    ForEach(otherSubjects, id: \.device_id) { device in
-                        Button { switchTo(device) } label: {
-                            subjectRow(device)
+                    ForEach(otherSubjects, id: \.subjectId) { entry in
+                        Button { switchTo(entry) } label: {
+                            subjectRow(entry)
                         }
                         .buttonStyle(.plain)
                         Divider().background(Color.white.opacity(0.08))
@@ -372,18 +343,6 @@ struct SubjectTabView: View {
                     }
                 }
             }
-
-            if userAccountManager.authState.isAuthenticated {
-                NavigationLink {
-                    DeviceSettingsView()
-                        .environmentObject(userAccountManager)
-                        .environmentObject(deviceManager)
-                        .environmentObject(dataManager)
-                } label: {
-                    row(icon: "iphone.gen3", title: "すべてのデバイス", detail: nil)
-                }
-                .buttonStyle(.plain)
-            }
         }
     }
 
@@ -399,36 +358,13 @@ struct SubjectTabView: View {
         }
     }
 
-    private func row(icon: String, title: String, detail: String?) -> some View {
+    private func subjectRow(_ entry: SubjectEntry) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon)
-                .font(.system(size: 18))
-                .foregroundColor(Color(white: 0.7))
-                .frame(width: 28)
-            Text(title)
+            AvatarView(type: .subject, id: entry.subjectId, size: 32, avatarUrl: entry.subject.avatarUrl)
+            Text(entry.displayName)
                 .font(.system(size: 15))
-                .foregroundColor(.white)
-            Spacer()
-            if let detail {
-                Text(detail)
-                    .font(.system(size: 12, design: .monospaced))
-                    .foregroundColor(Color(white: 0.45))
-            }
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12))
-                .foregroundColor(Color(white: 0.35))
-        }
-        .padding(.vertical, 12)
-        .contentShape(Rectangle())
-    }
-
-    private func subjectRow(_ device: Device) -> some View {
-        HStack(spacing: 12) {
-            AvatarView(type: .subject, id: device.subject?.subjectId, size: 32, avatarUrl: device.subject?.avatarUrl)
-            Text(subjectName(device))
-                .font(.system(size: 15))
-                .foregroundColor(device.subject?.name?.isEmpty == false ? .white : Color(white: 0.56))
-            if device.isDemo {
+                .foregroundColor(entry.subject.name?.isEmpty == false ? .white : Color(white: 0.56))
+            if entry.isDemo {
                 Text("サンプル")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(.accentTeal)
@@ -445,58 +381,18 @@ struct SubjectTabView: View {
         .contentShape(Rectangle())
     }
 
-    private func subjectName(_ device: Device) -> String {
-        if let name = device.subject?.name, !name.isEmpty { return name }
-        return "名称未設定"
-    }
-
-    private func deviceLabel(_ device: Device) -> String {
-        switch device.device_type.lowercased() {
-        case "ios": return "iPhone"
-        case "demo": return "サンプル"
-        case "observer": return "録音機"
-        default: return device.device_type
-        }
-    }
-
-    private func deviceIcon(_ device: Device) -> String {
-        device.device_type.lowercased() == "observer" ? "mic.circle" : "iphone.gen3"
-    }
-
     /// Recordings go to the selected subject, so it cannot change while recording.
-    private func switchTo(_ device: Device) {
+    private func switchTo(_ entry: SubjectEntry) {
         guard !recordingStore.state.isRecording else {
             showRecordingSwitchAlert = true
             return
         }
-        deviceManager.selectDevice(device.device_id)
+        subjectManager.selectSubject(entry.subjectId)
         dismiss()
     }
 
-    private var currentDeviceTypeLabel: String {
-        guard let selectedDeviceID = deviceManager.selectedDeviceID,
-              let device = deviceManager.devices.first(where: { $0.device_id == selectedDeviceID }) else {
-            return "未選択"
-        }
-
-        switch device.device_type.lowercased() {
-        case "ios":
-            return "iPhone"
-        case "observer":
-            return "オブザーバー"
-        case "android":
-            return "Android"
-        case "web":
-            return "Webブラウザ"
-        case "demo":
-            return "デモデバイス"
-        default:
-            return device.device_type
-        }
-    }
-
     private var canEditSelectedSubject: Bool {
-        deviceManager.devices.first(where: { $0.device_id == deviceManager.selectedDeviceID })?.canEditSubject ?? false
+        subjectManager.selectedEntry?.canEditSubject ?? false
     }
 
     private func buildInitialValuesFromAccount() -> SubjectRegistrationView.InitialValues {
@@ -539,7 +435,7 @@ struct SubjectTabView: View {
                 .fontWeight(.semibold)
                 .foregroundColor(.white)
 
-            if let subject = deviceManager.selectedSubject, let cognitiveTypeData = subject.cognitiveTypeData {
+            if let subject = subjectManager.selectedSubject, let cognitiveTypeData = subject.cognitiveTypeData {
                 // タイプ選択済み - カードのみ表示
                 cognitiveTypeCard(for: cognitiveTypeData)
             } else {
@@ -621,8 +517,7 @@ struct SubjectTabView: View {
 
     // MARK: - タイプ選択処理
     private func selectCognitiveType() {
-        guard let subject = deviceManager.selectedSubject,
-              let deviceId = deviceManager.selectedDeviceID else { return }
+        guard let subject = subjectManager.selectedSubject else { return }
 
         isUpdatingType = true
 
@@ -631,7 +526,6 @@ struct SubjectTabView: View {
                 // Update subject using existing updateSubject method
                 try await dataManager.updateSubject(
                     subjectId: subject.subjectId,
-                    deviceId: deviceId,
                     name: subject.name ?? "",
                     age: subject.age,
                     gender: subject.gender,
@@ -643,7 +537,7 @@ struct SubjectTabView: View {
 
                 // Update local subject data
                 if let userId = userAccountManager.currentUser?.id {
-                    await deviceManager.loadDevices(for: userId)
+                    await subjectManager.loadSubjects(for: userId)
                 }
 
                 await MainActor.run {
@@ -995,10 +889,4 @@ struct InfoSheet: View {
             }
         }
     }
-}
-
-/// A Device wrapped for sheet(item:).
-private struct IdentifiedDevice: Identifiable {
-    let device: Device
-    var id: String { device.device_id }
 }

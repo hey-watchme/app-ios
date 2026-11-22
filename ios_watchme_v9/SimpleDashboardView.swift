@@ -11,7 +11,7 @@ import UIKit
 // データ取得のトリガーを管理する構造体
 struct LoadDataTrigger: Equatable {
     let localDate: String
-    let deviceId: String?
+    let subjectId: String?
     let refreshTrigger: Int  // Pull-to-Refresh用
 }
 
@@ -29,7 +29,7 @@ struct CachedDashboardData {
 struct SimpleDashboardView: View {
     let localDate: String
     @Binding var selectedLocalDate: String
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var recordingStore: RecordingStore
@@ -40,10 +40,10 @@ struct SimpleDashboardView: View {
     }
 
     private var currentTimezone: TimeZone {
-        if let deviceId = deviceManager.selectedDeviceID {
-            return deviceManager.getTimezone(for: deviceId)
+        if let subjectId = subjectManager.selectedSubjectID {
+            return subjectManager.getTimezone(for: subjectId)
         }
-        return deviceManager.selectedDeviceTimezone
+        return subjectManager.selectedTimezone
     }
 
     private var displayDate: Date {
@@ -75,7 +75,7 @@ struct SimpleDashboardView: View {
     @State private var timeBlocks: [DashboardTimeBlock] = []  // グラフ用データ（spot_results）
     @State private var otherDayBlocks: [DashboardTimeBlock] = []  // received this day, recorded on another (imports)
     @State private var isLoading = false
-    @State private var lastLoadedDeviceID: String? = nil  // 最後に読み込んだデバイスID
+    @State private var lastLoadedSubjectID: String? = nil  // 最後に読み込んだ分析対象のID
 
     // Phase 2: フィルタ結果を@State変数で明示的に管理
     @State private var conversationBlocks: [DashboardTimeBlock] = []  // 会話があるブロック
@@ -137,7 +137,7 @@ struct SimpleDashboardView: View {
                 VStack(spacing: 0) {
                     // 大きい日付セクション（スクロール可能）
                     LargeDateSection(selectedDate: selectedDateBinding)
-                        .environmentObject(deviceManager)
+                        .environmentObject(subjectManager)
                         .environmentObject(dataManager)
                         .padding(.top, floatingHeaderContentInset)
                         .background(
@@ -167,11 +167,11 @@ struct SimpleDashboardView: View {
                             }
 
                             // 2. The day itself: the same content the report opens (DayContentView)
-                            DayContentView(deviceId: deviceManager.selectedDeviceID, localDate: localDate,
+                            DayContentView(subjectId: subjectManager.selectedSubjectID, localDate: localDate,
                                            summary: dashboardSummary, blocks: timeBlocks,
                                            onOpenSpot: { selectedSpotForDetail = $0 }) {
                                 // Questions the analysis could not settle (hidden when none are open)
-                                QuestionsEntry(deviceId: deviceManager.selectedDeviceID, place: .dashboard)
+                                QuestionsEntry(subjectId: subjectManager.selectedSubjectID, place: .dashboard)
                             }
                             .padding(.horizontal, 20)
                             .transition(.opacity.combined(with: .scale(scale: 0.98)))
@@ -221,16 +221,16 @@ struct SimpleDashboardView: View {
             // 固定日付ヘッダー（条件付き表示）
             if showStickyHeader {
                 StickyDateHeader(selectedDate: selectedDateBinding)
-                    .environmentObject(deviceManager)
+                    .environmentObject(subjectManager)
                     .environmentObject(dataManager)
                     .transition(.move(edge: .top).combined(with: .opacity))
             }
         }
-        .task(id: LoadDataTrigger(localDate: localDate, deviceId: deviceManager.selectedDeviceID, refreshTrigger: refreshTrigger)) {
+        .task(id: LoadDataTrigger(localDate: localDate, subjectId: subjectManager.selectedSubjectID, refreshTrigger: refreshTrigger)) {
             // 📊 パフォーマンス最適化: データ取得を一元化（Phase 1-A: デバウンス + キャッシュ）
-            guard deviceManager.isReady else {
+            guard subjectManager.isReady else {
                 #if DEBUG
-                print("⏸️ [SimpleDashboardView] DeviceManager not ready, skipping data load")
+                print("⏸️ [SimpleDashboardView] SubjectManager not ready, skipping data load")
                 #endif
                 await MainActor.run {
                     clearAllData()
@@ -239,7 +239,7 @@ struct SimpleDashboardView: View {
             }
 
             // キャッシュキーの生成
-            guard let deviceId = deviceManager.selectedDeviceID else {
+            guard let subjectId = subjectManager.selectedSubjectID else {
                 await MainActor.run {
                     clearAllData()
                 }
@@ -247,7 +247,7 @@ struct SimpleDashboardView: View {
             }
 
             let dateString = localDate
-            let cacheKey = "\(deviceId)_\(dateString)"
+            let cacheKey = "\(subjectId)_\(dateString)"
 
             // Pull-to-Refresh: Clear cache if triggered
             if refreshTrigger > 0 {
@@ -355,17 +355,17 @@ struct SimpleDashboardView: View {
                 }
             }
         }
-        .task(id: LoadDataTrigger(localDate: localDate, deviceId: deviceManager.selectedDeviceID, refreshTrigger: refreshTrigger)) {
+        .task(id: LoadDataTrigger(localDate: localDate, subjectId: subjectManager.selectedSubjectID, refreshTrigger: refreshTrigger)) {
             await loadOtherDayBlocks()
         }
-        .task(id: deviceManager.selectedDeviceID) {
-            guard let deviceId = deviceManager.selectedDeviceID else { await realtime.stop(); return }
+        .task(id: subjectManager.selectedSubjectID) {
+            guard let subjectId = subjectManager.selectedSubjectID else { await realtime.stop(); return }
             realtime.onChange = { Task { await silentRefreshCurrentDay() } }
-            await realtime.watch(deviceId: deviceId)
+            await realtime.watch(subjectId: subjectId)
         }
-        .onChange(of: deviceManager.selectedDeviceID) { oldDeviceId, newDeviceId in
+        .onChange(of: subjectManager.selectedSubjectID) { oldSubjectId, newSubjectId in
             // デバイスが切り替わったときにデータとキャッシュをクリア（Phase 1-A）
-            if oldDeviceId != nil && newDeviceId != nil && oldDeviceId != newDeviceId {
+            if oldSubjectId != nil && newSubjectId != nil && oldSubjectId != newSubjectId {
                 clearAllData()
                 // キャッシュもクリア
                 dataCache.removeAll()
@@ -398,7 +398,7 @@ struct SimpleDashboardView: View {
         .sheet(isPresented: $showBehaviorSheet) {
             NavigationView {
                 BehaviorGraphView(selectedDate: displayDate)
-                    .environmentObject(deviceManager)
+                    .environmentObject(subjectManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
                     .navigationTitle("行動グラフ")
@@ -414,7 +414,7 @@ struct SimpleDashboardView: View {
         .sheet(isPresented: $showEmotionSheet) {
             NavigationView {
                 EmotionGraphView(selectedDate: displayDate)
-                    .environmentObject(deviceManager)
+                    .environmentObject(subjectManager)
                     .environmentObject(dataManager)
                     .navigationBarTitleDisplayMode(.large)
                     .navigationTitle("感情グラフ")
@@ -428,8 +428,8 @@ struct SimpleDashboardView: View {
             }
         }
         .sheet(item: $selectedSpotForDetail) { spot in
-            if let deviceId = deviceManager.selectedDeviceID {
-                SpotDetailView(deviceId: deviceId, spotData: spot)
+            if let subjectId = subjectManager.selectedSubjectID {
+                SpotDetailView(subjectId: subjectId, spotData: spot)
                     .environmentObject(dataManager)
             }
         }
@@ -444,8 +444,8 @@ struct SimpleDashboardView: View {
         // Only process dashboard refresh notifications
         guard update.type == .refreshDashboard else { return }
 
-        // Filter: Only process if this view's device matches
-        guard update.deviceId == deviceManager.selectedDeviceID else {
+        // Filter: only when the push is for the subject on screen
+        guard update.subjectId == subjectManager.selectedSubjectID else {
             print("⚠️ [PUSH] Update ignored (different device)")
             return
         }
@@ -459,9 +459,9 @@ struct SimpleDashboardView: View {
         }
 
         lastHandledPushTimestamp = update.timestamp
-        print("🔄 [PUSH] Dashboard update received: \(update.deviceId) - \(update.date)")
+        print("🔄 [PUSH] Dashboard update received: \(update.subjectId) - \(update.date)")
 
-        let cacheKey = "\(update.deviceId)_\(update.date)"
+        let cacheKey = "\(update.subjectId)_\(update.date)"
         dataCache.removeValue(forKey: cacheKey)
         cacheKeys.removeAll { $0 == cacheKey }
         print("🗑️ [PUSH] Cache cleared: \(cacheKey)")
@@ -501,13 +501,13 @@ struct SimpleDashboardView: View {
 
     /// Realtime: reload today's data without the skeleton, so only the changed parts redraw.
     private func silentRefreshCurrentDay() async {
-        guard let deviceId = deviceManager.selectedDeviceID else { return }
-        guard isToday(localDate, timezone: deviceManager.getTimezone(for: deviceId)) else { return }
+        guard let subjectId = subjectManager.selectedSubjectID else { return }
+        guard isToday(localDate, timezone: subjectManager.getTimezone(for: subjectId)) else { return }
         guard !isLoading else { return }
         await loadAllData(showLoading: false)
         await loadOtherDayBlocks()
         // The cached copy of today is now stale; drop it so the next visit reloads.
-        let cacheKey = "\(deviceId)_\(localDate)"
+        let cacheKey = "\(subjectId)_\(localDate)"
         dataCache.removeValue(forKey: cacheKey)
         cacheKeys.removeAll { $0 == cacheKey }
         #if DEBUG
@@ -517,19 +517,19 @@ struct SimpleDashboardView: View {
 
     /// Recordings that arrived on this day but belong to another (imported files), for the activity strip and log.
     private func loadOtherDayBlocks() async {
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             await MainActor.run { otherDayBlocks = [] }
             return
         }
         let blocks = await dataManager.fetchReceivedFromOtherDays(
-            deviceId: deviceId, localDate: localDate, timezone: deviceManager.getTimezone(for: deviceId)
+            subjectId: subjectId, localDate: localDate, timezone: subjectManager.getTimezone(for: subjectId)
         )
         await MainActor.run { otherDayBlocks = blocks }
     }
 
     private func refreshCurrentDayIfNeeded(reason: String) {
-        guard let deviceId = deviceManager.selectedDeviceID else { return }
-        let timezone = deviceManager.getTimezone(for: deviceId)
+        guard let subjectId = subjectManager.selectedSubjectID else { return }
+        let timezone = subjectManager.getTimezone(for: subjectId)
 
         guard isToday(localDate, timezone: timezone) else { return }
 
@@ -555,8 +555,8 @@ struct SimpleDashboardView: View {
                 )
             } else {
                 // エンプティーステート：ナビゲーションボタンを非表示
-                if deviceManager.selectedDeviceID == nil {
-                    DeviceNotSelectedView(graphType: .vibe, isCompact: true)
+                if subjectManager.selectedSubjectID == nil {
+                    SubjectNotSelectedView(graphType: .vibe, isCompact: true)
                 } else {
                     GraphEmptyStateView(graphType: .vibe, isCompact: true)
                 }
@@ -636,8 +636,8 @@ struct SimpleDashboardView: View {
                     behaviorReportContent(behaviorReport)
                 }
             } else {
-                if deviceManager.selectedDeviceID == nil {
-                    DeviceNotSelectedView(graphType: .behavior, isCompact: true)
+                if subjectManager.selectedSubjectID == nil {
+                    SubjectNotSelectedView(graphType: .behavior, isCompact: true)
                 } else {
                     GraphEmptyStateView(graphType: .behavior, isCompact: true)
                 }
@@ -657,8 +657,8 @@ struct SimpleDashboardView: View {
             if let emotionReport = emotionReport {
                 emotionReportContent(emotionReport)
             } else {
-                if deviceManager.selectedDeviceID == nil {
-                    DeviceNotSelectedView(graphType: .emotion, isCompact: true)
+                if subjectManager.selectedSubjectID == nil {
+                    SubjectNotSelectedView(graphType: .emotion, isCompact: true)
                 } else {
                     GraphEmptyStateView(graphType: .emotion, isCompact: true)
                 }
@@ -840,7 +840,7 @@ struct SimpleDashboardView: View {
     /// (used for Realtime updates, so the page does not flash or jump to the top).
     private func loadAllData(showLoading: Bool = true) async {
         // 📊 パフォーマンス最適化: 詳細ログを削減
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             // データをクリア
             await MainActor.run {
                 self.behaviorReport = nil
@@ -868,15 +868,15 @@ struct SimpleDashboardView: View {
         }
 
         // 📊 Performance optimization: Parallel network requests
-        let timezone = deviceManager.getTimezone(for: deviceId)
+        let timezone = subjectManager.getTimezone(for: subjectId)
 
         async let resultTask = dataManager.fetchAllReports(
-            deviceId: deviceId,
+            subjectId: subjectId,
             localDate: localDate,
             timezone: timezone
         )
         async let timeBlocksTask = dataManager.fetchDashboardTimeBlocks(
-            deviceId: deviceId,
+            subjectId: subjectId,
             localDate: localDate,
             timezone: timezone
         )

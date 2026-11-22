@@ -19,7 +19,7 @@ fileprivate let appLaunchTime: Date = {
 @main
 struct ios_watchme_v9App: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
-    @StateObject private var deviceManager = DeviceManager()
+    @StateObject private var subjectManager = SubjectManager()
     @StateObject private var userAccountManager: UserAccountManager
     @StateObject private var dataManager: SupabaseDataManager
     @StateObject private var toastManager = ToastManager.shared
@@ -39,23 +39,23 @@ struct ios_watchme_v9App: App {
             print("✅ [SUPABASE-PRELOAD] Supabaseクライアント事前初期化完了: \(Date().timeIntervalSince(initStart))秒")
         }
 
-        let deviceManager = DeviceManager()
-        print("⏱️ [APP-INIT] DeviceManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
+        let subjectManager = SubjectManager()
+        print("⏱️ [APP-INIT] SubjectManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
 
-        let userAccountManager = UserAccountManager(deviceManager: deviceManager)
+        let userAccountManager = UserAccountManager(subjectManager: subjectManager)
         print("⏱️ [APP-INIT] UserAccountManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
 
         let dataManager = SupabaseDataManager(userAccountManager: userAccountManager)
-        dataManager.setDeviceManager(deviceManager)  // 🚀 DeviceManager参照を設定（パフォーマンス最適化）
+        dataManager.setSubjectManager(subjectManager)  // 🚀 SubjectManager参照を設定（パフォーマンス最適化）
         print("⏱️ [APP-INIT] SupabaseDataManager初期化完了: \(Date().timeIntervalSince(startTime))秒")
 
         let recordingStore = RecordingStore(
-            deviceManager: deviceManager,
+            subjectManager: subjectManager,
             userAccountManager: userAccountManager
         )
         print("⏱️ [APP-INIT] RecordingStore初期化完了: \(Date().timeIntervalSince(startTime))秒")
 
-        _deviceManager = StateObject(wrappedValue: deviceManager)
+        _subjectManager = StateObject(wrappedValue: subjectManager)
         _userAccountManager = StateObject(wrappedValue: userAccountManager)
         _dataManager = StateObject(wrappedValue: dataManager)
         _recordingStore = StateObject(wrappedValue: recordingStore)
@@ -67,7 +67,7 @@ struct ios_watchme_v9App: App {
         WindowGroup {
             MainAppView()
                 .environmentObject(userAccountManager)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
                 .environmentObject(dataManager)
                 .environmentObject(toastManager)
                 .environmentObject(recordingStore)
@@ -78,7 +78,7 @@ struct ios_watchme_v9App: App {
 // メインアプリビュー
 struct MainAppView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var toastManager: ToastManager
     @EnvironmentObject var recordingStore: RecordingStore
@@ -157,7 +157,7 @@ struct MainAppView: View {
     private var homeContent: some View {
         ContentView(showRecordingSheet: $showRecordingSheet)
             .environmentObject(userAccountManager)
-            .environmentObject(deviceManager)
+            .environmentObject(subjectManager)
             .environmentObject(dataManager)
             .environmentObject(recordingStore)
     }
@@ -165,14 +165,14 @@ struct MainAppView: View {
     private var reportContent: some View {
         ReportView()
             .environmentObject(userAccountManager)
-            .environmentObject(deviceManager)
+            .environmentObject(subjectManager)
             .environmentObject(dataManager)
     }
 
 
-    /// The sample banner shows whenever the demo device is selected (always, for signed-out visitors).
+    /// The sample banner shows whenever the sample is selected (always, for signed-out visitors).
     private var showSampleBanner: Bool {
-        deviceManager.isDemoDeviceSelected
+        subjectManager.isSampleSelected
     }
 
     /// Room the banner takes above the footer, so scrolling content can reach past it.
@@ -212,7 +212,7 @@ struct MainAppView: View {
                     // スワイプ体験を維持するため、コンテンツ構造は変えずにフッターのみ浮島化
                     CustomFooterNavigation(
                         selectedTab: $selectedTab,
-                        showRecordButton: deviceManager.showsRecordButton,
+                        showRecordButton: true,
                         showMicTip: showMicTip,
                         onDismissMicTip: {
                             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
@@ -245,14 +245,14 @@ struct MainAppView: View {
             .sheet(item: $userAccountManager.signUpPrompt) { prompt in
                 SignUpPromptView(action: prompt.action)
                     .environmentObject(userAccountManager)
-                    .environmentObject(deviceManager)
+                    .environmentObject(subjectManager)
                     .environmentObject(toastManager)
             }
             .sheet(isPresented: $showRecordingSheet) {
                 ZStack {
                     if aiConsentGranted || AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id) {
                         FullScreenRecordingView()
-                            .environmentObject(deviceManager)
+                            .environmentObject(subjectManager)
                             .environmentObject(userAccountManager)
                             .environmentObject(recordingStore)
                     } else {
@@ -277,18 +277,18 @@ struct MainAppView: View {
     }
 
     /// Record button. Signed-out visitors are asked to sign up. Signed-in users who are
-    /// looking at the sample record on their own device (the sample is read-only).
+    /// looking at the sample record for their own subject (the sample is read-only).
     private func handleRecordTap() {
         if isGuest {
             userAccountManager.promptSignUp("録音する")
             return
         }
-        if deviceManager.isDemoDeviceSelected {
-            guard let own = deviceManager.ownRecordingDevice else {
+        if subjectManager.isSampleSelected {
+            guard let own = subjectManager.ownRecordingSubject else {
                 toastManager.showError(title: "録音できません", subtitle: "サンプルには録音できません。先に分析対象を追加してください")
                 return
             }
-            deviceManager.selectDevice(own.device_id)
+            subjectManager.selectSubject(own.subjectId)
         }
         aiConsentGranted = AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id)
         showRecordingSheet = true
@@ -299,9 +299,8 @@ struct MainAppView: View {
             userAccountManager.promptSignUp()
             return
         }
-        // Signed in but viewing the sample: go back to the user's own device.
-        let own = deviceManager.realDevices.first(where: { $0.role == "owner" }) ?? deviceManager.realDevices.first
-        deviceManager.selectDevice(own?.device_id)
+        // Signed in but viewing the sample: go back to the user's own subject.
+        subjectManager.selectSubject(subjectManager.ownRecordingSubject?.subjectId)
     }
 
     private var mainContent: some View {
@@ -328,7 +327,7 @@ struct MainAppView: View {
             LoginView(onStartNew: { showOnboarding = true })
                 .environmentObject(userAccountManager)
                 .environmentObject(toastManager)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
         }
         .task {
             viewStartTime = Date()
@@ -491,12 +490,12 @@ struct CustomFooterNavigation: View {
     let showMicTip: Bool
     let onDismissMicTip: () -> Void
     let onRecordTap: () -> Void
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     private let glassBaseOpacity: Double = 0.62
     private let glassMaterialOpacity: Double = 0.40
 
-    private var isDeviceSelected: Bool {
-        deviceManager.selectedDeviceID != nil
+    private var isSubjectSelected: Bool {
+        subjectManager.selectedSubjectID != nil
     }
 
     var body: some View {
@@ -513,7 +512,7 @@ struct CustomFooterNavigation: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 10)
-        .opacity(isDeviceSelected ? 1.0 : 0.65)
+        .opacity(isSubjectSelected ? 1.0 : 0.65)
         .frame(maxWidth: 460)
         .background(
             Capsule()
@@ -563,11 +562,11 @@ struct CustomFooterNavigation: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .disabled(!isDeviceSelected)
+        .disabled(!isSubjectSelected)
     }
 
     private func tabForegroundColor(isSelected: Bool) -> Color {
-        guard isDeviceSelected else { return Color.gray.opacity(0.55) }
+        guard isSubjectSelected else { return Color.gray.opacity(0.55) }
         return isSelected ? Color.accentTeal.opacity(0.9) : Color.white.opacity(0.76)
     }
 
@@ -593,10 +592,10 @@ struct CustomFooterNavigation: View {
                 .shadow(color: Color.black.opacity(0.25), radius: 8, x: 0, y: 3)
         }
         .buttonStyle(.plain)
-        .disabled(!isDeviceSelected)
+        .disabled(!isSubjectSelected)
         .frame(width: 52, height: 52)
         .overlay(alignment: .topTrailing) {
-            if showMicTip && isDeviceSelected {
+            if showMicTip && isSubjectSelected {
                 MicTipBubble(
                     text: "まずは音声の\n分析を始めてみましょう。",
                     onClose: onDismissMicTip
@@ -674,11 +673,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return []
         }
 
-        // Device filter: Current selected device only
-        if let targetDeviceId = userInfo["device_id"] as? String {
-            let selectedDeviceId = UserDefaults.standard.string(forKey: "watchme_selected_device_id")
-            guard targetDeviceId == selectedDeviceId else {
-                print("⚠️ [PUSH] Notification ignored (different device: target=\(targetDeviceId), selected=\(selectedDeviceId ?? "nil"))")
+        // Only for the subject on screen
+        if let targetSubjectId = (userInfo["subject_id"] ?? userInfo["device_id"]) as? String {
+            let selectedSubjectId = UserDefaults.standard.string(forKey: "watchme_selected_device_id")
+            guard targetSubjectId == selectedSubjectId else {
+                print("⚠️ [PUSH] Notification ignored (different device: target=\(targetSubjectId), selected=\(selectedSubjectId ?? "nil"))")
                 return []
             }
         }
@@ -714,11 +713,11 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
             return
         }
 
-        // Device filter: selected device is known and different -> ignore
-        if let targetDeviceId = userInfo["device_id"] as? String,
-           let selectedDeviceId = UserDefaults.standard.string(forKey: "watchme_selected_device_id"),
-           targetDeviceId != selectedDeviceId {
-            print("⚠️ [PUSH] Tap ignored (different device: target=\(targetDeviceId), selected=\(selectedDeviceId))")
+        // Another subject than the one on screen -> ignore
+        if let targetSubjectId = (userInfo["subject_id"] ?? userInfo["device_id"]) as? String,
+           let selectedSubjectId = UserDefaults.standard.string(forKey: "watchme_selected_device_id"),
+           targetSubjectId != selectedSubjectId {
+            print("⚠️ [PUSH] Tap ignored (different device: target=\(targetSubjectId), selected=\(selectedSubjectId))")
             return
         }
 
@@ -734,7 +733,7 @@ class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDele
         UserDefaults.standard.set(token, forKey: "apns_device_token")
         print("💾 [PUSH] デバイストークンをUserDefaultsに保存: \(token)")
 
-        // NotificationCenterで通知（DeviceManagerで受信してSupabaseに保存）
+        // NotificationCenterで通知（SubjectManagerで受信してSupabaseに保存）
         NotificationCenter.default.post(
             name: NSNotification.Name("APNsTokenReceived"),
             object: nil,

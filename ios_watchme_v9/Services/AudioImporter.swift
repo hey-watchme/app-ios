@@ -88,12 +88,12 @@ enum AudioImporter {
         AVLinearPCMIsNonInterleaved: false,
     ]
 
-    /// Convert `url` into journaled chunks for `deviceId`. `progress` gets 0...1 on the main actor.
+    /// Convert `url` into journaled chunks for `subjectId`. `progress` gets 0...1 on the main actor.
     @MainActor
     static func importFile(
         at url: URL,
         originalDates: FileDates?,
-        deviceId: String,
+        subjectId: String,
         timezone: TimeZone,
         progress: @escaping @MainActor (Double) -> Void
     ) async throws -> ImportResult {
@@ -119,7 +119,7 @@ enum AudioImporter {
         }
 
         let sessionId = UUID().uuidString
-        let writer = ChunkWriter(sessionId: sessionId, deviceId: deviceId, timezone: timezone, startedAt: startedAt)
+        let writer = ChunkWriter(sessionId: sessionId, subjectId: subjectId, timezone: timezone, startedAt: startedAt)
         let totalBytes = max(duration * WAVFile.bytesPerSecond, 1)
 
         let reader = try AVAssetReader(asset: asset)
@@ -205,7 +205,7 @@ enum AudioImporter {
     @MainActor
     private final class ChunkWriter {
         let sessionId: String
-        let deviceId: String
+        let subjectId: String
         let timezone: TimeZone
         let startedAt: Date
 
@@ -215,9 +215,9 @@ enum AudioImporter {
         private var currentId: String?
         private var currentBytes = 0
 
-        init(sessionId: String, deviceId: String, timezone: TimeZone, startedAt: Date) {
+        init(sessionId: String, subjectId: String, timezone: TimeZone, startedAt: Date) {
             self.sessionId = sessionId
-            self.deviceId = deviceId
+            self.subjectId = subjectId
             self.timezone = timezone
             self.startedAt = startedAt
         }
@@ -258,7 +258,7 @@ enum AudioImporter {
             currentBytes = 0
             ChunkUploader.shared.activeRecordingIds.insert(id)
             await ChunkUploader.shared.chunkStarted(ChunkRecord(
-                id: id, fileName: fileName, deviceId: deviceId, recordedAt: recordedAt,
+                id: id, fileName: fileName, subjectId: subjectId, recordedAt: recordedAt,
                 sessionId: sessionId, sequence: chunkCount, durationSeconds: nil, state: .recording,
                 sessionStartedAt: startedAt
             ))

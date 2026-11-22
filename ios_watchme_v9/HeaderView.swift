@@ -9,7 +9,7 @@ import SwiftUI
 
 struct HeaderView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @EnvironmentObject var recordingStore: RecordingStore
     @Binding var showLogoutConfirmation: Bool
@@ -24,12 +24,12 @@ struct HeaderView: View {
     
     var body: some View {
         HStack(spacing: 10) {
-            // The selected analysis subject; opens the 分析対象 screen (subject, its device, the others)
+            // The selected analysis subject; opens the 分析対象 screen (the subject and the others)
             if userAccountManager.authState.isAuthenticated {
                 NavigationLink(destination:
                     SubjectTabView()
                         .environmentObject(userAccountManager)
-                        .environmentObject(deviceManager)
+                        .environmentObject(subjectManager)
                         .environmentObject(dataManager)
                         .environmentObject(recordingStore)
                 ) {
@@ -37,7 +37,7 @@ struct HeaderView: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                // Sample mode: devices and subjects need an account
+                // Sample mode: subjects need an account
                 Button(action: { userAccountManager.promptSignUp("分析対象を設定する") }) {
                     targetPill
                 }
@@ -74,7 +74,7 @@ struct HeaderView: View {
             // 通知画面
             NotificationView()
                 .environmentObject(userAccountManager)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
                 .environmentObject(dataManager)
                 .onDisappear {
                     // 通知画面を閉じたら未読数を更新
@@ -118,7 +118,7 @@ struct HeaderView: View {
     // 現在の分析対象またはデバイス情報を表示するView
     @ViewBuilder
     private var currentTargetView: some View {
-        if let subject = deviceManager.selectedSubject {
+        if let subject = subjectManager.selectedSubject {
             // 分析対象が設定されている場合
             HStack(spacing: 8) {
                 // アバター表示（SSOT: Subject.avatarUrl を渡す）
@@ -136,9 +136,9 @@ struct HeaderView: View {
                         .foregroundColor(.white.opacity(0.9))
                 }
             }
-        } else if deviceManager.selectedDeviceID != nil {
+        } else if subjectManager.selectedSubjectID != nil {
             // デバイスが選択されている場合
-            if deviceManager.isSampleDeviceSelected {
+            if subjectManager.isSampleSelected {
                 // サンプルデバイス選択中
                 HStack(spacing: 8) {
                     ZStack {
@@ -168,13 +168,13 @@ struct HeaderView: View {
                             .foregroundColor(.white.opacity(0.86))
                     }
 
-                    // A recording container without a subject profile yet (the device id is in the 分析対象 screen)
+                    // A subject without a name yet (名称未設定)
                     Text("名称未設定")
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.white.opacity(0.92))
                 }
             }
-        } else if !deviceManager.hasRealDevices {
+        } else if !subjectManager.hasOwnSubjects {
             // 実際のデバイス（デモ以外）が未連携の場合
             HStack(spacing: 8) {
                 ZStack {

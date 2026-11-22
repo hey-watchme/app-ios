@@ -266,7 +266,7 @@ struct HomeRecordingCard: View {
                 StageProgressRow(stages: block.stages)
             }
             if !block.stages.isInProgress, let recordedAt = block.recordedAt {
-                SpotEventsCard(deviceId: block.deviceId, recordedAt: recordedAt, localTime: block.localTime,
+                SpotEventsCard(subjectId: block.subjectId, recordedAt: recordedAt, localTime: block.localTime,
                                metricsRaw: block.metricsRaw, store: events, part: .picture, embedded: true)
                     .transition(.opacity)
             }
@@ -303,7 +303,7 @@ struct HomeRecordingCard: View {
 /// reprimands at the top a hard one. Counts as counted (low-confidence events left out);
 /// a recording analysed more than once counts by its newest version.
 struct HomeEventRankingCard: View {
-    let deviceId: String
+    let subjectId: String
     let localDate: String
     /// Changes when a recording of the day finishes its analysis, so the counts are read again.
     let refreshKey: String
@@ -361,7 +361,7 @@ struct HomeEventRankingCard: View {
                 .detailCard()
             }
         }
-        .task(id: "\(deviceId)-\(localDate)-\(refreshKey)") { await load() }
+        .task(id: "\(subjectId)-\(localDate)-\(refreshKey)") { await load() }
     }
 
     private func row(rank: Int, entry: Entry, top: Int) -> some View {
@@ -398,7 +398,7 @@ struct HomeEventRankingCard: View {
             let runs: [Run] = try await SupabaseClientManager.shared.client
                 .from("spot_event_runs")
                 .select("recorded_at, extractor_version, counts")
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .eq("local_date", value: localDate)
                 .execute()
                 .value
@@ -504,8 +504,8 @@ struct HomeDigestCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
             Spacer(minLength: 4)
-            if let recordedAt = moment.block.recordedAt, SavedRecordings.canSave(deviceId: moment.block.deviceId) {
-                EventPlayButton(id: "digest-\(moment.id)", deviceId: moment.block.deviceId, recordedAt: recordedAt,
+            if let recordedAt = moment.block.recordedAt, SavedRecordings.canSave(subjectId: moment.block.subjectId) {
+                EventPlayButton(id: "digest-\(moment.id)", subjectId: moment.block.subjectId, recordedAt: recordedAt,
                                 start: moment.start, end: moment.end)
             }
         }

@@ -3,7 +3,7 @@
 //  ios_watchme_v9
 //
 //  Plays the moment of a counted event: from a few seconds before it starts to a little
-//  after it ends. The URL comes from GET /audio?device_id&recorded_at&at (platform
+//  after it ends. The URL comes from GET /audio?subject_id&recorded_at&at (platform
 //  backend/functions/audio), which finds the kept copy or, within 3 days, the audio that
 //  is still there; 410 means the audio was deleted. Event times come from the listener
 //  and can be a few seconds off, hence the lead-in.
@@ -32,7 +32,7 @@ final class EventAudioPlayer: ObservableObject {
     func isActive(_ id: String) -> Bool { activeId == id }
 
     /// Toggle playback of one event. start/end are seconds from the start of the recording.
-    func toggle(id: String, deviceId: String, recordedAt: String, start: Double, end: Double) async {
+    func toggle(id: String, subjectId: String, recordedAt: String, start: Double, end: Double) async {
         if activeId == id {
             stop()
             return
@@ -45,7 +45,7 @@ final class EventAudioPlayer: ObservableObject {
         let from = max(start - Self.leadIn, 0)
         let until = max(end + Self.tail, from + Self.minimumLength)
         do {
-            let (url, partStart) = try await playbackURL(deviceId: deviceId, recordedAt: recordedAt, at: from)
+            let (url, partStart) = try await playbackURL(subjectId: subjectId, recordedAt: recordedAt, at: from)
             guard activeId == id else { return }  // another event was pressed meanwhile
             try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .default)
             try? AVAudioSession.sharedInstance().setActive(true)
@@ -99,11 +99,11 @@ final class EventAudioPlayer: ObservableObject {
         }
     }
 
-    private func playbackURL(deviceId: String, recordedAt: String, at: Double) async throws -> (URL, Double) {
+    private func playbackURL(subjectId: String, recordedAt: String, at: Double) async throws -> (URL, Double) {
         guard let bearer = await SupabaseClientManager.shared.bearerToken() else { throw PlaybackError.failed(401) }
         var components = URLComponents(string: "\(serverURL)/audio")!
         components.queryItems = [
-            URLQueryItem(name: "device_id", value: deviceId),
+            URLQueryItem(name: "subject_id", value: subjectId),
             URLQueryItem(name: "recorded_at", value: recordedAt),
             URLQueryItem(name: "at", value: String(format: "%.1f", at)),
         ]
@@ -126,7 +126,7 @@ final class EventAudioPlayer: ObservableObject {
 /// The play / stop button of one event.
 struct EventPlayButton: View {
     let id: String
-    let deviceId: String
+    let subjectId: String
     let recordedAt: String
     let start: Double
     let end: Double
@@ -134,7 +134,7 @@ struct EventPlayButton: View {
 
     var body: some View {
         Button {
-            Task { await player.toggle(id: id, deviceId: deviceId, recordedAt: recordedAt, start: start, end: end) }
+            Task { await player.toggle(id: id, subjectId: subjectId, recordedAt: recordedAt, start: start, end: end) }
         } label: {
             Group {
                 if player.isActive(id) && player.isLoading {

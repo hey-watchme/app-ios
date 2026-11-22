@@ -14,7 +14,7 @@ import Charts
 import Supabase
 
 struct DailyReportView: View {
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
 
     // Period selection
@@ -87,7 +87,7 @@ struct DailyReportView: View {
                 // Period selector, and the saved recordings (not bound to the period)
                 HStack(spacing: 10) {
                     periodSelector
-                    if let deviceId = deviceManager.selectedDeviceID, SavedRecordings.canSave(deviceId: deviceId) {
+                    if let subjectId = subjectManager.selectedSubjectID, SavedRecordings.canSave(subjectId: subjectId) {
                         savedButton
                     }
                 }
@@ -123,16 +123,16 @@ struct DailyReportView: View {
         }
         .background(Color.darkBase)
         .navigationDestination(item: $openDay) { day in
-            if let deviceId = deviceManager.selectedDeviceID {
-                DayScreen(deviceId: deviceId, localDate: day.localDate)
-                    .environmentObject(deviceManager)
+            if let subjectId = subjectManager.selectedSubjectID {
+                DayScreen(subjectId: subjectId, localDate: day.localDate)
+                    .environmentObject(subjectManager)
                     .environmentObject(dataManager)
             }
         }
         .sheet(isPresented: $showSaved) {
-            if let deviceId = deviceManager.selectedDeviceID {
-                SavedRecordingsView(deviceId: deviceId)
-                    .environmentObject(deviceManager)
+            if let subjectId = subjectManager.selectedSubjectID {
+                SavedRecordingsView(subjectId: subjectId)
+                    .environmentObject(subjectManager)
                     .environmentObject(dataManager)
             }
         }
@@ -144,7 +144,7 @@ struct DailyReportView: View {
                 await loadData()
             }
         }
-        .onChange(of: deviceManager.selectedDeviceID) { _, _ in
+        .onChange(of: subjectManager.selectedSubjectID) { _, _ in
             Task {
                 await loadData()
             }
@@ -163,7 +163,7 @@ struct DailyReportView: View {
     }
 
     private func loadData() async {
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             dailySummaries = []
             previousSummaries = []
             eventDays = [:]
@@ -185,12 +185,12 @@ struct DailyReportView: View {
 
         // The selected period and the one before it (the dashed line), in one read each
         async let summariesTask = dataManager.fetchDailyResultsRange(
-            deviceId: deviceId,
+            subjectId: subjectId,
             startDate: starts.previous,
             endDate: today
         )
-        async let runsTask = fetchEventRuns(deviceId: deviceId, from: starts.previous, to: today)
-        async let stripsTask = fetchStrips(deviceId: deviceId, from: starts.current, to: today)
+        async let runsTask = fetchEventRuns(subjectId: subjectId, from: starts.previous, to: today)
+        async let stripsTask = fetchStrips(subjectId: subjectId, from: starts.current, to: today)
         let fetched = await summariesTask
         let runs = await runsTask
         let strips = await stripsTask
@@ -226,7 +226,7 @@ struct DailyReportView: View {
     /// The device's spot_event_runs between two local dates. Read in pages until the total
     /// the server reports is reached: one response holds a limited number of rows, and a
     /// short answer would silently lower the counts.
-    private func fetchEventRuns(deviceId: String, from: Date, to: Date) async -> [ReportEventRun] {
+    private func fetchEventRuns(subjectId: String, from: Date, to: Date) async -> [ReportEventRun] {
         let client = SupabaseClientManager.shared.client
         let pageSize = 1000
         var rows: [ReportEventRun] = []
@@ -235,7 +235,7 @@ struct DailyReportView: View {
                 let response: PostgrestResponse<[ReportEventRun]> = try await client
                     .from("spot_event_runs")
                     .select("local_date, recorded_at, extractor_version, audio_seconds, counts", count: .exact)
-                    .eq("device_id", value: deviceId)
+                    .eq("subject_id", value: subjectId)
                     .gte("local_date", value: Self.dayFormatter.string(from: from))
                     .lte("local_date", value: Self.dayFormatter.string(from: to))
                     .order("recorded_at", ascending: true)
@@ -257,7 +257,7 @@ struct DailyReportView: View {
     /// Each day's picture for the panels: the recordings whose events were looked for (newest
     /// extractor version of each), and their warm and hard events, low-confidence ones left out.
     /// Read in pages, like the runs, so a long period is not cut short.
-    private func fetchStrips(deviceId: String, from: Date, to: Date) async -> [String: DayStripData] {
+    private func fetchStrips(subjectId: String, from: Date, to: Date) async -> [String: DayStripData] {
         struct Run: Decodable { let local_date: String; let recorded_at: String; let extractor_version: String; let audio_seconds: Double? }
         struct Spot: Decodable { let recorded_at: String; let local_time: String? }
         struct Row: Decodable {
@@ -278,7 +278,7 @@ struct DailyReportView: View {
             while true {
                 let response: PostgrestResponse<[T]> = try await filter(client.from(table)
                     .select(columns, count: .exact)
-                    .eq("device_id", value: deviceId)
+                    .eq("subject_id", value: subjectId)
                     .gte("local_date", value: fromDate)
                     .lte("local_date", value: toDate))
                     .order("recorded_at", ascending: true)
@@ -771,7 +771,7 @@ struct DailyReportView: View {
 
     /// The events counted for the selected day and metric, with the words that were heard.
     private func eventLines(for point: ChartPoint) -> some View {
-        let key = "\(deviceManager.selectedDeviceID ?? "")|\(point.id)|\(selectedMetric.id)"
+        let key = "\(subjectManager.selectedSubjectID ?? "")|\(point.id)|\(selectedMetric.id)"
         let shown = 4
         let loaded = balloonEventsKey == key
 
@@ -806,8 +806,8 @@ struct DailyReportView: View {
                             .foregroundColor(Color(white: 0.78))
                             .lineLimit(1)
                         Spacer(minLength: 0)
-                        if let deviceId = deviceManager.selectedDeviceID, SavedRecordings.canSave(deviceId: deviceId) {
-                            EventPlayButton(id: event.id, deviceId: deviceId, recordedAt: event.recordedAt,
+                        if let subjectId = subjectManager.selectedSubjectID, SavedRecordings.canSave(subjectId: subjectId) {
+                            EventPlayButton(id: event.id, subjectId: subjectId, recordedAt: event.recordedAt,
                                             start: event.start, end: event.end)
                         }
                     }
@@ -826,7 +826,7 @@ struct DailyReportView: View {
     /// Same rows the day's detail counts: the newest extractor version of each recording,
     /// low-confidence events left out.
     private func loadBalloonEvents(key: String, localDate: String) async {
-        guard let deviceId = deviceManager.selectedDeviceID, !selectedMetric.isVibe else { return }
+        guard let subjectId = subjectManager.selectedSubjectID, !selectedMetric.isVibe else { return }
         struct Run: Decodable { let recorded_at: String; let extractor_version: String }
         struct Spot: Decodable { let recorded_at: String; let local_time: String? }
         struct Row: Decodable {
@@ -843,15 +843,15 @@ struct DailyReportView: View {
         do {
             async let runsTask: [Run] = client.from("spot_event_runs")
                 .select("recorded_at, extractor_version")
-                .eq("device_id", value: deviceId).eq("local_date", value: localDate)
+                .eq("subject_id", value: subjectId).eq("local_date", value: localDate)
                 .execute().value
             async let spotsTask: [Spot] = client.from("spot_results")
                 .select("recorded_at, local_time")
-                .eq("device_id", value: deviceId).eq("local_date", value: localDate)
+                .eq("subject_id", value: subjectId).eq("local_date", value: localDate)
                 .execute().value
             async let rowsTask: [Row] = client.from("spot_events")
                 .select("recorded_at, extractor_version, seq, event_type, start_sec, end_sec, intensity, evidence")
-                .eq("device_id", value: deviceId).eq("local_date", value: localDate)
+                .eq("subject_id", value: subjectId).eq("local_date", value: localDate)
                 .in("event_type", values: selectedMetric.eventTypes)
                 .neq("confidence", value: "low")
                 .execute().value

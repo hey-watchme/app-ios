@@ -9,14 +9,14 @@ import SwiftUI
 
 struct DetailPageDateHeader: View {
     let selectedDate: Date
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     
     private var calendar: Calendar {
-        deviceManager.deviceCalendar
+        subjectManager.subjectCalendar
     }
     
     private var timezone: TimeZone {
-        deviceManager.selectedDeviceTimezone
+        subjectManager.selectedTimezone
     }
     
     private func formatDate() -> String {
@@ -49,5 +49,5 @@ struct DetailPageDateHeader: View {
 
 #Preview {
     DetailPageDateHeader(selectedDate: Date())
-        .environmentObject(DeviceManager())
+        .environmentObject(SubjectManager())
 }

@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct WeeklyReportView: View {
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
 
     // Mock data
@@ -36,8 +36,8 @@ struct WeeklyReportView: View {
         }
         .background(Color.darkBase)
         .sheet(isPresented: $showWeeklyDetailSheet) {
-            if let deviceId = deviceManager.selectedDeviceID {
-                WeeklyDetailView(deviceId: deviceId, weekStartDate: selectedWeekStart)
+            if let subjectId = subjectManager.selectedSubjectID {
+                WeeklyDetailView(subjectId: subjectId, weekStartDate: selectedWeekStart)
             }
         }
     }

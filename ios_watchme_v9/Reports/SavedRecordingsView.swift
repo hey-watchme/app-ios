@@ -10,11 +10,11 @@ import SwiftUI
 import Supabase
 
 struct SavedRecordingsView: View {
-    let deviceId: String
+    let subjectId: String
 
     @Environment(\.dismiss) var dismiss
     @EnvironmentObject var dataManager: SupabaseDataManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
 
     @State private var recordings: [DashboardTimeBlock] = []
     @State private var isLoading = true
@@ -64,7 +64,7 @@ struct SavedRecordingsView: View {
         .presentationBackground(Color.darkBase)
         // Reload when a detail closes: it may have been unsaved there.
         .sheet(item: $openSpot, onDismiss: { Task { await load() } }) { spot in
-            SpotDetailView(deviceId: deviceId, spotData: spot)
+            SpotDetailView(subjectId: subjectId, spotData: spot)
                 .environmentObject(dataManager)
         }
         .task { await load() }
@@ -144,7 +144,7 @@ struct SavedRecordingsView: View {
     private func load() async {
         failed = false
         do {
-            let saved = try await SavedRecordings.recordedAts(deviceId: deviceId)
+            let saved = try await SavedRecordings.recordedAts(subjectId: subjectId)
             guard !saved.isEmpty else {
                 recordings = []
                 isLoading = false
@@ -153,14 +153,14 @@ struct SavedRecordingsView: View {
             let days: [DayRow] = try await SupabaseClientManager.shared.client
                 .from("spot_results")
                 .select("local_date, recorded_at")
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .in("recorded_at", values: saved)
                 .execute()
                 .value
-            let timezone = deviceManager.getTimezone(for: deviceId)
+            let timezone = subjectManager.getTimezone(for: subjectId)
             var found: [DashboardTimeBlock] = []
             for date in Set(days.compactMap(\.local_date)).sorted() {
-                let blocks = await dataManager.fetchDashboardTimeBlocks(deviceId: deviceId, localDate: date, timezone: timezone)
+                let blocks = await dataManager.fetchDashboardTimeBlocks(subjectId: subjectId, localDate: date, timezone: timezone)
                 found += blocks.filter { saved.contains($0.recordedAt ?? "") }
             }
             let order = Dictionary(uniqueKeysWithValues: saved.enumerated().map { ($1, $0) })

@@ -23,7 +23,7 @@ struct FamilyQuestion: Decodable, Identifiable, Equatable {
     }
 
     let question_id: String
-    let device_id: String
+    let subject_id: String
     let recorded_at: String?
     let local_date: String?
     let scope: String          // recording, day, person

@@ -17,11 +17,11 @@ class NetworkManager: ObservableObject {
     @Published var currentUploadingFile: String? = nil
     
     private var userAccountManager: UserAccountManager?
-    private var deviceManager: DeviceManager?
+    private var subjectManager: SubjectManager?
     
-    init(userAccountManager: UserAccountManager? = nil, deviceManager: DeviceManager? = nil) {
+    init(userAccountManager: UserAccountManager? = nil, subjectManager: SubjectManager? = nil) {
         self.userAccountManager = userAccountManager
-        self.deviceManager = deviceManager
+        self.subjectManager = subjectManager
         
         // 認証済みユーザーIDを優先、フォールバックとして従来のユーザーID
         if let authenticatedUser = userAccountManager?.currentUser {
@@ -92,7 +92,7 @@ class NetworkManager: ObservableObject {
         print("   - アップロード試行: \(recording.uploadAttempts + 1)回目")
         print("   - ユーザーID: \(currentUserID)")
         print("   - サーバーURL: \(serverURL)")
-        print("   - 選択中のデバイスID: \(deviceManager?.selectedDeviceID ?? "nil")")
+        print("   - 選択中のデバイスID: \(subjectManager?.selectedSubjectID ?? "nil")")
         print("   - 認証状態: \(userAccountManager?.isAuthenticated ?? false)")
         
         // 接続ステータスを更新
@@ -175,7 +175,7 @@ class NetworkManager: ObservableObject {
             }
             
             // ① metadata JSONパラメータを追加
-            if let deviceInfo = deviceManager?.getDeviceInfo() {
+            if let subjectId = subjectManager?.selectedSubjectID {
                 // ユーザー体験のため、時刻は常にデバイスのローカルタイムゾーンを基準とします。
                 // UTCに変換せず、タイムゾーン情報(+09:00など)を付与したままサーバーに送信します。
                 let isoFormatter = ISO8601DateFormatter()
@@ -185,9 +185,8 @@ class NetworkManager: ObservableObject {
                 let recordedAtString = isoFormatter.string(from: recording.date)
                 
                 // S3にアップロードするメタデータ
-                // プレフィックスを削除し、純粋なdevice_idを使用
                 let metadata: [String: Any] = [
-                    "device_id": deviceInfo.deviceID,  // プレフィックスなしの純粋なdevice_id
+                    "subject_id": subjectId,
                     "recorded_at": recordedAtString
                 ]
                 
@@ -652,9 +651,9 @@ class NetworkManager: ObservableObject {
         }
     }
 
-    /// Result of DELETE /devices/{id}: the device is deleted only when no other account
-    /// is linked to it; otherwise just this account's link is removed.
-    struct DeviceRemoval: Decodable {
+    /// Result of DELETE /subjects/{id}: the subject is deleted only when no other account
+    /// is linked to it; otherwise just this account's membership is removed.
+    struct SubjectRemoval: Decodable {
         let deleted: Bool
         let other_users: Int
     }
@@ -672,11 +671,11 @@ class NetworkManager: ObservableObject {
         print("✅ アカウント削除成功: \(userId)")
     }
 
-    /// DELETE /devices/{id}: delete a device and its recordings, or only unlink it when
+    /// DELETE /subjects/{id}: delete a subject and its recordings, or only leave it when
     /// another account is still linked.
-    func deleteDevice(deviceId: String) async throws -> DeviceRemoval {
-        let data = try await accountRequest(method: "DELETE", path: "/devices/\(deviceId.lowercased())")
-        return try JSONDecoder().decode(DeviceRemoval.self, from: data)
+    func deleteSubject(subjectId: String) async throws -> SubjectRemoval {
+        let data = try await accountRequest(method: "DELETE", path: "/subjects/\(subjectId.lowercased())")
+        return try JSONDecoder().decode(SubjectRemoval.self, from: data)
     }
 
     /// The signed-in user's research consent (GET /account/research-consent).
@@ -686,7 +685,7 @@ class NetworkManager: ObservableObject {
     }
 
     /// Record the user's choice (PUT /account/research-consent). Turning it off deletes
-    /// the kept audio of this account's devices on the server.
+    /// the kept audio of this account.s subjects on the server.
     func setResearchConsent(_ consented: Bool, source: String) async throws -> ResearchConsentState {
         let body: [String: Any] = [
             "consented": consented,
@@ -705,7 +704,7 @@ class NetworkManager: ObservableObject {
     }
 
     /// Record the choice (PUT /account/audio-keep). Turning it off deletes the kept audio
-    /// of this account's devices on the server.
+    /// of this account.s subjects on the server.
     func setAudioKeep(_ keep: Bool) async throws -> AudioKeepState {
         let body: [String: Any] = ["keep": keep, "policy_version": AudioKeepInfo.policyVersion]
         let data = try await accountRequest(method: "PUT", path: "/account/audio-keep",

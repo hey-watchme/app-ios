@@ -14,7 +14,7 @@ struct UserInfoView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showAccountSettings = false  // アカウント設定画面
     @State private var showSignUpPrompt = false  // sample mode: sign-up sheet
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
@@ -278,13 +278,13 @@ struct UserInfoView: View {
         .sheet(isPresented: $showAccountSettings) {
             AccountSettingsView()
                 .environmentObject(userAccountManager)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
                 .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $showSignUpPrompt) {
             SignUpPromptView(action: nil)
                 .environmentObject(userAccountManager)
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
                 .environmentObject(ToastManager.shared)
                 .preferredColorScheme(.dark)
         }

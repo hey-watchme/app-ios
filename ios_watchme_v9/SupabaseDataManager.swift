@@ -37,7 +37,7 @@ class SupabaseDataManager: ObservableObject {
     // 認証マネージャーへの参照（オプショナル）
     private weak var userAccountManager: UserAccountManager?
     // デバイスマネージャーへの参照（パフォーマンス最適化用）
-    private weak var deviceManager: DeviceManager?
+    private weak var subjectManager: SubjectManager?
     
     // 日付フォーマッター
     private let dateFormatter: DateFormatter = {
@@ -63,76 +63,18 @@ class SupabaseDataManager: ObservableObject {
         self.userAccountManager = userAccountManager
     }
 
-    // デバイスマネージャーを設定（パフォーマンス最適化用）
-    func setDeviceManager(_ deviceManager: DeviceManager) {
-        self.deviceManager = deviceManager
+    // 分析対象の一覧を設定（パフォーマンス最適化用）
+    func setSubjectManager(_ subjectManager: SubjectManager) {
+        self.subjectManager = subjectManager
     }
     
     // MARK: - Public Methods
     
-    /// ユーザーIDから関連するデバイスIDを取得
-    func fetchDeviceId(for userId: String) async -> String? {
-        guard let url = URL(string: "\(supabaseURL)/rest/v1/devices") else {
-            print("❌ 無効なURL")
-            return nil
-        }
-        
-        var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-        components?.queryItems = [
-            URLQueryItem(name: "owner_user_id", value: "eq.\(userId)"),
-            URLQueryItem(name: "select", value: "device_id"),
-            URLQueryItem(name: "limit", value: "1")
-        ]
-        
-        guard let requestURL = components?.url else {
-            print("❌ URLの構築に失敗しました")
-            return nil
-        }
-        
-        var request = URLRequest(url: requestURL)
-        request.httpMethod = "GET"
-        request.setValue(await SupabaseClientManager.shared.bearerToken() ?? "Bearer \(supabaseAnonKey)", forHTTPHeaderField: "Authorization")
-        request.setValue(supabaseAnonKey, forHTTPHeaderField: "apikey")
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        
-        do {
-            let (data, response) = try await URLSession.shared.data(for: request)
-            
-            guard let httpResponse = response as? HTTPURLResponse else {
-                print("❌ 無効なレスポンス")
-                return nil
-            }
-            
-            if httpResponse.statusCode == 200 {
-                if let rawResponse = String(data: data, encoding: .utf8) {
-                    print("📄 Device query response: \(rawResponse)")
-                }
-                
-                struct DeviceResponse: Codable {
-                    let device_id: String
-                }
-                
-                let decoder = JSONDecoder()
-                let devices = try decoder.decode([DeviceResponse].self, from: data)
-                
-                if let device = devices.first {
-                    print("✅ Found device ID: \(device.device_id) for user: \(userId)")
-                    return device.device_id
-                } else {
-                    print("⚠️ No device found for user: \(userId)")
-                }
-            }
-        } catch {
-            print("❌ Device fetch error: \(error)")
-        }
-        
-        return nil
-    }
     
     /// 特定の日付のレポートを取得
-    func fetchDailyReport(for deviceId: String, date: Date) async {
+    func fetchDailyReport(for subjectId: String, date: Date) async {
         let dateString = dateFormatter.string(from: date)
-        print("📅 Fetching daily report for device: \(deviceId), date: \(dateString)")
+        print("📅 Fetching daily report for device: \(subjectId), date: \(dateString)")
 
         // URLの構築（daily_resultsテーブルを使用）
         guard let url = URL(string: "\(supabaseURL)/rest/v1/daily_results") else {
@@ -144,7 +86,7 @@ class SupabaseDataManager: ObservableObject {
         // クエリパラメータの構築（local_dateカラムを使用）
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.queryItems = [
-            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
+            URLQueryItem(name: "subject_id", value: "eq.\(subjectId)"),
             URLQueryItem(name: "local_date", value: "eq.\(dateString)"),
             URLQueryItem(name: "select", value: "*")
         ]
@@ -230,7 +172,7 @@ class SupabaseDataManager: ObservableObject {
     }
     
     /// 日付範囲でレポートを取得（週次表示用）
-    func fetchWeeklyReports(for deviceId: String, startDate: Date, endDate: Date) async {
+    func fetchWeeklyReports(for subjectId: String, startDate: Date, endDate: Date) async {
         isLoading = true
         errorMessage = nil
         weeklyReports = []
@@ -238,7 +180,7 @@ class SupabaseDataManager: ObservableObject {
         let startDateString = dateFormatter.string(from: startDate)
         let endDateString = dateFormatter.string(from: endDate)
 
-        print("📅 Fetching weekly reports for device: \(deviceId)")
+        print("📅 Fetching weekly reports for device: \(subjectId)")
         print("   From: \(startDateString) To: \(endDateString)")
 
         // URLの構築（daily_resultsテーブルを使用）
@@ -251,7 +193,7 @@ class SupabaseDataManager: ObservableObject {
         // クエリパラメータの構築（local_dateカラムを使用）
         var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
         components?.queryItems = [
-            URLQueryItem(name: "device_id", value: "eq.\(deviceId)"),
+            URLQueryItem(name: "subject_id", value: "eq.\(subjectId)"),
             URLQueryItem(name: "local_date", value: "gte.\(startDateString)"),
             URLQueryItem(name: "local_date", value: "lte.\(endDateString)"),
             URLQueryItem(name: "select", value: "*"),
@@ -322,43 +264,42 @@ class SupabaseDataManager: ObservableObject {
     /// 気分データのみ取得、行動・感情は将来実装
     ///
     /// - Parameters:
-    ///   - deviceId: デバイスID
+    ///   - subjectId: デバイスID
     ///   - date: 取得したい日付
     ///   - timezone: デバイス固有のタイムゾーン
     /// - Returns: DashboardData（気分データのみ含む）
-    func fetchAllReports(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
+    func fetchAllReports(subjectId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardData {
         let targetTimezone = timezone ?? TimeZone.current
         let localDate = LocalDate.string(from: date, timezone: targetTimezone)
-        return await fetchAllReports(deviceId: deviceId, localDate: localDate, timezone: targetTimezone)
+        return await fetchAllReports(subjectId: subjectId, localDate: localDate, timezone: targetTimezone)
     }
 
-    func fetchAllReports(deviceId: String, localDate: String, timezone: TimeZone? = nil) async -> DashboardData {
+    func fetchAllReports(subjectId: String, localDate: String, timezone: TimeZone? = nil) async -> DashboardData {
         isLoading = true
         errorMessage = nil
 
         // 🎯 Phase 1: daily_resultsテーブルに直接アクセス
-        let dashboardSummary = await fetchDailyResults(deviceId: deviceId, localDate: localDate, timezone: timezone)
+        let dashboardSummary = await fetchDailyResults(subjectId: subjectId, localDate: localDate, timezone: timezone)
 
-        // 🚀 最適化: DeviceManagerからSubject情報を取得（RPC呼び出し削減）
+        // 🚀 最適化: SubjectManagerからSubject情報を取得（RPC呼び出し削減）
         var subject: Subject? = nil
-        if let deviceManager = deviceManager {
-            // まず selectedSubject をチェック（selectedDeviceID と一致する場合）
-            if deviceManager.selectedDeviceID == deviceId,
-               let selectedSubject = deviceManager.selectedSubject {
+        if let subjectManager = subjectManager {
+            // まず selectedSubject をチェック（selectedSubjectID と一致する場合）
+            if subjectManager.selectedSubjectID == subjectId,
+               let selectedSubject = subjectManager.selectedSubject {
                 subject = selectedSubject
                 #if DEBUG
                 print("✅ [fetchAllReports] Subject loaded from selectedSubject: \(selectedSubject.name ?? "Unknown")")
                 #endif
-            } else if let device = deviceManager.devices.first(where: { $0.device_id == deviceId }),
-                      let cachedSubject = device.subject {
-                // フォールバック: devices配列から取得
+            } else if let cachedSubject = subjectManager.subjects.first(where: { $0.subjectId == subjectId })?.subject {
+                // フォールバック: 一覧から取得
                 subject = cachedSubject
                 #if DEBUG
                 print("✅ [fetchAllReports] Subject loaded from device cache: \(cachedSubject.name ?? "Unknown")")
                 #endif
             }
             // ✅ リファクタリング: fetchSubjectInfo()は削除されたため、
-            // DeviceManager.devices[].subjectのみを使用
+            // SubjectManager.subjects の subject のみを使用
         }
 
         // @Publishedプロパティも更新（互換性のため）
@@ -381,99 +322,27 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Subject Management Methods
 
-    /// 新しい分析対象を登録
-    func registerSubject(
-        name: String,
-        age: Int?,
-        gender: String?,
-        cognitiveType: String?,
-        prefecture: String?,
-        city: String?,
-        avatarUrl: String?,
-        notes: String?,
-        createdByUserId: String
-    ) async throws -> String {
-        print("👤 Registering new subject: \(name)")
-
-        struct SubjectInsert: Codable {
-            let name: String
-            let age: Int?
-            let gender: String?
-            let cognitive_type: String?
-            let prefecture: String?
-            let city: String?
-            let avatar_url: String?
-            let notes: String?
-            let created_by_user_id: String
-        }
-
-        let subjectInsert = SubjectInsert(
-            name: name,
-            age: age,
-            gender: gender,
-            cognitive_type: cognitiveType,
-            prefecture: prefecture,
-            city: city,
-            avatar_url: avatarUrl,
-            notes: notes,
-            created_by_user_id: createdByUserId
-        )
-        
-        let subjects: [Subject] = try await supabase
-            .from("subjects")
-            .insert(subjectInsert)
-            .select()
-            .execute()
-            .value
-        
-        guard let subject = subjects.first else {
-            throw SupabaseDataError.noDataReturned
-        }
-        
-        print("✅ Subject registered successfully: \(subject.subjectId)")
-        return subject.subjectId
-    }
-    
-    /// デバイスのsubject_idを更新
-    func updateDeviceSubjectId(deviceId: String, subjectId: String) async throws {
-        print("🔗 Updating device subject_id: \(deviceId) -> \(subjectId)")
-        
-        struct DeviceUpdate: Codable {
-            let subject_id: String
-        }
-        
-        let deviceUpdate = DeviceUpdate(subject_id: subjectId)
-        
-        try await supabase
-            .from("devices")
-            .update(deviceUpdate)
-            .eq("device_id", value: deviceId)
-            .execute()
-        
-        print("✅ Device subject_id updated successfully")
-    }
-    
     // MARK: - Daily Results Methods
 
     /// daily_resultsテーブルから指定日のサマリーデータを取得（直接アクセス）
     /// - Parameters:
-    ///   - deviceId: デバイスID
+    ///   - subjectId: デバイスID
     ///   - date: 対象日付
     ///   - timezone: デバイス固有のタイムゾーン
     /// - Returns: 1日のサマリーデータ（DashboardSummary）
-    func fetchDailyResults(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardSummary? {
+    func fetchDailyResults(subjectId: String, date: Date, timezone: TimeZone? = nil) async -> DashboardSummary? {
         let targetTimezone = timezone ?? TimeZone.current
         let dateString = LocalDate.string(from: date, timezone: targetTimezone)
-        return await fetchDailyResults(deviceId: deviceId, localDate: dateString, timezone: targetTimezone)
+        return await fetchDailyResults(subjectId: subjectId, localDate: dateString, timezone: targetTimezone)
     }
 
-    func fetchDailyResults(deviceId: String, localDate: String, timezone: TimeZone? = nil) async -> DashboardSummary? {
+    func fetchDailyResults(subjectId: String, localDate: String, timezone: TimeZone? = nil) async -> DashboardSummary? {
         let targetTimezone = timezone ?? TimeZone.current
         let dateString = localDate
 
         #if DEBUG
         print("📊 [Direct Access] Fetching daily_results")
-        print("   Device: \(deviceId)")
+        print("   Device: \(subjectId)")
         print("   Date: \(dateString)")
         print("   Timezone: \(targetTimezone.identifier)")
         #endif
@@ -483,7 +352,7 @@ class SupabaseDataManager: ObservableObject {
             let results: [DashboardSummary] = try await supabase
                 .from("daily_results")
                 .select()
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .eq("local_date", value: dateString)
                 .execute()
                 .value
@@ -529,12 +398,12 @@ class SupabaseDataManager: ObservableObject {
 
     /// Fetch daily_results for a date range (multiple days)
     /// - Parameters:
-    ///   - deviceId: Device ID
+    ///   - subjectId: 分析対象の ID
     ///   - startDate: Start date of the period
     ///   - endDate: End date of the period
-    ///   - timezone: Device-specific timezone
+    ///   - timezone: the subject.s timezone
     /// - Returns: Array of DashboardSummary sorted by date (oldest first)
-    func fetchDailyResultsRange(deviceId: String, startDate: Date, endDate: Date, timezone: TimeZone? = nil) async -> [DashboardSummary] {
+    func fetchDailyResultsRange(subjectId: String, startDate: Date, endDate: Date, timezone: TimeZone? = nil) async -> [DashboardSummary] {
         let targetTimezone = timezone ?? TimeZone.current
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd"
@@ -545,7 +414,7 @@ class SupabaseDataManager: ObservableObject {
 
         #if DEBUG
         print("📊 [Range Query] Fetching daily_results")
-        print("   Device: \(deviceId)")
+        print("   Device: \(subjectId)")
         print("   Period: \(startDateString) 〜 \(endDateString)")
         #endif
 
@@ -553,7 +422,7 @@ class SupabaseDataManager: ObservableObject {
             let results: [DashboardSummary] = try await supabase
                 .from("daily_results")
                 .select()
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .gte("local_date", value: startDateString)
                 .lte("local_date", value: endDateString)
                 .order("local_date", ascending: true)
@@ -575,13 +444,13 @@ class SupabaseDataManager: ObservableObject {
 
     /// Fetch single spot result with details
     /// - Parameters:
-    ///   - deviceId: Device ID
+    ///   - subjectId: 分析対象の ID
     ///   - recordedAt: recorded_at timestamp (ISO8601)
     /// - Returns: SpotResult with full details or nil if not found
-    func fetchSpotDetail(deviceId: String, recordedAt: String) async -> SpotResult? {
+    func fetchSpotDetail(subjectId: String, recordedAt: String) async -> SpotResult? {
         #if DEBUG
         print("📊 [Spot Detail] Fetching spot_results")
-        print("   Device: \(deviceId)")
+        print("   Device: \(subjectId)")
         print("   Recorded At: \(recordedAt)")
         #endif
 
@@ -589,7 +458,7 @@ class SupabaseDataManager: ObservableObject {
             let results: [SpotResult] = try await supabase
                 .from("spot_results")
                 .select()
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .eq("recorded_at", value: recordedAt)
                 .limit(1)
                 .execute()
@@ -612,13 +481,13 @@ class SupabaseDataManager: ObservableObject {
 
     /// Fetch all spot results for a specific day
     /// - Parameters:
-    ///   - deviceId: Device ID
+    ///   - subjectId: 分析対象の ID
     ///   - localDate: Local date string (yyyy-MM-dd)
     /// - Returns: Array of SpotResult sorted by local_time
-    func fetchSpotsForDay(deviceId: String, localDate: String) async -> [SpotResult] {
+    func fetchSpotsForDay(subjectId: String, localDate: String) async -> [SpotResult] {
         #if DEBUG
         print("📊 [Spots for Day] Fetching spot_results")
-        print("   Device: \(deviceId)")
+        print("   Device: \(subjectId)")
         print("   Local Date: \(localDate)")
         #endif
 
@@ -626,7 +495,7 @@ class SupabaseDataManager: ObservableObject {
             let results: [SpotResult] = try await supabase
                 .from("spot_results")
                 .select()
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .eq("local_date", value: localDate)
                 .order("local_time", ascending: true)
                 .execute()
@@ -647,21 +516,21 @@ class SupabaseDataManager: ObservableObject {
 
     /// spot_resultsテーブルから指定日の詳細データを取得
     /// - Parameters:
-    ///   - deviceId: デバイスID
+    ///   - subjectId: デバイスID
     ///   - date: 対象日付
     /// - Returns: 録音ごとのデータ配列（時間順でソート済み）
     ///
     /// ⚠️ 重要: local_dateのみ使用。recorded_at（UTC）は一切参照しない
-    func fetchDashboardTimeBlocks(deviceId: String, date: Date, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
+    func fetchDashboardTimeBlocks(subjectId: String, date: Date, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
         let targetTimezone = timezone ?? TimeZone.current
         let localDate = LocalDate.string(from: date, timezone: targetTimezone)
-        return await fetchDashboardTimeBlocks(deviceId: deviceId, localDate: localDate, timezone: targetTimezone)
+        return await fetchDashboardTimeBlocks(subjectId: subjectId, localDate: localDate, timezone: targetTimezone)
     }
 
     /// Recordings the server received on `localDate` that were recorded on another day (files imported
     /// from the camera roll or a recorder). Their analysis lives on the day they were recorded; this lets
     /// the day they arrived show them in its activity so they can be found and opened.
-    func fetchReceivedFromOtherDays(deviceId: String, localDate: String, timezone: TimeZone) async -> [DashboardTimeBlock] {
+    func fetchReceivedFromOtherDays(subjectId: String, localDate: String, timezone: TimeZone) async -> [DashboardTimeBlock] {
         guard let dayStart = LocalDate.date(from: localDate, timezone: timezone),
               let dayEnd = LocalDate.calendar(timezone: timezone).date(byAdding: .day, value: 1, to: dayStart) else { return [] }
         let iso = ISO8601DateFormatter()
@@ -673,7 +542,7 @@ class SupabaseDataManager: ObservableObject {
             let rows: [Row] = try await supabase
                 .from("spot_results")
                 .select("local_date, local_time")
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .neq("local_date", value: localDate)
                 .gte("created_at", value: iso.string(from: dayStart))
                 .lt("created_at", value: iso.string(from: dayEnd))
@@ -682,7 +551,7 @@ class SupabaseDataManager: ObservableObject {
             var blocks: [DashboardTimeBlock] = []
             for date in Set(rows.compactMap(\.local_date)).sorted() {
                 let wanted = Set(rows.filter { $0.local_date == date }.compactMap(\.local_time))
-                let dayBlocks = await fetchDashboardTimeBlocks(deviceId: deviceId, localDate: date, timezone: timezone)
+                let dayBlocks = await fetchDashboardTimeBlocks(subjectId: subjectId, localDate: date, timezone: timezone)
                 // Both lists read local_time from the same column, so the strings match exactly.
                 blocks += dayBlocks.filter { wanted.contains($0.localTime ?? "") }
             }
@@ -693,9 +562,9 @@ class SupabaseDataManager: ObservableObject {
         }
     }
 
-    func fetchDashboardTimeBlocks(deviceId: String, localDate: String, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
+    func fetchDashboardTimeBlocks(subjectId: String, localDate: String, timezone: TimeZone? = nil) async -> [DashboardTimeBlock] {
         #if DEBUG
-        print("📊 Fetching spot results with features for device: \(deviceId)")
+        print("📊 Fetching spot results with features for device: \(subjectId)")
         #endif
 
         let targetTimezone = timezone ?? TimeZone.current
@@ -709,7 +578,7 @@ class SupabaseDataManager: ObservableObject {
         do {
             // Step 1 & 2: Fetch spot_results and spot_features in parallel
             struct SpotResult: Codable {
-                let device_id: String
+                let subject_id: String
                 let local_date: String?
                 let local_time: String?  // ✅ local_timeで結合（ユニークキー）
                 let summary: String?
@@ -733,15 +602,15 @@ class SupabaseDataManager: ObservableObject {
 
             let spotResultsQuery = supabase
                 .from("spot_results")
-                .select("device_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at, recorded_at, llm_model, profile_result")
-                .eq("device_id", value: deviceId)
+                .select("subject_id, local_date, local_time, summary, behavior, emotion, vibe_score, rating, created_at, recorded_at, llm_model, profile_result")
+                .eq("subject_id", value: subjectId)
                 .eq("local_date", value: dateString)
                 .order("local_time", ascending: true)
 
             let spotFeaturesQuery = supabase
                 .from("spot_features")
-                .select("device_id, local_time, vibe_transcriber_result, behavior_extractor_result, emotion_extractor_result, emotion_features_result_hume")
-                .eq("device_id", value: deviceId)
+                .select("subject_id, local_time, vibe_transcriber_result, behavior_extractor_result, emotion_extractor_result, emotion_features_result_hume")
+                .eq("subject_id", value: subjectId)
                 .eq("local_date", value: dateString)
 
             async let spotResultsTask: [SpotResult] = spotResultsQuery.execute().value
@@ -811,7 +680,7 @@ class SupabaseDataManager: ObservableObject {
             let spotResultsRaw = try await supabase
                 .from("spot_results")
                 .select("local_time, profile_result")
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .eq("local_date", value: dateString)
                 .execute()
 
@@ -871,7 +740,7 @@ class SupabaseDataManager: ObservableObject {
                 let stageRows: [StageRow] = (try? await supabase
                     .from("spot_stages")
                     .select("recorded_at, stage, status, payload, error, updated_at")
-                    .eq("device_id", value: deviceId)
+                    .eq("subject_id", value: subjectId)
                     .in("recorded_at", values: recordedAts)
                     .execute()
                     .value) ?? []
@@ -891,7 +760,7 @@ class SupabaseDataManager: ObservableObject {
                 guard let localTime = result.local_time else { return nil }
 
                 return DashboardTimeBlock(
-                    deviceId: result.device_id,
+                    subjectId: result.subject_id,
                     localDate: result.local_date,
                     localTime: result.local_time,
                     summary: result.summary,
@@ -955,39 +824,9 @@ class SupabaseDataManager: ObservableObject {
         }
     }
     
-    /// 分析対象を削除
-    func deleteSubject(subjectId: String, deviceId: String) async throws {
-        print("🗑️ Deleting subject: \(subjectId) from device: \(deviceId)")
-
-        // Step 1: devicesテーブルからsubject_idをクリア
-        struct DeviceUpdate: Codable {
-            let subject_id: String?
-        }
-
-        let deviceUpdate = DeviceUpdate(subject_id: nil)
-
-        try await supabase
-            .from("devices")
-            .update(deviceUpdate)
-            .eq("device_id", value: deviceId)
-            .execute()
-
-        print("✅ Device subject_id cleared")
-
-        // Step 2: subjectsテーブルからレコードを削除
-        try await supabase
-            .from("subjects")
-            .delete()
-            .eq("subject_id", value: subjectId)
-            .execute()
-
-        print("✅ Subject deleted successfully: \(subjectId)")
-    }
-
     /// 分析対象を更新
     func updateSubject(
         subjectId: String,
-        deviceId: String,
         name: String,
         age: Int?,
         gender: String?,
@@ -996,7 +835,7 @@ class SupabaseDataManager: ObservableObject {
         city: String?,
         notes: String?
     ) async throws {
-        print("👤 Updating subject: \(subjectId) for device: \(deviceId)")
+        print("👤 Updating subject: \(subjectId)")
         print("📝 Update data: name=\(name), age=\(age?.description ?? "nil"), gender=\(gender ?? "nil"), cognitiveType=\(cognitiveType ?? "nil"), prefecture=\(prefecture ?? "nil"), city=\(city ?? "nil"), notes=\(notes ?? "nil")")
 
         // Custom Encodable struct that includes nil values in JSON.
@@ -1383,7 +1222,7 @@ extension SupabaseDataManager {
     // MARK: - Weekly Results
 
     /// Fetch weekly results for current week (Monday-Sunday)
-    func fetchWeeklyResults(deviceId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> WeeklyResults? {
+    func fetchWeeklyResults(subjectId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> WeeklyResults? {
         let tz = timezone ?? TimeZone.current
 
         // Format week_start_date (YYYY-MM-DD, Monday)
@@ -1397,7 +1236,7 @@ extension SupabaseDataManager {
         #endif
 
         // Fetch from weekly_results table
-        let urlString = "\(self.supabaseURL)/rest/v1/weekly_results?device_id=eq.\(deviceId)&week_start_date=eq.\(weekStartString)&select=*"
+        let urlString = "\(self.supabaseURL)/rest/v1/weekly_results?subject_id=eq.\(subjectId)&week_start_date=eq.\(weekStartString)&select=*"
 
         guard let url = URL(string: urlString) else {
             #if DEBUG
@@ -1452,7 +1291,7 @@ extension SupabaseDataManager {
     }
 
     /// Calculate average vibe score from daily_results for current week
-    func fetchWeeklyAverageVibeScore(deviceId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> Double? {
+    func fetchWeeklyAverageVibeScore(subjectId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> Double? {
         let tz = timezone ?? TimeZone.current
         var calendar = Calendar.current
         calendar.timeZone = tz
@@ -1473,7 +1312,7 @@ extension SupabaseDataManager {
         print("📅 [fetchWeeklyAverageVibeScore] Fetching daily results from \(startString) to \(endString)")
 
         // Fetch daily_results for the week
-        let urlString = "\(self.supabaseURL)/rest/v1/daily_results?device_id=eq.\(deviceId)&local_date=gte.\(startString)&local_date=lte.\(endString)&select=vibe_score"
+        let urlString = "\(self.supabaseURL)/rest/v1/daily_results?subject_id=eq.\(subjectId)&local_date=gte.\(startString)&local_date=lte.\(endString)&select=vibe_score"
 
         guard let url = URL(string: urlString) else {
             print("❌ [fetchWeeklyAverageVibeScore] Invalid URL")
@@ -1516,7 +1355,7 @@ extension SupabaseDataManager {
     }
 
     /// Fetch daily vibe scores for a week (7 days: Monday to Sunday)
-    func fetchWeeklyDailyVibeScores(deviceId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> [DailyVibeScore] {
+    func fetchWeeklyDailyVibeScores(subjectId: String, weekStartDate: Date, timezone: TimeZone? = nil) async -> [DailyVibeScore] {
         let tz = timezone ?? TimeZone.current
         var calendar = Calendar.current
         calendar.timeZone = tz
@@ -1537,7 +1376,7 @@ extension SupabaseDataManager {
         print("📅 [fetchWeeklyDailyVibeScores] Fetching daily vibe scores from \(startString) to \(endString)")
 
         // Fetch daily_results for the week
-        let urlString = "\(self.supabaseURL)/rest/v1/daily_results?device_id=eq.\(deviceId)&local_date=gte.\(startString)&local_date=lte.\(endString)&select=local_date,vibe_score&order=local_date.asc"
+        let urlString = "\(self.supabaseURL)/rest/v1/daily_results?subject_id=eq.\(subjectId)&local_date=gte.\(startString)&local_date=lte.\(endString)&select=local_date,vibe_score&order=local_date.asc"
 
         guard let url = URL(string: urlString) else {
             print("❌ [fetchWeeklyDailyVibeScores] Invalid URL")

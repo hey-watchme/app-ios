@@ -81,7 +81,7 @@ struct GraphEmptyStateView: View {
     }
 }
 
-struct DeviceNotSelectedView: View {
+struct SubjectNotSelectedView: View {
     let graphType: GraphEmptyStateView.GraphType
     let isCompact: Bool
 
@@ -97,12 +97,12 @@ struct DeviceNotSelectedView: View {
                 .foregroundColor(Color(white: 0.25))
 
             VStack(spacing: 8) {
-                Text("No device selected")
+                Text("分析対象が選ばれていません")
                     .font(isCompact ? .system(size: 14, weight: .medium) : .system(size: 16, weight: .semibold))
                     .foregroundColor(.white)
 
                 if !isCompact {
-                    Text("Select a device to view data.")
+                    Text("分析対象を選ぶと、データが表示されます。")
                         .font(.system(size: 14))
                         .foregroundColor(Color(white: 0.45))
                         .multilineTextAlignment(.center)
@@ -117,7 +117,7 @@ struct DeviceNotSelectedView: View {
 #Preview {
     VStack(spacing: 20) {
         GraphEmptyStateView(graphType: .vibe, isCompact: true)
-        DeviceNotSelectedView(graphType: .vibe, isCompact: true)
+        SubjectNotSelectedView(graphType: .vibe, isCompact: true)
     }
     .padding()
     .background(Color.darkBase)

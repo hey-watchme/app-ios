@@ -215,8 +215,8 @@ struct FeedbackFormView: View {
 
 // プレビュー
 #Preview("一般的なお問い合わせ") {
-    let deviceManager = DeviceManager()
-    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
+    let subjectManager = SubjectManager()
+    let userAccountManager = UserAccountManager(subjectManager: subjectManager)
 
     return FeedbackFormView(context: .general)
         .environmentObject(userAccountManager)

@@ -66,7 +66,7 @@ struct SceneMapping: Codable, Equatable {
 // MARK: - Dashboard Time Block
 
 struct DashboardTimeBlock: Codable, Equatable, Identifiable {
-    let deviceId: String
+    let subjectId: String
     let date: String?  // local_dateをdateにマッピング（nullの可能性あり）
     let localTime: String?  // local_time (YYYY-MM-DD HH:MM:SS) - ✅ ユニークキー
     let summary: String?    // その録音の詳細説明
@@ -100,11 +100,11 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
 
     // Identifiable conformance
     var id: String {
-        "\(deviceId)_\(localTime ?? "unknown")"
+        "\(subjectId)_\(localTime ?? "unknown")"
     }
 
     enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
+        case subjectId = "subject_id"
         case date = "local_date"
         case localTime = "local_time"
         case summary
@@ -123,7 +123,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
 
-        deviceId = try container.decode(String.self, forKey: .deviceId)
+        subjectId = try container.decode(String.self, forKey: .subjectId)
         date = try container.decodeIfPresent(String.self, forKey: .date)
         localTime = try container.decodeIfPresent(String.self, forKey: .localTime)
         summary = try container.decodeIfPresent(String.self, forKey: .summary)
@@ -158,15 +158,15 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         llmModel = nil
 
         // displayTimeを初期化時に1回だけ計算（キャッシュ）
-        displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
+        displayTime = Self.calculateDisplayTime(localTime: localTime, subjectId: subjectId)
     }
 
     // 表示用の時刻文字列を計算（staticメソッド）
-    private static func calculateDisplayTime(localTime: String?, deviceId: String) -> String {
+    private static func calculateDisplayTime(localTime: String?, subjectId: String) -> String {
         // ⚠️ 必ずlocal_timeを使用（UTCではなくユーザーの生活時間）
         guard let localTime = localTime else {
             print("❌ [ERROR] local_time is NULL - this should never happen!")
-            print("   device_id: \(deviceId)")
+            print("   device_id: \(subjectId)")
             return "⚠️ ERROR"
         }
 
@@ -286,7 +286,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     // MARK: - Direct Initializer for Performance Optimization
 
     /// Direct initializer to avoid JSON encoding/decoding overhead
-    init(deviceId: String,
+    init(subjectId: String,
          localDate: String?,
          localTime: String?,
          summary: String?,
@@ -311,7 +311,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          recordingRaw: String? = nil,
          llmModel: String? = nil) {
 
-        self.deviceId = deviceId
+        self.subjectId = subjectId
         self.date = localDate
         self.localTime = localTime
         self.summary = summary
@@ -337,7 +337,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.llmModel = llmModel
 
         // Calculate displayTime
-        self.displayTime = Self.calculateDisplayTime(localTime: localTime, deviceId: deviceId)
+        self.displayTime = Self.calculateDisplayTime(localTime: localTime, subjectId: subjectId)
     }
 }
 // MARK: - Transcript and scene (shared by the result card and the detail view)

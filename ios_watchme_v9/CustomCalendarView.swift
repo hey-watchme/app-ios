@@ -12,14 +12,14 @@ import Supabase
 struct CustomCalendarView: View {
     @Binding var selectedDate: Date
     @Binding var isPresented: Bool
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
 
     @State private var displayMonth = Date()
     /// local_date (yyyy-MM-dd) of the shown month's days that have a recording
     @State private var recordedDays: Set<String> = []
 
-    private var calendar: Calendar { deviceManager.deviceCalendar }
-    private var timezone: TimeZone { deviceManager.selectedDeviceTimezone }
+    private var calendar: Calendar { subjectManager.subjectCalendar }
+    private var timezone: TimeZone { subjectManager.selectedTimezone }
 
     private var monthStart: Date {
         calendar.dateInterval(of: .month, for: displayMonth)?.start ?? displayMonth
@@ -162,14 +162,14 @@ struct CustomCalendarView: View {
     }
 
     private func loadRecordedDays() async {
-        guard let deviceId = deviceManager.selectedDeviceID,
+        guard let subjectId = subjectManager.selectedSubjectID,
               let interval = calendar.dateInterval(of: .month, for: displayMonth),
               let last = calendar.date(byAdding: .day, value: -1, to: interval.end) else { return }
         struct Row: Decodable { let local_date: String? }
         let rows: [Row] = (try? await SupabaseClientManager.shared.client
             .from("spot_results")
             .select("local_date")
-            .eq("device_id", value: deviceId)
+            .eq("subject_id", value: subjectId)
             .gte("local_date", value: LocalDate.string(from: interval.start, timezone: timezone))
             .lte("local_date", value: LocalDate.string(from: last, timezone: timezone))
             .execute()

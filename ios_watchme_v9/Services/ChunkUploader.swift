@@ -250,7 +250,7 @@ final class ChunkUploader: NSObject, ObservableObject {
 
     /// Any .wav / .m4a under Documents/<date>/ that no record points to.
     private func adoptStrayFiles() async {
-        guard let deviceId = defaultDeviceId?() else { return }
+        guard let subjectId = defaultSubjectId?() else { return }
         let known = Set(await journal.all().map(\.fileName))
         let root = UploadJournal.documentsDirectory
         guard let dirs = try? FileManager.default.contentsOfDirectory(at: root, includingPropertiesForKeys: [.isDirectoryKey]) else { return }
@@ -267,7 +267,7 @@ final class ChunkUploader: NSObject, ObservableObject {
                 }
                 // Old leftovers (from before the journal existed) are not sent on their own: the person decides.
                 let isOld = Date().timeIntervalSince(created) > 7 * 24 * 3600
-                var record = ChunkRecord(id: UUID().uuidString, fileName: fileName, deviceId: deviceId, recordedAt: created,
+                var record = ChunkRecord(id: UUID().uuidString, fileName: fileName, subjectId: subjectId, recordedAt: created,
                                          sessionId: nil, sequence: nil, durationSeconds: WAVFile.duration(of: file),
                                          state: isOld ? .blocked : .recorded)
                 if isOld {
@@ -280,7 +280,7 @@ final class ChunkUploader: NSObject, ObservableObject {
     }
 
     /// The device to attribute stray files to (the selected one). Set by RecordingStore.
-    var defaultDeviceId: (() -> String?)?
+    var defaultSubjectId: (() -> String?)?
 
     // MARK: - Sending
 
@@ -422,7 +422,7 @@ final class ChunkUploader: NSObject, ObservableObject {
         let formatter = ISO8601DateFormatter()
         formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
         var body: [String: Any] = [
-            "device_id": record.deviceId,
+            "subject_id": record.subjectId,
             "recorded_at": formatter.string(from: record.recordedAt),
             "content_type": record.fileName.hasSuffix(".m4a") ? "audio/mp4" : "audio/wav",
         ]

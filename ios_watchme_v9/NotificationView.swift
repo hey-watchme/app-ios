@@ -142,7 +142,7 @@ struct NotificationView: View {
             }
         }
         .sheet(item: $selectedSpot) { spot in
-            SpotDetailView(deviceId: spot.deviceId, spotData: spot)
+            SpotDetailView(subjectId: spot.subjectId, spotData: spot)
                 .environmentObject(dataManager)
         }
         // The app is dark throughout; in the light scheme the segmented control drew its
@@ -216,7 +216,7 @@ struct NotificationView: View {
 struct ProcessingLogTab: View {
     let onTapRecording: (DashboardTimeBlock) -> Void
 
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var blocks: [DashboardTimeBlock] = []
     @State private var isLoading = true
@@ -234,16 +234,16 @@ struct ProcessingLogTab: View {
                 ActivityLogView(blocks: blocks, timezone: timezone, viewingDate: "", onTapRecording: onTapRecording)
             }
         }
-        .task(id: deviceManager.selectedDeviceID) { await load() }
+        .task(id: subjectManager.selectedSubjectID) { await load() }
     }
 
     private var timezone: TimeZone {
-        deviceManager.selectedDeviceID.map { deviceManager.getTimezone(for: $0) } ?? .current
+        subjectManager.selectedSubjectID.map { subjectManager.getTimezone(for: $0) } ?? .current
     }
 
     /// The recordings received in the last week, oldest first (ActivityLogView lists them newest first).
     private func load() async {
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             blocks = []
             isLoading = false
             return
@@ -253,7 +253,7 @@ struct ProcessingLogTab: View {
         let rows: [Row] = (try? await SupabaseClientManager.shared.client
             .from("spot_results")
             .select("local_date")
-            .eq("device_id", value: deviceId)
+            .eq("subject_id", value: subjectId)
             .gte("created_at", value: since)
             .execute()
             .value) ?? []
@@ -261,7 +261,7 @@ struct ProcessingLogTab: View {
         let timezone = timezone
         let fetched = await withTaskGroup(of: [DashboardTimeBlock].self) { group in
             for date in dates {
-                group.addTask { await dataManager.fetchDashboardTimeBlocks(deviceId: deviceId, localDate: date, timezone: timezone) }
+                group.addTask { await dataManager.fetchDashboardTimeBlocks(subjectId: subjectId, localDate: date, timezone: timezone) }
             }
             var all: [DashboardTimeBlock] = []
             for await dayBlocks in group { all += dayBlocks }

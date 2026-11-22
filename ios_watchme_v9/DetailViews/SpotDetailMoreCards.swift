@@ -179,7 +179,7 @@ final class SpotEventsStore: ObservableObject {
     @Published private(set) var noRun = false
     private var loading = false
 
-    func load(deviceId: String, recordedAt: String) async {
+    func load(subjectId: String, recordedAt: String) async {
         guard run == nil, !loading else { return }
         loading = true
         defer { loading = false }
@@ -188,7 +188,7 @@ final class SpotEventsStore: ObservableObject {
             let runs: [Run] = try await client
                 .from("spot_event_runs")
                 .select("activity, audio_seconds, counts, extractor_version, llm_model")
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .eq("recorded_at", value: recordedAt)
                 .order("extractor_version", ascending: false)
                 .limit(1)
@@ -202,7 +202,7 @@ final class SpotEventsStore: ObservableObject {
             let rows: [Event] = try await client
                 .from("spot_events")
                 .select("seq, event_type, start_sec, end_sec, actor, target, intensity, evidence, confidence")
-                .eq("device_id", value: deviceId)
+                .eq("subject_id", value: subjectId)
                 .eq("recorded_at", value: recordedAt)
                 .eq("extractor_version", value: latest.extractor_version)
                 .order("seq", ascending: true)
@@ -229,7 +229,7 @@ struct SpotEventsCard: View {
         case list
     }
 
-    let deviceId: String
+    let subjectId: String
     let recordedAt: String
     let localTime: String?
     /// profile_result.metrics as JSON; the voice chart reads its per-utterance measurements.
@@ -287,7 +287,7 @@ struct SpotEventsCard: View {
                         .foregroundColor(Color(white: 0.6))
                         .fixedSize(horizontal: false, vertical: true)
                     Button("もう一度読み込む") {
-                        Task { await store.load(deviceId: deviceId, recordedAt: recordedAt) }
+                        Task { await store.load(subjectId: subjectId, recordedAt: recordedAt) }
                     }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.accentTeal)
@@ -295,7 +295,7 @@ struct SpotEventsCard: View {
                 .detailCard()
             }
         }
-        .task(id: recordedAt) { await store.load(deviceId: deviceId, recordedAt: recordedAt) }
+        .task(id: recordedAt) { await store.load(subjectId: subjectId, recordedAt: recordedAt) }
     }
 
     @ViewBuilder
@@ -414,8 +414,8 @@ struct SpotEventsCard: View {
                         .font(.system(size: 10))
                         .foregroundColor(Color(white: 0.5))
                 }
-                if SavedRecordings.canSave(deviceId: deviceId) {
-                    EventPlayButton(id: "\(recordedAt)-\(event.seq)", deviceId: deviceId, recordedAt: recordedAt,
+                if SavedRecordings.canSave(subjectId: subjectId) {
+                    EventPlayButton(id: "\(recordedAt)-\(event.seq)", subjectId: subjectId, recordedAt: recordedAt,
                                     start: event.start_sec, end: event.end_sec)
                 }
             }

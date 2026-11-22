@@ -2,7 +2,7 @@
 //  QuestionService.swift
 //  ios_watchme_v9
 //
-//  Reads the open questions (RLS: devices linked to the user) and sends the answers to the
+//  Reads the open questions (RLS: subjects the user is a member of) and sends the answers to the
 //  API, which applies them and writes the recording's note again (platform functions/questions).
 //
 
@@ -13,11 +13,11 @@ enum QuestionService {
 
     /// Open questions of a device, newest first. recordedAt narrows them to one recording,
     /// scope to one kind of question (person = about the observed person).
-    static func open(deviceId: String, recordedAt: String? = nil, scope: String? = nil) async -> [FamilyQuestion] {
+    static func open(subjectId: String, recordedAt: String? = nil, scope: String? = nil) async -> [FamilyQuestion] {
         var query = SupabaseClientManager.shared.client
             .from("questions")
-            .select("question_id, device_id, recorded_at, local_date, scope, kind, prompt, options, context")
-            .eq("device_id", value: deviceId)
+            .select("question_id, subject_id, recorded_at, local_date, scope, kind, prompt, options, context")
+            .eq("subject_id", value: subjectId)
             .eq("status", value: "open")
         if let recordedAt {
             query = query.eq("recorded_at", value: recordedAt)

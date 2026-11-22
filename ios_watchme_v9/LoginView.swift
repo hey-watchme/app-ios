@@ -13,7 +13,7 @@ struct LoginView: View {
     var onStartNew: (() -> Void)? = nil
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var toastManager: ToastManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var showValidationErrors: Bool = false

@@ -19,17 +19,17 @@ struct SubjectRegistrationView: View {
     }
 
     @EnvironmentObject var dataManager: SupabaseDataManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var userAccountManager: UserAccountManager
     @Environment(\.dismiss) private var dismiss  // iOS 15+の推奨パターン
     
-    let deviceID: String
+    let subjectID: String
     @Binding var isPresented: Bool  // 互換性のため残す
     let editingSubject: Subject? // 編集対象の分析対象（nilの場合は新規登録）
     let initialValues: InitialValues?
-    /// Adding a new analysis subject: a recording container (devices row) is created for it
-    /// on save and selected afterwards, so recordings go to the new subject. deviceID is unused.
-    let createsContainer: Bool
+    /// Adding a new subject: it is created on save and selected afterwards, so recordings
+    /// go to it. subjectID is unused then.
+    let createsSubject: Bool
     
     // フォーム入力項目
     @State private var name: String = ""
@@ -89,21 +89,21 @@ struct SubjectRegistrationView: View {
         editingSubject != nil
     }
 
-    // View-only mode (based on device permissions) - Cached to avoid repeated array search
+    // View-only mode (based on the subject role) - Cached to avoid repeated array search
     @State private var isViewOnly: Bool = false
 
     init(
-        deviceID: String,
+        subjectID: String,
         isPresented: Binding<Bool>,
         editingSubject: Subject?,
         initialValues: InitialValues? = nil,
-        createsContainer: Bool = false
+        createsSubject: Bool = false
     ) {
-        self.deviceID = deviceID
+        self.subjectID = subjectID
         self._isPresented = isPresented
         self.editingSubject = editingSubject
         self.initialValues = initialValues
-        self.createsContainer = createsContainer
+        self.createsSubject = createsSubject
     }
     
     var body: some View {
@@ -172,8 +172,8 @@ struct SubjectRegistrationView: View {
                 loadEditingData()
                 applyInitialValuesIfNeeded()
                 // Calculate isViewOnly once on appear to avoid repeated array searches
-                if let device = deviceManager.devices.first(where: { $0.device_id == deviceID }) {
-                    isViewOnly = !device.canEditSubject
+                if let entry = subjectManager.subjects.first(where: { $0.subjectId == subjectID }) {
+                    isViewOnly = !entry.canEditSubject
                 } else {
                     isViewOnly = false
                 }
@@ -200,7 +200,7 @@ struct SubjectRegistrationView: View {
                     }
                 }
             } message: {
-                Text("この分析対象を完全に削除します。この操作は取り消せません。")
+                Text("この分析対象と、録音・分析結果がすべて削除されます。ほかのアカウントとも共有している場合は、共有だけを解除します。この操作は取り消せません。")
             }
             .alert("変更内容を破棄しますか？", isPresented: $showingDiscardAlert) {
                 Button("キャンセル", role: .cancel) { }
@@ -475,7 +475,7 @@ struct SubjectRegistrationView: View {
                 .padding(.vertical, 6)
             }
 
-            Text("この分析対象に関連する全てのデータが削除されます。この操作は取り消せません。")
+            Text("録音と分析結果もすべて削除されます。この操作は取り消せません。")
                 .font(.caption)
                 .foregroundColor(.secondary)
         }
@@ -574,32 +574,23 @@ struct SubjectRegistrationView: View {
                 return
             }
             
-            // 分析対象を登録（アバターはAvatarPickerView経由で別途アップロード）
-            let subjectId = try await dataManager.registerSubject(
+            // The subject and the caller's membership in one call, then the profile fields
+            // (the avatar is uploaded separately, via AvatarPickerView).
+            let subjectId = try await subjectManager.createSubject(name: trimmedName)
+            try await dataManager.updateSubject(
+                subjectId: subjectId,
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
                 cognitiveType: cognitiveType.isEmpty ? nil : cognitiveType,
                 prefecture: prefecture.isEmpty ? nil : prefecture,
                 city: city.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : city.trimmingCharacters(in: .whitespacesAndNewlines),
-                avatarUrl: nil,
-                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
-                createdByUserId: currentUser.id
+                notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             )
+            _ = currentUser
 
-            // Link the subject to its recording container (a new one when adding a subject)
-            let targetDeviceID = createsContainer
-                ? try await deviceManager.registerDevice(userId: currentUser.id)
-                : deviceID
-            try await dataManager.updateDeviceSubjectId(deviceId: targetDeviceID, subjectId: subjectId)
-
-            // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
-            if let userId = userAccountManager.currentUser?.id {
-                await deviceManager.loadDevices(for: userId)
-            }
-            if createsContainer {
-                await MainActor.run { deviceManager.selectDevice(targetDeviceID) }
-            }
+            await subjectManager.loadSubjects(for: currentUser.id)
+            await MainActor.run { subjectManager.selectSubject(subjectId) }
 
             await MainActor.run {
                 isLoading = false
@@ -647,7 +638,6 @@ struct SubjectRegistrationView: View {
             // 分析対象を更新（アバターはAvatarPickerView経由で別途アップロード）
             try await dataManager.updateSubject(
                 subjectId: subject.subjectId,
-                deviceId: deviceID,
                 name: trimmedName,
                 age: ageInt,
                 gender: gender.isEmpty ? nil : gender,
@@ -657,9 +647,9 @@ struct SubjectRegistrationView: View {
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             )
 
-            // DeviceManagerのデータを強制的に再取得（最新のSubject情報を含む）
+            // SubjectManagerのデータを強制的に再取得（最新のSubject情報を含む）
             if let userId = userAccountManager.currentUser?.id {
-                await deviceManager.loadDevices(for: userId)
+                await subjectManager.loadSubjects(for: userId)
             }
 
             print("✅ Subject update completed - name: \(trimmedName), age: \(ageInt?.description ?? "nil"), gender: \(gender.isEmpty ? "nil" : gender), notes: \(notes.isEmpty ? "nil" : notes)")
@@ -690,17 +680,14 @@ struct SubjectRegistrationView: View {
         }
 
         do {
-            // 分析対象を削除
-            try await dataManager.deleteSubject(subjectId: subject.subjectId, deviceId: deviceID)
-
-            // DeviceManagerのデータを強制的に再取得
+            // The server deletes the subject with its recordings and audio, or only this
+            // account's membership when someone else is linked too (DELETE /subjects/{id}).
+            let network = NetworkManager(userAccountManager: userAccountManager, subjectManager: subjectManager)
+            _ = try await network.deleteSubject(subjectId: subject.subjectId)
+            await MainActor.run { subjectManager.forgetSubject(subject.subjectId) }
             if let userId = userAccountManager.currentUser?.id {
-                await deviceManager.loadDevices(for: userId)
-                print("✅ DeviceManager refreshed after subject deletion")
+                await subjectManager.loadSubjects(for: userId)
             }
-
-            // DeviceManagerのinitializeDevicesが呼ばれたため、
-            // selectedSubjectは自動的に更新される（計算プロパティのため）
 
             print("✅ Subject deletion completed - subjectId: \(subject.subjectId)")
 
@@ -720,15 +707,15 @@ struct SubjectRegistrationView: View {
 }
 
 #Preview {
-    let deviceManager = DeviceManager()
-    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
+    let subjectManager = SubjectManager()
+    let userAccountManager = UserAccountManager(subjectManager: subjectManager)
     
     return SubjectRegistrationView(
-        deviceID: "sample-device-id",
+        subjectID: "sample-subject-id",
         isPresented: .constant(true),
         editingSubject: nil
     )
     .environmentObject(SupabaseDataManager())
-    .environmentObject(deviceManager)
+    .environmentObject(subjectManager)
     .environmentObject(userAccountManager)
 }

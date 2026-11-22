@@ -10,7 +10,7 @@ import Foundation
 // MARK: - Spot Result
 // spot_results table model
 struct SpotResult: Codable, Identifiable {
-    let deviceId: String
+    let subjectId: String
     let recordedAt: String  // ISO8601 timestamp
     let localDate: String?
     let localTime: String?
@@ -21,11 +21,11 @@ struct SpotResult: Codable, Identifiable {
     let createdAt: String?
 
     var id: String {
-        "\(deviceId)_\(recordedAt)"
+        "\(subjectId)_\(recordedAt)"
     }
 
     enum CodingKeys: String, CodingKey {
-        case deviceId = "device_id"
+        case subjectId = "subject_id"
         case recordedAt = "recorded_at"
         case localDate = "local_date"
         case localTime = "local_time"
@@ -48,7 +48,7 @@ struct SpotResultDetail: Identifiable {
         spotResult.id
     }
 
-    var deviceId: String { spotResult.deviceId }
+    var subjectId: String { spotResult.subjectId }
     var recordedAt: String { spotResult.recordedAt }
     var localDate: String? { spotResult.localDate }
     var localTime: String? { spotResult.localTime }

@@ -10,7 +10,7 @@ import Charts
 
 struct EmotionGraphView: View {
     @EnvironmentObject var userAccountManager: UserAccountManager
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
 
     // 独自にデータを管理（完全分離型）
@@ -216,8 +216,8 @@ struct EmotionGraphView: View {
                     } else {
                         // エンプティステート表示（共通コンポーネント使用）
                         Group {
-                            if deviceManager.selectedDeviceID == nil {
-                                DeviceNotSelectedView(graphType: .emotion)
+                            if subjectManager.selectedSubjectID == nil {
+                                SubjectNotSelectedView(graphType: .emotion)
                             } else {
                                 GraphEmptyStateView(graphType: .emotion)
                             }
@@ -237,7 +237,7 @@ struct EmotionGraphView: View {
 
     // データ取得メソッド
     private func loadEmotionData() async {
-        guard let deviceId = deviceManager.selectedDeviceID else {
+        guard let subjectId = subjectManager.selectedSubjectID else {
             print("❌ [EmotionGraphView] No device selected")
             isLoading = false
             return
@@ -246,9 +246,9 @@ struct EmotionGraphView: View {
         isLoading = true
         defer { isLoading = false }
 
-        let timezone = deviceManager.getTimezone(for: deviceId)
+        let timezone = subjectManager.getTimezone(for: subjectId)
         let result = await dataManager.fetchAllReports(
-            deviceId: deviceId,
+            subjectId: subjectId,
             date: selectedDate,
             timezone: timezone
         )

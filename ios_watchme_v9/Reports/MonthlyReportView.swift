@@ -8,7 +8,7 @@
 import SwiftUI
 
 struct MonthlyReportView: View {
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var dataManager: SupabaseDataManager
 
     // Mock data
@@ -36,8 +36,8 @@ struct MonthlyReportView: View {
         }
         .background(Color.darkBase)
         .sheet(isPresented: $showMonthlyDetailSheet) {
-            if let deviceId = deviceManager.selectedDeviceID {
-                MonthlyDetailView(deviceId: deviceId, monthStartDate: selectedMonth)
+            if let subjectId = subjectManager.selectedSubjectID {
+                MonthlyDetailView(subjectId: subjectId, monthStartDate: selectedMonth)
             }
         }
     }

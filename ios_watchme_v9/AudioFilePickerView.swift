@@ -12,7 +12,7 @@ import AVFoundation
 
 struct AudioFilePickerView: View {
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var userAccountManager: UserAccountManager
     @EnvironmentObject var recordingStore: RecordingStore
 
@@ -62,7 +62,7 @@ struct AudioFilePickerView: View {
             return
         }
 
-        guard deviceManager.selectedDeviceID != nil else {
+        guard subjectManager.selectedSubjectID != nil else {
             await MainActor.run {
                 ToastManager.shared.showError(
                     title: "分析対象が選ばれていません",

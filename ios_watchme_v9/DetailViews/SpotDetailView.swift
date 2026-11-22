@@ -11,7 +11,7 @@ import AVFoundation
 #endif
 
 struct SpotDetailView: View {
-    let deviceId: String
+    let subjectId: String
     let spotData: DashboardTimeBlock
 
     @Environment(\.dismiss) var dismiss
@@ -36,7 +36,7 @@ struct SpotDetailView: View {
                 VStack(spacing: 16) {
                     // What the analysis could not settle, for the family to answer (hidden when none are open)
                     if let recordedAt = spotData.recordedAt {
-                        QuestionsEntry(deviceId: spotData.deviceId, recordedAt: recordedAt, place: .recording)
+                        QuestionsEntry(subjectId: spotData.subjectId, recordedAt: recordedAt, place: .recording)
                     }
 
                     // While the analysis is still running, how far it has got; once finished,
@@ -51,7 +51,7 @@ struct SpotDetailView: View {
                         vibeScoreCard(vibeScore)
                     }
                     if let recordedAt = spotData.recordedAt {
-                        SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime,
+                        SpotEventsCard(subjectId: spotData.subjectId, recordedAt: recordedAt, localTime: spotData.localTime,
                                        metricsRaw: spotData.metricsRaw, store: eventsStore, part: .picture)
                     }
                     if let summary = spotData.summary {
@@ -62,7 +62,7 @@ struct SpotDetailView: View {
                     sectionHeader("詳しく")
 
                     if let recordedAt = spotData.recordedAt {
-                        SpotEventsCard(deviceId: spotData.deviceId, recordedAt: recordedAt, localTime: spotData.localTime,
+                        SpotEventsCard(subjectId: spotData.subjectId, recordedAt: recordedAt, localTime: spotData.localTime,
                                        metricsRaw: spotData.metricsRaw, store: eventsStore, part: .list)
                     }
 
@@ -123,8 +123,8 @@ struct SpotDetailView: View {
     // MARK: - Saved (bookmark)
 
     private func loadSaved() async {
-        guard let recordedAt = spotData.recordedAt, SavedRecordings.canSave(deviceId: deviceId) else { return }
-        isSaved = try? await SavedRecordings.isSaved(deviceId: deviceId, recordedAt: recordedAt)
+        guard let recordedAt = spotData.recordedAt, SavedRecordings.canSave(subjectId: subjectId) else { return }
+        isSaved = try? await SavedRecordings.isSaved(subjectId: subjectId, recordedAt: recordedAt)
     }
 
     private func toggleSaved(_ saved: Bool) async {
@@ -133,9 +133,9 @@ struct SpotDetailView: View {
         defer { isSaving = false }
         do {
             if saved {
-                try await SavedRecordings.remove(deviceId: deviceId, recordedAt: recordedAt)
+                try await SavedRecordings.remove(subjectId: subjectId, recordedAt: recordedAt)
             } else {
-                try await SavedRecordings.save(deviceId: deviceId, recordedAt: recordedAt)
+                try await SavedRecordings.save(subjectId: subjectId, recordedAt: recordedAt)
             }
             isSaved = !saved
             HapticManager.shared.impact(style: .light)
@@ -1085,7 +1085,7 @@ struct SpotDetailView: View {
 
 #if DEBUG
 /// Plays a recording through a short-lived URL from GET /audio (development builds only).
-/// The API checks the signed-in user's token and their access to the device.
+/// The API checks the signed-in user's token and their membership of the subject.
 @MainActor
 private final class RecordingPreviewPlayer: ObservableObject {
     @Published var isPlaying = false

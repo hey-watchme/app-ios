@@ -12,14 +12,13 @@ struct FullScreenRecordingView: View {
     // MARK: - Properties
     @EnvironmentObject var store: RecordingStore
     @Environment(\.dismiss) private var dismiss
-    @EnvironmentObject var deviceManager: DeviceManager
+    @EnvironmentObject var subjectManager: SubjectManager
     @EnvironmentObject var userAccountManager: UserAccountManager
 
     // 音声モニタリング（録音の有無に関わらず常に動作）
     @StateObject private var audioMonitor = AudioMonitorService()
 
     // UI状態
-    @State private var showDeviceRegistrationConfirm = false
     @State private var showSignUpPrompt = false
     @State private var showVideoPicker = false
     @State private var showAudioFilePicker = false
@@ -160,22 +159,12 @@ struct FullScreenRecordingView: View {
             SignUpView()
                 .environmentObject(userAccountManager)
         }
-        .confirmationDialog("デバイスを連携", isPresented: $showDeviceRegistrationConfirm) {
-            Button("連携") {
-                Task {
-                    await registerDevice()
-                }
-            }
-            Button("キャンセル", role: .cancel) { }
-        } message: {
-            Text("このデバイスのマイクを使って音声情報を分析します")
-        }
         .sheet(isPresented: $showVideoPicker) {
             VideoPickerView(onVideoProcessingStarted: {
                 // ビデオ処理開始フラグを立てる
                 videoProcessingStarted = true
             })
-                .environmentObject(deviceManager)
+                .environmentObject(subjectManager)
                 .environmentObject(userAccountManager)
                 .environmentObject(store)
         }
@@ -183,7 +172,7 @@ struct FullScreenRecordingView: View {
             AudioFilePickerView(onAudioProcessingStarted: {
                 audioFileProcessingStarted = true
             })
-            .environmentObject(deviceManager)
+            .environmentObject(subjectManager)
             .environmentObject(userAccountManager)
             .environmentObject(store)
         }
@@ -217,9 +206,9 @@ struct FullScreenRecordingView: View {
                 return
             }
 
-            // デバイスチェック
-            if deviceManager.selectedDeviceID == nil {
-                showDeviceRegistrationConfirm = true
+            // No subject yet: make an unnamed one (名称未設定) and record to it.
+            if subjectManager.selectedSubjectID == nil {
+                Task { await createSubjectAndRecord() }
                 return
             }
 
@@ -230,24 +219,19 @@ struct FullScreenRecordingView: View {
         }
     }
 
-    private func registerDevice() async {
+    private func createSubjectAndRecord() async {
         guard let userId = userAccountManager.effectiveUserId else {
-            store.presentError("ユーザー情報が取得できないため、デバイス連携に失敗しました")
-            print("❌ デバイス連携失敗: userIdを解決できません")
+            store.presentError("ユーザー情報が取得できないため、録音を始められませんでした")
             return
         }
-
         do {
-            let _ = try await deviceManager.registerDevice(userId: userId)
-            await deviceManager.loadDevices(for: userId)
-
-            // 登録成功後、録音を開始
-            Task {
-                await store.startRecording()
-            }
+            let subjectId = try await subjectManager.createSubject()
+            await subjectManager.loadSubjects(for: userId)
+            await MainActor.run { subjectManager.selectSubject(subjectId) }
+            await store.startRecording()
         } catch {
-            print("❌ デバイス登録エラー: \(error)")
-            store.presentError("デバイス連携に失敗しました: \(error.localizedDescription)")
+            print("❌ Subject creation failed: \(error)")
+            store.presentError("分析対象を用意できませんでした: \(error.localizedDescription)")
         }
     }
 
@@ -472,12 +456,12 @@ struct RecordingButton: View {
 
 // MARK: - Preview
 #Preview {
-    let deviceManager = DeviceManager()
-    let userAccountManager = UserAccountManager(deviceManager: deviceManager)
-    let recordingStore = RecordingStore(deviceManager: deviceManager, userAccountManager: userAccountManager)
+    let subjectManager = SubjectManager()
+    let userAccountManager = UserAccountManager(subjectManager: subjectManager)
+    let recordingStore = RecordingStore(subjectManager: subjectManager, userAccountManager: userAccountManager)
 
     FullScreenRecordingView()
-        .environmentObject(deviceManager)
+        .environmentObject(subjectManager)
         .environmentObject(userAccountManager)
         .environmentObject(recordingStore)
 }

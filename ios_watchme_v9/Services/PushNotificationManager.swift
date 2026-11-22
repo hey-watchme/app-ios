@@ -32,7 +32,7 @@ class PushNotificationManager: ObservableObject {
     /// Push notification update payload
     struct PushNotificationUpdate: Equatable {
         let type: NotificationType
-        let deviceId: String
+        let subjectId: String
         let date: String
         let message: String
         let timestamp: Date
@@ -40,7 +40,7 @@ class PushNotificationManager: ObservableObject {
 
         static func == (lhs: PushNotificationUpdate, rhs: PushNotificationUpdate) -> Bool {
             lhs.type == rhs.type &&
-            lhs.deviceId == rhs.deviceId &&
+            lhs.subjectId == rhs.subjectId &&
             lhs.date == rhs.date &&
             lhs.message == rhs.message &&
             lhs.timestamp == rhs.timestamp
@@ -57,13 +57,13 @@ class PushNotificationManager: ObservableObject {
 
     /// Handle dashboard refresh notification
     /// - Parameters:
-    ///   - deviceId: Target device ID
+    ///   - subjectId: Target device ID
     ///   - date: Date string (YYYY-MM-DD)
     ///   - message: Display message for toast
-    func handleDashboardUpdate(deviceId: String, date: String, message: String) {
+    func handleDashboardUpdate(subjectId: String, date: String, message: String) {
         handleNotification(
             type: .refreshDashboard,
-            deviceId: deviceId,
+            subjectId: subjectId,
             date: date,
             message: message,
             metadata: nil
@@ -73,13 +73,13 @@ class PushNotificationManager: ObservableObject {
     /// Generic notification handler (for future extensibility)
     /// - Parameters:
     ///   - type: Notification type
-    ///   - deviceId: Target device ID
+    ///   - subjectId: Target device ID
     ///   - date: Date string
     ///   - message: Display message
     ///   - metadata: Additional metadata (optional)
     func handleNotification(
         type: NotificationType,
-        deviceId: String,
+        subjectId: String,
         date: String,
         message: String,
         metadata: [String: Any]?
@@ -87,7 +87,7 @@ class PushNotificationManager: ObservableObject {
         DispatchQueue.main.async { [weak self] in
             let update = PushNotificationUpdate(
                 type: type,
-                deviceId: deviceId,
+                subjectId: subjectId,
                 date: date,
                 message: message,
                 timestamp: Date(),
@@ -98,7 +98,7 @@ class PushNotificationManager: ObservableObject {
 
             print("📬 [PUSH-MANAGER] Notification handled:")
             print("   Type: \(type.rawValue)")
-            print("   Device: \(deviceId)")
+            print("   Device: \(subjectId)")
             print("   Date: \(date)")
             print("   Message: \(message)")
         }
@@ -116,9 +116,9 @@ class PushNotificationManager: ObservableObject {
         }
 
         // Extract required fields
-        guard let deviceId = userInfo["device_id"] as? String,
+        guard let subjectId = (userInfo["subject_id"] ?? userInfo["device_id"]) as? String,
               let date = userInfo["date"] as? String else {
-            print("❌ [PUSH-MANAGER] Missing required fields (device_id, date)")
+            print("❌ [PUSH-MANAGER] Missing required fields (subject_id, date)")
             return false
         }
 
@@ -136,7 +136,7 @@ class PushNotificationManager: ObservableObject {
         // Handle notification
         handleNotification(
             type: type,
-            deviceId: deviceId,
+            subjectId: subjectId,
             date: date,
             message: message,
             metadata: userInfo as? [String: Any]
