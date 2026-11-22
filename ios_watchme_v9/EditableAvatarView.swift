@@ -59,15 +59,16 @@ struct EditableAvatarView: View {
                     .overlay(Circle().stroke(ringColor, lineWidth: size >= 80 ? 4 : 2))
 
                 if canEdit {
+                    // Light badge with a dark camera: readable on the dark screens
                     Circle()
-                        .fill(Color(.systemBackground))
+                        .fill(Color.white)
                         .frame(width: badgeSize, height: badgeSize)
                         .overlay(
                             Image(systemName: "camera.fill")
                                 .font(.system(size: badgeSize * 0.5))
-                                .foregroundColor(.black)
+                                .foregroundColor(.darkBase)
                         )
-                        .overlay(Circle().stroke(Color(.separator), lineWidth: 1))
+                        .overlay(Circle().stroke(Color.darkBase, lineWidth: 2))
                 }
             }
         }

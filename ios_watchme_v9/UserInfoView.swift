@@ -30,10 +30,11 @@ struct UserInfoView: View {
                         // バナー画像とアカウント設定ボタン
                         ZStack(alignment: .topTrailing) {
                             // A plain gradient for now; an image may come later (2026-11-22)
+                            // Ends above the page's colour, so the banner keeps a clear lower edge
                             LinearGradient(
-                                colors: [Color.accentTeal.opacity(0.45), Color.accentTeal.opacity(0.12), Color.darkBase],
+                                colors: [Color.accentTeal.opacity(0.85), Color.accentTeal.opacity(0.4)],
                                 startPoint: .topLeading,
-                                endPoint: .bottom
+                                endPoint: .bottomTrailing
                             )
                             .frame(height: 180)
                             
@@ -110,7 +111,8 @@ struct UserInfoView: View {
                                 type: .user,
                                 entityId: userAccountManager.effectiveUserId,
                                 avatarUrl: userAccountManager.currentUser?.profile?.avatarUrl,
-                                size: 100
+                                size: 100,
+                                ringColor: Color.darkBase
                             )
                             .environmentObject(userAccountManager)
                             .padding(.leading, 20)
@@ -277,7 +279,7 @@ struct UserInfoView: View {
             AccountSettingsView()
                 .environmentObject(userAccountManager)
                 .environmentObject(deviceManager)
-                .preferredColorScheme(.light)
+                .preferredColorScheme(.dark)
         }
         .sheet(isPresented: $showSignUpPrompt) {
             SignUpPromptView(action: nil)

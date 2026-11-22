@@ -45,7 +45,7 @@ struct AccountSettingsView: View {
                 } footer: {
                     Text("オンボーディング関連の表示を初回状態に戻します（端末単位）。")
                 }
-                .listRowBackground(Color(.systemBackground))
+                .listRowBackground(Color.darkCard)
                 #endif
 
                 // このアプリについて
@@ -63,7 +63,7 @@ struct AccountSettingsView: View {
                         showAboutApp = true
                     }
                 }
-                .listRowBackground(Color(.systemBackground))
+                .listRowBackground(Color.darkCard)
                 
                 // 利用規約・プライバシーポリシー
                 Section {
@@ -93,7 +93,7 @@ struct AccountSettingsView: View {
                         showPrivacyPolicy = true
                     }
                 }
-                .listRowBackground(Color(.systemBackground))
+                .listRowBackground(Color.darkCard)
 
                 // サポート
                 Section {
@@ -112,7 +112,7 @@ struct AccountSettingsView: View {
                         }
                     }
                 }
-                .listRowBackground(Color(.systemBackground))
+                .listRowBackground(Color.darkCard)
                 
                 // アカウント管理（ログインしているときだけ）
                 if userAccountManager.authState.isAuthenticated {
@@ -127,7 +127,7 @@ struct AccountSettingsView: View {
                         }
                     }
                 }
-                .listRowBackground(Color(.systemBackground))
+                .listRowBackground(Color.darkCard)
 
                 Section {
                     Button(action: {
@@ -143,23 +143,23 @@ struct AccountSettingsView: View {
                 } footer: {
                     Text("アカウント削除は取り消せません。")
                 }
-                .listRowBackground(Color(.systemBackground))
+                .listRowBackground(Color.darkCard)
                 }
             }
-            .scrollContentBackground(.automatic)
+            .scrollContentBackground(.hidden)
+            .background(Color.darkBase.ignoresSafeArea())
             .listStyle(.insetGrouped)
-            .listRowSeparatorTint(Color(.separator))
+            .listRowSeparatorTint(Color.white.opacity(0.08))
             .navigationTitle("アカウント設定")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarBackground(Color(.systemBackground), for: .navigationBar)
+            .toolbarBackground(Color.darkBase, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarColorScheme(.light, for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     CloseButton {
                         dismiss()
                     }
-                    .foregroundColor(.primary)
                 }
             }
             .alert("ログアウトしますか？", isPresented: $showLogoutConfirmation) {
@@ -224,7 +224,7 @@ struct AccountSettingsView: View {
                     .preferredColorScheme(.light)
             }
         }
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
     }
 
     private var supportMailURL: URL? {
