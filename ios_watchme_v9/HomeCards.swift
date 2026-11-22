@@ -218,8 +218,12 @@ struct HomeRecordingCard: View {
                         Text(timeRange)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(.white)
-                        if let score = block.vibeScore {
+                        if block.vibeScore == nil && block.stages.isInProgress {
+                            SkeletonRectangle(height: 18, width: 34)
+                                .clipShape(Capsule())
+                        } else if let score = block.vibeScore {
                             Text(String(format: "%@%.0f", score >= 0 ? "+" : "", score))
+                                .contentTransition(.numericText(value: score))
                                 .font(.system(size: 12, weight: .bold, design: .rounded))
                                 .foregroundColor(Color.vibeScoreColor(for: score))
                                 .padding(.horizontal, 7)
@@ -241,19 +245,25 @@ struct HomeRecordingCard: View {
                 InfoButton(text: SpotEventsCard.timelineInfo)
             }
 
+            // While it is analysed, the card already has its final shape: the empty picture
+            // and the lines of the summary, filled in as the results arrive (the activity card
+            // above says what step it is on).
             if block.stages.isInProgress {
-                HStack(spacing: 8) {
-                    ProgressView().scaleEffect(0.8).tint(.accentTeal)
-                    Text("分析中です。終わるとここに録音の流れが出ます")
-                        .font(.system(size: 12))
-                        .foregroundColor(Color(white: 0.6))
-                }
+                PendingPicture()
+                    .transition(.opacity)
             } else if let recordedAt = block.recordedAt {
                 SpotEventsCard(deviceId: block.deviceId, recordedAt: recordedAt, localTime: block.localTime,
                                metricsRaw: block.metricsRaw, store: events, part: .picture, embedded: true)
+                    .transition(.opacity)
             }
 
-            if let summary = block.summary, !summary.isEmpty {
+            if block.stages.isInProgress && (block.summary ?? "").isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    SkeletonRectangle(height: 11, width: nil)
+                    SkeletonRectangle(height: 11, width: 200)
+                }
+                .transition(.opacity)
+            } else if let summary = block.summary, !summary.isEmpty {
                 Button(action: onOpen) {
                     Text(summary)
                         .font(.system(size: 13))
@@ -267,6 +277,9 @@ struct HomeRecordingCard: View {
             }
         }
         .detailCard()
+        .animation(.easeInOut(duration: 0.5), value: block.stages.isInProgress)
+        .animation(.easeOut(duration: 0.8), value: block.vibeScore)
+        .animation(.easeInOut(duration: 0.5), value: block.summary)
     }
 }
 

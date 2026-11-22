@@ -30,7 +30,7 @@ struct DayContentView<Slot: View>: View {
     var body: some View {
         VStack(spacing: 16) {
             // At a glance: the day's score and summary
-            ModernHeroGaugeView(dashboardSummary: summary)
+            ModernHeroGaugeView(dashboardSummary: summary, isAnalysing: blocks.contains { $0.stages.isInProgress })
 
             afterScore()
 

@@ -9,7 +9,11 @@ import SwiftUI
 
 struct ModernHeroGaugeView: View {
     let dashboardSummary: DashboardSummary?
-    @State private var appearAnimation = false
+    /// A recording of the day is being analysed: the day's Vibe is on its way.
+    var isAnalysing = false
+    /// What the arc shows; moves to the score with an animation, from 0 on first appearance
+    /// and from the old value when a new one arrives.
+    @State private var shownFraction: Double = 0
     
     private var vibeScore: Double {
         if let s = dashboardSummary?.averageVibe { return Double(s) }
@@ -31,7 +35,7 @@ struct ModernHeroGaugeView: View {
     }
     
     private var insightTitle: String {
-        guard dashboardSummary != nil else { return "No Data Yet" }
+        guard dashboardSummary != nil else { return isAnalysing ? "Analysing" : "No Recordings Yet" }
         if vibeScore > 50 { return "Radiant Energy" }
         else if vibeScore > 20 { return "Steady & Clear" }
         else if vibeScore > -20 { return "Finding Balance" }
@@ -43,7 +47,10 @@ struct ModernHeroGaugeView: View {
             return text
         }
         guard dashboardSummary != nil else {
-            return "Wear your device to start capturing your daily Vibe and behavior insights."
+            if isAnalysing {
+                return "The recording is being analysed. The day's Vibe and what happened will appear here."
+            }
+            return "Record a moment at home with the button below. The day's Vibe and what happened will appear here."
         }
         if vibeScore > 20 {
             return "Your psychological state is remarkably positive today. Keep engaging in the activities that bring you this clarity."
@@ -73,7 +80,7 @@ struct ModernHeroGaugeView: View {
                     
                     // Progress Arc
                     ArcShape()
-                        .trim(from: 0, to: appearAnimation ? CGFloat(normalizedScore) : 0)
+                        .trim(from: 0, to: CGFloat(shownFraction))
                         .stroke(scoreColor, style: StrokeStyle(lineWidth: 4, lineCap: .round))
                         .frame(width: 280, height: 140)
                         .shadow(color: scoreColor.opacity(0.6), radius: 8, x: 0, y: 0)
@@ -89,6 +96,9 @@ struct ModernHeroGaugeView: View {
                         Text(gaugeLabel)
                             .font(.system(size: 64, weight: .semibold, design: .rounded))
                             .foregroundColor(.white)
+                            // The digits roll from the old value to the new one
+                            .contentTransition(.numericText(value: vibeScore))
+                            .animation(.easeOut(duration: 1.0), value: gaugeLabel)
                         
                         Text("VIBE SCORE")
                             .font(.system(size: 10, weight: .bold))
@@ -106,6 +116,8 @@ struct ModernHeroGaugeView: View {
                         .font(.custom("Georgia", size: 28)) // Using a serif font for an elegant editorial look
                         .foregroundColor(.white)
                         .multilineTextAlignment(.center)
+                        .contentTransition(.opacity)
+                        .animation(.easeInOut(duration: 0.5), value: insightTitle)
                     
                     // The summary is rebuilt after every recording: the day so far, not a finished day
                     if let count = dashboardSummary?.processedCount, count > 0 {
@@ -121,13 +133,21 @@ struct ModernHeroGaugeView: View {
                         .multilineTextAlignment(.center)
                         .lineSpacing(4)
                         .padding(.horizontal, 30)
+                        .contentTransition(.opacity)
+                        .animation(.easeInOut(duration: 0.5), value: insightText)
                 }
                 
             }
         }
         .onAppear {
             withAnimation(.easeOut(duration: 1.5).delay(0.2)) {
-                appearAnimation = true
+                shownFraction = dashboardSummary == nil ? 0 : normalizedScore
+            }
+        }
+        .onChange(of: dashboardSummary == nil ? -1 : normalizedScore) { _, _ in
+            // A new value: the meter moves from where it is to the new score
+            withAnimation(.easeOut(duration: 1.2)) {
+                shownFraction = dashboardSummary == nil ? 0 : normalizedScore
             }
         }
     }

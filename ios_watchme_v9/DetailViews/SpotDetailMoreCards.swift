@@ -272,6 +272,9 @@ struct SpotEventsCard: View {
                 case .list:
                     listCard(run)
                 }
+            } else if embedded && part == .picture && store.loadError == nil {
+                // Loading: the empty picture, so the card does not jump when it arrives
+                PendingPicture()
             } else if let loadError = store.loadError, part == .picture {
                 VStack(alignment: .leading, spacing: 10) {
                     DetailCardHeader(icon: "list.number", title: "EVENTS", badge: "出来事")

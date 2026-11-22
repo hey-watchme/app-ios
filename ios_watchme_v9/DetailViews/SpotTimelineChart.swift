@@ -131,6 +131,8 @@ struct SpotTimelineChart<Balloon: View>: View {
 
     /// Where the selected event is, across the picture (for the balloon's tail).
     @State private var selectedX: CGFloat?
+    /// False until the picture is first shown: the emoji then pop in one after another.
+    @State private var stampsShown = false
 
     private static var yDomain: ClosedRange<Double> { -5.25...3.4 }
     /// How far from the middle line the voice band reaches at most.
@@ -293,11 +295,16 @@ struct SpotTimelineChart<Balloon: View>: View {
                         // In time order, so a later event lies on top of an earlier one.
                         if let anchor = proxy.plotFrame {
                             let plot = geometry[anchor]
-                            ForEach(events.sorted { $0.start < $1.start }) { event in
+                            let ordered = events.sorted { $0.start < $1.start }
+                            ForEach(Array(ordered.enumerated()), id: \.element.id) { index, event in
                                 if let x = proxy.position(forX: event.start),
                                    let y = proxy.position(forY: heights[event.id] ?? event.height) {
                                     stamp(event, isSelected: event.id == selectedId)
                                         .fixedSize()
+                                        .scaleEffect(stampsShown ? 1 : 0.2)
+                                        .opacity(stampsShown ? 1 : 0)
+                                        .animation(.spring(response: 0.4, dampingFraction: 0.6)
+                                                    .delay(min(Double(index) * 0.04, 1.2)), value: stampsShown)
                                         .position(x: plot.minX + x, y: plot.minY + y)
                                         .allowsHitTesting(false)
                                 }
@@ -307,6 +314,7 @@ struct SpotTimelineChart<Balloon: View>: View {
                 }
             }
             .frame(height: 250)
+            .onAppear { stampsShown = true }
             // The balloon opens above the picture, where it is quiet, and over what is above
             // it, so the picture does not move under the finger
             .overlay(alignment: .top) {
@@ -363,6 +371,34 @@ struct SpotTimelineChart<Balloon: View>: View {
         } else {
             selectedId = nil
         }
+    }
+}
+
+/// The picture before it exists: the middle line and a faint breathing band, the same size as
+/// the picture, so the card keeps its shape and the picture fills it in when the analysis is done.
+struct PendingPicture: View {
+    static let height: CGFloat = 250
+    @State private var breathing = false
+
+    var body: some View {
+        GeometryReader { geometry in
+            let middle = geometry.size.height * 0.4
+            ZStack(alignment: .topLeading) {
+                Capsule()
+                    .fill(Color.white.opacity(breathing ? 0.07 : 0.03))
+                    .frame(width: geometry.size.width, height: breathing ? 56 : 24)
+                    .position(x: geometry.size.width / 2, y: middle)
+                Rectangle()
+                    .fill(Color.white.opacity(0.25))
+                    .frame(width: geometry.size.width, height: 1)
+                    .position(x: geometry.size.width / 2, y: middle)
+            }
+        }
+        .frame(height: Self.height)
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { breathing = true }
+        }
+        .accessibilityLabel("分析中")
     }
 }
 
