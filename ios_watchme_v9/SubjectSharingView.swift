@@ -51,7 +51,7 @@ struct SubjectSharingSection: View {
                     Divider().background(Color.white.opacity(0.08))
                 }
                 if entry.isOwner {
-                    actionRow(title: "家族を招待する", systemImage: "qrcode", color: .accentTeal) {
+                    actionRow(title: "分析対象の共有", systemImage: "qrcode", color: .accentTeal) {
                         showInvite = true
                     }
                 }
@@ -66,10 +66,12 @@ struct SubjectSharingSection: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(Color.darkCard))
             .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.white.opacity(0.08), lineWidth: 1))
 
-            Text(footnote)
-                .font(.system(size: 12))
-                .foregroundColor(Color(white: 0.45))
-                .fixedSize(horizontal: false, vertical: true)
+            if let footnote {
+                Text(footnote)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.45))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
         }
         .disabled(isWorking)
         .task(id: entry.subjectId) { await load() }
@@ -96,14 +98,15 @@ struct SubjectSharingSection: View {
         }
     }
 
-    private var footnote: String {
+    /// Only for situations the list does not explain; how invites work is on the QR screen.
+    private var footnote: String? {
         if entry.isViewer {
             return "見るだけの共有です。録音とプロフィールの編集は、録音・編集できる人が行います。"
         }
         if !canLeave && members.count > 1 {
             return "録音・編集できる人がほかにいないため、共有をやめられません。分析対象を削除すると、共有している人も見られなくなります。"
         }
-        return "招待の QR は 30 分間、1 回だけ使えます。相手は WatchMe の「分析対象」→「QR を読んで共有に参加」で読み取ります。"
+        return nil
     }
 
     private func memberRow(_ member: SubjectMember) -> some View {
