@@ -226,6 +226,8 @@ struct RecordingPlayerCard: View {
     private let utterances: [TimedUtterance]
     private let speakerColor: (String?) -> Color
     private let roles: [String: String]
+    private let engine: String?          // the speech-to-text model (transcript.json asr_model)
+    private let fallbackFrom: String?    // the engine that could not be used, when it fell back
     /// While the thumb is dragged, the bar shows the drag, not the playback.
     @State private var dragTime: Double?
     @State private var followsPlayback = true
@@ -237,6 +239,8 @@ struct RecordingPlayerCard: View {
         _player = StateObject(wrappedValue: RecordingPlayer(subjectId: subjectId, recordedAt: recordedAt, duration: length))
         self.utterances = utterances
         self.roles = roles
+        self.engine = transcript?["asr_model"] as? String
+        self.fallbackFrom = (transcript?["asr_fallback"] as? [String: Any])?["from"] as? String
         self.speakerColor = speakerColor
     }
 
@@ -326,6 +330,11 @@ struct RecordingPlayerCard: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
 
+            // Who speaks (labels from the transcription, people from the listener) and the model
+            if !utterances.isEmpty {
+                speakersAndModel
+            }
+
             // The transcript, following the playback
             if !utterances.isEmpty {
                 ScrollViewReader { proxy in
@@ -353,6 +362,57 @@ struct RecordingPlayerCard: View {
         }
         .detailCard()
         .onDisappear { player.stop() }
+    }
+
+    /// Labels in the order they first speak.
+    private var speakerOrder: [String] {
+        utterances.compactMap(\.speaker).reduce(into: [String]()) { order, s in
+            if !order.contains(s) { order.append(s) }
+        }
+    }
+
+    private var speakersAndModel: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("文字起こし")
+                    .font(.system(size: 11))
+                    .foregroundColor(Color(white: 0.45))
+                if let engine {
+                    Text(engine)
+                        .font(.system(size: 11, weight: .medium, design: .monospaced))
+                        .foregroundColor(Color(white: 0.7))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text("話者 \(speakerOrder.count)")
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(Color(white: 0.55))
+            }
+            if let fallbackFrom {
+                Text("\(fallbackFrom) が使えなかったため切り替え")
+                    .font(.system(size: 11))
+                    .foregroundColor(.orange)
+            }
+            if !roles.isEmpty {
+                LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading), GridItem(.flexible(), alignment: .leading)],
+                          alignment: .leading, spacing: 4) {
+                    ForEach(speakerOrder, id: \.self) { speaker in
+                        HStack(spacing: 6) {
+                            Text(speaker)
+                                .font(.system(size: 10, weight: .bold, design: .monospaced))
+                                .foregroundColor(speakerColor(speaker))
+                            Text(roles[speaker] ?? "不明")
+                                .font(.system(size: 12))
+                                .foregroundColor(Color(white: 0.75))
+                                .lineLimit(1)
+                        }
+                    }
+                }
+                Text("誰の声かは、録音を聞いた分析の推定です")
+                    .font(.system(size: 10))
+                    .foregroundColor(Color(white: 0.4))
+            }
+        }
     }
 
     private func utteranceRow(_ u: TimedUtterance, isCurrent: Bool) -> some View {

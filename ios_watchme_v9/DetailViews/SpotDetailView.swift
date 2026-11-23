@@ -699,10 +699,6 @@ struct SpotDetailView: View {
                         .tracking(1.0)
 
 
-                    if !conversationTurns.isEmpty {
-                        conversationDisclosure
-                    }
-
                     if let transcription = spotData.vibeTranscriberResult {
                         rawDataDisclosure(id: "stt", title: "STT", content: transcription)
                     }
@@ -738,96 +734,6 @@ struct SpotDetailView: View {
     private var conversationTurns: [DashboardTimeBlock.ConversationTurn] { spotData.conversationTurns }
     private var speakerRoles: [String: String] { spotData.speakerRoles }
 
-    private var conversationDisclosure: some View {
-        let engine = transcriptObject?["asr_model"] as? String
-        let fallbackFrom = (transcriptObject?["asr_fallback"] as? [String: Any])?["from"] as? String
-        let speakerOrder = conversationTurns.compactMap(\.speaker).reduce(into: [String]()) { order, speaker in
-            if !order.contains(speaker) { order.append(speaker) }
-        }
-        let roles = speakerRoles
-
-        return DisclosureGroup {
-            VStack(alignment: .leading, spacing: 10) {
-                if let engine {
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 8) {
-                            Text("主要モデル")
-                                .font(.system(size: 11))
-                                .foregroundColor(Color(white: 0.45))
-                            Text(engine)
-                                .font(.system(size: 12, weight: .medium, design: .monospaced))
-                                .foregroundColor(Color(white: 0.78))
-                        }
-                        if let fallbackFrom {
-                            Text("\(fallbackFrom) が使えなかったため切り替え")
-                                .font(.system(size: 11))
-                                .foregroundColor(.orange)
-                        }
-                    }
-                    .padding(.bottom, 4)
-                }
-
-                if !roles.isEmpty {
-                    VStack(alignment: .leading, spacing: 4) {
-                        ForEach(speakerOrder, id: \.self) { speaker in
-                            if let role = roles[speaker] {
-                                HStack(spacing: 10) {
-                                    Text(speaker)
-                                        .font(.system(size: 11, weight: .bold, design: .monospaced))
-                                        .foregroundColor(speakerColor(speaker, order: speakerOrder))
-                                        .frame(width: 28, alignment: .leading)
-                                    Text(role)
-                                        .font(.system(size: 13, weight: .medium))
-                                        .foregroundColor(Color(white: 0.78))
-                                }
-                            }
-                        }
-                        Text("声からの推定")
-                            .font(.system(size: 11))
-                            .foregroundColor(Color(white: 0.45))
-                    }
-                    .padding(.bottom, 6)
-                }
-
-                ForEach(conversationTurns) { turn in
-                    HStack(alignment: .top, spacing: 10) {
-                        Text(turn.speaker ?? "–")
-                            .font(.system(size: 11, weight: .bold, design: .monospaced))
-                            .foregroundColor(speakerColor(turn.speaker, order: speakerOrder))
-                            .frame(width: 28, alignment: .leading)
-                            .padding(.top, 2)
-                        Text(turn.text)
-                            .font(.system(size: 14))
-                            .foregroundColor(Color(white: 0.78))
-                            .fixedSize(horizontal: false, vertical: true)
-                            .lineSpacing(3)
-                            .textSelection(.enabled)
-                    }
-                }
-            }
-            .padding(.vertical, 8)
-        } label: {
-            HStack {
-                Text("Conversation")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white)
-                Spacer()
-                Text(speakerOrder.isEmpty ? "" : "\(speakerOrder.count) speakers")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(white: 0.45))
-            }
-        }
-        .tint(Color(white: 0.36))
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.darkCard)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
-        )
-    }
 
     /// The recording's length (recording.duration_seconds), for the player's bar.
     private var recordingSeconds: Double? {
