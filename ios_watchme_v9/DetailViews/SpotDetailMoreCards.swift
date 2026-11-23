@@ -335,7 +335,7 @@ struct SpotEventsCard: View {
             }
         } else {
             VStack(alignment: .leading, spacing: 12) {
-                DetailCardHeader(icon: "waveform.path.ecg", title: "TIMELINE", badge: "録音の流れ",
+                DetailCardHeader(icon: "waveform.path.ecg", title: "TIMELINE", badge: "タイムライン",
                              info: Self.timelineInfo)
                 timeline(run)
             }
@@ -400,15 +400,11 @@ struct SpotEventsCard: View {
             }
 
             if !voice.isEmpty && !embedded {
-                HStack {
-                    Text("後ろの帯: 声の")
-                        .font(.system(size: 11))
-                        .foregroundColor(Color(white: 0.45))
-                    Picker("声の測定", selection: $voiceMeasure) {
-                        ForEach(VoiceMeasure.allCases) { Text($0.rawValue).tag($0) }
-                    }
-                    .pickerStyle(.segmented)
+                // Which voice measure draws the wave behind (explained behind the card's (i))
+                Picker("声の測定", selection: $voiceMeasure) {
+                    ForEach(VoiceMeasure.allCases) { Text($0.rawValue).tag($0) }
                 }
+                .pickerStyle(.segmented)
             }
 
         }
@@ -417,7 +413,7 @@ struct SpotEventsCard: View {
     /// How to read the picture (behind the (i) of the card).
     static let timelineInfo = """
         横は録音の時間です。中央の線より上はあたたかい出来事（笑う・褒める）、下はきつい出来事（叱責・口論・泣く）。        線から離れているほど、その前後の声が強かった場面です。
-        後ろの波は話していた声の強さで、その人のこの録音でのふだんより強いほど膨らみます。誰も話していないところは平らです。
+        後ろの波は話していた声で、下のボタンで張り・大きさ・高さを切り替えます。その人のこの録音でのふだんより強いほど膨らみます。誰も話していないところは平らです。
         絵文字を押すと、そのときの言葉と再生ボタンが出ます。
         """
 
