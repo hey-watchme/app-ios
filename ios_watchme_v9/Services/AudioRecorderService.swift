@@ -18,17 +18,16 @@ import Combine
 
 enum RecordingEndReason {
     case stopped          // the person stopped
-    case limitReached     // maxSessionSeconds (45 minutes)
+    case limitReached     // RecordingLimits.maxMinutes (set on the server)
     case interrupted      // a call / Siri took the microphone and recording could not resume
     case failed(Error)    // writing failed (disk full, audio system reset, ...)
 }
 
 final class AudioRecorderService: NSObject {
     static let chunkSeconds: TimeInterval = 300
-    /// 45 minutes since 2026-11-23: the server transcribes a session in one Lambda call (at most
-    /// 15 minutes), and Gemini took 13 minutes for 52 minutes of audio (platform HANDOFF).
-    static let maxSessionSeconds: TimeInterval = 45 * 60
-    /// Enough for a whole session (about 115 MB) with room to spare.
+    /// How long one session may run; the value comes from the server (RecordingLimits).
+    static var maxSessionSeconds: TimeInterval { RecordingLimits.maxSessionSeconds }
+    /// Enough for a whole session (45 minutes is about 115 MB) with room to spare.
     static let minimumFreeBytes: Int64 = 200 * 1024 * 1024
 
     private struct ActiveChunk {
@@ -125,6 +124,7 @@ final class AudioRecorderService: NSObject {
         }
 
         limitTimer?.invalidate()
+        // The limit in force when the session starts holds for the whole session.
         limitTimer = Timer.scheduledTimer(withTimeInterval: Self.maxSessionSeconds, repeats: false) { [weak self] _ in
             self?.endSession(.limitReached)
         }

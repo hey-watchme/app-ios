@@ -337,6 +337,7 @@ struct MainAppView: View {
             viewStartTime = Date()
             print("⏱️ [VIEW] MainAppView表示開始 - 認証チェック呼び出し")
             userAccountManager.checkAuthStatus()
+            await RecordingLimits.refresh()
         }
         .onChange(of: userAccountManager.authState) { oldValue, newValue in
             print("🔄 MainAppView: 権限レベル変化 \(oldValue) → \(newValue)")

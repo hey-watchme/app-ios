@@ -41,7 +41,7 @@ final class RecordingStore: ObservableObject {
     @Published private(set) var state = RecordingState()
 
     static let chunkMinutes = Int(AudioRecorderService.chunkSeconds / 60)
-    static let maxMinutes = Int(AudioRecorderService.maxSessionSeconds / 60)
+    static var maxMinutes: Int { RecordingLimits.maxMinutes }
 
     private let audioService: AudioRecorderService
     private let uploader: ChunkUploader
