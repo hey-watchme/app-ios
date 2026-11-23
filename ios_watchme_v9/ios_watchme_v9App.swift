@@ -290,6 +290,10 @@ struct MainAppView: View {
             }
             subjectManager.selectSubject(own.subjectId)
         }
+        if subjectManager.selectedEntry?.isViewer == true {
+            toastManager.showError(title: "録音できません", subtitle: "この分析対象は見るだけの共有です。録音は共有した人に頼んでください")
+            return
+        }
         aiConsentGranted = AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id)
         showRecordingSheet = true
     }
@@ -300,7 +304,7 @@ struct MainAppView: View {
             return
         }
         // Signed in but viewing the sample: go back to the user's own subject.
-        subjectManager.selectSubject(subjectManager.ownRecordingSubject?.subjectId)
+        subjectManager.selectSubject((subjectManager.ownRecordingSubject ?? subjectManager.ownSubjects.first)?.subjectId)
     }
 
     private var mainContent: some View {
@@ -366,8 +370,33 @@ struct MainAppView: View {
         }
         .onOpenURL { url in
             print("🔗 [MainAppView] URL受信: \(url)")
+            // An invite QR read with the Camera app opens watchme://invite?code=...
+            if let code = SubjectInvite.code(in: url.absoluteString) {
+                joinFromLink(code: code)
+                return
+            }
             Task {
                 await userAccountManager.handleOAuthCallback(url: url)
+            }
+        }
+    }
+
+    /// Join a shared subject from an opened invite link.
+    private func joinFromLink(code: String) {
+        guard let userId = userAccountManager.currentUser?.id, !isGuest else {
+            toastManager.showError(title: "招待を受けられません", subtitle: "ログインしてから、もう一度 QR を読んでください")
+            return
+        }
+        guard !recordingStore.state.isRecording else {
+            toastManager.showError(title: "録音中です", subtitle: "録音を止めてから、もう一度 QR を読んでください")
+            return
+        }
+        Task {
+            do {
+                let name = try await subjectManager.join(code: code, userId: userId)
+                await MainActor.run { toastManager.showSuccess(title: "\(name)の共有に参加しました") }
+            } catch {
+                await MainActor.run { toastManager.showError(title: "招待を受けられませんでした", subtitle: error.localizedDescription) }
             }
         }
     }

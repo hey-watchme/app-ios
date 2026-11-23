@@ -23,6 +23,7 @@ struct QuestionsEntry: View {
     var scope: String? = nil
     let place: Place
 
+    @EnvironmentObject private var subjectManager: SubjectManager
     @State private var questions: [FamilyQuestion] = []
     @State private var showMode = false
 
@@ -96,7 +97,9 @@ struct QuestionsEntry: View {
     }
 
     private func load() async {
-        guard let subjectId else { questions = []; return }
+        // Only owners answer; a view-only member is not asked.
+        let isViewer = subjectManager.subjects.first(where: { $0.subjectId.lowercased() == subjectId?.lowercased() })?.isViewer ?? false
+        guard let subjectId, !isViewer else { questions = []; return }
         let found = await QuestionService.open(subjectId: subjectId, recordedAt: recordedAt, scope: scope)
         withAnimation(.easeInOut(duration: 0.25)) { questions = found }
     }

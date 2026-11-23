@@ -24,6 +24,7 @@ struct SubjectTabView: View {
     @State private var subjectInitialValues: SubjectRegistrationView.InitialValues? = nil
     @State private var showAddSubject = false
     @State private var showRecordingSwitchAlert = false
+    @State private var showJoin = false
 
     var body: some View {
         ScrollView {
@@ -58,6 +59,9 @@ struct SubjectTabView: View {
             .environmentObject(dataManager)
             .environmentObject(subjectManager)
             .environmentObject(userAccountManager)
+        }
+        .sheet(isPresented: $showJoin) {
+            JoinSubjectSheet(onJoined: { dismiss() })
         }
         .alert("録音中です", isPresented: $showRecordingSwitchAlert) {
             Button("OK") { }
@@ -316,6 +320,10 @@ struct SubjectTabView: View {
 
     private var managementSections: some View {
         VStack(alignment: .leading, spacing: 28) {
+            if userAccountManager.authState.isAuthenticated,
+               let entry = subjectManager.selectedEntry, !entry.isDemo, entry.role != nil {
+                SubjectSharingSection(entry: entry, onLeft: { dismiss() })
+            }
             section("ほかの分析対象") {
                 VStack(spacing: 0) {
                     ForEach(otherSubjects, id: \.subjectId) { entry in
@@ -332,6 +340,27 @@ struct SubjectTabView: View {
                                     .font(.system(size: 22))
                                     .foregroundColor(.accentTeal)
                                 Text("分析対象を増やす")
+                                    .font(.system(size: 15, weight: .medium))
+                                    .foregroundColor(.accentTeal)
+                                Spacer()
+                            }
+                            .padding(.vertical, 12)
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        Divider().background(Color.white.opacity(0.08))
+                        Button {
+                            guard !recordingStore.state.isRecording else {
+                                showRecordingSwitchAlert = true
+                                return
+                            }
+                            showJoin = true
+                        } label: {
+                            HStack(spacing: 12) {
+                                Image(systemName: "qrcode.viewfinder")
+                                    .font(.system(size: 22))
+                                    .foregroundColor(.accentTeal)
+                                Text("QR を読んで共有に参加")
                                     .font(.system(size: 15, weight: .medium))
                                     .foregroundColor(.accentTeal)
                                 Spacer()

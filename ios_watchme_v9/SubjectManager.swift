@@ -60,7 +60,7 @@ final class SubjectManager: ObservableObject {
 
     /// The subject a signed-in user records for when the sample is on screen: their own first.
     var ownRecordingSubject: SubjectEntry? {
-        ownSubjects.first(where: { $0.role == "owner" }) ?? ownSubjects.first
+        ownSubjects.first(where: { $0.canRecord })
     }
 
     // The key keeps its old name so the selection survives the update (same id value).
@@ -190,6 +190,58 @@ final class SubjectManager: ObservableObject {
         return id
     }
 
+    // MARK: - Sharing
+
+    /// An owner makes a one-time invite for `role` ("owner" or "viewer"), valid 30 minutes.
+    func createInvite(subjectId: String, role: String) async throws -> SubjectInvite {
+        let rows: [SubjectInvite] = try await supabase
+            .rpc("create_subject_invite", params: InviteParams(p_subject_id: subjectId, p_role: role))
+            .execute()
+            .value
+        guard let invite = rows.first else { throw SubjectManagerError.noInviteReturned }
+        return invite
+    }
+
+    /// Join the subject an invite is for. Returns its id.
+    func acceptInvite(code: String) async throws -> String {
+        do {
+            let id: String = try await supabase
+                .rpc("accept_subject_invite", params: AcceptParams(p_code: code))
+                .execute()
+                .value
+            return id
+        } catch {
+            throw SubjectManagerError.inviteRejected(Self.inviteMessage(for: error))
+        }
+    }
+
+    /// Accept an invite, reload the list and show the joined subject. Returns its name.
+    @discardableResult
+    func join(code: String, userId: String) async throws -> String {
+        let id = try await acceptInvite(code: code)
+        await loadSubjects(for: userId)
+        return await MainActor.run {
+            selectSubject(id)
+            return subjects.first(where: { $0.subjectId.lowercased() == id.lowercased() })?.displayName ?? "分析対象"
+        }
+    }
+
+    /// Who is linked to a subject (owners first).
+    func members(of subjectId: String) async throws -> [SubjectMember] {
+        try await supabase
+            .rpc("list_subject_members", params: MembersParams(p_subject_id: subjectId))
+            .execute()
+            .value
+    }
+
+    private static func inviteMessage(for error: Error) -> String {
+        let text = String(describing: error)
+        if text.contains("expired") { return "この招待は期限が切れています。招待した人に新しい QR を出してもらってください。" }
+        if text.contains("already used") { return "この招待は使用済みです。招待した人に新しい QR を出してもらってください。" }
+        if text.contains("not found") { return "この QR の招待が見つかりませんでした。" }
+        return "招待を受けられませんでした。時間をおいてもう一度お試しください。"
+    }
+
     func selectSubject(_ subjectId: String?) {
         selectedSubjectID = subjectId
         if let subjectId {
@@ -299,8 +351,64 @@ struct SubjectEntry: Equatable {
         return name.isEmpty ? "名称未設定" : name
     }
 
-    var canEditSubject: Bool { role == "owner" && !isDemo }
+    var isOwner: Bool { role == "owner" && !isDemo }
+    /// Shared with this account to look at only: no recording, editing or answering.
+    var isViewer: Bool { role == "viewer" && !isDemo }
+
+    var canEditSubject: Bool { isOwner }
+    var canRecord: Bool { isOwner }
     var canDeleteSubject: Bool { role != nil && !isDemo }
+}
+
+/// Someone linked to a subject (list_subject_members).
+struct SubjectMember: Decodable, Identifiable, Equatable {
+    let userId: String
+    let name: String
+    let role: String
+    let isMe: Bool
+
+    var id: String { userId }
+    var isOwner: Bool { role == "owner" }
+    var displayName: String { name.isEmpty ? "名前未設定のアカウント" : name }
+
+    enum CodingKeys: String, CodingKey {
+        case userId = "user_id", name, role, isMe = "is_me"
+    }
+}
+
+/// A one-time invite (create_subject_invite). The QR carries `url`.
+struct SubjectInvite: Decodable, Equatable {
+    let code: String
+    let expiresAt: Date
+
+    enum CodingKeys: String, CodingKey { case code, expiresAt = "expires_at" }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        code = try c.decode(String.self, forKey: .code)
+        let raw = try c.decode(String.self, forKey: .expiresAt)
+        expiresAt = SubjectInvite.parseDate(raw) ?? Date().addingTimeInterval(30 * 60)
+    }
+
+    var url: String { "watchme://invite?code=\(code)" }
+
+    /// The code in a scanned QR or an opened link (watchme://invite?code=...), if it is one.
+    static func code(in text: String) -> String? {
+        guard let components = URLComponents(string: text.trimmingCharacters(in: .whitespacesAndNewlines)),
+              components.scheme == "watchme", components.host == "invite",
+              let code = components.queryItems?.first(where: { $0.name == "code" })?.value,
+              code.range(of: "^[0-9a-f]{32}$", options: .regularExpression) != nil
+        else { return nil }
+        return code
+    }
+
+    private static func parseDate(_ raw: String) -> Date? {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        if let d = f.date(from: raw) { return d }
+        f.formatOptions = [.withInternetDateTime]
+        return f.date(from: raw)
+    }
 }
 
 /// A subjects row with the columns Subject does not carry.
@@ -333,12 +441,29 @@ private struct CreateSubjectParams: Encodable {
     let p_timezone: String
 }
 
+private struct InviteParams: Encodable {
+    let p_subject_id: String
+    let p_role: String
+}
+
+private struct AcceptParams: Encodable {
+    let p_code: String
+}
+
+private struct MembersParams: Encodable {
+    let p_subject_id: String
+}
+
 enum SubjectManagerError: Error, LocalizedError {
     case noSubjectReturned
+    case noInviteReturned
+    case inviteRejected(String)
 
     var errorDescription: String? {
         switch self {
         case .noSubjectReturned: return "分析対象の登録に失敗しました"
+        case .noInviteReturned: return "招待を作れませんでした"
+        case .inviteRejected(let message): return message
         }
     }
 }

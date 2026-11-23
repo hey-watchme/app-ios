@@ -651,8 +651,7 @@ class NetworkManager: ObservableObject {
         }
     }
 
-    /// Result of DELETE /subjects/{id}: the subject is deleted only when no other account
-    /// is linked to it; otherwise just this account's membership is removed.
+    /// Result of DELETE /subjects/{id}: deleted, or only this account's membership removed.
     struct SubjectRemoval: Decodable {
         let deleted: Bool
         let other_users: Int
@@ -671,11 +670,17 @@ class NetworkManager: ObservableObject {
         print("✅ アカウント削除成功: \(userId)")
     }
 
-    /// DELETE /subjects/{id}: delete a subject and its recordings, or only leave it when
-    /// another account is still linked.
+    /// DELETE /subjects/{id}: leave a subject (a viewer, or an owner while another owner is
+    /// linked), or, as its last owner, delete it with its recordings for everyone.
     func deleteSubject(subjectId: String) async throws -> SubjectRemoval {
         let data = try await accountRequest(method: "DELETE", path: "/subjects/\(subjectId.lowercased())")
         return try JSONDecoder().decode(SubjectRemoval.self, from: data)
+    }
+
+    /// DELETE /subjects/{id}/members/{user_id}: an owner takes another account off a shared subject.
+    func removeSubjectMember(subjectId: String, userId: String) async throws {
+        _ = try await accountRequest(method: "DELETE",
+                                     path: "/subjects/\(subjectId.lowercased())/members/\(userId.lowercased())")
     }
 
     /// The signed-in user's research consent (GET /account/research-consent).
