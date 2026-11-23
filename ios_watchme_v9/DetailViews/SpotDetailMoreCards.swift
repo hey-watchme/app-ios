@@ -18,8 +18,41 @@ struct DetailCardHeader: View {
     var badge: String? = nil
     /// How to read the card, behind an (i) at the right. Cards stay plain; whoever wants it asks.
     var info: String? = nil
+    /// When set, the header folds the card: a chevron at the right, and a tap opens or closes it.
+    var expanded: Binding<Bool>? = nil
 
     var body: some View {
+        if let expanded {
+            HStack(spacing: 8) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { expanded.wrappedValue.toggle() }
+                } label: {
+                    HStack(spacing: 8) {
+                        titleRow
+                        Spacer()
+                        Image(systemName: expanded.wrappedValue ? "chevron.up" : "chevron.down")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(Color(white: 0.5))
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if let info {
+                    InfoButton(text: info)
+                }
+            }
+        } else {
+            HStack(spacing: 8) {
+                titleRow
+                Spacer()
+                if let info {
+                    InfoButton(text: info)
+                }
+            }
+        }
+    }
+
+    private var titleRow: some View {
         HStack(spacing: 8) {
             Image(systemName: icon)
                 .font(.system(size: 14))
@@ -35,10 +68,6 @@ struct DetailCardHeader: View {
                     .padding(.horizontal, 6)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(Color.accentTeal.opacity(0.15)))
-            }
-            Spacer()
-            if let info {
-                InfoButton(text: info)
             }
         }
     }
@@ -458,12 +487,15 @@ struct SpotEventsCard: View {
 /// sounds that are not there, which is why it is not used for counting.
 struct SpotListenerCard: View {
     let sceneRaw: String?
+    @State private var expanded = false
 
     var body: some View {
         if let object = parseJSON(sceneRaw), let scene = object["scene"] as? [String: Any] {
             VStack(alignment: .leading, spacing: 12) {
                 DetailCardHeader(icon: "ear", title: "LISTENER", badge: (object["run"] as? [String: Any])?["model"] as? String,
-                                 info: "音声を直接聞いた AI の説明です。聞こえていない音を挙げることがあるため、出来事の回数には使っていません。")
+                                 info: "音声を直接聞いた AI の説明です。聞こえていない音を挙げることがあるため、出来事の回数には使っていません。",
+                                 expanded: $expanded)
+              if expanded {
 
                 VStack(alignment: .leading, spacing: 8) {
                     if let setting = scene["setting"] as? String, !setting.isEmpty {
@@ -508,7 +540,7 @@ struct SpotListenerCard: View {
                         }
                     }
                 }
-
+              }
             }
             .detailCard()
         }
@@ -529,6 +561,7 @@ struct SpotListenerCard: View {
 struct SpotMeasurementDetailsCard: View {
     let metricsRaw: String?
     let speakerRoles: [String: String]
+    @State private var expanded = false
 
     var body: some View {
         if let metrics = parseJSON(metricsRaw),
@@ -540,7 +573,9 @@ struct SpotMeasurementDetailsCard: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 DetailCardHeader(icon: "ruler", title: "MEASUREMENTS", badge: conversation["metric_version"] as? String,
-                                 info: "CONVERSATION に出していない残りの測定値です。割り込みは、相手が話している途中で話し始めた回数。")
+                                 info: "CONVERSATION に出していない残りの測定値です。割り込みは、相手が話している途中で話し始めた回数。",
+                                 expanded: $expanded)
+              if expanded {
 
                 HStack(spacing: 14) {
                     smallValue("長さ", seconds(whole["duration_seconds"]))
@@ -587,7 +622,7 @@ struct SpotMeasurementDetailsCard: View {
                         }
                     }
                 }
-
+              }
             }
             .detailCard()
         }

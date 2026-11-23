@@ -24,7 +24,7 @@ struct SpotDetailView: View {
     @State private var isSaved: Bool?
     @State private var isSaving = false
     #if DEBUG
-    @StateObject private var previewPlayer = RecordingPreviewPlayer()
+    @State private var showsConversationMetrics = false
     #endif
 
     private let rawPreviewCharacterLimit = 4_000
@@ -191,6 +191,14 @@ struct SpotDetailView: View {
             .padding(.top, 12)
 
             if showsData {
+                // The recording itself, with the transcript following it
+                if let recordedAt = spotData.recordedAt {
+                    RecordingPlayerCard(subjectId: spotData.subjectId, recordedAt: recordedAt,
+                                        transcript: transcriptObject, duration: recordingSeconds,
+                                        roles: speakerRoles,
+                                        speakerColor: { speakerColor($0, order: playerSpeakerOrder) })
+                }
+
                 // How the analysis went, once it is finished
                 if !spotData.stages.isEmpty && !spotData.stages.isInProgress {
                     stageProgressCard
@@ -422,18 +430,11 @@ struct SpotDetailView: View {
     private var metricsCard: some View {
         let order = speakerMetrics.map(\.id)
         return VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 8) {
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.system(size: 14))
-                    .foregroundColor(.accentTeal)
-                Text("CONVERSATION")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(Color(white: 0.45))
-                    .tracking(0.8)
-                Spacer()
-                InfoButton(text: "文字起こしの時刻から計算。応答がマイナスなら、相手の話の途中で話し始めた。声の値は、その人だけが話している区間で測り、マイクや距離で変わる")
-            }
+            DetailCardHeader(icon: "chart.bar.xaxis", title: "CONVERSATION",
+                             info: "文字起こしの時刻から計算。応答がマイナスなら、相手の話の途中で話し始めた。声の値は、その人だけが話している区間で測り、マイクや距離で変わる",
+                             expanded: $showsConversationMetrics)
 
+            if showsConversationMetrics {
             VStack(alignment: .leading, spacing: 12) {
                 ForEach(speakerMetrics) { m in
                     VStack(alignment: .leading, spacing: 6) {
@@ -474,7 +475,7 @@ struct SpotDetailView: View {
                     }
                 }
             }
-
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(16)
@@ -697,11 +698,6 @@ struct SpotDetailView: View {
                         .foregroundColor(Color(white: 0.36))
                         .tracking(1.0)
 
-                    #if DEBUG
-                    if let audioKey = spotData.audioKey {
-                        audioPreviewRow(audioKey: audioKey)
-                    }
-                    #endif
 
                     if !conversationTurns.isEmpty {
                         conversationDisclosure
@@ -735,50 +731,6 @@ struct SpotDetailView: View {
         }
     }
 
-    #if DEBUG
-    // MARK: - Audio preview (development builds only)
-
-    private func audioPreviewRow(audioKey: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack {
-                Button {
-                    Task { await previewPlayer.toggle(audioKey: audioKey) }
-                } label: {
-                    HStack(spacing: 8) {
-                        if previewPlayer.isLoading {
-                            ProgressView().tint(.accentTeal)
-                        } else {
-                            Image(systemName: previewPlayer.isPlaying ? "stop.fill" : "play.fill")
-                        }
-                        Text(previewPlayer.isPlaying ? "停止" : "録音を再生")
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.accentTeal)
-                }
-                .disabled(previewPlayer.isLoading)
-                Spacer()
-                Text("開発用")
-                    .font(.system(size: 11))
-                    .foregroundColor(Color(white: 0.45))
-            }
-            if let message = previewPlayer.errorMessage {
-                Text(message)
-                    .font(.system(size: 11))
-                    .foregroundColor(.accentCoral)
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.darkCard)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.white.opacity(0.1), lineWidth: 1)
-                )
-        )
-        .onDisappear { previewPlayer.stop() }
-    }
-    #endif
 
     // MARK: - Conversation (speaker-labelled transcript)
 
@@ -875,6 +827,20 @@ struct SpotDetailView: View {
                         .stroke(Color.white.opacity(0.1), lineWidth: 1)
                 )
         )
+    }
+
+    /// The recording's length (recording.duration_seconds), for the player's bar.
+    private var recordingSeconds: Double? {
+        guard let raw = spotData.recordingRaw, let data = raw.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return nil }
+        return (object["duration_seconds"] as? NSNumber)?.doubleValue
+    }
+
+    /// Speakers in the order they first speak, so the player's colours match the Conversation panel.
+    private var playerSpeakerOrder: [String] {
+        conversationTurns.compactMap(\.speaker).reduce(into: [String]()) { order, speaker in
+            if !order.contains(speaker) { order.append(speaker) }
+        }
     }
 
     private func speakerColor(_ speaker: String?, order: [String]) -> Color {
@@ -1083,69 +1049,4 @@ struct SpotDetailView: View {
     }
 }
 
-#if DEBUG
-/// Plays a recording through a short-lived URL from GET /audio (development builds only).
-/// The API checks the signed-in user's token and their membership of the subject.
-@MainActor
-private final class RecordingPreviewPlayer: ObservableObject {
-    @Published var isPlaying = false
-    @Published var isLoading = false
-    @Published var errorMessage: String?
 
-    private let serverURL = "https://api.hey-watch.me"
-    private var player: AVPlayer?
-    private var endObserver: NSObjectProtocol?
-
-    func toggle(audioKey: String) async {
-        if isPlaying {
-            stop()
-            return
-        }
-        isLoading = true
-        errorMessage = nil
-        defer { isLoading = false }
-
-        do {
-            let token = try await SupabaseClientManager.shared.client.auth.session.accessToken
-            var components = URLComponents(string: "\(serverURL)/audio")!
-            components.queryItems = [URLQueryItem(name: "audio_key", value: audioKey)]
-            var request = URLRequest(url: components.url!)
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-
-            let (data, response) = try await URLSession.shared.data(for: request)
-            let status = (response as? HTTPURLResponse)?.statusCode ?? 0
-            guard status == 200,
-                  let object = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let urlString = object["url"] as? String,
-                  let url = URL(string: urlString) else {
-                errorMessage = "再生用のURLを取得できませんでした（HTTP \(status)）"
-                return
-            }
-
-            try AVAudioSession.sharedInstance().setCategory(.playback)
-            try AVAudioSession.sharedInstance().setActive(true)
-            let item = AVPlayerItem(url: url)
-            endObserver = NotificationCenter.default.addObserver(
-                forName: .AVPlayerItemDidPlayToEndTime, object: item, queue: .main
-            ) { [weak self] _ in
-                Task { @MainActor in self?.stop() }
-            }
-            player = AVPlayer(playerItem: item)
-            player?.play()
-            isPlaying = true
-        } catch {
-            errorMessage = "再生できませんでした: \(error.localizedDescription)"
-        }
-    }
-
-    func stop() {
-        player?.pause()
-        player = nil
-        if let endObserver {
-            NotificationCenter.default.removeObserver(endObserver)
-        }
-        endObserver = nil
-        isPlaying = false
-    }
-}
-#endif
