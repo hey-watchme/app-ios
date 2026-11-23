@@ -246,17 +246,10 @@ struct UserInfoView: View {
                         InfoListSection(title: "ご利用状況") {
                             if let quota {
                                 InfoListRow(label: "プラン", value: quota.planLabel)
-                                if quota.isUnlimited {
-                                    InfoListRow(label: "今月の録音", value: "\(RecordingQuota.duration(quota.usedSeconds))（上限なし）")
-                                } else {
-                                    InfoListRow(label: "今月の録音",
-                                                value: "\(RecordingQuota.duration(quota.usedSeconds)) / \(RecordingQuota.duration(quota.limitSeconds ?? 0))")
-                                    InfoListRow(label: "残り", value: RecordingQuota.duration(quota.remainingSeconds ?? 0),
-                                                valueColor: quota.isUsedUp ? .accentCoral : .primary)
-                                }
-                                InfoListRow(label: "次に戻る日", value: quota.renewsOn)
+                                RecordingUsageMeter(quota: quota)
+                                InfoListRow(label: "次回更新日", value: quota.renewsOn)
                             } else {
-                                InfoListRow(label: "今月の録音", value: "読み込み中…", valueColor: Color(white: 0.56))
+                                InfoListRow(label: "今月の録音時間", value: "読み込み中…", valueColor: Color(white: 0.56))
                             }
                             InfoListRow(label: "1 回の録音の上限", value: "\(RecordingLimits.maxMinutes)分", showDivider: false)
                         }
@@ -379,4 +372,59 @@ private func formatDate(_ dateString: String) -> String {
     
     // 最終的にフォーマットできない場合は元の文字列を返す
     return dateString
+}
+
+// MARK: - Recording time meter
+
+/// This month's recording time as a 0-100% meter that fills as it is used.
+private struct RecordingUsageMeter: View {
+    let quota: RecordingQuota
+
+    private var fraction: Double {
+        guard let limit = quota.limitSeconds, limit > 0 else { return 0 }
+        return min(max(quota.usedSeconds / limit, 0), 1)
+    }
+
+    private var barColor: Color {
+        if quota.isUsedUp { return .accentCoral }
+        return fraction >= 0.8 ? .orange : .accentTeal
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("今月の録音時間")
+                    .font(.subheadline)
+                    .foregroundColor(Color(white: 0.56))
+                Spacer()
+                if quota.isUnlimited {
+                    Text("\(RecordingQuota.duration(quota.usedSeconds))（上限なし）")
+                        .font(.subheadline)
+                } else {
+                    Text("\(Int((fraction * 100).rounded()))%")
+                        .font(.subheadline.monospacedDigit())
+                        .fontWeight(.semibold)
+                        .foregroundColor(quota.isUsedUp ? .accentCoral : .primary)
+                }
+            }
+            if !quota.isUnlimited {
+                GeometryReader { proxy in
+                    ZStack(alignment: .leading) {
+                        Capsule().fill(Color.white.opacity(0.10))
+                        Capsule().fill(barColor)
+                            .frame(width: proxy.size.width * fraction)
+                    }
+                }
+                .frame(height: 8)
+                Text("\(RecordingQuota.duration(quota.usedSeconds)) / \(RecordingQuota.duration(quota.limitSeconds ?? 0))（残り\(RecordingQuota.duration(quota.remainingSeconds ?? 0))）")
+                    .font(.caption)
+                    .foregroundColor(Color(white: 0.56))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .overlay(alignment: .bottom) {
+            Divider().background(Color(.separator))
+        }
+    }
 }

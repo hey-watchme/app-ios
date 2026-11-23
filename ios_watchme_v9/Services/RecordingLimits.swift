@@ -95,11 +95,11 @@ struct RecordingQuota: Decodable, Equatable {
     /// One line for the recording screen.
     var summary: String {
         guard let remaining = remainingSeconds, let limit = limitSeconds else { return "" }
-        return "今月の録音 残り\(Self.duration(remaining)) / \(Self.duration(limit))（\(renewsOn) に戻ります）"
+        return "今月の録音 残り\(Self.duration(remaining)) / \(Self.duration(limit))（次回更新日 \(renewsOn)）"
     }
 
     var usedUpMessage: String {
-        "今月の録音時間（\(Self.duration(limitSeconds ?? 0))）を使い切りました。\(renewsOn) から再び録音できます"
+        "今月の録音時間（\(Self.duration(limitSeconds ?? 0))）を使い切りました。次回更新日（\(renewsOn)）から再び録音できます"
     }
 
     static func fetch() async -> RecordingQuota? {
