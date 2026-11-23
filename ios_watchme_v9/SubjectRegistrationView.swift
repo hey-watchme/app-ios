@@ -40,6 +40,8 @@ struct SubjectRegistrationView: View {
     @State private var city: String = ""
     @State private var notes: String = ""
     @State private var currentAvatarUrl: String? = nil // アバターURL（アップロード後の即時更新用）
+    /// What the analysis reads as context: names, birth date, concerns, the home, this account
+    @StateObject private var context = SubjectContextForm()
 
     // UI状態
     @State private var isLoading = false
@@ -81,7 +83,8 @@ struct SubjectRegistrationView: View {
                prefecture != (subject.prefecture ?? "") ||
                trimmedCity != (subject.city ?? "") ||
                trimmedNotes != (subject.notes ?? "") ||
-               currentAvatarUrl != subject.avatarUrl
+               currentAvatarUrl != subject.avatarUrl ||
+               context.hasChanges
     }
     
     // 編集モードかどうかの判定
@@ -116,8 +119,21 @@ struct SubjectRegistrationView: View {
                     // 基本情報
                     basicInfoSection
 
-                    // メモ
+                    // 特性・診断
                     notesSection
+
+                    // Concerns, the people at home, the home, and who this account is
+                    SubjectContextSections(form: context, canEditSubject: !isViewOnly)
+
+                    // A view-only member has no save button in the bar: "about you" is saved here
+                    if isViewOnly && context.isMember {
+                        Button("あなたについてを保存") {
+                            Task { await saveMyContext() }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(.accentTeal)
+                        .disabled(!context.hasChanges || isLoading)
+                    }
 
                     // 削除ボタン（編集時かつ編集可能な場合のみ表示）
                     if isEditing && !isViewOnly {
@@ -171,6 +187,11 @@ struct SubjectRegistrationView: View {
             .onAppear {
                 loadEditingData()
                 applyInitialValuesIfNeeded()
+                if let subject = editingSubject {
+                    Task { await context.load(subjectId: subject.subjectId) }
+                } else {
+                    context.prepareNew()
+                }
                 // Calculate isViewOnly once on appear to avoid repeated array searches
                 if let entry = subjectManager.subjects.first(where: { $0.subjectId == subjectID }) {
                     isViewOnly = !entry.canEditSubject
@@ -303,17 +324,9 @@ struct SubjectRegistrationView: View {
                         .disabled(isViewOnly)
                 }
                 
-                // 年齢（任意）
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("年齢")
-                        .font(.subheadline)
-                        .fontWeight(.medium)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    
-                    AppTextField("例：25", text: $age)
-                        .keyboardType(.numberPad)
-                        .disabled(isViewOnly)
-                }
+                // What they are called, and the birth date (it replaces the age field: the age and
+                // school year are worked out from it; a stored age stays until a date is set)
+                SubjectIdentityFields(form: context, disabled: isViewOnly)
                 
                 // 性別（任意）
                 VStack(alignment: .leading, spacing: 8) {
@@ -436,16 +449,16 @@ struct SubjectRegistrationView: View {
     // MARK: - Notes Section
     private var notesSection: some View {
         VStack(spacing: 16) {
-            Text("メモ")
+            Text("特性・診断")
                 .font(.headline)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("補足情報やその他のメモがあれば記入してください")
+                Text("性格や好きなこと、行動の特徴、診断があれば書いてください。行動の読み方の手がかりになります")
                     .font(.caption)
                     .foregroundColor(.secondary)
 
-                AppTextField("例：趣味はランニング、朝型の生活リズム", text: $notes, axis: .vertical)
+                AppTextField("例：好奇心が強くマイペース。声をかけても、何度か言われてから動くことが多い", text: $notes, axis: .vertical)
                     .lineLimit(3...6)
                     .disabled(isViewOnly)
             }
@@ -588,6 +601,7 @@ struct SubjectRegistrationView: View {
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             )
             _ = currentUser
+            try await context.save(subjectId: subjectId, canEditSubject: true)
 
             await subjectManager.loadSubjects(for: currentUser.id)
             await MainActor.run { subjectManager.selectSubject(subjectId) }
@@ -647,6 +661,8 @@ struct SubjectRegistrationView: View {
                 notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines)
             )
 
+            try await context.save(subjectId: subject.subjectId, canEditSubject: true)
+
             // SubjectManagerのデータを強制的に再取得（最新のSubject情報を含む）
             if let userId = userAccountManager.currentUser?.id {
                 await subjectManager.loadSubjects(for: userId)
@@ -667,6 +683,19 @@ struct SubjectRegistrationView: View {
                 isLoading = false
                 errorMessage = "更新に失敗しました: \(error.localizedDescription)"
             }
+        }
+    }
+
+    /// A view-only member saves who they are to the subject.
+    private func saveMyContext() async {
+        guard let subject = editingSubject else { return }
+        isLoading = true
+        defer { isLoading = false }
+        do {
+            try await context.save(subjectId: subject.subjectId, canEditSubject: false)
+            showingSuccessAlert = true
+        } catch {
+            errorMessage = "保存に失敗しました: \(error.localizedDescription)"
         }
     }
 
