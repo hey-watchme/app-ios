@@ -105,8 +105,8 @@ struct DayStrip: View {
         .allowsHitTesting(false)
     }
 
-    static let emoji = ["reprimand": "😠", "conflict": "💢", "crying": "😢", "laughter": "😄", "praise": "👏"]
-    static let direction: [String: CGFloat] = ["praise": 1, "laughter": 1, "reprimand": -1, "conflict": -1, "crying": -1]
+    static let emoji = ["reprimand": "😠", "conflict": "💢", "crying": "😢", "laughter": "😄", "praise": "👏", "joy": "😊"]
+    static let direction: [String: CGFloat] = ["praise": 1, "laughter": 1, "joy": 1, "reprimand": -1, "conflict": -1, "crying": -1]
 
     /// The graded strength of a reprimand or conflict, the middle for the rest (as
     /// TimelineEvent.gradedStrength).

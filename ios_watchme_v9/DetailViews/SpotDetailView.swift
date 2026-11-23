@@ -430,8 +430,8 @@ struct SpotDetailView: View {
     private var metricsCard: some View {
         let order = speakerMetrics.map(\.id)
         return VStack(alignment: .leading, spacing: 12) {
-            DetailCardHeader(icon: "chart.bar.xaxis", title: "CONVERSATION",
-                             info: "文字起こしの時刻から計算。応答がマイナスなら、相手の話の途中で話し始めた。声の値は、その人だけが話している区間で測り、マイクや距離で変わる",
+            DetailCardHeader(icon: "chart.bar.xaxis", title: "SPEECH & VOICE", badge: "話し方と声",
+                             info: "話した割合・話す速さ・応答の速さは、文字起こしの時刻から計算（応答がマイナスなら、相手の話の途中で話し始めた）。声の値（F0 = 声の高さ、HNR = 声の澄み具合など）は openSMILE の eGeMAPS で、その人だけが話している区間で測る。マイクや距離で変わる",
                              expanded: $showsConversationMetrics)
 
             if showsConversationMetrics {

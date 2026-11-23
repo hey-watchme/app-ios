@@ -23,7 +23,7 @@ struct ReportMetric: Identifiable, Hashable {
     /// The axes of axes-and-score.md, as far as today's event types go. A mishap belongs to none yet.
     static let axes = [
         ReportMetric(id: "axis-trouble", name: "対人トラブル", eventTypes: ["reprimand", "conflict"]),
-        ReportMetric(id: "axis-positive", name: "肯定的な関わり", eventTypes: ["praise"]),
+        ReportMetric(id: "axis-positive", name: "肯定的な関わり", eventTypes: ["praise", "joy"]),
         ReportMetric(id: "axis-expression", name: "感情の表出", eventTypes: ["crying", "laughter"]),
         ReportMetric(id: "axis-body", name: "体調", eventTypes: ReportEvents.bodyTypes),
     ]

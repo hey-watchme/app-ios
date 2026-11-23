@@ -30,7 +30,7 @@ struct TimelineEvent: Identifiable {
 
     /// The emoji of an event with feeling in it; nil for the ones written as a small word.
     var emoji: String? {
-        ["reprimand": "😠", "conflict": "💢", "crying": "😢", "laughter": "😄", "praise": "👏"][type]
+        ["reprimand": "😠", "conflict": "💢", "crying": "😢", "laughter": "😄", "praise": "👏", "joy": "😊"][type]
     }
 
     /// The word for an event without an emoji (body sounds, a mishap).
@@ -41,7 +41,7 @@ struct TimelineEvent: Identifiable {
     /// +1 for warm events (drawn above the middle line), -1 for hard ones, nil for the words.
     var direction: Double? {
         switch type {
-        case "praise", "laughter": return 1
+        case "praise", "laughter", "joy": return 1
         case "reprimand", "conflict", "crying": return -1
         default: return nil
         }
@@ -102,9 +102,9 @@ struct VoicePoint: Identifiable {
 
 /// Which measurement of the voice the band behind the events shows.
 enum VoiceMeasure: String, CaseIterable, Identifiable {
-    case strain = "張り"
-    case loudness = "大きさ"
-    case pitch = "高さ"
+    case strain = "Hammarberg"
+    case loudness = "ラウドネス"
+    case pitch = "F0"
     var id: String { rawValue }
 
     func value(_ point: VoicePoint) -> Double? {

@@ -278,15 +278,17 @@ struct SpotEventsCard: View {
     /// The event picked on the timeline (its seq); the balloon under the picture shows it.
     @State private var selectedSeq: Int?
 
-    static let typeOrder = ["reprimand", "praise", "laughter", "crying", "conflict", "mishap",
+    static let typeOrder = ["reprimand", "joy", "praise", "laughter", "crying", "conflict", "mishap",
                             "cough", "sneeze", "throat_clearing"]
     static let typeNames = [
-        "reprimand": "叱責", "praise": "褒める", "laughter": "笑い",
+        "reprimand": "叱責", "joy": "楽しい場面", "praise": "褒める", "laughter": "笑い",
         "crying": "泣く", "conflict": "口論", "mishap": "落とす・こぼす",
         "cough": "咳", "sneeze": "くしゃみ", "throat_clearing": "咳払い",
     ]
     // The strength of a reprimand or conflict; from events-v3 it comes from the measured voice.
     static let intensityNames = ["mild": "（穏やか）", "strong": "（強め）", "severe": "（非常に強い）"]
+    // Joy's level comes from how far the voice went up (events-v4).
+    static let joyIntensityNames = ["strong": "（弾んだ声）", "severe": "（とても弾んだ声）"]
     static let roleNames = ["subject": "本人", "adult": "大人", "other_child": "ほかの子ども", "unknown": "不明"]
     static let activityNames = [
         "meal": "食事", "homework_study": "宿題・勉強", "play": "遊び", "getting_ready": "身支度",
@@ -412,8 +414,11 @@ struct SpotEventsCard: View {
 
     /// How to read the picture (behind the (i) of the card).
     static let timelineInfo = """
-        横は録音の時間です。中央の線より上はあたたかい出来事（笑う・褒める）、下はきつい出来事（叱責・口論・泣く）。        線から離れているほど、その前後の声が強かった場面です。
-        後ろの波は話していた声で、下のボタンで張り・大きさ・高さを切り替えます。その人のこの録音でのふだんより強いほど膨らみます。誰も話していないところは平らです。
+        横は録音の時間です。中央の線より上はあたたかい出来事（楽しい場面・笑う・褒める）、下はきつい出来事（叱責・口論・泣く）。        線から離れているほど、その前後の声が強かった場面です。
+        後ろの波は話していた声で、下のボタンで次の 3 つを切り替えます。どれも、その人のこの録音でのふだんの値からどれだけ離れたかで膨らみます。誰も話していないところは平らです。
+        ・Hammarberg 指数（声の緊張）: 0〜2 kHz と 2〜5 kHz の一番強い成分の差（dB、eGeMAPS）。低いほど高い周波数が強い、張り詰めた声
+        ・ラウドネス（声の大きさ）: 聞こえの大きさ。マイクとの距離でも変わる
+        ・F0（声の高さ）: 基本周波数（半音）
         絵文字を押すと、そのときの言葉と再生ボタンが出ます。
         """
 
@@ -427,7 +432,7 @@ struct SpotEventsCard: View {
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
                     .foregroundColor(Color(white: 0.55))
                 Text((Self.typeNames[event.event_type] ?? event.event_type)
-                     + (Self.intensityNames[event.intensity ?? ""] ?? ""))
+                     + ((event.event_type == "joy" ? Self.joyIntensityNames : Self.intensityNames)[event.intensity ?? ""] ?? ""))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(.white)
                 Text(whoText(event))
