@@ -291,7 +291,7 @@ struct MainAppView: View {
             subjectManager.selectSubject(own.subjectId)
         }
         if subjectManager.selectedEntry?.isViewer == true {
-            toastManager.showError(title: "録音できません", subtitle: "この分析対象は見るだけの共有です。録音は共有した人に頼んでください")
+            toastManager.showError(title: "録音できません", subtitle: "この分析対象は閲覧のみです。録音は、録音・編集できる人が行います")
             return
         }
         aiConsentGranted = AIProcessingConsent.isGranted(userId: userAccountManager.currentUser?.id)
@@ -394,7 +394,7 @@ struct MainAppView: View {
         Task {
             do {
                 let name = try await subjectManager.join(code: code, userId: userId)
-                await MainActor.run { toastManager.showSuccess(title: "\(name)の共有に参加しました") }
+                await MainActor.run { toastManager.showSuccess(title: "\(name)を追加しました") }
             } catch {
                 await MainActor.run { toastManager.showError(title: "招待を受けられませんでした", subtitle: error.localizedDescription) }
             }

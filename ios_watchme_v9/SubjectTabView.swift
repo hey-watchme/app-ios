@@ -179,6 +179,10 @@ struct SubjectTabView: View {
                                             .foregroundColor(Color(white: 0.56))
                                     }
 
+                                    if subjectManager.selectedEntry?.isViewer == true {
+                                        ViewOnlyBadge()
+                                    }
+
                                     // 年齢・性別・地域を1行で表示
                                     HStack(spacing: 6) {
                                         if let age = subject.age {
@@ -324,7 +328,7 @@ struct SubjectTabView: View {
                let entry = subjectManager.selectedEntry, !entry.isDemo, entry.role != nil {
                 SubjectSharingSection(entry: entry, onLeft: { dismiss() })
             }
-            section("ほかの分析対象") {
+            section("登録済みの分析対象") {
                 VStack(spacing: 0) {
                     ForEach(otherSubjects, id: \.subjectId) { entry in
                         Button { switchTo(entry) } label: {
@@ -339,7 +343,7 @@ struct SubjectTabView: View {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.system(size: 22))
                                     .foregroundColor(.accentTeal)
-                                Text("分析対象を増やす")
+                                Text("分析対象を追加")
                                     .font(.system(size: 15, weight: .medium))
                                     .foregroundColor(.accentTeal)
                                 Spacer()
@@ -360,7 +364,7 @@ struct SubjectTabView: View {
                                 Image(systemName: "qrcode.viewfinder")
                                     .font(.system(size: 22))
                                     .foregroundColor(.accentTeal)
-                                Text("QR を読んで共有に参加")
+                                Text("QRコードから追加")
                                     .font(.system(size: 15, weight: .medium))
                                     .foregroundColor(.accentTeal)
                                 Spacer()

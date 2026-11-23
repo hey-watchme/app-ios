@@ -34,7 +34,7 @@ struct SubjectSharingSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("共有")
+            Text("共有中のアカウント")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(white: 0.56))
             VStack(spacing: 0) {
@@ -57,7 +57,7 @@ struct SubjectSharingSection: View {
                 }
                 if canLeave {
                     if entry.isOwner { Divider().background(Color.white.opacity(0.08)) }
-                    actionRow(title: "共有をやめる", systemImage: "rectangle.portrait.and.arrow.right", color: .accentCoral) {
+                    actionRow(title: "解除する", systemImage: "rectangle.portrait.and.arrow.right", color: .accentCoral) {
                         showLeaveConfirm = true
                     }
                 }
@@ -90,21 +90,18 @@ struct SubjectSharingSection: View {
         } message: {
             Text("この分析対象の記録が見られなくなります。録音と分析結果は残ります。")
         }
-        .alert("共有をやめますか？", isPresented: $showLeaveConfirm) {
+        .alert("この分析対象を解除しますか？", isPresented: $showLeaveConfirm) {
             Button("キャンセル", role: .cancel) { }
-            Button("共有をやめる", role: .destructive) { leave() }
+            Button("解除する", role: .destructive) { leave() }
         } message: {
-            Text("\(entry.displayName)の記録が、このアカウントから見られなくなります。録音と分析結果はほかの人のために残ります。もう一度見るには、招待してもらう必要があります。")
+            Text("\(entry.displayName)の記録が、このアカウントから見られなくなります。録音と分析結果はほかの人のために残ります。もう一度見るには、QR コードを出してもらって追加し直します。")
         }
     }
 
     /// Only for situations the list does not explain; how invites work is on the QR screen.
     private var footnote: String? {
-        if entry.isViewer {
-            return "見るだけの共有です。録音とプロフィールの編集は、録音・編集できる人が行います。"
-        }
         if !canLeave && members.count > 1 {
-            return "録音・編集できる人がほかにいないため、共有をやめられません。分析対象を削除すると、共有している人も見られなくなります。"
+            return "録音・編集できる人がほかにいないため、解除できません。分析対象を削除すると、共有中のアカウントからも見られなくなります。"
         }
         return nil
     }
@@ -118,7 +115,7 @@ struct SubjectSharingSection: View {
                 Text(member.displayName + (member.isMe ? "（あなた）" : ""))
                     .font(.system(size: 15))
                     .foregroundColor(.white)
-                Text(member.isOwner ? "録音・編集できる" : "見るだけ")
+                Text(member.isOwner ? "録音・編集できる" : "閲覧のみ")
                     .font(.system(size: 12))
                     .foregroundColor(Color(white: 0.56))
             }
@@ -188,15 +185,47 @@ struct SubjectSharingSection: View {
                 }
                 await MainActor.run {
                     isWorking = false
-                    toastManager.showSuccess(title: "\(entry.displayName)の共有をやめました")
+                    toastManager.showSuccess(title: "\(entry.displayName)を解除しました")
                     onLeft()
                 }
             } catch {
                 await MainActor.run {
                     isWorking = false
-                    toastManager.showError(title: "共有をやめられませんでした", subtitle: error.localizedDescription)
+                    toastManager.showError(title: "解除できませんでした", subtitle: error.localizedDescription)
                 }
             }
+        }
+    }
+}
+
+// MARK: - View-only badge
+
+/// 閲覧のみ, next to the subject's name; tapping it explains what that means.
+struct ViewOnlyBadge: View {
+    @State private var showInfo = false
+
+    var body: some View {
+        Button { showInfo = true } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "eye")
+                Text("閲覧のみ")
+            }
+            .font(.system(size: 11, weight: .medium))
+            .foregroundColor(.accentTeal)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 3)
+            .background(Capsule().fill(Color.accentTeal.opacity(0.15)))
+        }
+        .buttonStyle(.plain)
+        .popover(isPresented: $showInfo) {
+            Text("あなたはこの分析対象を閲覧のみで共有されています。記録と分析結果は見られますが、録音・取り込み・プロフィールの編集はできません。")
+                .font(.system(size: 13))
+                .foregroundColor(.white)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(width: 260)
+                .padding(14)
+                .presentationCompactAdaptation(.popover)
+                .presentationBackground(Color.darkElevated)
         }
     }
 }
@@ -245,7 +274,7 @@ struct SubjectInviteSheet: View {
             Text("招待する人にできること")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(Color(white: 0.56))
-            roleOption("viewer", title: "見るだけ", detail: "記録と分析結果を見られます。録音・プロフィールの編集・招待はできません。")
+            roleOption("viewer", title: "閲覧のみ", detail: "記録と分析結果を見られます。録音・プロフィールの編集・招待はできません。")
             roleOption("owner", title: "録音・編集もできる", detail: "あなたと同じように、録音・プロフィールの編集・ほかの人の招待ができます。")
 
             if let errorMessage {
@@ -304,7 +333,7 @@ struct SubjectInviteSheet: View {
         TimelineView(.periodic(from: .now, by: 1)) { context in
             let remaining = max(0, Int(invite.expiresAt.timeIntervalSince(context.date)))
             VStack(spacing: 16) {
-                Text(role == "owner" ? "録音・編集もできる招待" : "見るだけの招待")
+                Text(role == "owner" ? "録音・編集もできる招待" : "閲覧のみの招待")
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(.white)
                 if remaining > 0, let image = QRCodeService.image(for: invite.url) {
@@ -319,7 +348,7 @@ struct SubjectInviteSheet: View {
                     Text("あと \(remaining / 60):\(String(format: "%02d", remaining % 60)) 有効・1 回だけ使えます")
                         .font(.system(size: 13).monospacedDigit())
                         .foregroundColor(Color(white: 0.56))
-                    Text("相手の iPhone で WatchMe を開き、「分析対象」→「QR を読んで共有に参加」で読み取ってもらってください。")
+                    Text("相手の iPhone で WatchMe を開き、「分析対象」→「QRコードから追加」で読み取ってもらってください。")
                         .font(.system(size: 13))
                         .foregroundColor(Color(white: 0.56))
                         .multilineTextAlignment(.center)
@@ -387,7 +416,7 @@ struct JoinSubjectSheet: View {
                     ProgressView().tint(.white)
                 }
             }
-            .navigationTitle("QR を読んで共有に参加")
+            .navigationTitle("QRコードから追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(Color.darkBase, for: .navigationBar)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -407,7 +436,7 @@ struct JoinSubjectSheet: View {
             VStack(spacing: 8) {
                 if isJoining {
                     ProgressView().tint(.white)
-                    Text("参加しています…")
+                    Text("追加しています…")
                 } else if let errorMessage {
                     Text(errorMessage)
                         .foregroundColor(.accentCoral)
@@ -448,7 +477,7 @@ struct JoinSubjectSheet: View {
             do {
                 let name = try await subjectManager.join(code: code, userId: userId)
                 await MainActor.run {
-                    toastManager.showSuccess(title: "\(name)の共有に参加しました")
+                    toastManager.showSuccess(title: "\(name)を追加しました")
                     dismiss()
                     onJoined()
                 }
