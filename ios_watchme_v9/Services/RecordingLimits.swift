@@ -44,3 +44,63 @@ enum RecordingLimits {
         }
     }
 }
+
+/// This account's recording time this month (my_recording_quota() on the server).
+/// The month runs from the day the account was made; admins have no limit.
+struct RecordingQuota: Decodable, Equatable {
+    let plan: String
+    let limitSeconds: Double?
+    let usedSeconds: Double
+    let remainingSeconds: Double?
+    let periodEnd: String
+
+    enum CodingKeys: String, CodingKey {
+        case plan, limitSeconds = "limit_seconds", usedSeconds = "used_seconds",
+             remainingSeconds = "remaining_seconds", periodEnd = "period_end"
+    }
+
+    var isUnlimited: Bool { remainingSeconds == nil }
+    var isUsedUp: Bool { (remainingSeconds ?? 1) <= 0 }
+
+    /// When the month starts again, e.g. "12/10".
+    var renewsOn: String {
+        let parser = ISO8601DateFormatter()
+        parser.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let date = parser.date(from: periodEnd) ?? {
+            parser.formatOptions = [.withInternetDateTime]
+            return parser.date(from: periodEnd)
+        }()
+        guard let date else { return "" }
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "ja_JP")
+        f.dateFormat = "M/d"
+        return f.string(from: date)
+    }
+
+    static func duration(_ seconds: Double) -> String {
+        let minutes = Int((seconds / 60).rounded(.down))
+        let h = minutes / 60, m = minutes % 60
+        if h == 0 { return "\(m)分" }
+        return m == 0 ? "\(h)時間" : "\(h)時間\(m)分"
+    }
+
+    /// One line for the recording screen.
+    var summary: String {
+        guard let remaining = remainingSeconds, let limit = limitSeconds else { return "" }
+        return "今月の録音 残り\(Self.duration(remaining)) / \(Self.duration(limit))（\(renewsOn) に戻ります）"
+    }
+
+    var usedUpMessage: String {
+        "今月の録音時間（\(Self.duration(limitSeconds ?? 0))）を使い切りました。\(renewsOn) から再び録音できます"
+    }
+
+    static func fetch() async -> RecordingQuota? {
+        do {
+            let quota: RecordingQuota? = try await supabase.rpc("my_recording_quota").execute().value
+            return quota
+        } catch {
+            print("⚠️ RecordingQuota: could not read: \(error)")
+            return nil
+        }
+    }
+}

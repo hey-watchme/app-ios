@@ -403,6 +403,8 @@ final class ChunkUploader: NSObject, ObservableObject {
             switch self {
             case .http(404, _): return "この分析対象がサーバーに見つかりません。分析対象を選び直してください"
             case .http(401, _): return "ログインの確認ができませんでした。ログインし直すと送られます"
+            case .http(403, let detail) where detail?.contains("used up") == true:
+                return "今月の録音時間を使い切ったため、送れませんでした"
             case .http(403, _): return "この分析対象を録音する権限がありません"
             case .http(let status, let detail): return "サーバーが受け付けませんでした（\(status)\(detail.map { ": \($0)" } ?? "")）"
             case .badResponse: return "サーバーの応答が読めませんでした"

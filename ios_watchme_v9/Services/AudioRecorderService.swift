@@ -110,7 +110,8 @@ final class AudioRecorderService: NSObject {
     }
 
     /// Start a session. Returns its id. Throws when nothing was recorded.
-    func startSession(subjectId: String, timezone: TimeZone) throws -> String {
+    /// `limitSeconds` stops the session early (what is left of the month); never beyond the per-recording limit.
+    func startSession(subjectId: String, timezone: TimeZone, limitSeconds: TimeInterval? = nil) throws -> String {
         guard session == nil else { throw RecordingError.alreadyRecording }
         try ensureFreeSpace()
 
@@ -125,7 +126,8 @@ final class AudioRecorderService: NSObject {
 
         limitTimer?.invalidate()
         // The limit in force when the session starts holds for the whole session.
-        limitTimer = Timer.scheduledTimer(withTimeInterval: Self.maxSessionSeconds, repeats: false) { [weak self] _ in
+        let limit = min(Self.maxSessionSeconds, max(limitSeconds ?? .infinity, 1))
+        limitTimer = Timer.scheduledTimer(withTimeInterval: limit, repeats: false) { [weak self] _ in
             self?.endSession(.limitReached)
         }
         print("🎙️ AudioRecorderService: session started \(newSession.id)")

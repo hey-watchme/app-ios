@@ -27,6 +27,10 @@ struct RecordingState {
     // Sending: everything on the device the server has not confirmed (not the chunk being written)
     var pending: [ChunkRecord] = []
 
+    // This month's recording time (nil until read, or when it could not be read)
+    var quota: RecordingQuota?
+    var stoppedByQuota = false
+
     // Errors shown inside the recording sheet
     var errorMessage: String?
     var showError = false
@@ -135,9 +139,23 @@ final class RecordingStore: ObservableObject {
             return
         }
 
+        // The month's recording time: refuse when it is used up, stop when it runs out.
+        // When it cannot be read, the server still refuses a recording past the limit.
+        let quota = await RecordingQuota.fetch()
+        if let quota { state.quota = quota }
+        if let quota, quota.isUsedUp {
+            presentError(quota.usedUpMessage)
+            return
+        }
+        let remaining = quota?.remainingSeconds
+        state.stoppedByQuota = false
+
         do {
             try audioService.configureAudioSession()
-            let sessionId = try audioService.startSession(subjectId: subjectId, timezone: subjectManager.selectedTimezone)
+            let sessionId = try audioService.startSession(subjectId: subjectId, timezone: subjectManager.selectedTimezone,
+                                                          limitSeconds: remaining)
+            quotaEndsSession = remaining.map { $0 < AudioRecorderService.maxSessionSeconds } ?? false
+            sessionLimitSeconds = quotaEndsSession ? remaining : nil
             state.isRecording = true
             uploader.isRecording = true
             state.isInterrupted = false
@@ -154,6 +172,19 @@ final class RecordingStore: ObservableObject {
         }
     }
 
+    /// Read this month's recording time again (the recording screen shows it).
+    func refreshQuota() async {
+        if let quota = await RecordingQuota.fetch() { state.quota = quota }
+    }
+
+    private var quotaEndsSession = false
+    private var sessionLimitSeconds: TimeInterval?
+
+    /// How long the current recording can run: the per-recording limit, or what is left of the month.
+    var sessionLimitMinutes: Int {
+        Int(((sessionLimitSeconds ?? AudioRecorderService.maxSessionSeconds) / 60).rounded(.down))
+    }
+
     func stopRecording() async {
         guard state.isRecording else { return }
         audioService.stopSession()   // state is updated from sessionEnded
@@ -167,6 +198,10 @@ final class RecordingStore: ObservableObject {
         }
         guard !subjectManager.isSampleSelected else {
             throw AudioImportError.readFailed("サンプルには取り込めません。ご自分の分析対象を選んでください")
+        }
+        if let quota = await RecordingQuota.fetch() {
+            state.quota = quota
+            if quota.isUsedUp { throw AudioImportError.readFailed(quota.usedUpMessage) }
         }
         var shown = -1
         let result = try await AudioImporter.importFile(
@@ -244,6 +279,12 @@ final class RecordingStore: ObservableObject {
         switch reason {
         case .stopped:
             ToastManager.shared.showInfo(title: "録音を送っています", subtitle: "届き次第お知らせします")
+        case .limitReached where quotaEndsSession:
+            state.stoppedByQuota = true
+            ToastManager.shared.announce(
+                title: "今月の録音時間を使い切ったので録音を止めました",
+                subtitle: "ここまでの録音を送ります。\(state.quota?.renewsOn ?? "")から再び録音できます"
+            )
         case .limitReached:
             ToastManager.shared.announce(
                 title: "\(Self.maxMinutes)分に達したので録音を止めました",

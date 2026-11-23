@@ -65,6 +65,15 @@ struct FullScreenRecordingView: View {
                         .padding(.top, 6)
                 }
 
+                if let quota = store.state.quota, !quota.isUnlimited {
+                    Text(quota.summary)
+                        .font(.footnote)
+                        .foregroundColor(quota.isUsedUp ? .accentCoral : .white.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+                }
+
                 Spacer()
 
                 // 録音制御ボタンとビデオ選択ボタン
@@ -149,6 +158,7 @@ struct FullScreenRecordingView: View {
 
             Task {
                 await store.initialize()
+                await store.refreshQuota()
             }
         }
         .onDisappear {
@@ -237,7 +247,7 @@ struct FullScreenRecordingView: View {
 
     /// While recording, only "sending" now and then: the 5-minute pieces are the machine's business.
     private var sessionProgressText: String {
-        let limit = "\(RecordingStore.maxMinutes)分で自動的に終了します"
+        let limit = "\(store.sessionLimitMinutes)分で自動的に終了します"
         guard let sessionId = store.state.currentSessionId else { return limit }
         let sending = store.state.pending.contains { $0.sessionId == sessionId }
         return sending ? "録音データを送信中・\(limit)" : limit
