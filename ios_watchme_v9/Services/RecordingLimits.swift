@@ -60,6 +60,14 @@ struct RecordingQuota: Decodable, Equatable {
     }
 
     var isUnlimited: Bool { remainingSeconds == nil }
+
+    var planLabel: String {
+        switch plan {
+        case "admin": return "管理者（録音時間の上限なし）"
+        case "premium": return "プレミアム"
+        default: return "無料"
+        }
+    }
     var isUsedUp: Bool { (remainingSeconds ?? 1) <= 0 }
 
     /// When the month starts again, e.g. "12/10".

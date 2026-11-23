@@ -14,12 +14,14 @@ struct UserInfoView: View {
     @EnvironmentObject var dataManager: SupabaseDataManager
     @State private var showAccountSettings = false  // アカウント設定画面
     @State private var showSignUpPrompt = false  // sample mode: sign-up sheet
+    @State private var quota: RecordingQuota? = nil  // this month's recording time
     @EnvironmentObject var subjectManager: SubjectManager
     @Environment(\.dismiss) private var dismiss
     
     var body: some View {
         ZStack {
             Color.darkBase.ignoresSafeArea()
+                .task { quota = await RecordingQuota.fetch() }
             
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
@@ -236,6 +238,27 @@ struct UserInfoView: View {
 
                             InfoListRow(label: "会員登録日", value: "未設定", valueColor: Color(white: 0.56))
                             InfoListRow(label: "ユーザーID", value: "未設定", showDivider: false, valueColor: Color(white: 0.56))
+                        }
+                    }
+
+                    // This month's recording time and the plan (signed-in users)
+                    if userAccountManager.currentUser != nil {
+                        InfoListSection(title: "ご利用状況") {
+                            if let quota {
+                                InfoListRow(label: "プラン", value: quota.planLabel)
+                                if quota.isUnlimited {
+                                    InfoListRow(label: "今月の録音", value: "\(RecordingQuota.duration(quota.usedSeconds))（上限なし）")
+                                } else {
+                                    InfoListRow(label: "今月の録音",
+                                                value: "\(RecordingQuota.duration(quota.usedSeconds)) / \(RecordingQuota.duration(quota.limitSeconds ?? 0))")
+                                    InfoListRow(label: "残り", value: RecordingQuota.duration(quota.remainingSeconds ?? 0),
+                                                valueColor: quota.isUsedUp ? .accentCoral : .primary)
+                                }
+                                InfoListRow(label: "次に戻る日", value: quota.renewsOn)
+                            } else {
+                                InfoListRow(label: "今月の録音", value: "読み込み中…", valueColor: Color(white: 0.56))
+                            }
+                            InfoListRow(label: "1 回の録音の上限", value: "\(RecordingLimits.maxMinutes)分", showDivider: false)
                         }
                     }
 
