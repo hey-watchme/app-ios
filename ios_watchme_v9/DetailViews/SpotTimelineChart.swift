@@ -47,8 +47,8 @@ struct TimelineEvent: Identifiable {
         }
     }
 
-    /// How strong it was, 0...1, when no voice was measured: the graded strength of a
-    /// reprimand or conflict, the middle for the rest.
+    /// How strong it was, 0...1: the graded strength of a reprimand or conflict (from the
+    /// analysis), the middle for the rest.
     var gradedStrength: Double {
         switch intensity {
         case "severe": return 1
@@ -58,7 +58,8 @@ struct TimelineEvent: Identifiable {
         }
     }
 
-    /// Height of an event with no voice to go by; the chart uses the measured voice when it has it.
+    /// Height of the event: its kind sets the side of the middle line, its own graded strength
+    /// the distance. The voice band behind does not move it.
     var height: Double {
         guard let direction else { return timelineWordRows[0] }
         return direction * (timelineMinReach + timelineReachSpan * gradedStrength)
@@ -196,26 +197,16 @@ struct SpotTimelineChart<Balloon: View>: View {
         }
     }
 
-    /// How strong the voice was around an event, 0...1 against this recording's strongest voices.
-    private func voiceStrength(_ event: TimelineEvent, reference: Double) -> Double? {
-        let around = voice.filter { $0.end >= event.start - 1 && $0.start <= event.end + 1 }
-            .compactMap { measure.value($0) }
-        guard let strongest = around.max() else { return nil }
-        return min(max(strongest / reference, 0), 1)
-    }
-
-    /// Where each event is drawn. An emoji sits above or below the middle line by its kind,
-    /// and further out the stronger the voice around it was, so the picture spreads over the
-    /// whole height. A word that would run into the word before it drops a row.
+    /// Where each event is drawn. An emoji sits above or below the middle line by its kind, and
+    /// further out the stronger the event itself was (TimelineEvent.height); the voice measure
+    /// chosen for the band never moves it. A word that would run into the word before it drops a row.
     private var heights: [Int: Double] {
-        let reference = bandReference
         let span = xDomain.upperBound - xDomain.lowerBound
         var rowEnds = [Double](repeating: -.infinity, count: timelineWordRows.count)
         var heights: [Int: Double] = [:]
         for event in events.sorted(by: { $0.start < $1.start }) {
-            if let direction = event.direction {
-                let strength = voiceStrength(event, reference: reference) ?? event.gradedStrength
-                heights[event.id] = direction * (timelineMinReach + timelineReachSpan * strength)
+            if event.direction != nil {
+                heights[event.id] = event.height
                 continue
             }
             // About 3.5% of the width per character at this size, centred on the event
