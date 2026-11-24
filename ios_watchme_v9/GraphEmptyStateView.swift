@@ -13,22 +13,16 @@ struct GraphEmptyStateView: View {
 
     enum GraphType {
         case vibe
-        case behavior
-        case emotion
 
         var defaultIcon: String {
             switch self {
             case .vibe: return "chart.line.uptrend.xyaxis"
-            case .behavior: return "chart.bar.doc.horizontal"
-            case .emotion: return "heart.text.square"
             }
         }
 
         var dataTypeName: String {
             switch self {
             case .vibe: return "recording"
-            case .behavior: return "behavior"
-            case .emotion: return "emotion"
             }
         }
     }

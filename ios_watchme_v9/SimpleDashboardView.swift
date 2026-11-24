@@ -18,11 +18,8 @@ struct LoadDataTrigger: Equatable {
 // 📊 パフォーマンス最適化: キャッシュデータ構造（Phase 1-A）
 struct CachedDashboardData {
     let dashboardSummary: DashboardSummary?
-    let behaviorReport: BehaviorReport?
-    let emotionReport: EmotionReport?
     let subject: Subject?
     let timeBlocks: [DashboardTimeBlock]  // グラフ用データ
-    let cachedEmotionPercentages: [(String, Double, String, Color)]
     let timestamp: Date
 }
 
@@ -68,8 +65,6 @@ struct SimpleDashboardView: View {
     @State private var showStickyHeader = false
     
     // 各データを個別に管理（シンプルに）
-    @State private var behaviorReport: BehaviorReport?
-    @State private var emotionReport: EmotionReport?
     @State private var subject: Subject?
     @State private var dashboardSummary: DashboardSummary?  // メインデータソース
     @State private var timeBlocks: [DashboardTimeBlock] = []  // グラフ用データ（spot_results）
@@ -84,8 +79,6 @@ struct SimpleDashboardView: View {
     @State private var highlightBlocks: [DashboardTimeBlock] = []  // ハイライト表示用
     @State private var showHighlightSection = false  // ハイライトセクション表示判定
 
-    // 📊 パフォーマンス最適化: 計算結果のキャッシュ
-    @State private var cachedEmotionPercentages: [(String, Double, String, Color)] = []
 
     // 📊 パフォーマンス最適化: データキャッシュ（Phase 1-A）
     @State private var dataCache: [String: CachedDashboardData] = [:]
@@ -104,8 +97,6 @@ struct SimpleDashboardView: View {
     @State private var lastHandledPushTimestamp: Date?
 
     // モーダル表示管理
-    @State private var showBehaviorSheet = false
-    @State private var showEmotionSheet = false
     @State private var selectedSpotForDetail: DashboardTimeBlock?
     /// Finished results the person has looked at (the activity card does not repeat them).
     @State private var activitySeen = ActivitySeen.load()
@@ -265,11 +256,8 @@ struct SimpleDashboardView: View {
                 if shouldUseCachedData(cached, for: localDate, timezone: currentTimezone) {
                     await MainActor.run {
                         self.dashboardSummary = cached.dashboardSummary
-                        self.behaviorReport = cached.behaviorReport
-                        self.emotionReport = cached.emotionReport
                         self.subject = cached.subject
                         self.timeBlocks = cached.timeBlocks  // グラフ用データ
-                        self.cachedEmotionPercentages = cached.cachedEmotionPercentages
 
                         // Phase 2: キャッシュ復元時もフィルタリング実行
                         self.updateFilteredData()
@@ -330,11 +318,8 @@ struct SimpleDashboardView: View {
             await MainActor.run {
                 let cached = CachedDashboardData(
                     dashboardSummary: self.dashboardSummary,
-                    behaviorReport: self.behaviorReport,
-                    emotionReport: self.emotionReport,
                     subject: self.subject,
                     timeBlocks: self.timeBlocks,  // グラフ用データ
-                    cachedEmotionPercentages: self.cachedEmotionPercentages,
                     timestamp: Date()
                 )
 
@@ -399,38 +384,6 @@ struct SimpleDashboardView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             refreshCurrentDayIfNeeded(reason: "significantTimeChange")
-        }
-        .sheet(isPresented: $showBehaviorSheet) {
-            NavigationView {
-                BehaviorGraphView(selectedDate: displayDate)
-                    .environmentObject(subjectManager)
-                    .environmentObject(dataManager)
-                    .navigationBarTitleDisplayMode(.large)
-                    .navigationTitle("行動グラフ")
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            CloseButton {
-                                showBehaviorSheet = false
-                            }
-                        }
-                    }
-            }
-        }
-        .sheet(isPresented: $showEmotionSheet) {
-            NavigationView {
-                EmotionGraphView(selectedDate: displayDate)
-                    .environmentObject(subjectManager)
-                    .environmentObject(dataManager)
-                    .navigationBarTitleDisplayMode(.large)
-                    .navigationTitle("感情グラフ")
-                    .toolbar {
-                        ToolbarItem(placement: .navigationBarTrailing) {
-                            CloseButton {
-                                showEmotionSheet = false
-                            }
-                        }
-                    }
-            }
         }
         .sheet(item: $selectedSpotForDetail) { spot in
             if let subjectId = subjectManager.selectedSubjectID {
@@ -604,237 +557,7 @@ struct SimpleDashboardView: View {
         highlightBlocks = conversationBlocks.reversed()
     }
 
-    // Highlight section (conversation-focused, no fallback)
-    private var behaviorGraphCard: some View {
-        UnifiedCard(
-            title: "行動",
-            navigationLabel: "行動詳細",
-            onNavigate: { }
-        ) {
-            if let behaviorReport = behaviorReport {
-                VStack(spacing: 8) {
-                    let filteredRanking = behaviorReport.summaryRanking.filter { 
-                        $0.event.lowercased() != "other" && $0.event.lowercased() != "その他" 
-                    }
-                    
-                    if let topBehavior = filteredRanking.first {
-                        VStack(spacing: 8) {
-                            Text("🚶")
-                                .font(.system(size: 108))  // 1.5倍に拡大（72 * 1.5 = 108）
-
-                            HStack(spacing: 8) {
-                                Text(topBehavior.event)
-                                    .font(.caption)
-                                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                                    .textCase(.uppercase)
-                                    .tracking(1.0)
-
-                                Text("\(topBehavior.count)回")
-                                    .font(.caption)
-                                    .fontWeight(.semibold)
-                                    .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                            }
-                        }
-                        .padding(.bottom, 30)  // 下に30px余白
-                    }
-                    
-                    behaviorReportContent(behaviorReport)
-                }
-            } else {
-                if subjectManager.selectedSubjectID == nil {
-                    SubjectNotSelectedView(graphType: .behavior, isCompact: true)
-                } else {
-                    GraphEmptyStateView(graphType: .behavior, isCompact: true)
-                }
-            }
-        }
-        .onTapGesture {
-            showBehaviorSheet = true
-        }
-    }
-    
-    private var emotionGraphCard: some View {
-        UnifiedCard(
-            title: "感情",
-            navigationLabel: "感情詳細",
-            onNavigate: { }
-        ) {
-            if let emotionReport = emotionReport {
-                emotionReportContent(emotionReport)
-            } else {
-                if subjectManager.selectedSubjectID == nil {
-                    SubjectNotSelectedView(graphType: .emotion, isCompact: true)
-                } else {
-                    GraphEmptyStateView(graphType: .emotion, isCompact: true)
-                }
-            }
-        }
-        .onTapGesture {
-            showEmotionSheet = true
-        }
-    }
-    
-    private func behaviorReportContent(_ report: BehaviorReport) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            let filteredRanking = report.summaryRanking.filter {
-                $0.event.lowercased() != "other" && $0.event.lowercased() != "その他"
-            }
-            
-            if filteredRanking.count > 1 {
-                VStack(alignment: .leading, spacing: 10) {
-                    ForEach(Array(filteredRanking.prefix(10).enumerated()), id: \.element.id) { index, behavior in
-                        HStack(spacing: 8) {
-                            Text("\(index + 1)")
-                                .font(.body)  // caption → body
-                                .fontWeight(.medium)
-                                .foregroundStyle(Color.safeColor("BehaviorTextSecondary"))
-                                .frame(width: 24, alignment: .leading)
-
-                            Text(behavior.event)
-                                .font(.body)  // subheadline → body
-                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                                .lineLimit(1)
-
-                            Spacer()
-
-                            Text("\(behavior.count)")
-                                .font(.body)  // caption → body
-                                .foregroundStyle(Color.safeColor("BehaviorTextTertiary"))
-                        }
-                    }
-                }
-                .padding()
-                .background(Color.safeColor("CardBackground"))
-                .cornerRadius(8)
-            }
-        }
-    }
-    
-    // 感情データの計算用のヘルパー関数
-    // 📊 パフォーマンス最適化: 1回のループで全感情の合計を計算（Phase 3-A）
-    private func calculateEmotionPercentages(from activeTimePoints: [EmotionTimePoint]) -> [(String, Double, String, Color)] {
-        // 各感情の合計値を1回のループで計算
-        var totals: [String: Double] = [
-            "neutral": 0.0, "joy": 0.0, "anger": 0.0, "sadness": 0.0
-        ]
-
-        for point in activeTimePoints {
-            totals["neutral"]! += point.neutral
-            totals["joy"]! += point.joy
-            totals["anger"]! += point.anger
-            totals["sadness"]! += point.sadness
-        }
-
-        // 全感情の総計
-        let grandTotal = totals.values.reduce(0.0, +)
-
-        guard grandTotal > 0 else { return [] }
-
-        // パーセンテージを計算
-        return [
-            ("neutral", totals["neutral"]! / grandTotal * 100, "😐", Color.safeColor("EmotionNeutral")),
-            ("joy", totals["joy"]! / grandTotal * 100, "😊", Color.safeColor("EmotionJoy")),
-            ("anger", totals["anger"]! / grandTotal * 100, "😠", Color.safeColor("ErrorColor")),
-            ("sadness", totals["sadness"]! / grandTotal * 100, "😢", Color.safeColor("PrimaryActionColor"))
-        ]
-    }
-    
-    private func emotionReportContent(_ report: EmotionReport) -> some View {
-        VStack(spacing: 16) {
-            if !report.emotionGraph.isEmpty {
-                let activeTimePoints = report.emotionGraph.filter { $0.totalEmotions > 0 }
-
-                if !activeTimePoints.isEmpty {
-                    // 📊 パフォーマンス最適化: キャッシュされた結果を使用
-                    let allEmotions = cachedEmotionPercentages
-
-                // トップ感情（1位のみ）を絵文字で表示
-                if let topEmotion = allEmotions.first {
-                    VStack(spacing: 8) {
-                        Text(topEmotion.2)
-                            .font(.system(size: 108))  // 1.5倍に拡大
-
-                        HStack(spacing: 8) {
-                            Text(emotionLabel(for: topEmotion.0))
-                                .font(.caption)
-                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                                .textCase(.uppercase)
-                                .tracking(1.0)
-
-                            Text("\(Int(topEmotion.1.rounded()))%")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundStyle(Color.safeColor("BehaviorTextPrimary"))
-                        }
-                    }
-                    .padding(.bottom, 30)  // 下に30px余白
-                }
-
-                // 感情バー（4つすべて表示）
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Array(allEmotions.enumerated()), id: \.element.0) { index, emotion in
-                        HStack {
-                            Text(emotionLabel(for: emotion.0))
-                                .font(.body)  // caption → body
-                                .frame(width: 80, alignment: .leading)
-
-                            GeometryReader { geometry in
-                                ZStack(alignment: .leading) {
-                                    Rectangle()
-                                        .fill(Color.safeColor("BorderLight").opacity(0.2))
-                                        .frame(height: 6)
-                                        .cornerRadius(3)
-
-                                    Rectangle()
-                                        .fill(Color.safeColor("AppAccentColor"))  // 統一感のため紫色に変更
-                                        .frame(width: geometry.size.width * CGFloat(emotion.1) / 100, height: 6)
-                                        .cornerRadius(3)
-                                }
-                            }
-                            .frame(height: 6)
-                        }
-                    }
-                }
-                .padding()
-                .background(Color.safeColor("CardBackground"))
-                .cornerRadius(8)
-                } else {
-                    // アクティブなデータポイントがない場合
-                    Text("感情データがありません")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                }
-            } else {
-                // emotionGraphが空の場合
-                Text("データなし")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-            }
-        }
-    }
-    
-    private func emotionLabel(for key: String) -> String {
-        switch key.lowercased() {
-        case "neutral": return "中立"
-        case "joy": return "喜び"
-        case "trust": return "信頼"
-        case "fear": return "恐れ"
-        case "surprise": return "驚き"
-        case "sadness": return "悲しみ"
-        case "disgust": return "嫌悪"
-        case "anger": return "怒り"
-        case "anticipation": return "期待"
-        default: return key
-        }
-    }
-    
     private func clearAllData() {
-        behaviorReport = nil
-        emotionReport = nil
         subject = nil
         dashboardSummary = nil
         timeBlocks = []  // グラフ用データもクリア
@@ -848,8 +571,6 @@ struct SimpleDashboardView: View {
         guard let subjectId = subjectManager.selectedSubjectID else {
             // データをクリア
             await MainActor.run {
-                self.behaviorReport = nil
-                self.emotionReport = nil
                 self.subject = nil
                 self.dashboardSummary = nil
                 self.timeBlocks = []
@@ -890,25 +611,9 @@ struct SimpleDashboardView: View {
 
         // 取得したデータを設定
         await MainActor.run {
-            self.behaviorReport = result.behaviorReport
-            self.emotionReport = result.emotionReport
             self.subject = result.subject
             self.dashboardSummary = result.dashboardSummary
             self.timeBlocks = fetchedTimeBlocks  // グラフ用データ
-
-            // 📊 パフォーマンス最適化: 感情データのキャッシュを更新
-            if let emotionReport = result.emotionReport {
-                let activeTimePoints = emotionReport.emotionGraph.filter { $0.totalEmotions > 0 }
-                if !activeTimePoints.isEmpty {
-                    let emotions = calculateEmotionPercentages(from: activeTimePoints)
-                    let nonZeroEmotions = emotions.filter { $0.1 > 0 }
-                    self.cachedEmotionPercentages = nonZeroEmotions.sorted { $0.1 > $1.1 }
-                } else {
-                    self.cachedEmotionPercentages = []
-                }
-            } else {
-                self.cachedEmotionPercentages = []
-            }
 
             // Phase 2: データ取得後にフィルタリングを明示的に実行
             self.updateFilteredData()

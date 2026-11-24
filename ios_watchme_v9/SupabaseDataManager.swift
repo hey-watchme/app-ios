@@ -11,8 +11,6 @@ import SwiftUI
 // MARK: - Dashboard Data Structure
 // 統合ダッシュボードデータ構造体
 struct DashboardData {
-    let behaviorReport: BehaviorReport?
-    let emotionReport: EmotionReport?
     let subject: Subject?
     let dashboardSummary: DashboardSummary?  // メインデータソース（気分データ含む）
 }
@@ -24,7 +22,6 @@ class SupabaseDataManager: ObservableObject {
     
     // MARK: - Published Properties
     @Published var dailyReport: DashboardSummary?
-    // dailyBehaviorReport, dailyEmotionReportは削除（各Viewがローカルで管理）
     @Published var weeklyReports: [DashboardSummary] = []
     @Published var isLoading = false
     @Published var errorMessage: String?
@@ -251,7 +248,6 @@ class SupabaseDataManager: ObservableObject {
     /// データをクリア
     func clearData() {
         dailyReport = nil
-        // dailyBehaviorReport, dailyEmotionReportは削除（各Viewがローカルで管理）
         weeklyReports = []
         errorMessage = nil
     }
@@ -312,8 +308,6 @@ class SupabaseDataManager: ObservableObject {
 
         // Phase 1: 気分のみ対応、行動・感情はnil
         return DashboardData(
-            behaviorReport: nil,  // Phase 2で実装予定
-            emotionReport: nil,   // Phase 2で実装予定
             subject: subject,
             dashboardSummary: dashboardSummary
         )

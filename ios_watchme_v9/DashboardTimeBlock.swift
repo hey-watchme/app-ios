@@ -377,7 +377,7 @@ extension DashboardTimeBlock {
         return object["scene"] as? [String: Any]
     }
 
-    /// Who each speaker label sounds like, estimated from the voice by the scene stage (e.g. "S1" -> "子ども").
+    /// Who each speaker label sounds like, estimated by the listener stage, platform common/record.py (e.g. "S1" -> "子ども").
     var speakerRoles: [String: String] {
         guard let roles = sceneObject?["speaker_roles"] as? [[String: Any]] else { return [:] }
         var result: [String: String] = [:]
@@ -389,7 +389,7 @@ extension DashboardTimeBlock {
         return result
     }
 
-    /// One or two sentences describing the scene (scene stage).
+    /// One or two sentences describing the scene (the listener stage).
     var sceneSummary: String? {
         guard let summary = sceneObject?["summary"] as? String, !summary.isEmpty else { return nil }
         return summary

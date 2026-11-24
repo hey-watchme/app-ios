@@ -204,7 +204,7 @@ final class SpotEventsStore: ObservableObject {
     @Published private(set) var events: [Event] = []
     /// Why the events could not be read; shown with a retry instead of hiding the card.
     @Published private(set) var loadError: String?
-    /// Loaded, and this recording has no events run (its events stage failed or never ran).
+    /// Loaded, and this recording has no events run (its listener stage failed or never ran).
     @Published private(set) var noRun = false
     private var loading = false
 
