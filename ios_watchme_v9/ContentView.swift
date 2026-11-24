@@ -73,6 +73,16 @@ struct ContentView: View {
         UserDefaults.standard.set(localDate, forKey: "home_newest_recorded_day_\(subjectId)")
     }
     
+    /// The placeholder from launch until the day is ready, laid out where the day will be.
+    private var startSkeleton: some View {
+        ScrollView {
+            SkeletonView()
+                // Where the day starts under the date header (SimpleDashboardView)
+                .padding(.top, 145)
+        }
+        .scrollDisabled(true)
+    }
+
     var body: some View {
         ZStack {
             Color.darkBase.ignoresSafeArea()
@@ -81,26 +91,12 @@ struct ContentView: View {
                 // ✅ 権限ベース設計: 状態チェックロジック更新
                 switch subjectManager.state {
                 case .idle, .loading:
-                    // ロード中または初期状態はスピナーを表示
-                    Spacer()
-                    VStack(spacing: 20) {
-                        ProgressView()
-                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            .scaleEffect(1.5)
-                        Text("読み込み中...")
-                            .font(.caption)
-                            .foregroundColor(Color(white: 0.56))
-                    }
-                    Spacer()
+                    // The same skeleton as the day, so start-up shows one placeholder, not a spinner first
+                    startSkeleton
 
                 case .available where !startDayKnown:
                     // The first time on this device: wait for the newest day rather than show today first
-                    ScrollView {
-                        SkeletonView()
-                            // Where the day starts under the date header (SimpleDashboardView)
-                            .padding(.top, 145)
-                    }
-                    .scrollDisabled(true)
+                    startSkeleton
 
                 case .available:
                     // 常にダッシュボードを表示

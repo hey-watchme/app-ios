@@ -74,7 +74,9 @@ struct SimpleDashboardView: View {
     @State private var dashboardSummary: DashboardSummary?  // メインデータソース
     @State private var timeBlocks: [DashboardTimeBlock] = []  // グラフ用データ（spot_results）
     @State private var otherDayBlocks: [DashboardTimeBlock] = []  // received this day, recorded on another (imports)
-    @State private var isLoading = false
+    // Starts as loading: the cache is empty when the page is created, so the first frame
+    // is the skeleton rather than an empty day that then turns into the skeleton.
+    @State private var isLoading = true
     @State private var lastLoadedSubjectID: String? = nil  // 最後に読み込んだ分析対象のID
 
     // Phase 2: フィルタ結果を@State変数で明示的に管理
@@ -174,7 +176,7 @@ struct SimpleDashboardView: View {
                                 QuestionsEntry(subjectId: subjectManager.selectedSubjectID, place: .dashboard)
                             }
                             .padding(.horizontal, 20)
-                            .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                            .transition(.opacity)
 
                             Spacer(minLength: 100)
                         }
@@ -234,6 +236,7 @@ struct SimpleDashboardView: View {
                 #endif
                 await MainActor.run {
                     clearAllData()
+                    isLoading = false
                 }
                 return
             }
@@ -242,6 +245,7 @@ struct SimpleDashboardView: View {
             guard let subjectId = subjectManager.selectedSubjectID else {
                 await MainActor.run {
                     clearAllData()
+                    isLoading = false
                 }
                 return
             }
@@ -269,6 +273,7 @@ struct SimpleDashboardView: View {
 
                         // Phase 2: キャッシュ復元時もフィルタリング実行
                         self.updateFilteredData()
+                        self.isLoading = false
                     }
                     print("✅ [Cache HIT] Data loaded from cache for \(dateString)")
                     return
