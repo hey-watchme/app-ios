@@ -231,6 +231,8 @@ struct RecordingPlayerCard: View {
     /// While the thumb is dragged, the bar shows the drag, not the playback.
     @State private var dragTime: Double?
     @State private var followsPlayback = true
+    /// Whether the transcript has more to scroll above and below (for the fading edges).
+    @State private var transcriptEdges = ScrollEdges(moreAbove: false, moreBelow: true)
 
     init(subjectId: String, recordedAt: String, transcript: [String: Any]?, duration: Double?,
          roles: [String: String], speakerColor: @escaping (String?) -> Color) {
@@ -347,6 +349,19 @@ struct RecordingPlayerCard: View {
                         }
                     }
                     .frame(height: 280)
+                    // Show that the transcript goes on: the edges fade where there is more to scroll,
+                    // and the scroll bar flashes when the card appears.
+                    .onScrollGeometryChange(for: ScrollEdges.self) { geo in
+                        ScrollEdges(
+                            moreAbove: geo.contentOffset.y > 1,
+                            moreBelow: geo.contentOffset.y + geo.containerSize.height < geo.contentSize.height - 1
+                        )
+                    } action: { _, edges in
+                        transcriptEdges = edges
+                    }
+                    .mask(transcriptFadeMask)
+                    .scrollIndicators(.visible)
+                    .scrollIndicatorsFlash(onAppear: true)
                     .simultaneousGesture(DragGesture().onChanged { _ in followsPlayback = false })
                     .onChange(of: currentIndex) { _, index in
                         guard followsPlayback, player.isPlaying, let index else { return }
@@ -362,6 +377,22 @@ struct RecordingPlayerCard: View {
         }
         .detailCard()
         .onDisappear { player.stop() }
+    }
+
+    /// Fades the transcript to black at an edge that has more to scroll, so it reads as a list that goes on.
+    private var transcriptFadeMask: some View {
+        let fade: CGFloat = 0.16  // of the 280 pt height
+        return LinearGradient(
+            stops: [
+                .init(color: transcriptEdges.moreAbove ? .clear : .black, location: 0),
+                .init(color: .black, location: fade),
+                .init(color: .black, location: 1 - fade),
+                .init(color: transcriptEdges.moreBelow ? .clear : .black, location: 1)
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .animation(.easeInOut(duration: 0.2), value: transcriptEdges)
     }
 
     /// Labels in the order they first speak.
@@ -461,4 +492,10 @@ struct RecordingPlayerCard: View {
         return s >= 3600 ? String(format: "%d:%02d:%02d", s / 3600, (s % 3600) / 60, s % 60)
                          : String(format: "%d:%02d", s / 60, s % 60)
     }
+}
+
+/// Whether a scroll view has content beyond its top and bottom edges.
+struct ScrollEdges: Equatable {
+    var moreAbove: Bool
+    var moreBelow: Bool
 }
