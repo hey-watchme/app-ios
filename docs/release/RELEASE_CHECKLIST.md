@@ -1,6 +1,6 @@
 # リリース前チェックリスト
 
-最終更新: 2025-12-06
+最終更新: 2026-11-25
 
 ---
 
@@ -17,8 +17,9 @@
 - [ ] **Bundle Identifier**: `com.watchme.watchme`
 - [ ] **Team**: WatchMe開発チーム
 - [ ] **Signing**: Automatic（Distribution証明書）
-- [ ] **Deployment Target**: iOS 17.0以上
+- [ ] **Deployment Target**: iOS 18.0以上
 - [ ] **Supported Devices**: iPhone only（iPadは未対応）
+- [ ] **ウィジェット拡張 `RecordingWidget`**（`com.watchme.watchme.RecordingWidget`、2026-11-25 追加。録音中のロック画面のライブアクティビティ）が、アーカイブで配布用に署名されているか。開発用は自動署名で通ったが、配布用は初回のアーカイブで未確認。App ID が足りなければ Apple Developer で作る
 
 ### バージョン情報
 
@@ -32,7 +33,8 @@
 - [ ] **NSCameraUsageDescription**: ✅ 記載済み
 - [ ] **NSPhotoLibraryUsageDescription**: ✅ 記載済み
 - [ ] **CFBundleURLTypes**: ✅ OAuth用URL Scheme設定済み
-- [ ] **UIBackgroundModes**: ✅ `remote-notification`のみ
+- [ ] **UIBackgroundModes**: ✅ `audio`（録音中に動き続ける）と `remote-notification`
+- [ ] **NSSupportsLiveActivities**: ✅ `true`（録音中のロック画面の表示）
 
 ---
 
@@ -51,7 +53,11 @@
 - [ ] マイク権限リクエストが表示される
 - [ ] 録音開始が正常に動作する
 - [ ] 録音中に音声レベルが表示される
-- [ ] 録音停止が正常に動作する
+- [ ] 録音停止が正常に動作し、録音画面が閉じる（30分の上限・ロック画面の停止でも閉じる）
+- [ ] 録音中にロックすると、ロック画面に経過時間と停止ボタンが出る。停止ボタンで止まる
+- [ ] 録音中に Siri を出して閉じると「録音停止中」（灰色・時間が止まる）になり、数秒で自動で再開する
+- [ ] 録音中に他のアプリで動画や音楽を流しても止まらない
+- [ ] 止まったときは端末の `Documents/recording-events.log` に理由が残る（読み方は platform `docs/long-recording.md`「録音を止めるもの、とその扱い」）
 - [ ] S3へのアップロードが成功する
 - [ ] アップロード完了バナーが表示される
 
