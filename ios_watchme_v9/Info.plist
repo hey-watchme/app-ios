@@ -37,6 +37,8 @@
 	<string>家族の会話などを録音し、その場の様子を分析して記録に残すためにマイクを使います。録音はサーバーに送って分析します。</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>プロフィール写真を選ぶときと、撮影済みの動画から音声を取り込むときに写真ライブラリを使います。</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

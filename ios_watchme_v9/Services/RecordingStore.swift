@@ -104,6 +104,18 @@ final class RecordingStore: ObservableObject {
         uploader.onChunkUploaded = { [weak self] record in self?.handleChunkUploaded(record) }
         uploader.onChunkFailed = { [weak self] record in self?.handleChunkFailed(record) }
 
+        // The stop button of the lock screen Live Activity
+        NotificationCenter.default.publisher(for: .watchMeStopRecordingRequested)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                RecordingEventLog.write("stop requested from the lock screen")
+                Task { await self?.stopRecording() }
+            }
+            .store(in: &cancellables)
+
+        // A Live Activity left over from a run that died while recording
+        RecordingLiveActivity.endAll()
+
         // Whenever the app comes to the foreground, say if recordings are still waiting
         NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)
             .receive(on: DispatchQueue.main)
@@ -167,6 +179,7 @@ final class RecordingStore: ObservableObject {
             state.sessionChunksDelivered = 0
             state.errorMessage = nil
             startRecordingTimer()
+            RecordingLiveActivity.start(recordedSoFar: 0)
         } catch {
             presentError("録音を始められませんでした: \(error.localizedDescription)")
             print("❌ RecordingStore: start failed - \(error)")
@@ -276,6 +289,7 @@ final class RecordingStore: ObservableObject {
         state.isInterrupted = false
         state.currentSessionId = nil
         stopRecordingTimer()
+        RecordingLiveActivity.end()
 
         switch reason {
         case .stopped:
@@ -317,12 +331,14 @@ final class RecordingStore: ObservableObject {
             }
             state.recordingStartTime = nil
             state.recordingDuration = recordedBeforeSegment
+            RecordingLiveActivity.update(interrupted: true, recordedSoFar: recordedBeforeSegment)
             ToastManager.shared.showError(
                 title: "録音が止まっています",
                 subtitle: "ほかのアプリや電話がマイクを使っています。使い終わると自動で続きを録音します"
             )
         } else {
             state.recordingStartTime = Date()
+            RecordingLiveActivity.update(interrupted: false, recordedSoFar: recordedBeforeSegment)
             ToastManager.shared.announce(title: "録音を再開しました", subtitle: nil)
         }
     }

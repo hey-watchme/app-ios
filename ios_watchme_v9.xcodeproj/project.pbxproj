@@ -11,6 +11,7 @@
 		91A8170B2ED1B4830081336E /* Lottie in Frameworks */ = {isa = PBXBuildFile; productRef = 91A8170A2ED1B4830081336E /* Lottie */; };
 		91DFF89C2E37C1FA00ABAB40 /* Launch Screen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 91DFF89B2E37C1FA00ABAB40 /* Launch Screen.storyboard */; };
 		91F6CD982E52BA2300C1B696 /* Mantis in Frameworks */ = {isa = PBXBuildFile; productRef = 91F6CD972E52BA2300C1B696 /* Mantis */; };
+		A1C0DE000000000000000002 /* RecordingWidget.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1C0DE000000000000000001 /* RecordingWidget.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -28,6 +29,13 @@
 			remoteGlobalIDString = 917532582DF9BB8E001BD7DB;
 			remoteInfo = ios_watchme_v9;
 		};
+		A1C0DE000000000000000004 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 917532512DF9BB8E001BD7DB /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1C0DE000000000000000009;
+			remoteInfo = RecordingWidget;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -41,6 +49,17 @@
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1C0DE000000000000000003 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1C0DE000000000000000002 /* RecordingWidget.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +67,7 @@
 		917532662DF9BB90001BD7DB /* ios_watchme_v9Tests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ios_watchme_v9Tests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		917532702DF9BB90001BD7DB /* ios_watchme_v9UITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ios_watchme_v9UITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		91DFF89B2E37C1FA00ABAB40 /* Launch Screen.storyboard */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; path = "Launch Screen.storyboard"; sourceTree = "<group>"; };
+		A1C0DE000000000000000001 /* RecordingWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = RecordingWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -57,6 +77,13 @@
 				Info.plist,
 			);
 			target = 917532582DF9BB8E001BD7DB /* ios_watchme_v9 */;
+		};
+		A1C0DE000000000000000008 /* Exceptions for "RecordingWidget" folder in "RecordingWidget" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A1C0DE000000000000000009 /* RecordingWidget */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -77,6 +104,19 @@
 		917532732DF9BB90001BD7DB /* ios_watchme_v9UITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ios_watchme_v9UITests;
+			sourceTree = "<group>";
+		};
+		A1C0DE000000000000000006 /* RecordingActivityShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = RecordingActivityShared;
+			sourceTree = "<group>";
+		};
+		A1C0DE000000000000000007 /* RecordingWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A1C0DE000000000000000008 /* Exceptions for "RecordingWidget" folder in "RecordingWidget" target */,
+			);
+			path = RecordingWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -106,6 +146,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1C0DE00000000000000000B /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -116,6 +163,8 @@
 				9175325B2DF9BB8E001BD7DB /* ios_watchme_v9 */,
 				917532692DF9BB90001BD7DB /* ios_watchme_v9Tests */,
 				917532732DF9BB90001BD7DB /* ios_watchme_v9UITests */,
+				A1C0DE000000000000000006 /* RecordingActivityShared */,
+				A1C0DE000000000000000007 /* RecordingWidget */,
 				918961182E181B1C00222C7F /* Frameworks */,
 				9175325A2DF9BB8E001BD7DB /* Products */,
 			);
@@ -127,6 +176,7 @@
 				917532592DF9BB8E001BD7DB /* ios_watchme_v9.app */,
 				917532662DF9BB90001BD7DB /* ios_watchme_v9Tests.xctest */,
 				917532702DF9BB90001BD7DB /* ios_watchme_v9UITests.xctest */,
+				A1C0DE000000000000000001 /* RecordingWidget.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -149,13 +199,16 @@
 				917532562DF9BB8E001BD7DB /* Frameworks */,
 				917532572DF9BB8E001BD7DB /* Resources */,
 				91A8170F2ED1B4830081336E /* Embed Frameworks */,
+				A1C0DE000000000000000003 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A1C0DE000000000000000005 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				9175325B2DF9BB8E001BD7DB /* ios_watchme_v9 */,
+				A1C0DE000000000000000006 /* RecordingActivityShared */,
 			);
 			name = ios_watchme_v9;
 			packageProductDependencies = (
@@ -213,6 +266,29 @@
 			productReference = 917532702DF9BB90001BD7DB /* ios_watchme_v9UITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		A1C0DE000000000000000009 /* RecordingWidget */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1C0DE00000000000000000D /* Build configuration list for PBXNativeTarget "RecordingWidget" */;
+			buildPhases = (
+				A1C0DE00000000000000000A /* Sources */,
+				A1C0DE00000000000000000B /* Frameworks */,
+				A1C0DE00000000000000000C /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A1C0DE000000000000000007 /* RecordingWidget */,
+				A1C0DE000000000000000006 /* RecordingActivityShared */,
+			);
+			name = RecordingWidget;
+			packageProductDependencies = (
+			);
+			productName = RecordingWidget;
+			productReference = A1C0DE000000000000000001 /* RecordingWidget.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -233,6 +309,9 @@
 					9175326F2DF9BB90001BD7DB = {
 						CreatedOnToolsVersion = 16.4;
 						TestTargetID = 917532582DF9BB8E001BD7DB;
+					};
+					A1C0DE000000000000000009 = {
+						CreatedOnToolsVersion = 26.0;
 					};
 				};
 			};
@@ -261,6 +340,7 @@
 				917532582DF9BB8E001BD7DB /* ios_watchme_v9 */,
 				917532652DF9BB90001BD7DB /* ios_watchme_v9Tests */,
 				9175326F2DF9BB90001BD7DB /* ios_watchme_v9UITests */,
+				A1C0DE000000000000000009 /* RecordingWidget */,
 			);
 		};
 /* End PBXProject section */
@@ -282,6 +362,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		9175326E2DF9BB90001BD7DB /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1C0DE00000000000000000C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -312,6 +399,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1C0DE00000000000000000A /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -324,6 +418,11 @@
 			isa = PBXTargetDependency;
 			target = 917532582DF9BB8E001BD7DB /* ios_watchme_v9 */;
 			targetProxy = 917532712DF9BB90001BD7DB /* PBXContainerItemProxy */;
+		};
+		A1C0DE000000000000000005 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1C0DE000000000000000009 /* RecordingWidget */;
+			targetProxy = A1C0DE000000000000000004 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -591,6 +690,60 @@
 			};
 			name = Release;
 		};
+		A1C0DE00000000000000000E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = TG68TFXG88;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RecordingWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = WatchMe;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.watchme.watchme.RecordingWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Debug;
+		};
+		A1C0DE00000000000000000F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 2;
+				DEVELOPMENT_TEAM = TG68TFXG88;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = RecordingWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = WatchMe;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.watchme.watchme.RecordingWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 1;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -626,6 +779,15 @@
 			buildConfigurations = (
 				917532812DF9BB90001BD7DB /* Debug */,
 				917532822DF9BB90001BD7DB /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1C0DE00000000000000000D /* Build configuration list for PBXNativeTarget "RecordingWidget" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1C0DE00000000000000000E /* Debug */,
+				A1C0DE00000000000000000F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

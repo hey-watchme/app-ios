@@ -189,6 +189,13 @@ struct FullScreenRecordingView: View {
                 audioMonitor.startMonitoring()
             }
         }
+        .onChange(of: store.state.isRecording) { wasRecording, recording in
+            // A recording that ended (stop, time limit, the lock screen's stop button) closes
+            // this screen; the app shows where the result will appear.
+            if wasRecording && !recording {
+                dismiss()
+            }
+        }
         .sheet(isPresented: $showSignUpPrompt) {
             SignUpView()
                 .environmentObject(userAccountManager)
@@ -230,8 +237,7 @@ struct FullScreenRecordingView: View {
         if store.state.isRecording {
             // 録音停止
             Task {
-                await store.stopRecording()
-                dismiss()
+                await store.stopRecording()   // the screen closes when the recording has ended (onChange above)
             }
         } else {
             // 権限チェック
