@@ -116,6 +116,9 @@ struct SpotDetailView: View {
                 }
             }
         }
+        // This screen opens as a sheet, over the app's own toast layer: show toasts here too,
+        // so that a failed save is reported where it happened, not after the sheet closes.
+        .overlay { ToastOverlay(toastManager: ToastManager.shared) }
         .preferredColorScheme(.dark)
         .task(id: spotData.recordedAt) { await loadSaved() }
     }
