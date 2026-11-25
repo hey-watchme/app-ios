@@ -31,6 +31,12 @@ struct FamilyQuestion: Decodable, Identifiable, Equatable {
     let prompt: String
     let options: [Option]
     let context: Context?
+    /// When the recording ran, filled from spot_results after reading (not a column of questions).
+    var span: RecordingSpan? = nil
+
+    private enum CodingKeys: String, CodingKey {
+        case question_id, subject_id, recorded_at, local_date, scope, kind, prompt, options, context
+    }
 
     var id: String { question_id }
 
@@ -39,12 +45,32 @@ struct FamilyQuestion: Decodable, Identifiable, Equatable {
         options.map(\.key) == ["yes", "no"]
     }
 
-    var scopeName: String {
+    /// Which recording or day the question is about. A day holds several recordings, so a bare
+    /// "この録音" would not say which one: name it by its time, e.g. 7:27〜7:57 の録音.
+    /// withDate: on the dashboard the questions come from every day, so the date is named too.
+    func scopeName(withDate: Bool) -> String {
         switch scope {
-        case "person": return "プロフィール"
-        case "day": return "この日"
-        default: return "この録音"
+        case "person":
+            return "プロフィール"
+        case "day":
+            return Self.dayLabel(local_date) ?? "この日"
+        default:
+            guard let span else { return "この録音" }
+            let date = withDate ? (Self.dayLabel(local_date).map { $0 + " " } ?? "") : ""
+            return "\(date)\(span.label) の録音"
         }
+    }
+
+    /// "11/24（月）" from "2026-11-24".
+    private static func dayLabel(_ localDate: String?) -> String? {
+        guard let localDate else { return nil }
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "yyyy-MM-dd"
+        guard let date = formatter.date(from: localDate) else { return nil }
+        formatter.dateFormat = "M/d（E）"
+        return formatter.string(from: date)
     }
 
     var topicName: String {
@@ -61,5 +87,22 @@ struct FamilyQuestion: Decodable, Identifiable, Equatable {
         guard let seconds = context?.start_sec, seconds >= 0 else { return nil }
         let s = Int(seconds)
         return String(format: "%d:%02d", s / 60, s % 60)
+    }
+}
+
+/// A recording's local start time and length (spot_results.local_time, profile_result.recording).
+struct RecordingSpan: Equatable {
+    let start: Date      // local wall-clock time, kept in a UTC calendar
+    let seconds: Double?
+
+    /// "7:27〜7:57", or "7:27〜" while the length is unknown.
+    var label: String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = TimeZone(identifier: "UTC")
+        formatter.dateFormat = "H:mm"
+        let from = formatter.string(from: start)
+        guard let seconds, seconds > 0 else { return "\(from)〜" }
+        return "\(from)〜\(formatter.string(from: start.addingTimeInterval(seconds)))"
     }
 }

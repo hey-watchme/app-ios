@@ -5,7 +5,8 @@
 //  Questions the analysis could not settle, answered with one tap (platform docs/product/questions.md).
 //  An entry (a banner on a recording, a section on the dashboard, a banner on the profile) shows how
 //  many are open; tapping it opens the question mode: はい / いいえ by swiping, choices by tapping,
-//  わからない and スキップ always there. Answering is optional; nothing breaks when nobody answers.
+//  わからない and 後で always there (後で sends nothing, so the question comes back next time).
+//  Answering is optional; nothing breaks when nobody answers.
 //
 
 import AVFoundation
@@ -45,8 +46,14 @@ struct QuestionsEntry: View {
         }
         .task(id: "\(subjectId ?? "")|\(recordedAt ?? "")|\(scope ?? "")") { await load() }
         .fullScreenCover(isPresented: $showMode, onDismiss: { Task { await load() } }) {
-            QuestionModeView(questions: questions)
+            QuestionModeView(questions: questions, showsDate: showsDate)
         }
+    }
+
+    /// The dashboard gathers the open questions of every day, so each card names its date.
+    private var showsDate: Bool {
+        if case .dashboard = place { return true }
+        return false
     }
 
     private var title: String {
@@ -109,10 +116,13 @@ struct QuestionsEntry: View {
 
 struct QuestionModeView: View {
     let questions: [FamilyQuestion]
+    var showsDate = false
 
     @Environment(\.dismiss) private var dismiss
     @State private var index = 0
     @State private var answers: [String: String] = [:]
+    /// Put off with 後で: not sent, so they stay open and come back next time.
+    @State private var later: Set<String> = []
     @State private var drag: CGSize = .zero
     @State private var sending = false
     @State private var sendError: String?
@@ -168,7 +178,7 @@ struct QuestionModeView: View {
     private func card(_ question: FamilyQuestion) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(spacing: 6) {
-                Text(question.scopeName)
+                Text(question.scopeName(withDate: showsDate))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(.accentTeal)
                     .padding(.horizontal, 8)
@@ -310,7 +320,7 @@ struct QuestionModeView: View {
                     }
                 }
                 Spacer()
-                Button("スキップ") { answer("skip") }
+                Button("後で") { putOff() }
             }
             .font(.system(size: 14))
             .foregroundColor(Color(white: 0.56))
@@ -339,6 +349,16 @@ struct QuestionModeView: View {
         withAnimation(.easeInOut(duration: 0.2)) { index += 1 }
     }
 
+    /// Leave this question for another time: nothing is sent for it.
+    private func putOff() {
+        guard let question = current else { return }
+        player.stop()
+        HapticManager.shared.playLightImpact()
+        later.insert(question.question_id)
+        drag = .zero
+        withAnimation(.easeInOut(duration: 0.2)) { index += 1 }
+    }
+
     /// The question before this one again, with its answer cleared.
     private func back() {
         guard index > 0 else { return }
@@ -347,11 +367,12 @@ struct QuestionModeView: View {
         sendError = nil
         withAnimation(.easeInOut(duration: 0.2)) { index -= 1 }
         answers[questions[index].question_id] = nil
+        later.remove(questions[index].question_id)
     }
 
     // MARK: Summary
 
-    private var answeredCount: Int { answers.values.filter { $0 != "unsure" && $0 != "skip" }.count }
+    private var answeredCount: Int { answers.values.filter { $0 != "unsure" }.count }
 
     private var summary: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -361,7 +382,7 @@ struct QuestionModeView: View {
             HStack(spacing: 8) {
                 tally(answeredCount, "答えた")
                 tally(answers.values.filter { $0 == "unsure" }.count, "わからない")
-                tally(answers.values.filter { $0 == "skip" }.count, "スキップ")
+                tally(later.count, "後で")
             }
             if sending {
                 ProgressView().tint(.accentTeal)
@@ -373,6 +394,12 @@ struct QuestionModeView: View {
                     .foregroundColor(.accentTeal)
             } else if answeredCount > 0 {
                 Text("閉じると答えを送ります。答えをもとに、件数と分析の文章を作り直します。1 分ほどで反映されます。音声は聞き直しません。")
+                    .font(.system(size: 13))
+                    .foregroundColor(Color(white: 0.56))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            if !later.isEmpty {
+                Text("「後で」にした \(later.count) 件は、次に開いたときにまた出ます。")
                     .font(.system(size: 13))
                     .foregroundColor(Color(white: 0.56))
                     .fixedSize(horizontal: false, vertical: true)
