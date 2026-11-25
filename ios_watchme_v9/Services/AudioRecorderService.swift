@@ -81,7 +81,11 @@ final class AudioRecorderService: NSObject {
     private var resumeTimer: Timer?
     /// While recording: checks that the recorder is really writing.
     private var watchdogTimer: Timer?
-    static let resumeRetrySeconds: TimeInterval = 5
+    static let resumeRetrySeconds: TimeInterval = 2
+    /// While interrupted in the background: asks iOS for time to keep retrying. Without it the
+    /// app is suspended as soon as its recording stops, and nothing retries until the person
+    /// opens the app again (2026-11-25: a Siri request of a few seconds cost 30 minutes).
+    private var resumeBackgroundTask: UIBackgroundTaskIdentifier = .invalid
     static let watchdogSeconds: TimeInterval = 5
 
     var isRecording: Bool { session != nil }
@@ -318,6 +322,12 @@ final class AudioRecorderService: NSObject {
     }
 
     private func startResumeTimer() {
+        if resumeBackgroundTask == .invalid {
+            resumeBackgroundTask = UIApplication.shared.beginBackgroundTask(withName: "resume-recording") { [weak self] in
+                RecordingEventLog.write("background time for resuming ran out; waiting for the app to come back")
+                self?.endResumeBackgroundTask()
+            }
+        }
         resumeTimer?.invalidate()
         resumeTimer = Timer.scheduledTimer(withTimeInterval: Self.resumeRetrySeconds, repeats: true) { [weak self] _ in
             self?.tryResume(trigger: "retry")
@@ -327,6 +337,13 @@ final class AudioRecorderService: NSObject {
     private func stopResumeTimer() {
         resumeTimer?.invalidate()
         resumeTimer = nil
+        endResumeBackgroundTask()
+    }
+
+    private func endResumeBackgroundTask() {
+        guard resumeBackgroundTask != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(resumeBackgroundTask)
+        resumeBackgroundTask = .invalid
     }
 
     /// A recorder can stop without an interruption or a delegate call (the session was
