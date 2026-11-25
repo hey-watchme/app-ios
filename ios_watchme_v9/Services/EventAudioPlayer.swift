@@ -149,5 +149,13 @@ struct EventPlayButton: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(player.isActive(id) ? "停止" : "この場面を再生")
+        // The sound belongs to its button: closing the balloon, picking another event or leaving
+        // the screen stops it, instead of it playing on with nothing on screen to stop it.
+        .onDisappear { stopIfPlaying(id) }
+        .onChange(of: id) { old, _ in stopIfPlaying(old) }
+    }
+
+    private func stopIfPlaying(_ id: String) {
+        if player.isActive(id) { player.stop() }
     }
 }
