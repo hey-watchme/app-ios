@@ -28,9 +28,10 @@ struct FullScreenRecordingView: View {
     // MARK: - Body
     var body: some View {
         ZStack {
-            // 紫背景
-            Color.accentPurple
+            // 紫背景（マイクを取られて録音が止まっている間は暗くする）
+            (store.state.isInterrupted ? Color(white: 0.22) : Color.accentPurple)
                 .ignoresSafeArea()
+                .animation(.easeInOut(duration: 0.3), value: store.state.isInterrupted)
 
             VStack {
                 Spacer()
@@ -55,9 +56,20 @@ struct FullScreenRecordingView: View {
                         .foregroundColor(.white)
                         .padding(.bottom, 20)
 
-                    Text(store.state.isInterrupted ? "中断中（電話などが終わると再開します）" : "録音中...")
-                        .font(.title3)
-                        .foregroundColor(.white.opacity(0.8))
+                    if store.state.isInterrupted {
+                        Text("録音停止中")
+                            .font(.title3.weight(.semibold))
+                            .foregroundColor(.white)
+                        Text("ほかのアプリや電話がマイクを使っています。\n使い終わると自動で続きを録音します")
+                            .font(.footnote)
+                            .foregroundColor(.white.opacity(0.8))
+                            .multilineTextAlignment(.center)
+                            .padding(.top, 4)
+                    } else {
+                        Text("録音中...")
+                            .font(.title3)
+                            .foregroundColor(.white.opacity(0.8))
+                    }
 
                     Text(sessionProgressText)
                         .font(.footnote)
@@ -153,8 +165,10 @@ struct FullScreenRecordingView: View {
             }
         }
         .onAppear {
-            // 音声モニタリング開始（録音の有無に関わらず）
-            audioMonitor.startMonitoring()
+            // 音声モニタリング開始（録音中は録音側のレベルを表示する。下の onChange）
+            if !store.state.isRecording {
+                audioMonitor.startMonitoring()
+            }
 
             Task {
                 await store.initialize()
@@ -163,7 +177,17 @@ struct FullScreenRecordingView: View {
         }
         .onDisappear {
             // 音声モニタリング停止
+            audioMonitor.stopFollowing()
             audioMonitor.stopMonitoring()
+        }
+        .onChange(of: store.state.isRecording, initial: true) { _, recording in
+            // While recording, the meter shows the recorder's level instead of opening the mic again
+            if recording {
+                audioMonitor.follow { [store] in MainActor.assumeIsolated { store.currentLevel() } }
+            } else {
+                audioMonitor.stopFollowing()
+                audioMonitor.startMonitoring()
+            }
         }
         .sheet(isPresented: $showSignUpPrompt) {
             SignUpView()

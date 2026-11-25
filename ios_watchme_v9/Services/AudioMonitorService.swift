@@ -17,6 +17,25 @@ final class AudioMonitorService: ObservableObject {
     private var audioEngine: AVAudioEngine?
     private var inputNode: AVAudioInputNode?
     private var isMonitoring = false
+    /// While recording the meter reads the recorder instead of opening the microphone a
+    /// second time (two inputs on one session is one more way for the recorder to stop).
+    private var followTimer: Timer?
+
+    /// Show the recorder's level instead of running our own engine.
+    func follow(_ level: @escaping () -> Float?) {
+        stopMonitoring()
+        followTimer?.invalidate()
+        followTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
+            self?.audioLevel = level() ?? 0
+        }
+    }
+
+    /// Back to our own engine (recording stopped).
+    func stopFollowing() {
+        followTimer?.invalidate()
+        followTimer = nil
+        audioLevel = 0
+    }
 
     // MARK: - Public Methods
 
@@ -25,10 +44,8 @@ final class AudioMonitorService: ObservableObject {
         guard !isMonitoring else { return }
 
         do {
-            // オーディオセッション設定
-            let audioSession = AVAudioSession.sharedInstance()
-            try audioSession.setCategory(.record, mode: .measurement, options: [])
-            try audioSession.setActive(true)
+            // The same session setup as recording, so starting to record changes nothing under the engine
+            try AudioRecorderService.configureSharedSession()
 
             // AVAudioEngine設定
             audioEngine = AVAudioEngine()

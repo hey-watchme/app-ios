@@ -19,7 +19,7 @@ struct RecordingState {
     var isRecording = false
     var isInterrupted = false
     var recordingStartTime: Date?
-    var recordingDuration: TimeInterval = 0
+    var recordingDuration: TimeInterval = 0   // time actually recorded (stops while interrupted)
     var currentSessionId: String?
     var sessionChunksFinished = 0   // closed so far in this session
     var sessionChunksDelivered = 0  // confirmed by the server so far in this session
@@ -93,7 +93,7 @@ final class RecordingStore: ObservableObject {
 
         audioService.interruptionChanged
             .receive(on: DispatchQueue.main)
-            .sink { [weak self] interrupted in self?.state.isInterrupted = interrupted }
+            .sink { [weak self] interrupted in self?.handleInterruptionChanged(interrupted) }
             .store(in: &cancellables)
 
         uploader.$pending
@@ -161,6 +161,7 @@ final class RecordingStore: ObservableObject {
             state.isInterrupted = false
             state.recordingStartTime = Date()
             state.recordingDuration = 0
+            recordedBeforeSegment = 0
             state.currentSessionId = sessionId
             state.sessionChunksFinished = 0
             state.sessionChunksDelivered = 0
@@ -303,6 +304,35 @@ final class RecordingStore: ObservableObject {
         }
     }
 
+    /// The count stops while the microphone is taken and goes on when it is back.
+    private func handleInterruptionChanged(_ interrupted: Bool) {
+        guard state.isRecording, interrupted != state.isInterrupted else {
+            state.isInterrupted = interrupted
+            return
+        }
+        state.isInterrupted = interrupted
+        if interrupted {
+            if let start = state.recordingStartTime {
+                recordedBeforeSegment += Date().timeIntervalSince(start)
+            }
+            state.recordingStartTime = nil
+            state.recordingDuration = recordedBeforeSegment
+            ToastManager.shared.showError(
+                title: "録音が止まっています",
+                subtitle: "ほかのアプリや電話がマイクを使っています。使い終わると自動で続きを録音します"
+            )
+        } else {
+            state.recordingStartTime = Date()
+            ToastManager.shared.announce(title: "録音を再開しました", subtitle: nil)
+        }
+    }
+
+    /// Recorded time before the current stretch (sum of the stretches between interruptions).
+    private var recordedBeforeSegment: TimeInterval = 0
+
+    /// The input level while recording, for the meter.
+    func currentLevel() -> Float? { audioService.currentLevel() }
+
     // MARK: - Uploader events
 
     private func handlePendingChanged(_ pending: [ChunkRecord]) {
@@ -372,7 +402,7 @@ final class RecordingStore: ObservableObject {
         recordingTimer = Timer.scheduledTimer(withTimeInterval: 0.5, repeats: true) { [weak self] _ in
             Task { @MainActor [weak self] in
                 guard let self, let start = self.state.recordingStartTime else { return }
-                self.state.recordingDuration = Date().timeIntervalSince(start)
+                self.state.recordingDuration = self.recordedBeforeSegment + Date().timeIntervalSince(start)
             }
         }
     }
@@ -382,5 +412,6 @@ final class RecordingStore: ObservableObject {
         recordingTimer = nil
         state.recordingStartTime = nil
         state.recordingDuration = 0
+        recordedBeforeSegment = 0
     }
 }

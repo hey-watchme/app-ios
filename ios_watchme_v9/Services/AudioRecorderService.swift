@@ -5,9 +5,14 @@
 //  Records one session as a series of 5-minute WAV chunks (16 kHz, 16-bit, mono).
 //  Recording never stops at a chunk boundary: the next recorder is prepared first,
 //  then the current one is stopped and the next started (a gap of milliseconds).
-//  A session ends when the person stops it, at 45 minutes, when an interruption
-//  cannot be resumed, or when writing fails. Every event is published so the
-//  store can journal each chunk the moment it starts. See platform/docs/long-recording.md.
+//  A session ends only when the person stops it, at the time limit, or when writing
+//  fails. Nothing else ends it: when the system takes the microphone (a call, Siri,
+//  another app) the chunk is closed and sent, and recording resumes as soon as the
+//  system lets it: on the end of the interruption (with or without "should resume"),
+//  when the app comes back to the foreground, and on a retry timer. A watchdog restarts
+//  a recorder that stopped without telling us. Every event is published so the store
+//  can journal each chunk the moment it starts, and written to RecordingEventLog for
+//  diagnosis. See platform/docs/long-recording.md.
 //
 //  All methods must be called on the main thread (timers and AVFoundation callbacks are too).
 //
@@ -15,11 +20,12 @@
 import Foundation
 import AVFoundation
 import Combine
+import UIKit
 
 enum RecordingEndReason {
     case stopped          // the person stopped
     case limitReached     // RecordingLimits.maxMinutes (set on the server)
-    case interrupted      // a call / Siri took the microphone and recording could not resume
+    case interrupted      // no longer used: an interruption waits for the microphone instead of ending
     case failed(Error)    // writing failed (disk full, audio system reset, ...)
 }
 
@@ -71,6 +77,12 @@ final class AudioRecorderService: NSObject {
     /// Chunks closed by the end of their session, until the recorder reports them closed.
     private var finalChunkIds = Set<String>()
     private var observers: [NSObjectProtocol] = []
+    /// While interrupted: tries to take the microphone back every few seconds.
+    private var resumeTimer: Timer?
+    /// While recording: checks that the recorder is really writing.
+    private var watchdogTimer: Timer?
+    static let resumeRetrySeconds: TimeInterval = 5
+    static let watchdogSeconds: TimeInterval = 5
 
     var isRecording: Bool { session != nil }
     var currentSessionId: String? { session?.id }
@@ -87,6 +99,13 @@ final class AudioRecorderService: NSObject {
         observers.append(center.addObserver(forName: AVAudioSession.mediaServicesWereResetNotification, object: nil, queue: .main) { [weak self] _ in
             self?.handleMediaServicesReset()
         })
+        observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] note in
+            self?.handleRouteChange(note)
+        })
+        // Coming back to the app is the surest moment the microphone can be taken back.
+        observers.append(center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in
+            self?.tryResume(trigger: "app became active")
+        })
     }
 
     deinit {
@@ -96,16 +115,33 @@ final class AudioRecorderService: NSObject {
     // MARK: - Session control
 
     func configureAudioSession() throws {
-        do {
-            try audioSession.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetooth])
-            try audioSession.setActive(true, options: [])
-        } catch {
-            // Fall back to plain recording
-            try audioSession.setCategory(.record, mode: .default)
-            try audioSession.setActive(true)
+        try Self.configureSharedSession()
+    }
+
+    /// The one audio session setup of the app (recording and the level meter share it, so
+    /// neither changes the session under the other).
+    /// - mixWithOthers: another app playing sound (a video, music, a game) does not take the
+    ///   microphone from us. Without it, any non-mixable audio of another app interrupts us.
+    /// - No Bluetooth input: the phone's own microphone records the room. With HFP allowed,
+    ///   earbuds become the microphone, and taking them off interrupts the recording.
+    /// - prefersNoInterruptionsFromSystemAlerts: a ringing call (banner style) or an alert
+    ///   does not interrupt; only answering the call does.
+    /// - prefersInterruptionOnRouteDisconnect = false: unplugging or disconnecting a device
+    ///   changes the route instead of interrupting.
+    static func configureSharedSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        let options: AVAudioSession.CategoryOptions = [.mixWithOthers, .defaultToSpeaker]
+        if session.category != .playAndRecord || session.mode != .default || session.categoryOptions != options {
+            try session.setCategory(.playAndRecord, mode: .default, options: options)
         }
-        if audioSession.isInputGainSettable {
-            try? audioSession.setInputGain(0.8)
+        try? session.setPrefersNoInterruptionsFromSystemAlerts(true)
+        try? session.setPrefersInterruptionOnRouteDisconnect(false)
+        try session.setActive(true, options: [])
+        if let builtIn = session.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+            try? session.setPreferredInput(builtIn)
+        }
+        if session.isInputGainSettable {
+            try? session.setInputGain(0.8)
         }
     }
 
@@ -130,6 +166,8 @@ final class AudioRecorderService: NSObject {
         limitTimer = Timer.scheduledTimer(withTimeInterval: limit, repeats: false) { [weak self] _ in
             self?.endSession(.limitReached)
         }
+        startWatchdog()
+        RecordingEventLog.write("session started \(newSession.id) limit=\(Int(limit))s \(Self.routeSummary())")
         print("🎙️ AudioRecorderService: session started \(newSession.id)")
         return newSession.id
     }
@@ -158,6 +196,7 @@ final class AudioRecorderService: NSObject {
         ]
         let next = try AVAudioRecorder(url: url, settings: settings)
         next.delegate = self
+        next.isMeteringEnabled = true
         guard next.prepareToRecord(), next.record() else {
             throw RecordingError.startFailed
         }
@@ -220,52 +259,148 @@ final class AudioRecorderService: NSObject {
         finishCurrentChunk()
         limitTimer?.invalidate()
         limitTimer = nil
+        stopResumeTimer()
+        watchdogTimer?.invalidate()
+        watchdogTimer = nil
         session = nil
         interruptionChanged.send(false)
         sessionEnded.send(reason)
+        RecordingEventLog.write("session ended (\(reason))")
         print("⏹️ AudioRecorderService: session ended (\(reason))")
     }
 
     // MARK: - Things that take the microphone away
 
     private func handleInterruption(_ notification: Foundation.Notification) {
-        guard var active = session,
-              let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
+        guard let raw = notification.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt,
               let type = AVAudioSession.InterruptionType(rawValue: raw) else { return }
+        let reason = (notification.userInfo?[AVAudioSessionInterruptionReasonKey] as? UInt).map(Self.reasonName) ?? "none"
+        let options = AVAudioSession.InterruptionOptions(rawValue: notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
+        RecordingEventLog.write("interruption \(type == .began ? "began" : "ended") reason=\(reason) shouldResume=\(options.contains(.shouldResume)) recording=\(session != nil) app=\(Self.appState())")
+        guard var active = session else { return }
 
         switch type {
         case .began:
-            // Close what we have so it gets sent; wait for the end of the interruption to resume.
+            guard !active.interrupted else { return }
+            // Close what we have so it gets sent, then keep trying to take the microphone back.
             finishCurrentChunk()
             active.interrupted = true
             session = active
             interruptionChanged.send(true)
-            print("⚠️ AudioRecorderService: interrupted, chunk closed; waiting to resume")
+            startResumeTimer()
+            print("⚠️ AudioRecorderService: interrupted (\(reason)), chunk closed; waiting to resume")
 
         case .ended:
-            guard active.interrupted else { return }
-            let options = AVAudioSession.InterruptionOptions(rawValue: notification.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
-            guard options.contains(.shouldResume) else {
-                endSession(.interrupted)
-                return
-            }
-            do {
-                try audioSession.setActive(true, options: [])
-                try startChunk()
-                interruptionChanged.send(false)
-                print("▶️ AudioRecorderService: resumed after interruption")
-            } catch {
-                print("❌ AudioRecorderService: could not resume after interruption - \(error)")
-                endSession(.interrupted)
-            }
+            // "shouldResume" is a hint for players. A recorder resumes whenever it can: the
+            // person asked for the whole scene, and a missing hint is not a reason to stop.
+            tryResume(trigger: "interruption ended")
 
         @unknown default:
             break
         }
     }
 
+    /// Take the microphone back after an interruption. Fails quietly while the system still
+    /// holds it (a call in progress); the retry timer and the next foreground try again.
+    private func tryResume(trigger: String) {
+        guard let active = session, active.interrupted else { return }
+        do {
+            try Self.configureSharedSession()
+            try startChunk()   // clears `interrupted`
+            stopResumeTimer()
+            interruptionChanged.send(false)
+            RecordingEventLog.write("resumed (\(trigger))")
+            print("▶️ AudioRecorderService: resumed after interruption (\(trigger))")
+        } catch {
+            RecordingEventLog.write("resume failed (\(trigger)): \(error.localizedDescription)")
+            print("⏳ AudioRecorderService: could not resume yet (\(trigger)) - \(error)")
+        }
+    }
+
+    private func startResumeTimer() {
+        resumeTimer?.invalidate()
+        resumeTimer = Timer.scheduledTimer(withTimeInterval: Self.resumeRetrySeconds, repeats: true) { [weak self] _ in
+            self?.tryResume(trigger: "retry")
+        }
+    }
+
+    private func stopResumeTimer() {
+        resumeTimer?.invalidate()
+        resumeTimer = nil
+    }
+
+    /// A recorder can stop without an interruption or a delegate call (the session was
+    /// reconfigured under it, the input route vanished). Every few seconds: if we should
+    /// be recording and the recorder is not, close what it wrote and start a new chunk.
+    private func startWatchdog() {
+        watchdogTimer?.invalidate()
+        watchdogTimer = Timer.scheduledTimer(withTimeInterval: Self.watchdogSeconds, repeats: true) { [weak self] _ in
+            self?.checkRecorder()
+        }
+    }
+
+    private func checkRecorder() {
+        guard let active = session, !active.interrupted else { return }
+        if let recorder, recorder.isRecording { return }
+        RecordingEventLog.write("watchdog: recorder not recording (recorder=\(recorder != nil)); restarting \(Self.routeSummary())")
+        finishCurrentChunk()
+        do {
+            try Self.configureSharedSession()
+            try startChunk()
+        } catch {
+            // Treat it like an interruption: keep the session and keep trying.
+            RecordingEventLog.write("watchdog: restart failed: \(error.localizedDescription)")
+            if var stuck = session {
+                stuck.interrupted = true
+                session = stuck
+                interruptionChanged.send(true)
+                startResumeTimer()
+            }
+        }
+    }
+
+    private func handleRouteChange(_ notification: Foundation.Notification) {
+        guard session != nil else { return }
+        let raw = notification.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
+        RecordingEventLog.write("route change reason=\(raw) \(Self.routeSummary())")
+    }
+
+    /// Current input level 0...1 for the meter while recording (nil when not writing).
+    func currentLevel() -> Float? {
+        guard let recorder, recorder.isRecording else { return nil }
+        recorder.updateMeters()
+        let db = recorder.averagePower(forChannel: 0)   // -160...0
+        return max(0, min(1, (db + 50) / 50))
+    }
+
+    private static func reasonName(_ raw: UInt) -> String {
+        switch AVAudioSession.InterruptionReason(rawValue: raw) {
+        case .default: return "default"
+        case .builtInMicMuted: return "builtInMicMuted"
+        case .routeDisconnected: return "routeDisconnected"
+        default: return "raw\(raw)"
+        }
+    }
+
+    private static func appState() -> String {
+        switch UIApplication.shared.applicationState {
+        case .active: return "active"
+        case .inactive: return "inactive"
+        case .background: return "background"
+        @unknown default: return "unknown"
+        }
+    }
+
+    static func routeSummary() -> String {
+        let s = AVAudioSession.sharedInstance()
+        let inputs = s.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
+        let outputs = s.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
+        return "in=[\(inputs)] out=[\(outputs)] category=\(s.category.rawValue) mode=\(s.mode.rawValue) options=\(s.categoryOptions.rawValue)"
+    }
+
     /// The audio system restarted under us. The recorder is dead; keep what was written and go on.
     private func handleMediaServicesReset() {
+        RecordingEventLog.write("media services were reset recording=\(session != nil)")
         guard session != nil else { return }
         finishCurrentChunk()
         do {
@@ -273,7 +408,13 @@ final class AudioRecorderService: NSObject {
             try startChunk()
             print("▶️ AudioRecorderService: continued after a media services reset")
         } catch {
-            endSession(.failed(error))
+            // Keep the session and keep trying, like an interruption.
+            if var stuck = session {
+                stuck.interrupted = true
+                session = stuck
+                interruptionChanged.send(true)
+                startResumeTimer()
+            }
         }
     }
 
@@ -294,6 +435,7 @@ extension AudioRecorderService: AVAudioRecorderDelegate {
         guard let chunk = closing.removeValue(forKey: ObjectIdentifier(recorder)) else { return }
         if !flag {
             // The file may still hold audio; the uploader repairs or drops it.
+            RecordingEventLog.write("chunk \(chunk.sequence) did not finish cleanly")
             print("⚠️ AudioRecorderService: chunk \(chunk.sequence) did not finish cleanly")
         }
         chunkFinished.send((id: chunk.id, isFinal: finalChunkIds.remove(chunk.id) != nil))
@@ -302,6 +444,7 @@ extension AudioRecorderService: AVAudioRecorderDelegate {
     /// Writing failed (e.g. the disk is full). The recorder has stopped on its own.
     func audioRecorderEncodeErrorDidOccur(_ recorder: AVAudioRecorder, error: Error?) {
         let failure = error ?? RecordingError.recordingFailed
+        RecordingEventLog.write("encode error: \(failure.localizedDescription)")
         print("❌ AudioRecorderService: encode error - \(failure)")
         let wasCurrent = self.recorder === recorder
         if wasCurrent {
