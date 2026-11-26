@@ -278,11 +278,11 @@ struct SpotEventsCard: View {
     /// The event picked on the timeline (its seq); the balloon under the picture shows it.
     @State private var selectedSeq: Int?
 
-    static let typeOrder = ["reprimand", "joy", "praise", "laughter", "crying", "conflict", "mishap",
+    static let typeOrder = ["reprimand", "joy", "praise", "laughter", "crying", "conflict", "request", "mishap",
                             "cough", "sneeze", "throat_clearing"]
     static let typeNames = [
         "reprimand": "叱責", "joy": "楽しい場面", "praise": "褒める", "laughter": "笑い",
-        "crying": "泣く", "conflict": "口論", "mishap": "落とす・こぼす",
+        "crying": "泣く", "conflict": "口論", "request": "促す", "mishap": "落とす・こぼす",
         "cough": "咳", "sneeze": "くしゃみ", "throat_clearing": "咳払い",
     ]
     // The strength of a reprimand or conflict; from events-v3 it comes from the measured voice.
