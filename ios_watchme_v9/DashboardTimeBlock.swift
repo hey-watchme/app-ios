@@ -89,6 +89,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
     let sceneDescriptionRaw: String?  // Acoustic scene description (Gemini) for debug display
     let audioKey: String?  // S3 key of the recording (development playback)
     let metricsRaw: String?  // Fixed measurements (profile_result.metrics) as JSON
+    let readingRaw: String?  // The reading of how people got along (profile_result.reading, a trial) as JSON
     let vocalEmotionRaw: String?  // emotion2vec scores (profile_result.vocal_emotion) as JSON
     let stages: [SpotStage]  // per-stage progress (spot_stages); empty for old recordings
     let recordedAt: String?  // spot_results.recorded_at (UTC); keys the events of this recording
@@ -151,6 +152,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         sceneDescriptionRaw = nil
         audioKey = nil
         metricsRaw = nil
+        readingRaw = nil
         vocalEmotionRaw = nil
         stages = []
         recordedAt = nil
@@ -305,6 +307,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
          sceneDescriptionRaw: String? = nil,
          audioKey: String? = nil,
          metricsRaw: String? = nil,
+         readingRaw: String? = nil,
          vocalEmotionRaw: String? = nil,
          stages: [SpotStage] = [],
          recordedAt: String? = nil,
@@ -330,6 +333,7 @@ struct DashboardTimeBlock: Codable, Equatable, Identifiable {
         self.sceneDescriptionRaw = sceneDescriptionRaw
         self.audioKey = audioKey
         self.metricsRaw = metricsRaw
+        self.readingRaw = readingRaw
         self.vocalEmotionRaw = vocalEmotionRaw
         self.stages = stages
         self.recordedAt = recordedAt
