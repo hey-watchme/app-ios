@@ -99,24 +99,24 @@ struct SpotReadingCard: View {
     @State private var picked: Picked?
     @State private var openEpisode: SpotReading.Episode?
 
-    private static let height: CGFloat = 320
-    private static let middle: CGFloat = 160
-    /// Width of one minute of the recording; the picture scrolls sideways.
-    private static let minuteWidth: CGFloat = 54
-    private static let inset: CGFloat = 20
-    private static let balloonWidth: CGFloat = 270
+    private static let height: CGFloat = 300
+    private static let middle: CGFloat = 150
+    private static let inset: CGFloat = 8
     /// How far from the middle line the voice reaches at most.
-    private static let waveReach: CGFloat = 128
+    private static let waveReach: CGFloat = 64
     private static let waveStep = 3.0
+    /// Emoji rows above and below the line, as distances from the middle.
+    private static let topicRows: [CGFloat] = [70, 94, 118]
 
     // Worked out once: the card is drawn again on every tap, and parsing the measurements
     // (about 50 KB of JSON) for every mark made it slow.
     private let duration: Double
-    private let width: CGFloat
     /// The voice per step of waveStep seconds, 0...1 against this recording's louder voices.
     private let wave: [CGFloat]
-    /// Where each topic's emoji sits (it illustrates the talk; it is not on the line).
-    private let topicY: [Double: CGFloat]
+    /// Above (negative) or below (positive) the line, and which row, for each topic's emoji.
+    private let topicOffset: [Double: CGFloat]
+    /// The pins in time order, for stepping from one to the next.
+    private let pinsInOrder: [SpotReading.Pin]
 
     init(subjectId: String, recordedAt: String, reading: SpotReading, metricsRaw: String?) {
         self.subjectId = subjectId
@@ -126,14 +126,13 @@ struct SpotReadingCard: View {
         let duration = max(reading.pins.map(\.sec).max() ?? 0, reading.topics.map(\.sec).max() ?? 0,
                            reading.episodes.map(\.toSec).max() ?? 0, voice.map(\.end).max() ?? 0, 60)
         self.duration = duration
-        let width = max(320, CGFloat(duration / 60) * Self.minuteWidth + Self.inset * 2)
-        self.width = width
         self.wave = Self.wave(voice, duration: duration)
-        self.topicY = Self.scatter(reading, duration: duration, width: width)
+        self.topicOffset = Self.scatter(reading, duration: duration)
+        self.pinsInOrder = reading.pins.sorted { $0.sec < $1.sec }
     }
 
     /// The utterances as one outline: each step takes its loudest voice against the speaker's
-    /// usual, scaled to this recording's louder voices so the picture fills, then smoothed.
+    /// usual, scaled to this recording's louder voices, then smoothed.
     private static func wave(_ voice: [VoicePoint], duration: Double) -> [CGFloat] {
         let count = max(Int(duration / waveStep) + 1, 2)
         let values = voice.compactMap(\.louder).filter { $0 > 0 }.sorted()
@@ -159,32 +158,37 @@ struct SpotReadingCard: View {
 
     /// Emoji above the line near exchanges that went well, below near ones that did not, on a
     /// few rows so that neighbours do not sit on each other. Fixed for a recording, not random.
-    private static func scatter(_ reading: SpotReading, duration: Double, width: CGFloat) -> [Double: CGFloat] {
-        let above: [CGFloat] = [44, 74, 104], below: [CGFloat] = [216, 246, 276]
-        var lastX = [CGFloat: CGFloat]()
+    private static func scatter(_ reading: SpotReading, duration: Double) -> [Double: CGFloat] {
+        var lastAt = [CGFloat: Double]()   // row -> time of the last emoji put on it
+        let gap = duration * 0.05          // about 5% of the width between emoji on one row
         var result = [Double: CGFloat]()
         for topic in reading.topics.sorted(by: { $0.sec < $1.sec }) {
             let near = reading.pins.filter { $0.sec >= topic.sec - 10 && $0.sec <= topic.sec + 40 }
             let good = near.filter(\.isGood).count, concern = near.count - good
             let seed = Int(topic.sec) &* 31 &+ 7
             let up = good == concern ? seed % 2 == 0 : good > concern
-            let rows = up ? above : below
-            let px = inset + CGFloat(topic.sec / duration) * (width - inset * 2)
+            let rows = topicRows.map { up ? -$0 : $0 }
             var row = rows[abs(seed / 2) % rows.count]
-            if let taken = lastX[row], px - taken < 30 {
-                row = rows.first { px - (lastX[$0] ?? -100) >= 30 } ?? row
+            if let last = lastAt[row], topic.sec - last < gap {
+                row = rows.first { topic.sec - (lastAt[$0] ?? -.infinity) >= gap } ?? row
             }
-            lastX[row] = px
+            lastAt[row] = topic.sec
             result[topic.sec] = row
         }
         return result
     }
 
-    private func x(_ sec: Double) -> CGFloat {
-        Self.inset + CGFloat(sec / duration) * (width - Self.inset * 2)
-    }
+    private func radius(_ pin: SpotReading.Pin) -> CGFloat { [4, 4, 6, 9][min(max(pin.weight, 0), 3)] }
 
-    private func radius(_ pin: SpotReading.Pin) -> CGFloat { [5, 5, 8, 12][min(max(pin.weight, 0), 3)] }
+    /// The app's scheme: the accent for what went well, the body text grey for the rest.
+    /// Above or below the line already says which is which, so the colours need not shout.
+    static func color(_ pin: SpotReading.Pin) -> Color { pin.isGood ? .accentTeal : .brightText }
+
+    /// Good pins above the line, the others below; the heavier, the further from the line.
+    private func pinY(_ pin: SpotReading.Pin) -> CGFloat {
+        let distance: CGFloat = [16, 16, 30, 46][min(max(pin.weight, 0), 3)]
+        return Self.middle + (pin.isGood ? -distance : distance)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -195,37 +199,40 @@ struct SpotReadingCard: View {
             }
             .pickerStyle(.segmented)
 
-            ScrollView(.horizontal, showsIndicators: false) {
+            GeometryReader { geometry in
+                let width = geometry.size.width
+                let x = { (sec: Double) -> CGFloat in Self.inset + CGFloat(sec / duration) * (width - Self.inset * 2) }
                 ZStack(alignment: .topLeading) {
-                    Canvas { context, _ in draw(&context) }
+                    Canvas { context, _ in draw(&context, width: width, x: x) }
 
                     if layers != .pins {
                         ForEach(reading.topics) { topic in
                             Text(topic.emoji)
-                                .font(.system(size: 22))
-                                .position(x: x(topic.sec), y: topicY[topic.sec] ?? Self.middle)
+                                .font(.system(size: 17))
+                                .position(x: x(topic.sec), y: Self.middle + (topicOffset[topic.sec] ?? 0))
                         }
                     }
 
                     // Heavier pins first, so that a small one next to a large one stays visible
                     ForEach(reading.pins.sorted { $0.weight > $1.weight }) { pin in
                         Circle()
-                            .fill(pin.isGood ? Color.accentTeal : Color.accentCoral)
+                            .fill(Self.color(pin))
                             .frame(width: radius(pin) * 2, height: radius(pin) * 2)
-                            .overlay(Circle().stroke(Color.white, lineWidth: picked == .pin(pin.id) ? 2 : 0))
-                            .position(x: x(pin.sec), y: Self.middle)
+                            .overlay(Circle().stroke(Color.darkCard, lineWidth: 1))
+                            .overlay(Circle().stroke(Color.white, lineWidth: picked == .pin(pin.id) ? 2 : 0).padding(-2))
+                            .position(x: x(pin.sec), y: pinY(pin))
                     }
 
-                    balloon
+                    balloon(width: width, x: x)
                 }
-                .frame(width: width, height: Self.height)
                 .contentShape(Rectangle())
-                .gesture(SpatialTapGesture().onEnded { pick(at: $0.location) })
+                .gesture(SpatialTapGesture().onEnded { pick(at: $0.location, x: x) })
             }
+            .frame(height: Self.height)
 
             HStack(spacing: 14) {
-                legend(Color.accentTeal, "うまくいった")
-                legend(Color.accentCoral, "気になる")
+                legend(Color.accentTeal, "うまくいった（上）")
+                legend(Color.brightText, "気になる（下）")
                 Text("丸が大きいほど重い")
                     .font(.system(size: 10))
                     .foregroundColor(Color(white: 0.45))
@@ -239,17 +246,16 @@ struct SpotReadingCard: View {
     }
 
     /// The pin or emoji nearest to a tap; a tap on nothing closes the balloon.
-    private func pick(at location: CGPoint) {
-        let reach: CGFloat = 26
-        if abs(location.y - Self.middle) < reach,
-           let pin = reading.pins.min(by: { abs(x($0.sec) - location.x) < abs(x($1.sec) - location.x) }),
-           abs(x(pin.sec) - location.x) < reach {
+    private func pick(at location: CGPoint, x: (Double) -> CGFloat) {
+        let reach: CGFloat = 22
+        func pinDistance(_ pin: SpotReading.Pin) -> CGFloat { hypot(x(pin.sec) - location.x, pinY(pin) - location.y) }
+        if let pin = reading.pins.min(by: { pinDistance($0) < pinDistance($1) }), pinDistance(pin) < reach {
             picked = .pin(pin.id)
             return
         }
         if layers != .pins {
             func distance(_ topic: SpotReading.Topic) -> CGFloat {
-                hypot(x(topic.sec) - location.x, (topicY[topic.sec] ?? Self.middle) - location.y)
+                hypot(x(topic.sec) - location.x, Self.middle + (topicOffset[topic.sec] ?? 0) - location.y)
             }
             if let topic = reading.topics.min(by: { distance($0) < distance($1) }), distance(topic) < reach {
                 picked = .topic(topic.sec)
@@ -261,7 +267,8 @@ struct SpotReadingCard: View {
 
     // MARK: Drawing (the minutes, the voice, the line)
 
-    private func draw(_ context: inout GraphicsContext) {
+    private func draw(_ context: inout GraphicsContext, width: CGFloat, x: (Double) -> CGFloat) {
+        let step = duration > 2400 ? 10.0 : 5.0
         var minute = 0.0
         while minute * 60 <= duration {
             let px = x(minute * 60)
@@ -271,7 +278,7 @@ struct SpotReadingCard: View {
             context.stroke(line, with: .color(.white.opacity(0.06)), lineWidth: 1)
             context.draw(Text("\(Int(minute))分").font(.system(size: 10)).foregroundColor(Color(white: 0.5)),
                          at: CGPoint(x: px + 3, y: Self.height - 8), anchor: .leading)
-            minute += 5
+            minute += step
         }
 
         // The voice as one filled shape around the line: wide where people spoke loudly, flat in silence
@@ -317,20 +324,21 @@ struct SpotReadingCard: View {
     // MARK: The balloon, right next to what was picked (it may cover other marks)
 
     @ViewBuilder
-    private var balloon: some View {
+    private func balloon(width: CGFloat, x: (Double) -> CGFloat) -> some View {
         switch picked {
         case .pin(let id):
             if let pin = reading.pins.first(where: { $0.id == id }) {
                 // Good pins open upward, the others downward, so the two sides stay apart
-                placed(at: x(pin.sec), edge: Self.middle + (pin.isGood ? -(radius(pin) + 8) : radius(pin) + 8), upward: pin.isGood) {
+                placed(at: x(pin.sec), edge: pinY(pin) + (pin.isGood ? -(radius(pin) + 8) : radius(pin) + 8),
+                       upward: pin.isGood, width: width) {
                     pinBalloon(pin)
                 }
             }
         case .topic(let sec):
             if let topic = reading.topics.first(where: { $0.sec == sec }) {
-                let y = topicY[sec] ?? Self.middle
+                let offset = topicOffset[sec] ?? 0
                 // Toward the middle, where there is room
-                placed(at: x(sec), edge: y + (y < Self.middle ? 18 : -18), upward: y > Self.middle) {
+                placed(at: x(sec), edge: Self.middle + offset + (offset < 0 ? 14 : -14), upward: offset > 0, width: width) {
                     HStack(alignment: .top, spacing: 8) {
                         Text(topic.emoji).font(.system(size: 20))
                         VStack(alignment: .leading, spacing: 2) {
@@ -350,27 +358,29 @@ struct SpotReadingCard: View {
         }
     }
 
-    /// A balloon whose near edge is at `edge`, growing up or down from there, kept inside the picture sideways.
-    private func placed<Content: View>(at px: CGFloat, edge: CGFloat, upward: Bool,
+    /// A balloon whose near edge is at `edge`, growing up or down from there, kept inside the card sideways.
+    private func placed<Content: View>(at px: CGFloat, edge: CGFloat, upward: Bool, width: CGFloat,
                                        @ViewBuilder content: () -> Content) -> some View {
-        let left = min(max(px - Self.balloonWidth / 2, 6), max(width - Self.balloonWidth - 6, 6))
+        let balloonWidth = min(280, width - 8)
+        let left = min(max(px - balloonWidth / 2, 4), max(width - balloonWidth - 4, 4))
         return content()
             .padding(12)
-            .frame(width: Self.balloonWidth, alignment: .leading)
+            .frame(width: balloonWidth, alignment: .leading)
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.darkElevated))
             .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.white.opacity(0.12), lineWidth: 1))
             .shadow(color: .black.opacity(0.5), radius: 8, y: 2)
             .onTapGesture { }   // a tap on the balloon itself does not close it
-            .frame(width: Self.balloonWidth, height: upward ? edge : Self.height - edge, alignment: upward ? .bottom : .top)
+            .frame(width: balloonWidth, height: upward ? edge : Self.height - edge, alignment: upward ? .bottom : .top)
             .offset(x: left, y: upward ? 0 : edge)
     }
 
     private func pinBalloon(_ pin: SpotReading.Pin) -> some View {
-        VStack(alignment: .leading, spacing: 5) {
+        let index = pinsInOrder.firstIndex { $0.id == pin.id } ?? 0
+        return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
                 Text(pin.isGood ? "うまくいった" : "気になる")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(pin.isGood ? .accentTeal : .accentCoral)
+                    .foregroundColor(Self.color(pin))
                 Text(Self.clock(pin.sec))
                     .font(.system(size: 11, weight: .medium, design: .monospaced))
                     .foregroundColor(Color(white: 0.55))
@@ -392,11 +402,25 @@ struct SpotReadingCard: View {
                 .font(.system(size: 12))
                 .foregroundColor(Color(white: 0.85))
                 .lineLimit(3)
-            if let episode = reading.episode(at: pin.sec) {
-                Button("この場面を詳しく") { openEpisode = episode }
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.accentTeal)
+            HStack {
+                if let episode = reading.episode(at: pin.sec) {
+                    Button("この場面を詳しく") { openEpisode = episode }
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(.accentTeal)
+                }
+                Spacer()
+                // Pins close in time overlap on the line; step through them in time order
+                Button { picked = .pin(pinsInOrder[index - 1].id) } label: { Image(systemName: "chevron.left") }
+                    .disabled(index == 0)
+                Text("\(index + 1)/\(pinsInOrder.count)")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(Color(white: 0.55))
+                Button { picked = .pin(pinsInOrder[index + 1].id) } label: { Image(systemName: "chevron.right") }
+                    .disabled(index >= pinsInOrder.count - 1)
             }
+            .font(.system(size: 14, weight: .semibold))
+            .foregroundColor(.accentTeal)
+            .padding(.top, 2)
         }
     }
 
@@ -406,10 +430,10 @@ struct SpotReadingCard: View {
 
     static let info = """
         録音の中のやりとりを読んだ試作です。
-        ・丸（ピン）: やりとりがうまくいった場面と、気になる場面。大きいほど重い場面です。
-        ・絵文字: そのころ何の話をしていたかの挿し絵です。位置に細かい意味はありません。
+        ・丸（ピン）: 線より上はやりとりがうまくいった場面、下は気になる場面。大きく、線から離れているほど重い場面です。
+        ・絵文字: そのころ何の話をしていたかの挿し絵です。近くにうまくいった場面が多ければ上、気になる場面が多ければ下に置いています。
         ・後ろの波: 話していた声。その人のふだんより大きいほど広がります。
-        丸を押すと理由が出て、その場面を再生できます。
+        丸を押すと理由が出て、その場面を再生できます。重なった丸は、吹き出しの ‹ › で順にたどれます。
         """
 }
 
