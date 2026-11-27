@@ -102,15 +102,16 @@ struct SpotReadingCard: View {
     private static let inset: CGFloat = 8
     /// How far from the middle line the voice reaches at most.
     private static let waveReach: CGFloat = 64
-    private static let waveStep = 3.0
+    /// Size of the faces that mark the exchanges: one size for all, as their distance from the line shows the weight.
+    private static let faceSize: CGFloat = 18
     /// Emoji rows above and below the line, as distances from the middle. They may sit on pins.
     private static let topicRows: [CGFloat] = [14, 36, 58, 80, 102, 124]
 
     // Worked out once: the card is drawn again on every tap, and parsing the measurements
     // (about 50 KB of JSON) for every mark made it slow.
     private let duration: Double
-    /// The voice per step of waveStep seconds, 0...1 against this recording's louder voices.
-    private let wave: [CGFloat]
+    /// The voice in up to 120 steps, (time, 0...1 against this recording's more strained voices).
+    private let wave: [(time: Double, value: CGFloat)]
     /// Above (negative) or below (positive) the line, and which row, for each topic's emoji.
     private let topicOffset: [Double: CGFloat]
     /// The pins in time order, for stepping from one to the next.
@@ -129,29 +130,43 @@ struct SpotReadingCard: View {
         self.pinsInOrder = reading.pins.sorted { $0.sec < $1.sec }
     }
 
-    /// The utterances as one outline: each step takes its loudest voice against the speaker's
-    /// usual, scaled to this recording's louder voices, then smoothed.
-    private static func wave(_ voice: [VoicePoint], duration: Double) -> [CGFloat] {
-        let count = max(Int(duration / waveStep) + 1, 2)
-        let values = voice.compactMap(\.louder).filter { $0 > 0 }.sorted()
-        guard !values.isEmpty else { return [] }
-        let reference = max(values[Int(Double(values.count - 1) * 0.9)], 0.001)
+    /// The voice drawn the way the stamp chart draws it (SpotTimelineChart, its default measure):
+    /// how much more strained than the speaker's usual, in up to 120 steps of at least 2 seconds,
+    /// each taking its strongest voice, neighbours averaged once, joined by a smooth curve.
+    private static func wave(_ voice: [VoicePoint], duration: Double) -> [(time: Double, value: CGFloat)] {
+        let measure = VoiceMeasure.strain
+        let values = voice.compactMap { measure.value($0) }.filter { $0 > 0 }.sorted()
+        guard !voice.isEmpty, duration > 0 else { return [] }
+        let reference = values.isEmpty ? 1 : max(values[Int(Double(values.count - 1) * 0.9)], 0.001)
+        let count = max(min(Int(duration / 2), 120), 2)
+        let width = duration / Double(count)
         var strongest = [Double](repeating: 0, count: count)
         for point in voice {
-            let share = min(max((point.louder ?? 0) / reference, 0), 1)
-            let first = min(max(Int(point.start / waveStep), 0), count - 1)
-            let last = min(max(Int(point.end / waveStep), first), count - 1)
+            let share = min(max((measure.value(point) ?? 0) / reference, 0), 1)
+            let first = min(max(Int(point.start / width), 0), count - 1)
+            let last = min(max(Int(point.end / width), first), count - 1)
             for index in first...last {
-                strongest[index] = max(strongest[index], 0.18 + 0.82 * share)
+                // Speech that is not above the usual still shows a little, so talk is visible
+                strongest[index] = max(strongest[index], 0.08 + 0.92 * share)
             }
         }
-        for _ in 0..<2 {
-            strongest = strongest.indices.map { index in
-                let before = strongest[max(index - 1, 0)], after = strongest[min(index + 1, count - 1)]
-                return (before + 2 * strongest[index] + after) / 4
-            }
+        let smoothed = strongest.indices.map { index -> Double in
+            let before = strongest[max(index - 1, 0)], after = strongest[min(index + 1, count - 1)]
+            return (before + 2 * strongest[index] + after) / 4
         }
-        return strongest.map { CGFloat($0) }
+        return smoothed.enumerated().map { index, value in ((Double(index) + 0.5) * width, CGFloat(value)) }
+    }
+
+    /// A smooth curve through the points (Catmull-Rom, as the stamp chart's interpolation).
+    private static func smoothLine(_ path: inout Path, through points: [CGPoint]) {
+        guard points.count > 1 else { return }
+        for index in 0..<(points.count - 1) {
+            let p0 = points[max(index - 1, 0)], p1 = points[index], p2 = points[index + 1]
+            let p3 = points[min(index + 2, points.count - 1)]
+            path.addCurve(to: p2,
+                          control1: CGPoint(x: p1.x + (p2.x - p0.x) / 6, y: p1.y + (p2.y - p0.y) / 6),
+                          control2: CGPoint(x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6))
+        }
     }
 
     /// Emoji above the line near exchanges that went well, below near ones that did not, on a
@@ -176,7 +191,10 @@ struct SpotReadingCard: View {
         return result
     }
 
-    private func radius(_ pin: SpotReading.Pin) -> CGFloat { [4, 4, 6, 9][min(max(pin.weight, 0), 3)] }
+    private func radius(_ pin: SpotReading.Pin) -> CGFloat { Self.faceSize / 2 }
+
+    /// A smiling face for what went well, an angry one for the rest; the same size for all.
+    static func face(_ pin: SpotReading.Pin) -> String { pin.isGood ? "😊" : "😠" }
 
     /// The app's scheme: the accent for what went well, the body text grey for the rest.
     /// Above or below the line already says which is which, so the colours need not shout.
@@ -222,11 +240,10 @@ struct SpotReadingCard: View {
 
                     // Heavier pins first, so that a small one next to a large one stays visible
                     ForEach(showsPins ? reading.pins.sorted { $0.weight > $1.weight } : []) { pin in
-                        Circle()
-                            .fill(Self.color(pin))
-                            .frame(width: radius(pin) * 2, height: radius(pin) * 2)
-                            .overlay(Circle().stroke(Color.darkCard, lineWidth: 1))
-                            .overlay(Circle().stroke(Color.white, lineWidth: picked == .pin(pin.id) ? 2 : 0).padding(-2))
+                        Text(Self.face(pin))
+                            .font(.system(size: Self.faceSize))
+                            .frame(width: Self.faceSize + 4, height: Self.faceSize + 4)
+                            .background(Circle().fill(Color.white.opacity(picked == .pin(pin.id) ? 0.25 : 0)))
                             .position(x: x(pin.sec), y: pinY(pin))
                     }
 
@@ -241,8 +258,8 @@ struct SpotReadingCard: View {
             .zIndex(1)
 
             HStack(spacing: 14) {
-                legend(Color.accentTeal, "うまくいった出来事")
-                legend(Color.brightText, "気になる出来事")
+                legend("😊", "うまくいった出来事")
+                legend("😠", "気になる出来事")
             }
         }
         .detailCard()
@@ -290,27 +307,15 @@ struct SpotReadingCard: View {
 
         // The voice as one filled shape around the line: wide where people spoke loudly, flat in silence
         if wave.count > 1 {
-            let tops = wave.enumerated().map { index, value in
-                CGPoint(x: x(min((Double(index) + 0.5) * Self.waveStep, duration)), y: Self.middle - Self.waveReach * value)
-            }
+            let tops = wave.map { CGPoint(x: x($0.time), y: Self.middle - Self.waveReach * $0.value) }
+            let bottoms = tops.reversed().map { CGPoint(x: $0.x, y: 2 * Self.middle - $0.y) }
             var shape = Path()
-            shape.move(to: CGPoint(x: tops[0].x, y: Self.middle))
-            shape.addLine(to: tops[0])
-            for index in 1..<tops.count {
-                let previous = tops[index - 1], current = tops[index]
-                shape.addQuadCurve(to: CGPoint(x: (previous.x + current.x) / 2, y: (previous.y + current.y) / 2), control: previous)
-            }
-            shape.addLine(to: tops[tops.count - 1])
-            shape.addLine(to: CGPoint(x: tops[tops.count - 1].x, y: 2 * Self.middle - tops[tops.count - 1].y))
-            for index in stride(from: tops.count - 1, to: 0, by: -1) {
-                let previous = tops[index], current = tops[index - 1]
-                let mirrored = CGPoint(x: previous.x, y: 2 * Self.middle - previous.y)
-                shape.addQuadCurve(to: CGPoint(x: (previous.x + current.x) / 2, y: 2 * Self.middle - (previous.y + current.y) / 2),
-                                   control: mirrored)
-            }
-            shape.addLine(to: CGPoint(x: tops[0].x, y: 2 * Self.middle - tops[0].y))
+            shape.move(to: tops[0])
+            Self.smoothLine(&shape, through: tops)
+            shape.addLine(to: bottoms[0])
+            Self.smoothLine(&shape, through: bottoms)
             shape.closeSubpath()
-            context.fill(shape, with: .color(.white.opacity(0.10)))
+            context.fill(shape, with: .color(.white.opacity(0.12)))
         }
 
         var middle = Path()
@@ -340,9 +345,9 @@ struct SpotReadingCard: View {
         .animation(.easeOut(duration: 0.15), value: on)
     }
 
-    private func legend(_ color: Color, _ text: String) -> some View {
-        HStack(spacing: 5) {
-            Circle().fill(color).frame(width: 8, height: 8)
+    private func legend(_ face: String, _ text: String) -> some View {
+        HStack(spacing: 4) {
+            Text(face).font(.system(size: 11))
             Text(text)
                 .font(.system(size: 10))
                 .foregroundColor(Color(white: 0.6))
@@ -408,7 +413,7 @@ struct SpotReadingCard: View {
         let index = pinsInOrder.firstIndex { $0.id == pin.id } ?? 0
         return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 8) {
-                Text(pin.isGood ? "うまくいった" : "気になる")
+                Text("\(Self.face(pin)) \(pin.isGood ? "うまくいった" : "気になる")")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(Self.color(pin))
                 Text(Self.clock(pin.sec))
@@ -460,11 +465,11 @@ struct SpotReadingCard: View {
 
     static let info = """
         録音の中のやりとりを読んだ試作です。
-        ・丸（出来事）: 線より上はやりとりがうまくいった場面、下は気になる場面。大きく、線から離れているほど重い場面です（同じ重さの中では重なりにくいよう少し散らしています）。
+        ・顔（出来事）: 😊 はやりとりがうまくいった場面で線より上、😠 は気になる場面で線より下。線から離れているほど重い場面です（同じ重さの中では重なりにくいよう少し散らしています）。
         ・絵文字: そのころ何の話をしていたかの挿し絵です。近くにうまくいった場面が多ければ上、気になる場面が多ければ下に置いています。
-        ・後ろの波: 話していた声。その人のふだんより大きいほど広がります。
+        ・後ろの波: 話していた声。その人のふだんより張り詰めているほど広がります。
         「出来事」「話題」はそれぞれ表示を切り替えられます。
-        丸を押すと理由が出て、その場面を再生できます。重なった丸は、吹き出しの ‹ › で順にたどれます。
+        顔を押すと理由が出て、その場面を再生できます。重なった顔は、吹き出しの ‹ › で順にたどれます。
         """
 }
 
