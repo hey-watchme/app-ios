@@ -125,7 +125,7 @@ enum QuestionService {
     }
 }
 
-extension Notification.Name {
+extension NSNotification.Name {
     /// Answers were saved: the open questions have changed.
-    static let questionsAnswered = Notification.Name("questionsAnswered")
+    static let questionsAnswered = NSNotification.Name("questionsAnswered")
 }
