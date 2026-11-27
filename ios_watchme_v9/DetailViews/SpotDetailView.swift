@@ -124,6 +124,9 @@ struct SpotDetailView: View {
         .overlay { ToastOverlay(toastManager: ToastManager.shared) }
         .preferredColorScheme(.dark)
         .task(id: spotData.recordedAt) { await loadSaved() }
+        // Opened from anywhere (a recording card, the report, the activity card): the home screen's
+        // "分析完了" and "…を更新" for this recording have been seen
+        .onAppear { ActivitySeen.addRecording(spotData.id) }
     }
 
     // MARK: - Saved (bookmark)

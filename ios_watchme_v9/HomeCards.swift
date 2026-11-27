@@ -93,7 +93,20 @@ enum ActivitySeen {
         guard !entries.contains(entry) else { return }
         entries.append(entry)
         UserDefaults.standard.set(Array(entries.suffix(limit)), forKey: key)
+        NotificationCenter.default.post(name: .activitySeen, object: nil)
     }
+
+    /// Both notices of a recording (its analysis done, the day updated from it): opening the
+    /// recording shows both, so neither needs to be announced again.
+    static func addRecording(_ recordingID: String) {
+        add("\(recordingID)#recording")
+        add("\(recordingID)#day")
+    }
+}
+
+extension NSNotification.Name {
+    /// A finished result was marked as seen: the activity card reads the list again.
+    static let activitySeen = NSNotification.Name("activitySeen")
 }
 
 /// The slim card at the top of the home screen.

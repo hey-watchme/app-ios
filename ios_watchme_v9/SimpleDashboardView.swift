@@ -111,9 +111,12 @@ struct SimpleDashboardView: View {
     }
 
     private func openActivity(_ banner: ActivityBanner) {
-        if let key = banner.seenKey {
-            ActivitySeen.add(key)
-            activitySeen.insert(key)
+        switch banner {
+        case .recordingDone(let id, _), .recordingFailed(let id, _), .dayUpdated(let id, _, _):
+            ActivitySeen.addRecording(id)
+            activitySeen = ActivitySeen.load()
+        default:
+            break
         }
         switch banner {
         case .analysing(let id, _, _), .recordingDone(let id, _), .recordingFailed(let id, _):
@@ -385,6 +388,8 @@ struct SimpleDashboardView: View {
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.significantTimeChangeNotification)) { _ in
             refreshCurrentDayIfNeeded(reason: "significantTimeChange")
         }
+        // A recording opened from anywhere marks its notices as seen (SpotDetailView)
+        .onReceive(NotificationCenter.default.publisher(for: .activitySeen)) { _ in activitySeen = ActivitySeen.load() }
         .sheet(item: $selectedSpotForDetail) { spot in
             if let subjectId = subjectManager.selectedSubjectID {
                 SpotDetailView(subjectId: subjectId, spotData: spot)
