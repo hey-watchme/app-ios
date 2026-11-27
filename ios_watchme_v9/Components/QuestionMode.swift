@@ -45,6 +45,8 @@ struct QuestionsEntry: View {
             }
         }
         .task(id: "\(subjectId ?? "")|\(recordedAt ?? "")|\(scope ?? "")") { await load() }
+        // Answered from another entry (a recording's, while this is the dashboard's): read the list again
+        .onReceive(NotificationCenter.default.publisher(for: .questionsAnswered)) { _ in Task { await load() } }
         .fullScreenCover(isPresented: $showMode, onDismiss: { Task { await load() } }) {
             QuestionModeView(questions: questions, showsDate: showsDate)
         }

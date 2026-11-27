@@ -120,5 +120,12 @@ enum QuestionService {
             throw NSError(domain: "QuestionService", code: status,
                           userInfo: [NSLocalizedDescriptionKey: "答えを送れませんでした（\(status)）。時間をおいてもう一度お試しください"])
         }
+        // Every entry (the recording, the dashboard, the profile) keeps its own list; answered ones must leave them all
+        await MainActor.run { NotificationCenter.default.post(name: .questionsAnswered, object: nil) }
     }
+}
+
+extension Notification.Name {
+    /// Answers were saved: the open questions have changed.
+    static let questionsAnswered = Notification.Name("questionsAnswered")
 }
