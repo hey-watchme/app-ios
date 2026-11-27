@@ -16,7 +16,7 @@ import SwiftUI
 struct SpotReading: Decodable {
     struct Pin: Decodable, Identifiable {
         let sec: Double
-        let kind: String        // "good" or "concern"
+        let kind: String        // "good", "concern" or "neutral" (reading-v2; not drawn)
         let weight: Int         // 1 small, 2 clear, 3 for the family's record
         let who: String
         let label: String
@@ -59,6 +59,10 @@ struct SpotReading: Decodable {
 
     let pins: [Pin]
     let topics: [Topic]
+
+    /// The pins the timeline draws: what went well and what did not. Ordinary exchanges (neutral) give the
+    /// reading somewhere to put them, so that they are not forced into either side, and are not drawn.
+    var shownPins: [Pin] { pins.filter { $0.kind == "good" || $0.kind == "concern" } }
     let episodes: [Episode]
     let summary: [String]
     let suggestions: [Suggestion]
@@ -125,12 +129,12 @@ struct SpotReadingCard: View {
         self.reading = reading
         self.embedded = embedded
         let voice = VoicePoint.parse(metricsRaw: metricsRaw)
-        let duration = max(reading.pins.map(\.sec).max() ?? 0, reading.topics.map(\.sec).max() ?? 0,
+        let duration = max(reading.shownPins.map(\.sec).max() ?? 0, reading.topics.map(\.sec).max() ?? 0,
                            reading.episodes.map(\.toSec).max() ?? 0, voice.map(\.end).max() ?? 0, 60)
         self.duration = duration
         self.wave = Self.wave(voice, duration: duration)
         self.topicOffset = Self.scatter(reading, duration: duration)
-        self.pinsInOrder = reading.pins.sorted { $0.sec < $1.sec }
+        self.pinsInOrder = reading.shownPins.sorted { $0.sec < $1.sec }
     }
 
     /// The voice drawn the way the stamp chart draws it (SpotTimelineChart, its default measure):
@@ -179,7 +183,7 @@ struct SpotReadingCard: View {
         let gap = duration * 0.08          // about 8% of the width between emoji on one row
         var result = [Double: CGFloat]()
         for topic in reading.topics.sorted(by: { $0.sec < $1.sec }) {
-            let near = reading.pins.filter { $0.sec >= topic.sec - 10 && $0.sec <= topic.sec + 40 }
+            let near = reading.shownPins.filter { $0.sec >= topic.sec - 10 && $0.sec <= topic.sec + 40 }
             let good = near.filter(\.isGood).count, concern = near.count - good
             let seed = Int(topic.sec) &* 31 &+ 7
             let up = good == concern ? seed % 2 == 0 : good > concern
@@ -245,7 +249,7 @@ struct SpotReadingCard: View {
                     }
 
                     // Heavier pins first, so that a small one next to a large one stays visible
-                    ForEach(showsPins ? reading.pins.sorted { $0.weight > $1.weight } : []) { pin in
+                    ForEach(showsPins ? reading.shownPins.sorted { $0.weight > $1.weight } : []) { pin in
                         Text(Self.face(pin))
                             .font(.system(size: Self.faceSize))
                             .frame(width: Self.faceSize + 4, height: Self.faceSize + 4)
@@ -274,7 +278,7 @@ struct SpotReadingCard: View {
     private func pick(at location: CGPoint, x: (Double) -> CGFloat) {
         let reach: CGFloat = 22
         func pinDistance(_ pin: SpotReading.Pin) -> CGFloat { hypot(x(pin.sec) - location.x, pinY(pin) - location.y) }
-        if showsPins, let pin = reading.pins.min(by: { pinDistance($0) < pinDistance($1) }), pinDistance(pin) < reach {
+        if showsPins, let pin = reading.shownPins.min(by: { pinDistance($0) < pinDistance($1) }), pinDistance(pin) < reach {
             picked = .pin(pin.id)
             return
         }
@@ -352,7 +356,7 @@ struct SpotReadingCard: View {
     private func balloon(width: CGFloat, x: (Double) -> CGFloat) -> some View {
         switch picked {
         case .pin(let id):
-            if let pin = reading.pins.first(where: { $0.id == id }) {
+            if let pin = reading.shownPins.first(where: { $0.id == id }) {
                 // Good pins open upward and the others downward, unless that side has no room
                 let above = pinY(pin) - radius(pin) - 8, below = pinY(pin) + radius(pin) + 8
                 let upward = pin.isGood ? (above >= Self.balloonHeight || above > Self.height - below)
