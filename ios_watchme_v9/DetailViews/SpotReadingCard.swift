@@ -82,6 +82,8 @@ struct SpotReadingCard: View {
     let subjectId: String
     let recordedAt: String
     let reading: SpotReading
+    /// Inside another card (the home screen's recording card): no header and no card of its own.
+    var embedded = false
 
     private enum Picked: Equatable {
         case pin(String)
@@ -117,10 +119,11 @@ struct SpotReadingCard: View {
     /// The pins in time order, for stepping from one to the next.
     private let pinsInOrder: [SpotReading.Pin]
 
-    init(subjectId: String, recordedAt: String, reading: SpotReading, metricsRaw: String?) {
+    init(subjectId: String, recordedAt: String, reading: SpotReading, metricsRaw: String?, embedded: Bool = false) {
         self.subjectId = subjectId
         self.recordedAt = recordedAt
         self.reading = reading
+        self.embedded = embedded
         let voice = VoicePoint.parse(metricsRaw: metricsRaw)
         let duration = max(reading.pins.map(\.sec).max() ?? 0, reading.topics.map(\.sec).max() ?? 0,
                            reading.episodes.map(\.toSec).max() ?? 0, voice.map(\.end).max() ?? 0, 60)
@@ -217,11 +220,14 @@ struct SpotReadingCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            DetailCardHeader(icon: "mappin.and.ellipse", title: "TIMELINE", badge: "試作", info: Self.info)
+            if !embedded {
+                DetailCardHeader(icon: "mappin.and.ellipse", title: "TIMELINE", badge: "試作", info: Self.info)
+            }
 
+            // コミュニケーション: how the exchanges went (the faces); 出来事: what was going on (the emoji)
             HStack(spacing: 8) {
-                layerToggle("出来事", isOn: $showsPins)
-                layerToggle("話題", isOn: $showsTopics)
+                layerToggle("コミュニケーション", isOn: $showsPins)
+                layerToggle("出来事", isOn: $showsTopics)
             }
 
             GeometryReader { geometry in
@@ -256,13 +262,8 @@ struct SpotReadingCard: View {
             }
             .frame(height: Self.height)
             .zIndex(1)
-
-            HStack(spacing: 14) {
-                legend("😊", "うまくいった出来事")
-                legend("😠", "気になる出来事")
-            }
         }
-        .detailCard()
+        .modifier(CardUnlessEmbedded(embedded: embedded))
         .sheet(item: $openEpisode) { episode in
             SpotReadingEpisodeView(episode: episode, subjectId: subjectId, recordedAt: recordedAt)
                 .preferredColorScheme(.dark)
@@ -343,15 +344,6 @@ struct SpotReadingCard: View {
         }
         .buttonStyle(.plain)
         .animation(.easeOut(duration: 0.15), value: on)
-    }
-
-    private func legend(_ face: String, _ text: String) -> some View {
-        HStack(spacing: 4) {
-            Text(face).font(.system(size: 11))
-            Text(text)
-                .font(.system(size: 10))
-                .foregroundColor(Color(white: 0.6))
-        }
     }
 
     // MARK: The balloon, right next to what was picked (it may cover other marks)
@@ -465,10 +457,10 @@ struct SpotReadingCard: View {
 
     static let info = """
         録音の中のやりとりを読んだ試作です。
-        ・顔（出来事）: 😊 はやりとりがうまくいった場面で線より上、😠 は気になる場面で線より下。線から離れているほど重い場面です（同じ重さの中では重なりにくいよう少し散らしています）。
-        ・絵文字: そのころ何の話をしていたかの挿し絵です。近くにうまくいった場面が多ければ上、気になる場面が多ければ下に置いています。
+        ・コミュニケーション（顔）: 😊 はやりとりがうまくいった場面で線より上、😠 は気になる場面で線より下。線から離れているほど重い場面です（同じ重さの中では重なりにくいよう少し散らしています）。
+        ・出来事（絵文字）: そのころ何をしていたか、何の話をしていたかの挿し絵です。近くにうまくいった場面が多ければ上、気になる場面が多ければ下に置いています。
         ・後ろの波: 話していた声。その人のふだんより張り詰めているほど広がります。
-        「出来事」「話題」はそれぞれ表示を切り替えられます。
+        「コミュニケーション」「出来事」はそれぞれ表示を切り替えられます。
         顔を押すと理由が出て、その場面を再生できます。重なった顔は、吹き出しの ‹ › で順にたどれます。
         """
 }
@@ -590,5 +582,13 @@ struct SpotReadingEpisodeView: View {
                 .foregroundColor(Color(white: 0.88))
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+}
+
+/// The card's frame, left off when the timeline sits inside another card.
+private struct CardUnlessEmbedded: ViewModifier {
+    let embedded: Bool
+    func body(content: Content) -> some View {
+        if embedded { content } else { content.detailCard() }
     }
 }

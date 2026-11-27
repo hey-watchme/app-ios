@@ -200,7 +200,6 @@ struct ActivityBannerView: View {
 struct HomeRecordingCard: View {
     let block: DashboardTimeBlock
     let onOpen: () -> Void
-    @StateObject private var events = SpotEventsStore()
 
     /// When the recording ran, e.g. 19:59 – 20:45: the start, plus its length when known.
     private var timeRange: String {
@@ -253,7 +252,7 @@ struct HomeRecordingCard: View {
                 }
                 .buttonStyle(.plain)
                 // Outside the header's button, so that it shows the explanation and does not open the recording
-                InfoButton(text: SpotEventsCard.timelineInfo)
+                InfoButton(text: SpotReadingCard.info)
             }
 
             // While it is analysed, the card already has its final shape: the empty picture
@@ -265,9 +264,11 @@ struct HomeRecordingCard: View {
             } else if block.stages.hasFailed {
                 StageProgressRow(stages: block.stages)
             }
-            if !block.stages.isInProgress, let recordedAt = block.recordedAt {
-                SpotEventsCard(subjectId: block.subjectId, recordedAt: recordedAt, localTime: block.localTime,
-                               metricsRaw: block.metricsRaw, store: events, part: .picture, embedded: true)
+            // The recording read for how the people got along (profile_result.reading); the stamp chart
+            // it replaced is gone (2026-11-27), so a recording without a reading shows no picture.
+            if !block.stages.isInProgress, let recordedAt = block.recordedAt, let reading = SpotReading.parse(block.readingRaw) {
+                SpotReadingCard(subjectId: block.subjectId, recordedAt: recordedAt, reading: reading,
+                                metricsRaw: block.metricsRaw, embedded: true)
                     .transition(.opacity)
             }
 

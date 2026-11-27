@@ -50,16 +50,12 @@ struct SpotDetailView: View {
                     if let vibeScore = spotData.vibeScore {
                         vibeScoreCard(vibeScore)
                     }
-                    // A trial, next to the current picture to compare: the recording read for how
-                    // the people got along (only recordings that have profile_result.reading)
+                    // The recording read for how the people got along (profile_result.reading). It replaced
+                    // the stamp chart (2026-11-27); a recording without a reading has no picture.
                     if let recordedAt = spotData.recordedAt, let reading = SpotReading.parse(spotData.readingRaw) {
                         SpotReadingCard(subjectId: spotData.subjectId, recordedAt: recordedAt, reading: reading,
                                         metricsRaw: spotData.metricsRaw)
                         SpotReadingSummaryCard(reading: reading)
-                    }
-                    if let recordedAt = spotData.recordedAt {
-                        SpotEventsCard(subjectId: spotData.subjectId, recordedAt: recordedAt, localTime: spotData.localTime,
-                                       metricsRaw: spotData.metricsRaw, store: eventsStore, part: .picture)
                     }
                     if let summary = spotData.summary {
                         contentCard(title: "Summary", content: summary, icon: "text.alignleft")
