@@ -158,7 +158,7 @@ struct FullScreenRecordingView: View {
             VStack {
                 HStack {
                     Spacer()
-                    CloseButton { dismiss() }
+                    CloseButton(circled: true) { dismiss() }
                         .padding(16)
                 }
                 Spacer()

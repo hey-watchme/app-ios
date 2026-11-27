@@ -151,24 +151,25 @@ struct SimpleDashboardView: View {
                         if isLoading {
                             SkeletonView()
                         } else {
-                            // 1. Activity: one slim card that follows the latest recording through sending
-                            // and analysis, then says it is done until looked at (docs/product/screens.md)
-                            if let banner = activityBanner {
-                                ActivityBannerView(
-                                    banner: banner,
-                                    onTap: { openActivity(banner) }
-                                )
-                                .padding(.horizontal, 20)
-                                .transition(.opacity)
+                            // 1. Notices: the activity (a recording sent, analysed, done) and the open questions,
+                            // in one place and one shape (docs/product/screens.md)
+                            VStack(spacing: 8) {
+                                if let banner = activityBanner {
+                                    ActivityBannerView(
+                                        banner: banner,
+                                        onTap: { openActivity(banner) }
+                                    )
+                                    .transition(.opacity)
+                                }
+                                // Hidden when none are open
+                                QuestionsEntry(subjectId: subjectManager.selectedSubjectID, place: .dashboard)
                             }
+                            .padding(.horizontal, 20)
 
                             // 2. The day itself: the same content the report opens (DayContentView)
                             DayContentView(subjectId: subjectManager.selectedSubjectID, localDate: localDate,
                                            summary: dashboardSummary, blocks: timeBlocks,
-                                           onOpenSpot: { selectedSpotForDetail = $0 }) {
-                                // Questions the analysis could not settle (hidden when none are open)
-                                QuestionsEntry(subjectId: subjectManager.selectedSubjectID, place: .dashboard)
-                            }
+                                           onOpenSpot: { selectedSpotForDetail = $0 })
                             .padding(.horizontal, 20)
                             .transition(.opacity)
 

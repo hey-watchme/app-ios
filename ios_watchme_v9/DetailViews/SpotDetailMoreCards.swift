@@ -75,16 +75,19 @@ struct DetailCardHeader: View {
 
 /// The button that closes a sheet: an ×, the same in every language (screen reader: 閉じる).
 struct CloseButton: View {
+    /// A button over the screen's content draws its own circle. In a toolbar it does not: the
+    /// system already puts the glass circle behind it, as it does behind the save button (2026-11-28).
+    var circled = false
     let action: () -> Void
 
     var body: some View {
         Button(action: action) {
             // .primary: white on the dark screens, dark on the few that are still light
             Image(systemName: "xmark")
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundColor(Color.primary.opacity(0.85))
+                .font(.system(size: circled ? 14 : 16, weight: .semibold))
+                .foregroundColor(Color.primary.opacity(circled ? 0.85 : 1))
                 .frame(width: 30, height: 30)
-                .background(Circle().fill(Color.primary.opacity(0.12)))
+                .background(Circle().fill(Color.primary.opacity(circled ? 0.12 : 0)))
         }
         .buttonStyle(.plain)
         .accessibilityLabel("閉じる")
@@ -109,15 +112,26 @@ struct InfoButton: View {
         .buttonStyle(.plain)
         .accessibilityLabel("見方")
         .popover(isPresented: $shown) {
-            Text(text)
-                .font(.system(size: 13))
-                .foregroundColor(.white)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(width: 260, alignment: .leading)
-                .padding(14)
-                .presentationCompactAdaptation(.popover)
-                .presentationBackground(Color.darkElevated)
+            // A balloon with room around the words: one paragraph per line of the text, a gap between them
+            VStack(alignment: .leading, spacing: 12) {
+                ForEach(Array(paragraphs.enumerated()), id: \.offset) { _, paragraph in
+                    Text(paragraph)
+                        .font(.system(size: 14))
+                        .foregroundColor(Color(white: 0.9))
+                        .lineSpacing(4)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .frame(width: 270, alignment: .leading)
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
+            .presentationCompactAdaptation(.popover)
+            .presentationBackground(Color.darkElevated)
         }
+    }
+
+    private var paragraphs: [String] {
+        text.split(separator: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
     }
 }
 
@@ -414,7 +428,8 @@ struct SpotEventsCard: View {
 
     /// How to read the picture (behind the (i) of the card).
     static let timelineInfo = """
-        横は録音の時間です。中央の線より上はあたたかい出来事（楽しい場面・笑う・褒める）、下はきつい出来事（叱責・口論・泣く）。        叱責と口論は、強いものほど線から離れます。絵文字の位置は下のボタンでは変わりません。
+        横は録音の時間です。中央の線より上はあたたかい出来事（楽しい場面・笑う・褒める）、下はきつい出来事（叱責・口論・泣く）。
+        叱責と口論は、強いものほど線から離れます。絵文字の位置は下のボタンでは変わりません。
         後ろの波は話していた声で、絵文字とは別の測定です。下のボタンで次の 3 つを切り替えます。どれも、その人のこの録音でのふだんの値からどれだけ離れたかで膨らみます。誰も話していないところは平らです。
         ・Hammarberg 指数（声の緊張）: 0〜2 kHz と 2〜5 kHz の一番強い成分の差（dB、eGeMAPS）。低いほど高い周波数が強い、張り詰めた声
         ・ラウドネス（声の大きさ）: 聞こえの大きさ。マイクとの距離でも変わる

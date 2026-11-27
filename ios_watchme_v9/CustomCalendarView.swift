@@ -100,7 +100,7 @@ struct CustomCalendarView: View {
                 .frame(minWidth: 120)
             monthArrow("chevron.right", enabled: !isCurrentMonth) { moveMonth(1) }
             Spacer()
-            CloseButton { isPresented = false }
+            CloseButton(circled: true) { isPresented = false }
         }
     }
 

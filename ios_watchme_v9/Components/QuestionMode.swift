@@ -74,35 +74,23 @@ struct QuestionsEntry: View {
         }
     }
 
+    /// The same notice shape as the home's activity card (HomeCards.swift), so the two stack evenly.
     private var banner: some View {
-        HStack(spacing: 12) {
+        NoticeCard(title: title, subtitle: subtitle,
+                   fill: Color.accentTeal.opacity(0.08), border: Color.accentTeal.opacity(0.35)) {
             Text("\(questions.count)")
                 .font(.system(size: 15, weight: .bold, design: .rounded))
                 .foregroundColor(.darkBase)
                 .frame(width: 32, height: 32)
                 .background(Circle().fill(Color.accentTeal))
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white)
-                Text(subtitle)
-                    .font(.system(size: 12))
-                    .foregroundColor(Color(white: 0.56))
+        } trailing: {
+            HStack(spacing: 4) {
+                Text("答える")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(.accentTeal)
+                NoticeChevron(color: .accentTeal)
             }
-            Spacer(minLength: 8)
-            Text("答える")
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundColor(.accentTeal)
-            Image(systemName: "chevron.right")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.accentTeal)
         }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.accentTeal.opacity(0.08))
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(Color.accentTeal.opacity(0.35), lineWidth: 1))
-        )
     }
 
     private func load() async {
@@ -171,7 +159,7 @@ struct QuestionModeView: View {
                     .font(.system(size: 12, weight: .medium).monospacedDigit())
                     .foregroundColor(Color(white: 0.56))
             }
-            CloseButton { Task { await finish() } }
+            CloseButton(circled: true) { Task { await finish() } }
         }
     }
 

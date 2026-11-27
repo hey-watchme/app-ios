@@ -12,14 +12,12 @@
 import SwiftUI
 import Supabase
 
-struct DayContentView<Slot: View>: View {
+struct DayContentView: View {
     let subjectId: String?
     let localDate: String
     let summary: DashboardSummary?
     let blocks: [DashboardTimeBlock]
     let onOpenSpot: (DashboardTimeBlock) -> Void
-    /// What the host puts between the score and the recordings (the home's open questions).
-    @ViewBuilder var afterScore: () -> Slot
 
     /// Changes when a recording of the day finishes its events, so the counts are read again.
     private var refreshKey: String {
@@ -31,8 +29,6 @@ struct DayContentView<Slot: View>: View {
         VStack(spacing: 16) {
             // At a glance: the day's score and summary
             ModernHeroGaugeView(dashboardSummary: summary, isAnalysing: blocks.contains { $0.stages.isInProgress })
-
-            afterScore()
 
             // The picture: each recording, newest first
             if blocks.isEmpty {
@@ -55,14 +51,6 @@ struct DayContentView<Slot: View>: View {
                 HomeWhoToWhomCard(subjectId: subjectId, localDate: localDate, refreshKey: refreshKey)
             }
         }
-    }
-}
-
-extension DayContentView where Slot == EmptyView {
-    init(subjectId: String?, localDate: String, summary: DashboardSummary?, blocks: [DashboardTimeBlock],
-         onOpenSpot: @escaping (DashboardTimeBlock) -> Void) {
-        self.init(subjectId: subjectId, localDate: localDate, summary: summary, blocks: blocks,
-                  onOpenSpot: onOpenSpot, afterScore: { EmptyView() })
     }
 }
 

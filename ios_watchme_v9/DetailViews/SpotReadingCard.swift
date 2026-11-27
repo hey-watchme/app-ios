@@ -225,7 +225,7 @@ struct SpotReadingCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             if !embedded {
-                DetailCardHeader(icon: "mappin.and.ellipse", title: "TIMELINE", badge: "試作", info: Self.info)
+                DetailCardHeader(icon: "mappin.and.ellipse", title: "TIMELINE", badge: "タイムライン", info: Self.info)
             }
 
             // コミュニケーション: how the exchanges went (the faces); 出来事: what was going on (the emoji)
@@ -460,7 +460,7 @@ struct SpotReadingCard: View {
     }
 
     static let info = """
-        録音の中のやりとりを読んだ試作です。
+        録音の中のやりとりを、時間に沿って並べたものです。
         ・コミュニケーション（顔）: 😊 はやりとりがうまくいった場面で線より上、😠 は気になる場面で線より下。線から離れているほど重い場面です（同じ重さの中では重なりにくいよう少し散らしています）。
         ・出来事（絵文字）: そのころ何をしていたか、何の話をしていたかの挿し絵です。近くにうまくいった場面が多ければ上、気になる場面が多ければ下に置いています。
         ・後ろの波: 話していた声。その人のふだんより張り詰めているほど広がります。
@@ -478,7 +478,7 @@ struct SpotReadingSummaryCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            DetailCardHeader(icon: "list.bullet", title: "この録音のまとめ", badge: "試作")
+            DetailCardHeader(icon: "list.bullet", title: "この録音のまとめ")
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(reading.summary, id: \.self) { sentence in
                     HStack(alignment: .top, spacing: 8) {

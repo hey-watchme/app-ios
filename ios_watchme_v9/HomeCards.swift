@@ -109,46 +109,72 @@ extension NSNotification.Name {
     static let activitySeen = NSNotification.Name("activitySeen")
 }
 
-/// The slim card at the top of the home screen.
+/// The shape every notice at the top of the home shares (the activity card, the open questions,
+/// platform docs/product/screens.md「ホーム」): one height, icon, type and trailing arrow, so two
+/// stacked read as one list. The open questions use it on the recording and the profile as well.
+struct NoticeCard<Icon: View, Trailing: View>: View {
+    let title: String
+    let subtitle: String
+    var fill: Color = .darkCard
+    var border: Color = Color.white.opacity(0.1)
+    @ViewBuilder let icon: () -> Icon
+    @ViewBuilder let trailing: () -> Trailing
+
+    var body: some View {
+        HStack(spacing: 12) {
+            icon()
+                .frame(width: 32, height: 32)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(Color(white: 0.6))
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            trailing()
+        }
+        .padding(.horizontal, 14)
+        .frame(maxWidth: .infinity)
+        .frame(height: 60)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(fill)
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(border, lineWidth: 1))
+        )
+        .contentShape(Rectangle())
+    }
+}
+
+/// The arrow at the end of a notice.
+struct NoticeChevron: View {
+    var color: Color = Color(white: 0.5)
+
+    var body: some View {
+        Image(systemName: "chevron.right")
+            .font(.system(size: 12, weight: .semibold))
+            .foregroundColor(color)
+    }
+}
+
+/// The activity notice at the top of the home screen.
 struct ActivityBannerView: View {
     let banner: ActivityBanner
     let onTap: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
-            Button(action: onTap) {
-                HStack(spacing: 12) {
-                    icon
-                        .frame(width: 22, height: 22)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(title)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(.white)
-                            .lineLimit(1)
-                        Text(subtitle)
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.6))
-                            .lineLimit(1)
-                    }
-                    Spacer(minLength: 4)
-                    if isTappable {
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(white: 0.5))
-                    }
-                }
-                .contentShape(Rectangle())
+        Button(action: onTap) {
+            NoticeCard(title: title, subtitle: subtitle, border: borderColor) {
+                icon
+            } trailing: {
+                if isTappable { NoticeChevron() }
             }
-            .buttonStyle(.plain)
-            .disabled(!isTappable)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.darkCard)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(borderColor, lineWidth: 1))
-        )
+        .buttonStyle(.plain)
+        .disabled(!isTappable)
         .animation(.easeInOut(duration: 0.25), value: banner)
     }
 
@@ -159,11 +185,11 @@ struct ActivityBannerView: View {
             ProgressView().tint(.accentTeal)
         case .recordingDone, .dayUpdated:
             Image(systemName: "checkmark.circle.fill")
-                .font(.system(size: 18))
+                .font(.system(size: 22))
                 .foregroundColor(.accentTeal)
         case .recordingFailed:
             Image(systemName: "exclamationmark.triangle.fill")
-                .font(.system(size: 16))
+                .font(.system(size: 20))
                 .foregroundColor(.accentCoral)
         }
     }
@@ -254,17 +280,12 @@ struct HomeRecordingCard: View {
                                 .background(Capsule().fill(Color.vibeScoreColor(for: score).opacity(0.15)))
                         }
                         Spacer()
-                        Text("詳しく")
-                            .font(.system(size: 12))
-                            .foregroundColor(Color(white: 0.5))
-                        Image(systemName: "chevron.right")
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(Color(white: 0.5))
                     }
                     .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                // Outside the header's button, so that it shows the explanation and does not open the recording
+                // Alone at the top right, so it is not mistaken for the way into the recording
+                // (that is 詳しく見る at the bottom right, 2026-11-28)
                 InfoButton(text: SpotReadingCard.info)
             }
 
@@ -291,15 +312,30 @@ struct HomeRecordingCard: View {
                     SkeletonRectangle(height: 11, width: 200)
                 }
                 .transition(.opacity)
-            } else if let summary = block.summary, !summary.isEmpty {
+            } else if !block.stages.isInProgress || !(block.summary ?? "").isEmpty {
+                // The summary, cut short, and 詳しく見る under it: the whole block is one link into the recording
                 Button(action: onOpen) {
-                    Text(summary)
-                        .font(.system(size: 13))
-                        .foregroundColor(Color(white: 0.75))
-                        .lineSpacing(3)
-                        .lineLimit(3)
-                        .multilineTextAlignment(.leading)
-                        .frame(maxWidth: .infinity, alignment: .leading)
+                    VStack(alignment: .leading, spacing: 8) {
+                        if let summary = block.summary, !summary.isEmpty {
+                            Text(summary)
+                                .font(.system(size: 13))
+                                .foregroundColor(Color(white: 0.75))
+                                .lineSpacing(3)
+                                .lineLimit(2)
+                                .truncationMode(.tail)
+                                .multilineTextAlignment(.leading)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        HStack(spacing: 4) {
+                            Spacer()
+                            Text("詳しく見る")
+                                .font(.system(size: 13, weight: .semibold))
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .foregroundColor(.accentTeal)
+                    }
+                    .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
             }
